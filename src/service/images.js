@@ -136,7 +136,7 @@ export function imageSize(aspect, megapixels) {
 export const familyOfModel = (unet) => IMAGE_FAMILIES.find((f) => f.unet.test(unet)) || null
 
 // Builds the API graph. refs: picture names already in ComfyUI's input folder (Edit).
-export function imageGraph({ family, mode = 'generate', unet, te, vae, loras = [], prompt, negative = '', width, height, count = 1, seed, steps, cfg, refs = [], megapixels = 1, editLora = null, prefix }) {
+export function imageGraph({ family, mode = 'generate', unet, te, vae, loras = [], prompt, negative = '', width, height, count = 1, seed, steps, cfg, refs = [], megapixels = 1, editLora = null, prefix, keepAspect = false }) {
   const f = IMAGE_FAMILIES.find((x) => x.id === family)
   const g = {}
   let n = 0
@@ -164,8 +164,11 @@ export function imageGraph({ family, mode = 'generate', unet, te, vae, loras = [
     let h = height
     if (mode === 'edit') {
       const imgs = loadRefs().map(sized)
-      const size = add('GetImageSize', { image: imgs[0] })
-      ;[w, h] = [[size, 0], [size, 1]]
+      // an edit takes its first picture's size, unless keepAspect asks for width x height (a film's frame)
+      if (!keepAspect) {
+        const size = add('GetImageSize', { image: imgs[0] })
+        ;[w, h] = [[size, 0], [size, 1]]
+      }
       for (const img of imgs) {
         const lat = [add('VAEEncode', { pixels: img, vae: vaeOut }), 0]
         pos = [add('ReferenceLatent', { conditioning: pos, latent: lat }), 0]
@@ -188,7 +191,8 @@ export function imageGraph({ family, mode = 'generate', unet, te, vae, loras = [
       const inputs = { positive: pos, negative: neg, vae: vaeOut, resolution: 'resize', 'resolution.megapixels': megapixels }
       loadRefs().forEach((img, i) => (inputs[`images.image${i}`] = img))
       const ref = add('ReferenceMultiLatent', inputs)
-      save(ksample(model, [ref, 0], [ref, 1], repeat([ref, 2]), f.editSteps))
+      const latent = keepAspect ? [add('EmptyFlux2LatentImage', { width, height, batch_size: batch }), 0] : repeat([ref, 2])
+      save(ksample(model, [ref, 0], [ref, 1], latent, f.editSteps))
     } else save(ksample(model, pos, neg, [add('EmptyFlux2LatentImage', { width, height, batch_size: batch }), 0]))
   } else if (family === 'krea2') {
     if (mode === 'edit') {
@@ -271,8 +275,10 @@ export class Images {
   }
 
   // Queues a set of pictures. request: { mode: generate|edit, model (a checkpoint), prompt, negative, loras
-  // [{name, strength}], aspect, megapixels, count 1-4, seed, steps, cfg, refs [local picture paths] (Edit), name }.
-  async create({ mode = 'generate', model, prompt = '', negative = '', loras = [], aspect = IMAGE_DEFAULTS.aspect, megapixels = IMAGE_DEFAULTS.megapixels, count = IMAGE_DEFAULTS.count, seed = null, steps = null, cfg = null, refs = [], name } = {}) {
+  // [{name, strength}], aspect, megapixels, count 1-4, seed, steps, cfg, refs [local picture paths] (Edit), name,
+  // tag (keeps the set out of the gallery), keepAspect (an edit comes out at aspect, not its picture's shape;
+  // Flux.2 and Flux 3 only) }.
+  async create({ mode = 'generate', model, prompt = '', negative = '', loras = [], aspect = IMAGE_DEFAULTS.aspect, megapixels = IMAGE_DEFAULTS.megapixels, count = IMAGE_DEFAULTS.count, seed = null, steps = null, cfg = null, refs = [], name, tag = null, keepAspect = false } = {}) {
     const text = String(prompt || '').trim()
     if (!text) throw new Error(mode === 'edit' ? 'Say what to change in the picture.' : 'Describe the picture first.')
     const st = await this.status()
@@ -301,10 +307,10 @@ export class Images {
     }
     const id = randomUUID().slice(0, 8)
     const title = String(name || '').trim() || text.split(/[.,\n]/)[0].slice(0, 48)
-    const graph = imageGraph({ family: fam.id, mode, unet: model, te: fam.te, vae: fam.vae, loras: loras.filter((l) => l?.name), prompt: text, negative, width, height, count, seed: s, steps: usedSteps, cfg: usedCfg, refs: uploaded, megapixels: Number(megapixels) || 1, editLora: fam.editLora, prefix: `iv_studio/images/${slug(title)}_${id}` })
+    const graph = imageGraph({ family: fam.id, mode, unet: model, te: fam.te, vae: fam.vae, loras: loras.filter((l) => l?.name), prompt: text, negative, width, height, count, seed: s, steps: usedSteps, cfg: usedCfg, refs: uploaded, megapixels: Number(megapixels) || 1, editLora: fam.editLora, keepAspect: keepAspect && mode === 'edit' && ['flux2', 'flux3'].includes(fam.id), prefix: `iv_studio/images/${slug(title)}_${id}` })
     const project = this.studio.createProject(`Image · ${title}`, null, null, 'image')
     const job = await this.studio.submitGraph({ kind: `picture:${fam.id}`, graph, projectId: project.id, name: title, plan: { images: true, request: { prompt: text } } })
-    const record = { id, name: title, mode, family: fam.id, familyLabel: fam.label, model, prompt: text, negative, loras: loras.filter((l) => l?.name), aspect, megapixels: Number(megapixels) || 1, width: mode === 'edit' ? null : width, height: mode === 'edit' ? null : height, count: Math.max(1, Math.min(4, Math.round(count))), seed: s, steps: usedSteps, cfg: usedCfg, refs, projectId: project.id, jobId: job.id, status: job.status, files: [], createdAt: now() }
+    const record = { id, name: title, mode, family: fam.id, familyLabel: fam.label, model, prompt: text, negative, loras: loras.filter((l) => l?.name), aspect, megapixels: Number(megapixels) || 1, width: mode === 'edit' ? null : width, height: mode === 'edit' ? null : height, count: Math.max(1, Math.min(4, Math.round(count))), seed: s, steps: usedSteps, cfg: usedCfg, refs, ...(tag ? { tag } : {}), projectId: project.id, jobId: job.id, status: job.status, files: [], createdAt: now() }
     this.saveAll([record, ...this.all()])
     return record
   }
@@ -344,7 +350,8 @@ export class Images {
     return next
   }
 
-  list = () => Promise.all(this.all().map((r) => this.refresh(r)))
+  // tagged sets (a film's storyboard sketches) belong to their page and stay out of the gallery
+  list = ({ all = false } = {}) => Promise.all(this.all().filter((r) => all || !r.tag).map((r) => this.refresh(r)))
 
   async get(id) {
     const r = this.all().find((x) => x.id === id)

@@ -37,5 +37,6 @@ Incognito still shows the closed eye on every page.
   read at banner size.
 - Create (2026-10-30, when the dashboard took the eye): create 303, an open hand releasing a burst of sparks. A film
   camera was also tried and dropped: Flux drew fake lettering on it.
+- Projects (2026-10-30, when Projects joined the sidebar): projects 303, a director's chair and a megaphone.
 - The app copies are 1400 × 737 WebP (quality 86), the eye's own size. Raw outputs are in ComfyUI's
   `output\IV-Studio\page-art\`. `page-art-banners.jpg` shows every page's banner in the app.

@@ -26,7 +26,8 @@ export const SUBJECTS = {
   voices: 'a pair of full lips, slightly parted as if speaking',
   lines: 'a vintage ribbon microphone on a short stand',
   music: 'a vinyl record with a tone arm resting on it',
-  create: 'an open hand releasing a bright burst of sparks and small stars'
+  create: 'an open hand releasing a bright burst of sparks and small stars',
+  projects: "an empty wooden director's chair with a megaphone leaning against it"
 }
 
 const prompt = (subject) =>

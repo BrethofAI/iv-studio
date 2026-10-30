@@ -16,6 +16,7 @@ import { LinesPage, VoicesPage } from './components/Voices'
 import { MusicPage } from './components/Music'
 import MediaLibrary from './components/MediaLibrary'
 import Dashboard from './components/Dashboard'
+import { ProjectPage, ProjectsList } from './components/Projects'
 import RenderQueue from './components/RenderQueue'
 import { LorasPage } from './components/Loras'
 import Setup from './components/Setup'
@@ -31,8 +32,8 @@ const SECTIONS = {
   video: [
     ['home', 'Dashboard'],
     ['create', 'Create'],
+    ['projects', 'Projects'],
     ['library', 'Shots'],
-    ['sequences', 'Sequences'],
     ['edits', 'Edit'],
     ['workflows', 'Workflows'],
     ['characters', 'Characters'],
@@ -48,7 +49,7 @@ const SECTIONS = {
     ['settings', 'Settings']
   ]
 }
-const SUBPAGES = { settings: ['setup'], library: ['shot'], sequences: ['sequence'], edits: ['edit'], characters: ['character'], workflows: ['shinobi', 'shinobi-film', 'replace', 'sizzle', 'sizzle-project'] }
+const SUBPAGES = { settings: ['setup'], library: ['shot'], projects: ['project'], edits: ['edit'], characters: ['character'], workflows: ['sequences', 'sequence', 'shinobi', 'shinobi-film', 'replace', 'sizzle', 'sizzle-project'] }
 const savedSection = () => {
   try {
     return localStorage.getItem('iv.section') === 'audio' ? 'audio' : 'video'
@@ -84,6 +85,7 @@ export default function App() {
   const [characterForCreate, setCharacterForCreate] = useState(null)
   const [projectId, setProjectId] = useState(null)
   const [sequenceId, setSequenceId] = useState(null)
+  const [productionId, setProductionId] = useState(null) // the open Project
   const [editId, setEditId] = useState(null)
   const [trainingId, setTrainingId] = useState(null)
   const [shinobiId, setShinobiId] = useState(null)
@@ -158,6 +160,11 @@ export default function App() {
     switchSection('video')
     setPage('shot')
   }
+  const openProject = (id) => {
+    setProductionId(id)
+    switchSection('video')
+    setPage('project')
+  }
   const openSequence = (id) => {
     setSequenceId(id)
     switchSection('video')
@@ -170,6 +177,7 @@ export default function App() {
     if (id === 'music') return to('audio', 'music')
     if (id === 'line') return to('audio', 'lines')
     if (id === 'sequence') return to('video', 'sequences')
+    if (id === 'film') return to('video', 'projects')
     if (id === 'edit') return to('video', 'edits')
     if (id === 'sizzle') return to('video', 'sizzle')
     if (id === 'character') return to('video', 'characters')
@@ -219,7 +227,7 @@ export default function App() {
   }
 
   const ready = setup?.ready
-  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
 
   // Incognito: a private set of everything made, switched by restarting (see main's BASE / DATA). The eye
@@ -303,6 +311,8 @@ export default function App() {
         {page === 'media' && <MediaLibrary {...ctx} />}
         {page === 'library' && <Library {...ctx} />}
         {page === 'shot' && projectId && <Shot key={projectId} projectId={projectId} {...ctx} />}
+        {page === 'projects' && <ProjectsList {...ctx} />}
+        {page === 'project' && productionId && <ProjectPage key={productionId} productionId={productionId} {...ctx} />}
         {page === 'sequences' && <SequenceList {...ctx} />}
         {page === 'sequence' && sequenceId && <SequenceEditor key={sequenceId} sequenceId={sequenceId} {...ctx} />}
         {page === 'edits' && <EditList {...ctx} />}

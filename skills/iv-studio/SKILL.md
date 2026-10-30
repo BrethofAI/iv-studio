@@ -57,6 +57,39 @@ cropped to the shot's aspect, because they're stretched to fit).
   camera and action.
 - Say "There is no writing anywhere in the picture" unless text is wanted; H3 likes adding signs.
 
+## Projects: a short film, step by step
+
+The Projects page makes a whole film as a six-step wizard: Idea, Story, Cast and places, Storyboard, Film it,
+Watch. A project holds the brief (idea, aspect, length), the cast (character presets with their voices),
+places and props (descriptions and pictures), the look (notes and style LoRAs), the script, and its scenes and
+shots. The person sees each step as you work (`get_film` returns `step`; `update_film` with `step` moves
+them on). The tools say "film" because `list_projects` already means shots.
+
+1. `create_film` with a name, the idea as its logline, an aspect and a length. Give it a script if the person
+   has one. Screenplay format: `INT. PLACE - DAY` starts a scene, a NAME in capitals on its own line with the
+   words under it is dialogue, and other paragraphs are action.
+2. No script yet? `write_film_script` drafts one from the idea, the cast and the length (a minute or two on
+   this PC). Show it to the person and change it with `set_film_script` until they're happy. Speakers who
+   share a first name with a character preset join the cast; scene headings add places.
+3. `update_film` to cast characters, describe each place (every shot there uses it; a picture helps the
+   sketches) and set the look.
+4. `break_down_film` (background, minutes): each scene becomes 3-10 s shots with one speaker at most, each
+   shot gets its H3 prompt, then a storyboard sketch (a still on this PC's picture models; the character's
+   face and the place's picture are kept). Poll `get_film` until `breakdown.state` is done and
+   `totals.sketching` is 0. `sketch_film_shots` redraws sketches.
+5. Show the person the storyboard. Change shots with `edit_film_shot`, then `write_film_shot_prompt` and
+   `sketch_film_shots` for that shot. Get their OK before filming: every shot takes GPU minutes.
+6. `render_film_scene` (without sceneId, the whole film) or `render_film_shot` hunt takes; each shot is an
+   ordinary shot, also in Shots. A line whose character has a voice is spoken in it first, for lip-sync
+   (`speak_film_line` does it on its own). When a shot's status is pick, show the takes
+   (`state.candidates`) and `finish_film_shot` the chosen one.
+7. `build_rough_cut` lays every shot in script order on V1 of the film's edit (finished takes, else the
+   picked or first preview); `export_edit` saves it as a video. Then use the Edit tools, and
+   `generate_in_edit` to extend or bridge shots.
+
+H3 follows one character LoRA per shot best: a shot's `character` is its main person; others are named in
+the prompt.
+
 ## Sequences (one continuous video)
 
 - `save_sequence` with shots (10 or 15 s each). `method: "take"` renders every shot in one seamless

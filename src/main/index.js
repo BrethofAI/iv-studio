@@ -7,6 +7,7 @@ import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
 import { Edits, FORMATS } from '../service/edits'
 import { EditGen } from '../service/editgen'
+import { Productions } from '../service/productions'
 import { DEFAULT_TRACKS } from '../service/timeline'
 import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
 import { initUpdater, updateState } from './updater'
@@ -503,6 +504,39 @@ app.whenReady().then(() => {
     return f
   })
   handle('editgen:cancel', (id, genId) => editgen.cancel(id, genId))
+  // ---------- Projects (a short film from script to rough cut) ----------
+  const productions = new Productions({ dataDir: DATA, studio: () => studio, voices: () => voices, images: () => images, catalog: () => catalog, edits, localCopy, onChange: (id) => send('productions:changed', { id }), model: () => readSettings(BASE).ollamaModel || undefined })
+  handle('productions:list', () => productions.list())
+  handle('productions:get', (id) => productions.view(id))
+  handle('productions:create', (opts) => productions.create(opts))
+  handle('productions:update', (id, patch) => productions.update(id, patch))
+  handle('productions:delete', (id) => productions.remove(id))
+  handle('productions:setScript', (id, text) => productions.setScript(id, text))
+  handle('productions:writeScript', (id, opts) => productions.writeScript(id, opts))
+  handle('productions:sketch', async (id, opts) => {
+    await voices.release()
+    return productions.sketch(id, opts)
+  })
+  handle('productions:breakDown', (id, opts) => productions.breakDown(id, opts))
+  handle('productions:writePrompt', (id, sceneId, shotId) => productions.writeShotPrompt(id, sceneId, shotId))
+  handle('productions:editShot', (id, sceneId, shotId, patch) => productions.editShot(id, sceneId, shotId, patch))
+  handle('productions:speak', (id, shotId) => productions.speak(id, shotId))
+  handle('productions:render', async (id, shotId, opts) => {
+    const j = await productions.render(id, shotId, opts)
+    pending.add(j.id)
+    return j
+  })
+  handle('productions:renderScene', async (id, sceneId, opts) => {
+    const jobs = await productions.renderScene(id, sceneId, opts)
+    for (const j of jobs) pending.add(j.id)
+    return jobs
+  })
+  handle('productions:finish', async (id, shotId, candidate, opts) => {
+    const j = await productions.finish(id, shotId, candidate, opts)
+    pending.add(j.id)
+    return j
+  })
+  handle('productions:roughCut', (id) => productions.roughCut(id))
   // The editor's full-screen workspace: the window itself goes full screen too.
   handle('window:fullScreen', (on) => {
     win.setFullScreen(!!on)

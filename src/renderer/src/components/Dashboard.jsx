@@ -8,7 +8,7 @@ import { Tile, toSets, Viewer } from './MediaLibrary'
 const QUICK = [
   ['shot', 'New shot', 'An idea in plain words becomes H3 previews.', 'shots'],
   ['picture', 'New picture', 'Make or edit a picture on six image models.', 'library'],
-  ['sequence', 'Longer scene', 'Several shots as one continuous video.', 'sequences'],
+  ['film', 'Short film', 'A script becomes shots, takes and a rough cut.', 'projects'],
   ['edit', 'Cut an edit', 'Your renders, music and titles on a timeline.', 'edit'],
   ['music', 'New song', 'A song or a score, made on this PC.', 'music'],
   ['line', 'Voice line', "Words in a character's own voice.", 'lines'],

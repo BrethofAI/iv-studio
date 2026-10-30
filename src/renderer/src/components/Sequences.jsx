@@ -20,7 +20,7 @@ const newId = () => Math.random().toString(36).slice(2, 8)
 const SHOT_HINT =
   'Shots join into one continuous video. Describe the place the same way in every shot. Each later shot opens holding the previous shot\'s closing pose and stays quiet for about two seconds before anyone speaks. Every shot ends settled, with the line finished and about two seconds to spare. Keep lines to about 15 words for 10 s shots, 27 for 15 s. Write {char} where the character goes; dialogue as <d>[English] Your line.</d>'
 
-export function SequenceList({ openSequence, notify }) {
+export function SequenceList({ openSequence, notify, go }) {
   const [list, setList] = useState(null)
   useEffect(() => {
     window.ivstudio.sequences.list().then(setList)
@@ -36,7 +36,7 @@ export function SequenceList({ openSequence, notify }) {
 
   return (
     <div className="sequences">
-      <Hero art="sequences" title="Sequences" kicker="Infinite Variance" />
+      <Hero art="sequences" back={go && { label: "Workflows", onClick: () => go("workflows") }} title="Sequences" kicker="Several shots, one continuous take" />
       <p className="lede">
         Several shots that play as one continuous video.
         <span className="lede-small dim">Write the shots, render them as one seamless take or shot by shot, redo any stretch, then render out the final.</span>

@@ -13,6 +13,7 @@ import { INSTRUCTIONS, readGuide } from '../service/agent'
 import { menuMessage, START_MENU } from '../service/startmenu'
 import { Edits, editLength, FORMATS } from '../service/edits'
 import { EditGen, GEN_KINDS } from '../service/editgen'
+import { Productions } from '../service/productions'
 import { MediaTools } from '../service/media'
 import { comfyFolders, contentDir, dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
@@ -229,6 +230,7 @@ function describe(e) {
 }
 
 const LIVE = 'If the edit is open in the IV Studio window, it reloads there and the person can undo your change with Ctrl+Z.'
+const LIVE_FILM = 'The person sees it on the Projects page.'
 tool('list_edits', 'Edits (timelines in the Edit page), newest first.', {}, () => edits.list())
 tool('get_edit', 'An edit: its media (with ids), each track\'s clips in order (clip ids, start/end on the timeline, in/out in the media, fades, volume), settings, markers and past exports. Tracks: a higher V track is drawn over a lower one (V2 over V1); T1 holds titles; A tracks are sound; add_track adds more. trackList gives each track\'s state: hidden tracks are left out of the picture, muted ones out of the sound (and when any track is soloed, only soloed tracks are heard), and locked tracks can\'t be changed. Video clips play their own sound too unless muted.', { editId: z.string() }, ({ editId }) => describe(edits.get(editId)))
 tool('create_edit', 'Create an empty edit.', { name: z.string().default('Untitled edit'), format: z.enum(Object.keys(FORMATS)).default('1080p'), fps: z.number().int().min(12).max(60).default(24) }, ({ name, format, fps }) => {
@@ -320,6 +322,69 @@ tool('grab_frame', 'A picture of one moment, to check an edit or a render by eye
   })
   return { image: png.toString('base64'), caption: `${path.basename(src)} at ${t.toFixed(2)} s` }
 })
+
+// ---------- Projects: a short film from script to rough cut (the app's Projects page; "films" here, because
+// list_projects already means shots) ----------
+const films = new Productions({ dataDir: DATA, studio: () => studio, voices: () => voices, images: () => images, catalog: () => catalog, edits, localCopy: (f) => studio.localCopy(f, VIDEOS), model: () => readSettings(BASE).ollamaModel || undefined })
+const shotPatch = { action: z.string().optional(), camera: z.string().optional(), characters: z.array(z.string()).optional(), speaker: z.string().optional(), line: z.string().optional(), seconds: z.number().min(1).max(15).optional(), prompt: z.string().optional(), character: z.string().optional().describe('Character preset id or none') }
+tool('list_films', 'Short-film projects (the app\'s Projects page): name, logline, aspect, scenes and shots.', {}, () => ({ items: films.list() }))
+tool('create_film', `Start a short-film project. script (optional) is screenplay text: a scene starts with a heading like "INT. POTTERY STUDIO - DAY", a name in capitals on its own line with words under it is dialogue, other paragraphs are action. ${LIVE_FILM}`, {
+  name: z.string().default('Untitled film'),
+  logline: z.string().default(''),
+  aspect: z.enum(Object.keys(ASPECTS)).default('16:9'),
+  targetSeconds: z.number().min(10).max(3600).default(120),
+  script: z.string().optional()
+}, (args) => films.create(args))
+tool('get_film', 'A short-film project with its brief, cast, locations, props, look, scenes and every shot (what we see, camera, speaker and line, seconds, prompt, character) and where each shot is: state.status draft, ready, rendering, pick (previews to choose from, in state.candidates), finishing, finished (state.final) or error. Totals add it up.', { filmId: z.string() }, ({ filmId }) => films.view(filmId))
+tool('update_film', `Change a film's brief or assets: name, logline, aspect, targetSeconds, look {notes, loras:[{name, strength}]}, cast [{characterId, as}], locations and props [{name, description, pictures:[paths]}]. Lists replace the old ones whole. ${LIVE_FILM}`, {
+  filmId: z.string(),
+  name: z.string().optional(),
+  logline: z.string().optional(),
+  aspect: z.enum(Object.keys(ASPECTS)).optional(),
+  targetSeconds: z.number().min(10).max(3600).optional(),
+  step: z.enum(['idea', 'story', 'cast', 'board', 'film', 'watch']).optional().describe('The wizard step the person sees'),
+  look: z.object({ notes: z.string().optional(), loras: z.array(z.object({ name: z.string(), strength: z.number() })).optional() }).optional(),
+  cast: z.array(z.object({ characterId: z.string(), as: z.string().optional() })).optional(),
+  locations: z.array(z.object({ name: z.string(), description: z.string().optional(), pictures: z.array(z.string()).optional() })).optional(),
+  props: z.array(z.object({ name: z.string(), description: z.string().optional(), pictures: z.array(z.string()).optional() })).optional()
+}, ({ filmId, ...patch }) => films.update(filmId, patch))
+tool('set_film_script', `Replace a film's script (screenplay text, see create_film). Scenes are read from it; scenes that didn't change keep their shots, changed ones are marked stale. Speakers who share a first name with a character preset join the cast, and the scene headings add locations. ${LIVE_FILM}`, { filmId: z.string(), script: z.string().min(1) }, ({ filmId, script }) => films.setScript(filmId, script))
+tool('write_film_script', `Draft a film's script with the local writer from its idea (idea, else the film's logline), its cast and its target length. It replaces the script, so ask before writing over one the person wrote. Takes a minute or two. ${LIVE_FILM}`, { filmId: z.string(), idea: z.string().optional() }, ({ filmId, idea }) => films.writeScript(filmId, { idea }))
+tool('sketch_film_shots', "Draw a storyboard still for each shot without one (or shotIds, or every shot with redo), on this PC's picture models: about 15-30 s a shot, free. A shot's character face and its place's picture are kept when an editing model is set up. get_film shows each shot's sketch once drawn.", { filmId: z.string(), shotIds: z.array(z.string()).optional(), redo: z.boolean().default(false) }, async ({ filmId, ...opts }) => {
+  if (readSettings(BASE).target !== 'cloud') await voices.release()
+  return { items: await films.sketch(filmId, opts) }
+})
+tool('break_down_film', 'Break the script into shots with the local writer: each scene becomes 3-10 s shots (what we see, camera, who is on screen, at most one speaker and their exact words), then each shot gets its H3 prompt. Runs in the background (minutes); get_film shows breakdown progress. By default only scenes without shots, or stale ones; redo does every scene. sketch (on by default) then draws each new shot\'s storyboard still, as the Projects page does. Show the person the board and get their OK before rendering: renders take GPU time.', {
+  filmId: z.string(),
+  redo: z.boolean().default(false),
+  sceneIds: z.array(z.string()).optional(),
+  sketch: z.boolean().default(true)
+}, ({ filmId, ...opts }) => films.breakDown(filmId, opts))
+tool('edit_film_shot', `Change a shot (any of action, camera, characters, speaker, line, seconds, prompt, character), add one after it (add: true, with the new shot's fields), remove it (remove: true) or move it within its scene (move: -1 or 1). After changing what happens, write_film_shot_prompt rewrites its prompt. ${LIVE_FILM}`, {
+  filmId: z.string(),
+  sceneId: z.string(),
+  shotId: z.string().optional().describe('Omit with add to add at the end of the scene'),
+  add: z.boolean().optional(),
+  remove: z.boolean().optional(),
+  move: z.number().int().min(-1).max(1).optional(),
+  ...shotPatch
+}, ({ filmId, sceneId, shotId, ...patch }) => films.editShot(filmId, sceneId, shotId || null, patch))
+tool('write_film_shot_prompt', 'Write (or rewrite) one shot\'s H3 prompt from its description with the local writer.', { filmId: z.string(), sceneId: z.string(), shotId: z.string() }, async ({ filmId, sceneId, shotId }) => ({ prompt: await films.writeShotPrompt(filmId, sceneId, shotId) }))
+tool('speak_film_line', 'Say a shot\'s line in its character\'s voice; the shot then lip-syncs to it when rendered, and its finish uses that sound. The character needs a voice (Characters page).', { filmId: z.string(), shotId: z.string() }, async ({ filmId, shotId }) => {
+  if (readSettings(BASE).target !== 'cloud') await voices.release()
+  const line = await films.speak(filmId, shotId)
+  return { file: line.file, duration: line.duration }
+})
+tool('render_film_shot', 'Hunt previews for one shot (3 by default; an ordinary IV Studio shot, so it also shows in Shots). A line its character has a voice for is said in that voice first, so the shot lip-syncs to it (voice: false skips that). Poll get_film or get_job; when its status is pick, show the person the takes and finish_film_shot the one they choose.', { filmId: z.string(), shotId: z.string(), previews: z.number().int().min(1).max(3).default(3), seed: z.number().int().optional(), voice: z.boolean().default(true) }, async ({ filmId, shotId, ...opts }) => {
+  if (readSettings(BASE).target !== 'cloud') await voices.release()
+  return films.render(filmId, shotId, opts)
+})
+tool('render_film_scene', 'Hunt previews for every shot in a scene (or, without sceneId, the whole film) that has a prompt and nothing rendered yet. Ask the person first: each shot is minutes of GPU time.', { filmId: z.string(), sceneId: z.string().optional(), previews: z.number().int().min(1).max(3).default(3) }, async ({ filmId, sceneId, ...opts }) => {
+  if (readSettings(BASE).target !== 'cloud') await voices.release()
+  return { items: await films.renderScene(filmId, sceneId, opts) }
+})
+tool('finish_film_shot', 'Finish take n of a shot\'s latest previews at 2 MP (with its spoken line as the sound when it has one).', { filmId: z.string(), shotId: z.string(), candidate: z.number().int().min(1).max(3), megapixels: z.number().min(0.5).max(4).default(2), upscale2x: z.boolean().default(false) }, ({ filmId, shotId, candidate, ...opts }) => films.finish(filmId, shotId, candidate, opts))
+tool('build_rough_cut', `Put every shot of a film in script order on V1 of its edit (made the first time): the finished take, else the picked or first preview. Rebuilding replaces V1 only. Returns the edit id, how many shots went in, and which are missing; get_edit and export_edit take it from there. ${LIVE}`, { filmId: z.string() }, ({ filmId }) => films.roughCut(filmId))
 
 // New footage from inside an edit: the same Extend, Fill/Bridge and Retake as the editor's right-click menu.
 const editgen = new EditGen({ edits, studio: () => studio, localCopy: (f) => studio.localCopy(f, VIDEOS) })

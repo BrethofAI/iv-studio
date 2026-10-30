@@ -272,6 +272,23 @@ function parseJson(text) {
   }
 }
 
+// Any structured answer from the local writer: system + user text in, an object of `schema`'s shape out
+// (Projects' scene breakdown uses it). Unloads afterwards like every write.
+export async function ollamaJson({ system, user, schema, model, cpu = false, ctx = 16384, temperature = 0.5 }) {
+  await ensureOllama()
+  const name = model || DEFAULT_LOCAL_MODEL
+  const status = await ollamaStatus()
+  if (!status.models.some((m) => m.name === name)) throw new Error(`The writer model ${name} isn't in Ollama yet. Install it in Settings → Prompt writer.`)
+  const r = await fetch(`${OLLAMA_URL}/api/chat`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ model: name, stream: false, format: schema, keep_alive: 0, options: { temperature, num_ctx: ctx, ...(cpu ? { num_gpu: 0 } : {}) }, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }),
+    signal: AbortSignal.timeout(900000)
+  })
+  if (!r.ok) throw new Error(`Ollama: ${(await r.text()).slice(0, 300)}`)
+  return parseJson((await r.json()).message?.content)
+}
+
 // A short story -> one prompt per shot, written to join as one continuous take.
 export async function writeStoryLocal({ story, shots, seconds, character, model, cpu = false }) {
   await ensureOllama()

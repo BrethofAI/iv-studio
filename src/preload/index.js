@@ -19,6 +19,26 @@ contextBridge.exposeInMainWorld('ivstudio', {
   update: { state: call('update:state'), check: call('update:check'), install: call('update:install'), onChange: on('update:changed') },
   incognito: { set: call('incognito:set') },
   queue: { list: call('queue:list'), cancel: call('queue:cancel') },
+  // Projects: a short film from script to rough cut (src/service/productions.js)
+  productions: {
+    list: call('productions:list'),
+    get: call('productions:get'),
+    create: call('productions:create'),
+    update: call('productions:update'),
+    delete: call('productions:delete'),
+    setScript: call('productions:setScript'),
+    writeScript: call('productions:writeScript'),
+    sketch: call('productions:sketch'),
+    breakDown: call('productions:breakDown'),
+    writePrompt: call('productions:writePrompt'),
+    editShot: call('productions:editShot'),
+    speak: call('productions:speak'),
+    render: call('productions:render'),
+    renderScene: call('productions:renderScene'),
+    finish: call('productions:finish'),
+    roughCut: call('productions:roughCut'),
+    onChanged: on('productions:changed')
+  },
   settings: { get: call('settings:get'), set: call('settings:set'), setComfyKey: call('settings:setComfyKey'), setCivitaiKey: call('settings:setCivitaiKey') },
   // pathFor: the path of a file dropped on the window.
   replace: {

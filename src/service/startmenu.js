@@ -17,6 +17,13 @@ export const START_MENU = [
     brief: `Make or edit a picture (Create -> Image). Call list_image_models, ask whether they want a new picture or to change one (edit needs a picture path), pick a model family that suits it, then make_image and poll get_image. Show the results; offer "use in a shot" or another round.`
   },
   {
+    id: 'make_a_film',
+    title: 'Make a short film',
+    blurb: 'From an idea (or a script) to a storyboard, takes and a finished film, step by step.',
+    args: { idea: 'The film: a logline, an idea or a whole script (optional)' },
+    brief: `Make a short film as a project (the app's Projects page, a six-step wizard the person can follow). create_film with their idea as the logline, then write_film_script for a first draft (or set_film_script with theirs) and get their OK on the script. Check the cast and places (update_film: describe each place), then break_down_film: it plans the shots, writes their prompts and sketches a storyboard. When get_film shows it done, walk the person through the storyboard and get their OK before filming anything. Then film scene by scene (render_film_scene), show each shot's takes, finish_film_shot the ones they pick, and build_rough_cut. Follow the guide's Projects section.`
+  },
+  {
     id: 'make_a_sequence',
     title: 'Make a longer scene',
     blurb: 'Several shots that play as one continuous video, in one take or shot by shot.',
