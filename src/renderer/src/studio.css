@@ -5161,6 +5161,19 @@ button.nav-update:hover {
   }
 }
 
+.wiz-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  cursor: pointer;
+}
+.wiz-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--red);
+}
+
 /* a shot, opened */
 .wiz-drawer {
   display: grid;

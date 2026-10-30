@@ -80,7 +80,9 @@ them on). The tools say "film" because `list_projects` already means shots.
 5. Show the person the storyboard. Change shots with `edit_film_shot`, then `write_film_shot_prompt` and
    `sketch_film_shots` for that shot. Get their OK before filming: every shot takes GPU minutes.
 6. `render_film_scene` (without sceneId, the whole film) or `render_film_shot` hunt takes; each shot is an
-   ordinary shot, also in Shots. A line whose character has a voice is spoken in it first, for lip-sync
+   ordinary shot, also in Shots. A shot with a sketch opens exactly on it (Frames mode), so the film keeps the
+   storyboard's framing and faces (fromSketch: false films from the prompt alone). A line whose character
+   has a voice is spoken in it first, for lip-sync
    (`speak_film_line` does it on its own). When a shot's status is pick, show the takes
    (`state.candidates`) and `finish_film_shot` the chosen one.
 7. `build_rough_cut` lays every shot in script order on V1 of the film's edit (finished takes, else the

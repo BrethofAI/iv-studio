@@ -550,6 +550,7 @@ function Board({ v, act, characters, openShot, setStep, mode }) {
   const [open, setOpen] = useState(null) // { sceneId, shotId } in the drawer
   const [takes, setTakes] = useState(null) // shot id whose takes are being picked
   const [previews, setPreviews] = useState(3)
+  const [fromSketch, setFromSketch] = useState(true)
   const face = useFaces()
   const b = v.breakdown
   const t = v.totals
@@ -601,13 +602,18 @@ function Board({ v, act, characters, openShot, setStep, mode }) {
           <div>
             <h2 className="wiz-q">Film it</h2>
             <p className="wiz-help">
-              Each shot is filmed {previews} ways. Pick the take you like best and it's finished in full quality. A character with a voice speaks their lines in it, once voices are set up on Audio → Voices.
+              Each shot is filmed {previews} ways{fromSketch && t.sketched ? ', starting from its sketch' : ''}. Pick the take you like best and it's finished in full quality. A character with a voice speaks their lines in it, once voices are set up on Audio → Voices.
             </p>
           </div>
           <div className="wiz-banner-act">
             <span className="mono small dim">
               {t.finished} done · {t.pick} to pick · {t.rendering} filming
             </span>
+            {t.sketched > 0 && (
+              <label className="wiz-check small" title="Each shot opens exactly on its storyboard sketch, so the film keeps its framing and faces">
+                <input type="checkbox" checked={fromSketch} onChange={(e) => setFromSketch(e.target.checked)} /> Start each shot from its sketch
+              </label>
+            )}
             <div className="segmented" title="Takes per shot">
               {[2, 3].map((n) => (
                 <button key={n} className={previews === n ? 'on' : ''} onClick={() => setPreviews(n)}>
@@ -615,7 +621,7 @@ function Board({ v, act, characters, openShot, setStep, mode }) {
                 </button>
               ))}
             </div>
-            <button className="btn btn-primary" disabled={!toFilm.length} onClick={() => act(() => P().renderScene(v.id, null, { previews }), (jobs) => `Filming ${plural(jobs.length, 'shot')}.`)}>
+            <button className="btn btn-primary" disabled={!toFilm.length} onClick={() => act(() => P().renderScene(v.id, null, { previews, fromSketch }), (jobs) => `Filming ${plural(jobs.length, 'shot')}.`)}>
               {toFilm.length ? `Film ${toFilm.length === all.length ? 'every shot' : `the ${plural(toFilm.length, 'shot')} left`} · about ${estimate(toFilm, previews)} min` : 'Every shot is filmed'}
             </button>
           </div>
@@ -667,7 +673,7 @@ function Board({ v, act, characters, openShot, setStep, mode }) {
             <span className="mono small dim">{clock(sc.shots.reduce((n, s) => n + s.seconds, 0))}</span>
             {sc.stale && <span className="mono small pink">script changed</span>}
             {film && sc.shots.some((s) => s.prompt && !s.projectId) && (
-              <button className="link-btn mono small" onClick={() => act(() => P().renderScene(v.id, sc.id, { previews }), (jobs) => `Filming ${plural(jobs.length, 'shot')}.`)}>
+              <button className="link-btn mono small" onClick={() => act(() => P().renderScene(v.id, sc.id, { previews, fromSketch }), (jobs) => `Filming ${plural(jobs.length, 'shot')}.`)}>
                 Film this scene
               </button>
             )}
@@ -708,7 +714,7 @@ function Board({ v, act, characters, openShot, setStep, mode }) {
       ) : (
         <Foot back={() => setStep('cast')} next={() => setStep('film')} label="Next: film it" disabled={planning || !all.some((s) => s.prompt)} />
       )}
-      {shotAt && <ShotDrawer v={v} sceneId={open.sceneId} sh={shotAt} act={act} characters={characters} face={face} openShot={openShot} film={film} previews={previews} onTakes={() => (setOpen(null), setTakes(shotAt.id))} onClose={() => setOpen(null)} />}
+      {shotAt && <ShotDrawer v={v} sceneId={open.sceneId} sh={shotAt} act={act} characters={characters} face={face} openShot={openShot} film={film} previews={previews} fromSketch={fromSketch} onTakes={() => (setOpen(null), setTakes(shotAt.id))} onClose={() => setOpen(null)} />}
       {takesShot && <Takes v={v} sh={takesShot} act={act} onClose={() => setTakes(null)} />}
     </section>
   )
@@ -744,7 +750,7 @@ function Panel({ v, sh, n, film, ch, face, onClick }) {
 }
 
 // A shot opened from the board: what happens, the camera, the line and its length, plus its sketch and prompt.
-function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, previews, onTakes, onClose }) {
+function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, previews, fromSketch, onTakes, onClose }) {
   const [changed, setChanged] = useState(false)
   const [working, setWorking] = useState('')
   const sc = v.scenes.find((s) => s.id === sceneId)
@@ -858,7 +864,7 @@ function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, pre
                 </button>
               )}
               {sh.prompt && !['rendering', 'finishing'].includes(st.status) && (
-                <button className="btn btn-small btn-primary" onClick={() => act(() => P().render(v.id, sh.id, { previews }), `Filming ${previews} takes.`)}>
+                <button className="btn btn-small btn-primary" onClick={() => act(() => P().render(v.id, sh.id, { previews, fromSketch }), `Filming ${previews} takes.`)}>
                   {sh.projectId ? 'Film new takes' : 'Film this shot'}
                 </button>
               )}

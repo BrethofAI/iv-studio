@@ -1,6 +1,6 @@
 // Projects: a shot's spoken line always reaches its H3 prompt.   node test/productions.mjs
 import assert from 'node:assert/strict'
-import { scriptText, sketchPrompt, withLine } from '../src/service/productions.js'
+import { asFirstFrame, scriptText, sketchPrompt, withLine } from '../src/service/productions.js'
 import { parseScript } from '../src/service/screenplay.js'
 
 let n = 0
@@ -29,5 +29,10 @@ ok('a written script reads back as scenes, cues and lines', () => {
 ok('a sketch prompt names the face, framing and place', () => {
   const t = sketchPrompt({ action: 'Tess lifts a bowl.', camera: 'Medium shot, static.', place: 'Pottery studio', time: 'DAY', description: 'shelves of bowls', look: 'muted earthy colours', faces: ['Tess Marlow'] })
   assert.match(t, /^Cinematic film still, medium shot, static framing\. Tess Marlow is the person in picture 1; keep their face\. Tess lifts a bowl\. Pottery studio, day: shelves of bowls\. Look: muted earthy colours\./)
+})
+ok('a shot filmed from its sketch opens on <Picture 1>, once', () => {
+  const f = asFirstFrame(P)
+  assert.ok(f.startsWith('For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\n\nintegrated_multimodal_description:'))
+  assert.equal(asFirstFrame(f), f)
 })
 console.log(`${n} checks passed`)

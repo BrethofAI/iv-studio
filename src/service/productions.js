@@ -113,6 +113,13 @@ export function scriptText(out) {
   return parts.join('\n').trim() + '\n'
 }
 
+// A shot's text prompt as a Frames prompt: H3 opens on <Picture 1> (the shot's sketch) when the prompt says so.
+const FIRST_FRAME = 'For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.'
+export function asFirstFrame(prompt) {
+  const body = String(prompt || '').trim()
+  return body.startsWith(FIRST_FRAME) ? body : `${FIRST_FRAME}\n\n${body}`
+}
+
 // A storyboard still's prompt: a film still of the shot, in the film's look.
 export function sketchPrompt({ action, camera, place, time, description, look, faces = [] }) {
   return [
@@ -476,8 +483,9 @@ export class Productions {
 
   // Hunts previews for a shot (an ordinary IV Studio shot: it shows in Shots too).
   // With voice (the default), a line its character has a voice for is said first, so the shot lip-syncs to it;
-  // if the voice engine can't, the shot renders with H3's own voice.
-  async render(id, shotId, { previews = 3, seed, voice = true } = {}) {
+  // if the voice engine can't, the shot renders with H3's own voice. With fromSketch (the default) a shot that
+  // has a sketch opens exactly on it (Frames mode), so the film keeps the storyboard's framing and faces.
+  async render(id, shotId, { previews = 3, seed, voice = true, fromSketch = true } = {}) {
     const studio = this.studio()
     let p = this.get(id)
     let { sc, sh } = this.find(p, shotId)
@@ -500,8 +508,22 @@ export class Productions {
       this.patch(id, (q) => (this.find(q, shotId).sh.projectId = projectId))
     }
     const seconds = sh.voiceLine ? Math.min(15, Math.max(sh.seconds, Math.ceil(sh.voiceLine.duration + 0.5))) : sh.seconds
-    const job = await studio.generatePreviews({ projectId, mode: 'text', prompt: sh.prompt, character: sh.character || 'none', seconds, aspect: p.aspect, megapixels: 0.4, previews, extraLoras: p.look?.loras || [], voiceLine: sh.voiceLine?.file || null, seed: seed ?? Math.floor(Math.random() * 1e9) })
-    this.onChange(id)
+    const sketch = fromSketch && sh.sketch && fs.existsSync(sh.sketch) ? sh.sketch : null
+    const job = await studio.generatePreviews({
+      projectId,
+      mode: sketch ? 'frames' : 'text',
+      prompt: sketch ? asFirstFrame(sh.prompt) : sh.prompt,
+      media: sketch ? [{ kind: 'picture', file: sketch }] : [],
+      character: sh.character || 'none',
+      seconds,
+      aspect: p.aspect,
+      megapixels: 0.4,
+      previews,
+      extraLoras: p.look?.loras || [],
+      voiceLine: sh.voiceLine?.file || null,
+      seed: seed ?? Math.floor(Math.random() * 1e9)
+    })
+    this.patch(id, (q) => (this.find(q, shotId).sh.filmedFrom = sketch ? 'sketch' : 'prompt'))
     return job
   }
   // Previews for every shot in a scene (or, with no sceneId, the whole film) that has a prompt and nothing

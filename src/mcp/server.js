@@ -375,11 +375,11 @@ tool('speak_film_line', 'Say a shot\'s line in its character\'s voice; the shot 
   const line = await films.speak(filmId, shotId)
   return { file: line.file, duration: line.duration }
 })
-tool('render_film_shot', 'Hunt previews for one shot (3 by default; an ordinary IV Studio shot, so it also shows in Shots). A line its character has a voice for is said in that voice first, so the shot lip-syncs to it (voice: false skips that). Poll get_film or get_job; when its status is pick, show the person the takes and finish_film_shot the one they choose.', { filmId: z.string(), shotId: z.string(), previews: z.number().int().min(1).max(3).default(3), seed: z.number().int().optional(), voice: z.boolean().default(true) }, async ({ filmId, shotId, ...opts }) => {
+tool('render_film_shot', 'Hunt previews for one shot (3 by default; an ordinary IV Studio shot, so it also shows in Shots). A shot with a storyboard sketch opens exactly on it (fromSketch: false films from the prompt alone). A line its character has a voice for is said in that voice first, so the shot lip-syncs to it (voice: false skips that). Poll get_film or get_job; when its status is pick, show the person the takes and finish_film_shot the one they choose.', { filmId: z.string(), shotId: z.string(), previews: z.number().int().min(1).max(3).default(3), seed: z.number().int().optional(), voice: z.boolean().default(true), fromSketch: z.boolean().default(true).describe("Open on the shot's storyboard sketch (Frames mode) when it has one") }, async ({ filmId, shotId, ...opts }) => {
   if (readSettings(BASE).target !== 'cloud') await voices.release()
   return films.render(filmId, shotId, opts)
 })
-tool('render_film_scene', 'Hunt previews for every shot in a scene (or, without sceneId, the whole film) that has a prompt and nothing rendered yet. Ask the person first: each shot is minutes of GPU time.', { filmId: z.string(), sceneId: z.string().optional(), previews: z.number().int().min(1).max(3).default(3) }, async ({ filmId, sceneId, ...opts }) => {
+tool('render_film_scene', 'Hunt previews for every shot in a scene (or, without sceneId, the whole film) that has a prompt and nothing rendered yet. Ask the person first: each shot is minutes of GPU time.', { filmId: z.string(), sceneId: z.string().optional(), previews: z.number().int().min(1).max(3).default(3), fromSketch: z.boolean().default(true) }, async ({ filmId, sceneId, ...opts }) => {
   if (readSettings(BASE).target !== 'cloud') await voices.release()
   return { items: await films.renderScene(filmId, sceneId, opts) }
 })
