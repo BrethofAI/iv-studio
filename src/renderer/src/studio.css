@@ -5724,3 +5724,125 @@ button.nav-update:hover {
     grid-template-columns: repeat(2, 120px);
   }
 }
+
+/* ---------- the staging board (StageBoard.jsx) ---------- */
+.stage-board {
+  display: grid;
+  grid-template-columns: minmax(180px, 300px) minmax(0, 1fr);
+  gap: 12px 16px;
+  padding: 12px;
+  min-width: 0;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.stage-side > * {
+  min-width: 0;
+}
+.stage-side .row.tight {
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+/* the shot drawer is narrow: the floor on top, the controls under it */
+.wiz-drawer .stage-board {
+  grid-template-columns: minmax(0, 1fr);
+}
+.wiz-drawer .stage-floor {
+  max-width: 300px;
+  justify-self: center;
+}
+.stage-floor {
+  width: 100%;
+  aspect-ratio: 1;
+  touch-action: none;
+  user-select: none;
+}
+.stage-bg {
+  fill: var(--ink);
+}
+.stage-grid line {
+  stroke: var(--line);
+  stroke-width: 0.02;
+}
+.stage-fov {
+  fill: rgba(244, 72, 89, 0.1);
+  stroke: rgba(244, 72, 89, 0.45);
+  stroke-width: 0.03;
+}
+.stage-person,
+.stage-cam {
+  cursor: grab;
+}
+.stage-turn,
+.stage-cam-turn {
+  cursor: alias;
+}
+.stage-face,
+.stage-path {
+  stroke-width: 0.06;
+}
+.stage-path {
+  stroke-dasharray: 0.15 0.12;
+}
+.stage-walk {
+  fill: var(--ink);
+  stroke-width: 0.06;
+  cursor: grab;
+}
+.stage-cam {
+  fill: var(--cream);
+}
+.stage-cam-aim {
+  stroke: var(--cream);
+  stroke-width: 0.04;
+}
+.stage-cam-turn {
+  fill: var(--red);
+}
+.stage-name {
+  fill: var(--cream);
+  font: 0.3px 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  text-anchor: middle;
+  pointer-events: none;
+}
+.stage-side {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+.stage-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stage-who select {
+  flex: 1;
+  min-width: 0;
+}
+.stage-who .link-btn {
+  flex: none;
+}
+.stage-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+.stage-words {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 4px;
+}
+.stage-words p {
+  margin: 0;
+}
+.wiz-field-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+@media (max-width: 720px) {
+  .stage-board {
+    grid-template-columns: 1fr;
+  }
+}

@@ -17,6 +17,7 @@ export const GEN_KINDS = ['extend', 'bridge', 'retake']
 export const EXTEND_SECONDS = [5, 10, 15]
 const OPEN = ['rendering', 'pick', 'finishing']
 const OVERLAP = 22 // Continue's overlap frames (the default on Create)
+export const OVERLAPS = [5, 22, 39, 56] // the choices: fewer carries less of the clip's motion into the join
 const FPS = 24
 const round = (x) => Math.round(x * 1000) / 1000
 
@@ -157,6 +158,8 @@ export class EditGen {
       const m = this.video(e, c)
       const seconds = Number(spec.seconds) || 5
       if (!EXTEND_SECONDS.includes(seconds)) throw new Error(`An extension is ${EXTEND_SECONDS.join(', ')} seconds.`)
+      const overlap = spec.overlap ?? OVERLAP
+      if (!OVERLAPS.includes(overlap)) throw new Error(`The overlap is ${OVERLAPS.join(', ')} frames.`)
       // the last few seconds of what the clip shows: Continue carries on from its final frames
       const src = await this.cut(m, Math.max(c.in, c.out - 4), c.out, `${id}_source`)
       const job = await studio.generatePreviews({
@@ -166,8 +169,8 @@ export class EditGen {
         character,
         extraLoras,
         // Continue counts its overlap inside the length, so ask for that much more (H3 stops at 15 s)
-        seconds: Math.min(15, round(seconds + (OVERLAP + 1) / FPS)),
-        overlapFrames: OVERLAP,
+        seconds: Math.min(15, round(seconds + (overlap + 1) / FPS)),
+        overlapFrames: overlap,
         aspect: spec.aspect || nearestAspect(m.width, m.height),
         megapixels: 1,
         seed,

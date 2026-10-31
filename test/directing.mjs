@@ -6,7 +6,7 @@ import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { DIRECTING } from '../src/service/directing.js'
 import { sketchPrompt } from '../src/service/productions.js'
 import { outputSchema, systemPrompt } from '../src/service/prompter.js'
-import { FIX_KINDS, Reviewer, reviewSchema, reviewSystem } from '../src/service/review.js'
+import { FIX_KINDS, madeWith, Reviewer, reviewSchema, reviewSystem } from '../src/service/review.js'
 
 let n = 0
 const ok = async (name, fn) => {
@@ -62,7 +62,7 @@ await ok('a review is tidied: bounds, unknown kinds, the stretch, and a revision
 await ok('a problem that came back after a revision is marked, and unheard words are left alone', () => {
   const r = new Reviewer({ studio: () => null, ffmpeg: ffmpegStatic.ffmpegPath })
   const ctx = { prompt: 'x', req: { mode: 'text', seconds: 5 }, character: null }
-  const past = [{ id: 'a', revised: true, takes: [{ key: '1', fix: 'revise_prompt', unmet: [{ kind: 'space', what: 'looks at the lens' }] }] }]
+  const past = [{ id: 'a', revised: true, reref: false, takes: [{ key: '1', fix: 'revise_prompt', unmet: [{ kind: 'space', what: 'looks at the lens' }] }] }]
   const data = { verdict: 'usable_with_fixes', works: [], issues: [{ from: 0, to: 2, kind: 'space', what: 'still at the lens', unmet: true }, { from: 1, to: 3, kind: 'words', what: "can't confirm the line", unmet: false }], fix: { kind: 'revise_prompt', why: 'x', clean_from: 0, clean_to: 0 }, revised_prompt: '' }
   const a = r.tidy(data, { ...ctx, past })
   assert.equal(a.issues.length, 1, 'no transcript: the words guess is dropped')
@@ -72,18 +72,26 @@ await ok('a problem that came back after a revision is marked, and unheard words
   assert.equal(b.issues.length, 2, 'heard: words issues stay')
   const c = r.tidy(data, { ...ctx, past: [{ ...past[0], revised: false }] })
   assert.ok(!c.issues[0].again && !c.repeat, 'the same prompt run twice is not a revision')
+  const ref = { ...data, fix: { ...data.fix, kind: 'change_reference' } }
+  assert.ok(!r.tidy(ref, { ...ctx, past }).repeat, 'a new reference is not yet tried')
+  const d = r.tidy(ref, { ...ctx, past: [{ ...past[0], revised: false, reref: true }] })
+  assert.ok(d.issues[0].again && /references changed too/.test(d.repeat), 'after a new reference failed, a split or the clean stretch')
+  assert.equal(madeWith({ mode: 'frames', media: [{ kind: 'picture' }] }), 'in Frames mode from a first picture')
+  assert.equal(madeWith({ mode: 'reference', media: [{ kind: 'picture' }, { kind: 'picture' }, { kind: 'video' }] }), 'in References mode with 2 pictures, 1 video')
 })
 await ok("the history is the shot's earlier reviewed runs, finals included", () => {
   const jobs = {
-    a: { id: 'a', kind: 'previews', createdAt: '1', plan: { request: { prompt: 'old' } }, reviews: { 1: { fix: { kind: 'revise_prompt' }, issues: [{ kind: 'space', unmet: true, what: 'lens' }] } } },
+    a: { id: 'a', kind: 'previews', createdAt: '1', plan: { request: { prompt: 'old', mode: 'text' } }, reviews: { 1: { fix: { kind: 'revise_prompt' }, issues: [{ kind: 'space', unmet: true, what: 'lens' }] } } },
     f: { id: 'f', kind: 'finish', parent: 'a', createdAt: '2', reviews: { final: { fix: { kind: 'edit' }, issues: [{ kind: 'emotion', unmet: true, what: 'gasp' }] } } },
-    b: { id: 'b', kind: 'previews', createdAt: '3', projectId: 'p', plan: { asked: { prompt: 'new' } } },
+    b: { id: 'b', kind: 'previews', createdAt: '3', projectId: 'p', plan: { asked: { prompt: 'new' }, request: { mode: 'frames', media: [{ kind: 'picture' }] } } },
     c: { id: 'c', kind: 'previews', createdAt: '4', reviews: { 1: { fix: { kind: 'none' }, issues: [] } } }
   }
   const studio = { getProject: () => ({ jobs: ['a', 'f', 'b', 'c'] }), getJob: (id) => jobs[id] }
   const h = new Reviewer({ studio: () => studio, ffmpeg: ffmpegStatic.ffmpegPath }).history(jobs.b)
   assert.equal(h.length, 1, 'only earlier runs')
   assert.equal(h[0].revised, true)
+  assert.equal(h[0].reref, true, 'text then frames: the references changed')
+  assert.equal(h[0].how, 'in Text mode')
   assert.deepEqual(h[0].takes.map((x) => [x.key, x.unmet[0].kind]), [['1', 'space'], ['final', 'emotion']])
 })
 const clip = process.argv[2]

@@ -10,6 +10,7 @@
 // step is where the person is in the Projects wizard (idea, story, cast, board, film, watch).
 // Breaking the script down uses the local writer: one call per scene for the shot list, then one per shot
 // for its H3 prompt. Rendering, picking and finishing are Studio's own.
+import { stageFields } from './staging.js'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -569,7 +570,13 @@ export class Productions {
         return
       }
       const sh = sc.shots[i]
-      for (const k of ['action', 'staging', 'camera', 'ends', 'characters', 'speaker', 'line', 'seconds', 'prompt', 'character']) if (patch[k] !== undefined) sh[k] = patch[k]
+      for (const k of ['action', 'staging', 'camera', 'ends', 'characters', 'speaker', 'line', 'seconds', 'prompt', 'character', 'stage']) if (patch[k] !== undefined) sh[k] = patch[k]
+      // a staging board's plan becomes the shot's words, unless the words were given too
+      if (patch.stage) {
+        const f = stageFields(patch.stage)
+        if (patch.staging === undefined) sh.staging = f.staging
+        if (patch.camera === undefined) sh.camera = f.camera
+      }
       if (patch.line !== undefined || patch.character !== undefined) sh.voiceLine = null
       sh.seconds = Math.min(15, Math.max(1, Number(sh.seconds) || 5))
     })

@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react'
 import { ask } from './Confirm'
+import StageBoard from './StageBoard'
+import { cameraWords, stagingWords } from '../../../service/staging'
 
 const HARNESS_NAME = { claude: 'Claude Code', codex: 'Codex' }
 
 // "Write it for me": a plain-words idea in, a finished H3 prompt out. context carries what the writer
-// should respect (mode, seconds, aspect, character, media, sequence, previous shot).
-export default function PromptWriter({ context, current, onWritten, notify, go, compact = false }) {
+// should respect (mode, seconds, aspect, character, media, sequence, previous shot). names: who can go on the
+// staging board; its exact screen-side words go to the writer with the idea.
+export default function PromptWriter({ context, current, onWritten, notify, go, compact = false, names = null }) {
   const [idea, setIdea] = useState('')
+  const [board, setBoard] = useState(false)
+  const [stage, setStage] = useState(null)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState(null)
   const [undo, setUndo] = useState(null)
@@ -42,7 +47,10 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
   async function write() {
     setBusy(true)
     try {
-      const text = await window.ivstudio.prompts.write({ ...context, idea })
+      const staged = board && stage?.people?.length ? `${idea.trim()}
+Staging (follow it exactly): ${stagingWords(stage)}
+Camera: ${cameraWords(stage)}.` : idea
+      const text = await window.ivstudio.prompts.write({ ...context, idea: staged })
       setUndo(current || '')
       onWritten(text)
     } catch (err) {
@@ -64,6 +72,12 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
           {busy ? 'Writing…' : current?.trim() ? 'Rewrite prompt' : 'Write my prompt'}
         </button>
       </div>
+      {names && (
+        <button className={`link-btn mono small writer-stage ${board ? 'pink' : ''}`} onClick={() => setBoard(!board)}>
+          {board ? '✦ Leave the staging to the writer' : '✦ Stage it on a board'}
+        </button>
+      )}
+      {names && board && <StageBoard stage={stage} names={names} start={names.slice(0, 1)} onChange={setStage} />}
       {seeing && !blocker && <p className={`small writer-note ${sees ? 'dim' : 'pink'}`}>✦ {seeing}</p>}
       {blocker && (
         <p className="small pink writer-note">

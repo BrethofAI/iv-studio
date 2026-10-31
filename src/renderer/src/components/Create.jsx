@@ -408,6 +408,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
         <PromptWriter
           context={{ mode: form.mode, seconds: form.seconds, aspect: form.aspect, character: form.character ?? 'none', media: form.media.map((m) => ({ kind: m.kind, file: m.path })) }}
           current={form.prompt}
+          names={char ? [char.name, ...characters.filter((c) => c.id !== char.id).map((c) => c.name), 'Someone'] : ['Someone', ...characters.map((c) => c.name)]}
           onWritten={(prompt) => set({ prompt })}
           notify={notify}
           go={go}

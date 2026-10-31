@@ -51,6 +51,7 @@ export function GenDialog({ edit, spec, characters, notify, onStart, onClose }) 
   const [idea, setIdea] = useState('')
   const [character, setCharacter] = useState('none')
   const [seconds, setSeconds] = useState(spec.kind === 'extend' ? 5 : 3)
+  const [overlap, setOverlap] = useState(22)
   const [mode, setMode] = useState('both')
   const [from, setFrom] = useState(spec.from ?? 0)
   const [to, setTo] = useState(spec.to ?? 0)
@@ -97,7 +98,7 @@ export function GenDialog({ edit, spec, characters, notify, onStart, onClose }) 
   async function go() {
     setBusy('Starting…')
     try {
-      await onStart({ ...spec, prompt, character, seconds, mode, from: Number(from), to: Number(to), extraLoras: prep?.origin?.extraLoras || [], aspect: prep?.aspect })
+      await onStart({ ...spec, prompt, character, seconds, mode, ...(spec.kind === 'extend' && { overlap }), from: Number(from), to: Number(to), extraLoras: prep?.origin?.extraLoras || [], aspect: prep?.aspect })
       onClose()
     } catch (err) {
       notify(err.message)
@@ -152,6 +153,19 @@ export function GenDialog({ edit, spec, characters, notify, onStart, onClose }) 
                 </button>
               ))}
             </div>
+          </div>
+        )}
+        {spec.kind === 'extend' && (
+          <div className="row tight">
+            <span className="row-label">Overlap</span>
+            <div className="segmented">
+              {[5, 22, 39, 56].map((n) => (
+                <button key={n} className={overlap === n ? 'on' : ''} title={`${n} frames of the clip carried into the join`} onClick={() => setOverlap(n)}>
+                  {n}
+                </button>
+              ))}
+            </div>
+            <span className="dim small">{overlap <= 5 ? 'Freer: the new part can change more' : overlap >= 39 ? 'Smoothest join, keeps the motion going' : 'Balanced (default)'}</span>
           </div>
         )}
         {kind === 'bridge' && (

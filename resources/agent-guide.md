@@ -56,13 +56,17 @@ whole). Follow it whenever you write, stage or revise a scene yourself:
 - **Continuity across cuts.** Each shot opens where the last one left things: positions, hands and props, gaze,
   direction of travel. In Projects every shot has `staging` and `ends` (`edit_film_shot`), and the next shot's
   prompt starts from the previous one's `ends`.
+- **The staging board.** A shot's `stage` is a top-down plan in metres (people with facing, who they look at and
+  where they walk; the camera with lens, height and move). `edit_film_shot` with `stage` turns it into exact
+  screen-side `staging` and `camera` words and returns `lineWarnings` when two people swap sides from the scene's
+  last staged shot. Words alone handle simple paths well; the board's value is exact, consistent sides across shots.
 - **Review the take, not the hope.** `review_take` has the person's writer look at frames from a take and name
   each problem with its seconds, say what works, and pick one fix: none, revise the prompt (with the revised
   prompt, already through the checker), change a reference, split the action, use a clean stretch, or solve it
   in the edit. When the prompt already asked for what went wrong, it's an unmet instruction, not a missing
-  phrase. The reviewer sees the shot's earlier reviews: a problem that came back after a revision is marked
-  `again`, and the fix moves on to a reference, a split or the clean stretch, because more words won't move an
-  H3 habit. Show the person the review before rendering again.
+  phrase. The reviewer sees the shot's earlier reviews and how each run was made: a problem that came back after a
+  revision or a new reference is marked `again`, and the fix moves on (to a reference, then a split, the clean
+  stretch or the edit), because more words won't move an H3 habit such as talking to the camera. Show the person the review before rendering again.
 
 `write_prompt` and the storyboard already follow these rules: Claude Code and Codex get the whole method, the
 local writer a short version.

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { media } from '../media'
 import { ask } from './Confirm'
+import StageBoard from './StageBoard'
 import { fileUrl } from './edit/model'
 import Hero from './Hero'
 import { LoraPicker } from './Loras'
@@ -777,6 +778,9 @@ function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, pre
   const speaker = sh.speaker ? named.find((s) => first(s) === first(sh.speaker)) || sh.speaker : ''
   const speakers = speaker && !named.includes(speaker) ? [...named, speaker] : named
   const busy = (what, fn) => async () => (setWorking(what), await fn(), setWorking(''))
+  // the staging board, and the scene's last staged shot before this one (for the line between two people)
+  const [board, setBoard] = useState(!!sh.stage)
+  const before = sc.shots.slice(0, i).reverse().find((s) => s.stage)?.stage || null
   useEffect(() => {
     const key = (e) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', key)
@@ -816,13 +820,19 @@ function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, pre
           <span className="mono small dim">What we see</span>
           <textarea rows={3} defaultValue={sh.action} placeholder="Tess lifts the bowl off the wheel and turns it in the light." onBlur={(e) => e.target.value !== sh.action && edit({ action: e.target.value })} />
         </label>
-        <label className="wiz-field">
-          <span className="mono small dim">Who stands where</span>
-          <textarea rows={2} defaultValue={sh.staging || ''} placeholder="Tess screen-left at the wheel, facing right; Theo in the doorway screen-right, looking at her." onBlur={(e) => e.target.value !== (sh.staging || '') && edit({ staging: e.target.value })} />
-        </label>
+        <div className="wiz-field">
+          <span className="wiz-field-head">
+            <span className="mono small dim">Who stands where</span>
+            <button className={`link-btn mono small ${board ? 'pink' : ''}`} onClick={() => setBoard(!board)}>
+              {board ? 'Hide the board' : sh.stage ? 'Open the board' : 'Draw it on a board'}
+            </button>
+          </span>
+          {board && <StageBoard stage={sh.stage} names={named} start={sh.characters} before={before} onChange={(stage) => edit({ stage })} />}
+          <textarea key={`st${sh.staging}`} rows={2} defaultValue={sh.staging || ''} placeholder="Tess screen-left at the wheel, facing right; Theo in the doorway screen-right, looking at her." onBlur={(e) => e.target.value !== (sh.staging || '') && edit({ staging: e.target.value })} />
+        </div>
         <label className="wiz-field">
           <span className="mono small dim">Camera</span>
-          <input list="wiz-cameras" defaultValue={sh.camera} placeholder="Medium shot, static" onBlur={(e) => e.target.value !== sh.camera && edit({ camera: e.target.value })} />
+          <input key={`cam${sh.camera}`} list="wiz-cameras" defaultValue={sh.camera} placeholder="Medium shot, static" onBlur={(e) => e.target.value !== sh.camera && edit({ camera: e.target.value })} />
           <datalist id="wiz-cameras">
             {CAMERAS.map((c) => (
               <option key={c} value={c} />

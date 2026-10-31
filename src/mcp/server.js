@@ -14,6 +14,7 @@ import { GUIDE_SOURCE, loadGuide } from '../service/h3guide'
 import { blocking, lintPrompt } from '../service/lint'
 import { Ranker } from '../service/ranking'
 import { Reviewer } from '../service/review'
+import { CAMERA_MOVES, lineCheck } from '../service/staging'
 import { DIRECTING, DIRECTING_SOURCE } from '../service/directing'
 import { menuMessage, START_MENU } from '../service/startmenu'
 import { Edits, editLength, FORMATS } from '../service/edits'
@@ -363,7 +364,13 @@ tool('grab_frame', 'A picture of one moment, to check an edit or a render by eye
 // ---------- Projects: a short film from script to rough cut (the app's Projects page; "films" here, because
 // list_projects already means shots) ----------
 const films = new Productions({ dataDir: DATA, studio: () => studio, voices: () => voices, images: () => images, catalog: () => catalog, edits, localCopy: (f) => studio.localCopy(f, VIDEOS), model: () => readSettings(BASE).ollamaModel || undefined, writer: () => writerOf(readSettings(BASE)) })
-const shotPatch = { action: z.string().optional(), staging: z.string().optional().describe('Who stands where by screen side at the start, facing, eyelines, distance, movement'), camera: z.string().optional(), ends: z.string().optional().describe('How the shot leaves things: positions, facing, hands and props, gaze, direction of travel; the next shot opens on it'), characters: z.array(z.string()).optional(), speaker: z.string().optional(), line: z.string().optional(), seconds: z.number().min(1).max(15).optional(), prompt: z.string().optional(), character: z.string().optional().describe('Character preset id or none') }
+const stageSchema = z
+  .object({
+    people: z.array(z.object({ name: z.string(), x: z.number(), y: z.number(), facing: z.number().describe('degrees on the floor: 0 into the room (away from a camera at the front), 90 to the room\'s right, 180 toward the front'), to: z.object({ x: z.number(), y: z.number() }).nullable().optional().describe('where they walk to'), lookAt: z.string().nullable().optional() })).max(4),
+    camera: z.object({ x: z.number(), y: z.number(), facing: z.number(), lens: z.enum(['wide', 'normal', 'long']).default('normal'), move: z.enum(Object.keys(CAMERA_MOVES)).default('static'), height: z.enum(['eye', 'low', 'high']).default('eye') })
+  })
+  .describe('A staging board plan in metres on an 8 x 8 m floor centred on 0,0 (x to the right, y into the room; the camera usually at y -3 facing 0). Its words fill staging and camera unless those are given too.')
+const shotPatch = { stage: stageSchema.optional(), action: z.string().optional(), staging: z.string().optional().describe('Who stands where by screen side at the start, facing, eyelines, distance, movement'), camera: z.string().optional(), ends: z.string().optional().describe('How the shot leaves things: positions, facing, hands and props, gaze, direction of travel; the next shot opens on it'), characters: z.array(z.string()).optional(), speaker: z.string().optional(), line: z.string().optional(), seconds: z.number().min(1).max(15).optional(), prompt: z.string().optional(), character: z.string().optional().describe('Character preset id or none') }
 tool('list_films', 'Short-film projects (the app\'s Projects page): name, logline, aspect, scenes and shots.', {}, () => ({ items: films.list() }))
 tool('create_film', `Start a short-film project. script (optional) is screenplay text: a scene starts with a heading like "INT. POTTERY STUDIO - DAY", a name in capitals on its own line with words under it is dialogue, other paragraphs are action. ${LIVE_FILM}`, {
   name: z.string().default('Untitled film'),
@@ -397,7 +404,7 @@ tool('break_down_film', 'Break the script into shots with the local writer: each
   sceneIds: z.array(z.string()).optional(),
   sketch: z.boolean().default(true)
 }, ({ filmId, ...opts }) => films.breakDown(filmId, opts))
-tool('edit_film_shot', `Change a shot (any of action, staging, camera, ends, characters, speaker, line, seconds, prompt, character), add one after it (add: true, with the new shot's fields), remove it (remove: true) or move it within its scene (move: -1 or 1). After changing what happens, write_film_shot_prompt rewrites its prompt. ${LIVE_FILM}`, {
+tool('edit_film_shot', `Change a shot (any of action, staging, camera, ends, characters, speaker, line, seconds, prompt, character, stage), add one after it (add: true, with the new shot's fields), remove it (remove: true) or move it within its scene (move: -1 or 1). stage is the staging board's plan: its exact screen-side words become staging and camera, and lineWarnings says when two people swap sides from the scene's previous staged shot. After changing what happens, write_film_shot_prompt rewrites its prompt. ${LIVE_FILM}`, {
   filmId: z.string(),
   sceneId: z.string(),
   shotId: z.string().optional().describe('Omit with add to add at the end of the scene'),
@@ -405,7 +412,13 @@ tool('edit_film_shot', `Change a shot (any of action, staging, camera, ends, cha
   remove: z.boolean().optional(),
   move: z.number().int().min(-1).max(1).optional(),
   ...shotPatch
-}, ({ filmId, sceneId, shotId, ...patch }) => films.editShot(filmId, sceneId, shotId || null, patch))
+}, async ({ filmId, sceneId, shotId, ...patch }) => {
+  const out = await films.editShot(filmId, sceneId, shotId || null, patch)
+  if (!patch.stage || !shotId) return out
+  const shots = films.get(filmId).scenes.find((s) => s.id === sceneId)?.shots || []
+  const before = shots.slice(0, shots.findIndex((s) => s.id === shotId)).reverse().find((s) => s.stage)
+  return { ...out, lineWarnings: lineCheck(before?.stage, patch.stage) }
+})
 tool('write_film_shot_prompt', 'Write (or rewrite) one shot\'s H3 prompt from its description with the local writer.', { filmId: z.string(), sceneId: z.string(), shotId: z.string() }, async ({ filmId, sceneId, shotId }) => ({ prompt: await films.writeShotPrompt(filmId, sceneId, shotId) }))
 tool('speak_film_line', 'Say a shot\'s line in its character\'s voice; the shot then lip-syncs to it when rendered, and its finish uses that sound. Each take is read back with Whisper and said again (up to 3 seeds) until every word is there; heard is what Whisper heard. again: a new take with fresh seeds, then film new takes to use it. The character needs a voice (Characters page).', { filmId: z.string(), shotId: z.string(), again: z.boolean().default(false) }, async ({ filmId, shotId, again }) => {
   if (readSettings(BASE).target !== 'cloud') await voices.release()
@@ -435,6 +448,7 @@ tool('generate_in_edit', `Make new footage on an edit's timeline with H3, the wa
   next: z.string().optional().describe('bridge: the clip right after it'),
   gap: z.object({ track: z.string(), from: z.number(), to: z.number() }).optional().describe('bridge: fill this gap instead'),
   seconds: z.number().optional().describe('extend: 5, 10 or 15; bridge between clips: its length (default 3)'),
+  overlap: z.number().int().optional().describe('extend: how many of the clip\'s last frames Continue carries into the join, 5, 22 (default), 39 or 56. More keeps the motion smoother through the join; fewer lets the new part change more. At 15 s the overlap comes out of the new part.'),
   from: z.number().optional().describe('retake: start, timeline seconds'),
   to: z.number().optional().describe('retake: end, timeline seconds'),
   mode: z.enum(Object.keys(RETAKE_MODES)).optional(),
