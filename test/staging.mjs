@@ -87,6 +87,14 @@ ok('previs: push, pan and a walk', () => {
   assert.equal((f[100].people[0].facing + 360) % 360, 180, 'and turns back at the end')
   s.camera.move = 'pan-right'
   assert.ok(previsFrames(s, { frames: 11 })[10].camera.aim.x > 1, 'a pan right turns the aim right')
+  // tracking with someone who walks keeps her in the frame all the way (the batch's track shot lost her at 3.6 s)
+  const tr = defaultStage(['Tess'])
+  tr.people[0] = { name: 'Tess', x: -2, y: 1, facing: 90, to: { x: 2, y: 1 }, lookAt: null }
+  tr.camera = { ...tr.camera, x: -1.5, y: -3, facing: 0, move: 'track-right' }
+  const tf = previsFrames(tr, { frames: 101 })
+  assert.ok(tf.every((fr) => Math.abs(fr.people[0].x - fr.camera.x - -0.5) < 0.01), 'stays at the same place on screen')
+  tr.people[0].to = null
+  assert.ok(Math.abs(previsFrames(tr, { frames: 101 })[100].camera.x) < 0.01, 'with nobody walking it slides 1.5 m')
   assert.match(previsWords(two(), 1), /^<Video 1> is a grey previs.*the dark grey mannequin stands for Tess, the light grey mannequin stands for Theo\.$/)
 })
 ok('a previs is a camera guide: the writer is told so, and a prompt that describes its mannequins is stopped', () => {

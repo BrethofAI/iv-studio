@@ -163,6 +163,8 @@ const EYE = { eye: 1.6, low: 0.6, high: 3.2 }
 const smooth = (t) => t * t * (3 - 2 * t)
 const lerp = (a, b, t) => a + (b - a) * t
 const turnTo = (a, b, t) => a + ((((b - a) % 360) + 540) % 360 - 180) * t
+// how far along their walk someone is: they walk from 10% to 75% of the shot
+const walkAt = (t) => smooth(Math.min(1, Math.max(0, (t - 0.1) / 0.65)))
 
 // Where the camera looks: the middle of the people it sees, else 4 m ahead.
 function aimPoint(stage) {
@@ -210,7 +212,11 @@ export function previsFrames(stage, { frames = 124 } = {}) {
       }
       case 'track-left':
       case 'track-right': {
-        const s = (c.move === 'track-left' ? 1 : -1) * 1.5 * e
+        // tracking "with them" keeps pace with someone walking that way; otherwise a 1.5 m slide
+        const sign = c.move === 'track-left' ? 1 : -1
+        const along = (p) => dot({ x: p.to.x - p.x, y: p.to.y - p.y }, left)
+        const mover = (stage.people || []).find((p) => p.to && sign * along(p) > 0.3)
+        const s = mover ? along(mover) * walkAt(t) : sign * 1.5 * e
         cam = { x: c.x + left.x * s, y: c.y + left.y * s }
         break
       }
@@ -227,7 +233,7 @@ export function previsFrames(stage, { frames = 124 } = {}) {
       if (!p.to) return { x: p.x, y: p.y, facing: p.facing }
       // they turn to walk, walk from 10% to 75% of the shot, then turn back to their own facing
       const walkDir = deg(Math.atan2(p.to.x - p.x, p.to.y - p.y))
-      const w = smooth(Math.min(1, Math.max(0, (t - 0.1) / 0.65)))
+      const w = walkAt(t)
       const facingNow = t < 0.1 ? turnTo(p.facing, walkDir, t / 0.1) : t < 0.75 ? walkDir : turnTo(walkDir, p.facing, smooth(Math.min(1, (t - 0.75) / 0.15)))
       return { x: lerp(p.x, p.to.x, w), y: lerp(p.y, p.to.y, w), facing: facingNow }
     })
