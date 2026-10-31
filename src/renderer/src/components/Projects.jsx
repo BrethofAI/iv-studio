@@ -800,9 +800,9 @@ function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, pre
         <div className="wiz-drawer-frame" style={{ aspectRatio: ratio(v.aspect) }}>
           {film && st.final ? <video src={src(st.final)} controls preload="metadata" /> : sh.sketch ? <img src={fileUrl(sh.sketch)} alt="" /> : <span className="mono small dim">{sh.sketchSet ? 'Sketching…' : 'No sketch yet'}</span>}
         </div>
-        {changed && (
+        {(changed || sh.sketchStale) && (
           <div className="wiz-drawer-note">
-            <span className="small">You changed the shot. Update its prompt and sketch to match?</span>
+            <span className="small">{sh.sketchStale ? 'The sketch is from before the shot changed, so filming starts without it. Update the prompt and sketch to match?' : 'You changed the shot. Update its prompt and sketch to match?'}</span>
             <button
               className="btn btn-small btn-primary"
               disabled={!!working}

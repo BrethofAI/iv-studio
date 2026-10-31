@@ -1,7 +1,10 @@
 // Projects: a shot's spoken line always reaches its H3 prompt.   node test/productions.mjs
 import assert from 'node:assert/strict'
 import { shotName } from '../src/service/studio.js'
-import { asFirstFrame, beatOf, heading, placePrompt, scriptText, sketchPrompt, spokenWords, withLine, withRoom, withSilence, wordMatch } from '../src/service/productions.js'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { Productions, asFirstFrame, beatOf, heading, placePrompt, scriptText, sketchPrompt, spokenWords, withLine, withRoom, withSilence, wordMatch } from '../src/service/productions.js'
 import { parseScript } from '../src/service/screenplay.js'
 
 let n = 0
@@ -114,5 +117,20 @@ ok('a new shot is named from its first shot, not its field names', () => {
   const ref = ['subject_definitions:', '<Subject 1> is {char} (S1).', '', 'retention_analysis:', '<Subject 1> (appears in [Shot 1]): fully_preserved - x', '', 'detailed_description:', '[Shot 1] Live-action, cinematic. Full shot of {char} (S1) on a rooftop at dusk with water towers.'].join('\n')
   assert.equal(shotName(ref, { name: 'Tess Marlow' }), 'Full shot of Tess on a rooftop at dusk…')
   assert.equal(shotName('integrated_multimodal_description: [Shot 1] A dog runs.', null), 'A dog runs.')
+})
+ok('a sketch drawn before the shot changed is set aside until it is redrawn', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ivs-prod-'))
+  const films = new Productions({ dataDir: dir, studio: () => null })
+  const p = films.create({ name: 'Stale' })
+  films.patch(p.id, (q) => (q.scenes = [{ id: 's1', heading: 'EXT. BUS STOP - NIGHT', shots: [{ id: 'a', action: 'They sit.', seconds: 5, sketch: 'C:/x.png' }, { id: 'b', action: 'Rain.', seconds: 5 }] }]))
+  films.editShot(p.id, 's1', 'a', { seconds: 6, line: '' })
+  assert.ok(!films.find(films.get(p.id), 'a').sh.sketchStale, 'length and words leave the sketch alone')
+  films.editShot(p.id, 's1', 'a', { action: 'They sit.' })
+  assert.ok(!films.find(films.get(p.id), 'a').sh.sketchStale, 'the same action again changes nothing')
+  films.editShot(p.id, 's1', 'a', { stage: { people: [{ name: 'Tess', x: 0, y: 1, facing: 0 }], camera: { x: 0, y: -3, facing: 0, move: 'arc-left' } } })
+  assert.equal(films.find(films.get(p.id), 'a').sh.sketchStale, true, 'a new board does')
+  films.editShot(p.id, 's1', 'b', { action: 'Heavy rain.' })
+  assert.ok(!films.find(films.get(p.id), 'b').sh.sketchStale, 'a shot with no sketch has nothing to set aside')
+  fs.rmSync(dir, { recursive: true, force: true })
 })
 console.log(`${n} checks passed`)

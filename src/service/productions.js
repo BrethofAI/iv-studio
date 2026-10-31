@@ -581,6 +581,10 @@ export class Productions {
         return
       }
       const sh = sc.shots[i]
+      // a sketch drawn before the action, staging or camera changed would start the shot from the old picture
+      // (a seated pair stood up mid-take when the board had them standing), so it's set aside until redrawn
+      const looks = ['action', 'staging', 'camera', 'stage'].some((k) => patch[k] !== undefined && JSON.stringify(patch[k]) !== JSON.stringify(sh[k] ?? null))
+      if (looks && (sh.sketch || sh.sketchSet)) sh.sketchStale = true
       for (const k of ['action', 'staging', 'camera', 'ends', 'characters', 'speaker', 'line', 'seconds', 'prompt', 'character', 'stage']) if (patch[k] !== undefined) sh[k] = patch[k]
       // a staging board's plan becomes the shot's words, unless the words were given too
       if (patch.stage) {
@@ -663,7 +667,7 @@ export class Productions {
           (place && refs.length ? ` The place looks like picture ${refs.length}.` : '')
         const fam = refs.length ? editor : drawer
         const rec = await images.create({ mode: refs.length ? 'edit' : 'generate', model: fam.models[0], prompt, aspect: p.aspect, megapixels: 0.5, count: 1, refs, keepAspect: true, name: `${p.name} · ${sc.location || 'scene'} · ${i + 1}`, tag: `film:${p.id}` })
-        this.patch(id, (q) => Object.assign(this.find(q, sh.id).sh, { sketchSet: rec.id, sketch: null }))
+        this.patch(id, (q) => Object.assign(this.find(q, sh.id).sh, { sketchSet: rec.id, sketch: null, sketchStale: false }))
         made.push({ shot: sh.id, set: rec.id })
       }
     return made
@@ -754,7 +758,7 @@ export class Productions {
       this.patch(id, (q) => (this.find(q, shotId).sh.projectId = projectId))
     }
     const seconds = sh.voiceLine ? Math.min(15, Math.max(sh.seconds, Math.ceil(sh.voiceLine.duration + 0.5))) : sh.seconds
-    const sketch = fromSketch && sh.sketch && fs.existsSync(sh.sketch) ? sh.sketch : null
+    const sketch = fromSketch && sh.sketch && !sh.sketchStale && fs.existsSync(sh.sketch) ? sh.sketch : null
     // with a picture of the place too, reference to video keeps the room the same however the camera moves
     const loc = p.locations.find((l) => l.name.toLowerCase() === (sc.location || '').toLowerCase())
     const room = sketch && useRoom ? loc?.pictures?.find((f) => fs.existsSync(f)) : null

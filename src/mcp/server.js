@@ -405,7 +405,7 @@ tool('break_down_film', 'Break the script into shots with the local writer: each
   sceneIds: z.array(z.string()).optional(),
   sketch: z.boolean().default(true)
 }, ({ filmId, ...opts }) => films.breakDown(filmId, opts))
-tool('edit_film_shot', `Change a shot (any of action, staging, camera, ends, characters, speaker, line, seconds, prompt, character, stage), add one after it (add: true, with the new shot's fields), remove it (remove: true) or move it within its scene (move: -1 or 1). stage is the staging board's plan: its exact screen-side words become staging and camera, and lineWarnings says when two people swap sides from the scene's previous staged shot. After changing what happens, write_film_shot_prompt rewrites its prompt. ${LIVE_FILM}`, {
+tool('edit_film_shot', `Change a shot (any of action, staging, camera, ends, characters, speaker, line, seconds, prompt, character, stage), add one after it (add: true, with the new shot's fields), remove it (remove: true) or move it within its scene (move: -1 or 1). stage is the staging board's plan: its exact screen-side words become staging and camera, and lineWarnings says when two people swap sides from the scene's previous staged shot. After changing what happens, write_film_shot_prompt rewrites its prompt. A change to action, staging, camera or stage marks an existing sketch sketchStale: filming starts without it until sketch_film_shots redraws it. ${LIVE_FILM}`, {
   filmId: z.string(),
   sceneId: z.string(),
   shotId: z.string().optional().describe('Omit with add to add at the end of the scene'),
