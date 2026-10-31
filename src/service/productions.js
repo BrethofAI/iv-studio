@@ -10,7 +10,7 @@
 // step is where the person is in the Projects wizard (idea, story, cast, board, film, watch).
 // Breaking the script down uses the local writer: one call per scene for the shot list, then one per shot
 // for its H3 prompt. Rendering, picking and finishing are Studio's own.
-import { previsWords, stageFields } from './staging.js'
+import { needsPrevis, previsWords, stageFields } from './staging.js'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -283,7 +283,7 @@ export class Productions {
     this.dir = path.join(dataDir, 'productions')
     this.studio = studio
     this.voices = voices
-    this.previs = previs // the staging board in motion (previs.js), for shots whose camera moves
+    this.previs = previs // the staging board in motion (previs.js), for shots whose camera arcs
     this.images = images
     this.catalog = catalog // the ready-made characters, for faces of presets that have none of their own
     this.edits = edits
@@ -763,9 +763,9 @@ export class Productions {
     const loc = p.locations.find((l) => l.name.toLowerCase() === (sc.location || '').toLowerCase())
     const room = sketch && useRoom ? loc?.pictures?.find((f) => fs.existsSync(f)) : null
     const said = sh.line ? sh.prompt : withSilence(sh.prompt)
-    // a staged shot whose camera moves or whose people walk films from its previs: H3 follows a previs's camera
-    // path and framing much better than the same move in words
-    const moving = usePrevis && sh.stage?.camera && ((sh.stage.camera.move || 'static') !== 'static' || sh.stage.people?.some((x) => x.to))
+    // a staged shot whose camera arcs films from its previs: H3 follows a previs's arc and barely arcs from words
+    // (other moves and walks do as well from the staging words, and faster)
+    const moving = usePrevis && needsPrevis(sh.stage)
     const clip = moving && this.previs() ? await this.previs().make({ stage: sh.stage, seconds, aspect: p.aspect, name: `${p.name} ${sc.shots.indexOf(sh) + 1}` }).catch(() => null) : null
     const reference = room || clip
     // the shot's character comes from its LoRA; anyone else in the cast on screen comes from their face picture

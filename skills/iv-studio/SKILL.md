@@ -66,8 +66,10 @@ whole). Follow it whenever you write, stage or revise a scene yourself:
   screen-side `staging` and `camera` words and returns `lineWarnings` when two people swap sides from the scene's
   last staged shot. Words alone handle simple paths well; the board's value is exact, consistent sides across shots.
 - **Previs for a moving camera.** `make_previs` draws a board plan in motion as a grey clip (mannequins and boxes,
-  about 3 s on this PC). Attach it as a video in References mode and put its `words` in the prompt: H3 follows a
-  previs's camera path and framing (an arc, a push, a track) much better than the same move in words. Never let
+  about 3 s on this PC). Attach it as a video in References mode and put its `words` in the prompt. Use it for an
+  arc round people, which H3 follows from a previs and barely does from words; for a push, pull, track, pan or
+  walk the staging words did as well or better in tests, and render 1.6-3.5x faster. Projects films only arcing
+  shots from their previs. Never let
   the prompt describe the mannequins or their greys; the checker stops a prompt that does (`previs-look`).
 - **Review the take, not the hope.** `review_take` has the person's writer look at frames from a take and name
   each problem with its seconds, say what works, and pick one fix: none, revise the prompt (with the revised

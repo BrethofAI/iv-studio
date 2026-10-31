@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { media } from '../media'
 import { ask } from './Confirm'
 import StageBoard from './StageBoard'
+import { needsPrevis } from '../../../service/staging'
 import { fileUrl } from './edit/model'
 import Hero from './Hero'
 import { LoraPicker } from './Loras'
@@ -828,7 +829,7 @@ function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, pre
             </button>
           </span>
           {board && <StageBoard stage={sh.stage} names={named} start={sh.characters} before={before} onChange={(stage) => edit({ stage })} />}
-          {board && sh.stage && ((sh.stage.camera?.move || 'static') !== 'static' || sh.stage.people?.some((x) => x.to)) && <span className="small dim">This shot moves, so it films from a previs of the board: a grey clip of the move that H3 follows.</span>}
+          {board && needsPrevis(sh.stage) && <span className="small dim">The camera arcs, so this shot films from a previs of the board: a grey clip of the move that H3 follows.</span>}
           <textarea key={`st${sh.staging}`} rows={2} defaultValue={sh.staging || ''} placeholder="Tess screen-left at the wheel, facing right; Theo in the doorway screen-right, looking at her." onBlur={(e) => e.target.value !== (sh.staging || '') && edit({ staging: e.target.value })} />
         </div>
         <label className="wiz-field">

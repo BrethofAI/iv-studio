@@ -243,6 +243,10 @@ export function previsFrames(stage, { frames = 124 } = {}) {
 }
 
 // A previs clip, by where previs.js keeps it (the app data's previs folder).
+// Whether a shot is worth filming from its previs. Tested on 2026-10-31 (2 takes each, previs against the same
+// staging in words): H3 followed a previs's arc round the people and barely arced from words, but for a push, a
+// track and a walk the words did as well or better, and a previs take renders 1.6-3.5x slower. So arcs only.
+export const needsPrevis = (stage) => /^arc/.test(stage?.camera?.move || '')
 export const isPrevis = (file) => /[\\/]previs[\\/][^\\/]+\.mp4$/i.test(String(file || ''))
 
 // What the prompt says about a previs clip used as <Video n>.

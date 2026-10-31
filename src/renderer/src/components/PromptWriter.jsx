@@ -101,7 +101,7 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
             {drawing ? 'Drawing…' : previsN ? 'Draw the previs again' : 'Make a previs clip'}
           </button>{' '}
           <span className="dim">
-            {previsN ? `The previs is <Video ${previsN}> in your references; the writer tells H3 to follow its camera move.` : 'A grey clip of the camera move and the walks, added as a reference. H3 follows a moving camera far better from a previs than from words.'}
+            {previsN ? `The previs is <Video ${previsN}> in your references; the writer tells H3 to follow its camera move.` : 'A grey clip of the camera move and the walks, added as a reference. Worth it for an arc round people, which H3 barely does from words; a push, track or walk works as well from the staging words, and faster.'}
           </span>
         </p>
       )}

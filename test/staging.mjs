@@ -1,7 +1,7 @@
 // The staging board's words: screen sides, facing, distance, paths, shot size, and the 180-degree line check.
 //   node test/staging.mjs
 import assert from 'node:assert/strict'
-import { cameraWords, defaultStage, facingWords, isPrevis, lineCheck, previsFrames, previsWords, project, shotSize, stagingWords } from '../src/service/staging.js'
+import { cameraWords, defaultStage, facingWords, isPrevis, needsPrevis, lineCheck, previsFrames, previsWords, project, shotSize, stagingWords } from '../src/service/staging.js'
 import { lintPrompt } from '../src/service/lint.js'
 import { systemPrompt } from '../src/service/prompter.js'
 
@@ -96,6 +96,14 @@ ok('previs: push, pan and a walk', () => {
   tr.people[0].to = null
   assert.ok(Math.abs(previsFrames(tr, { frames: 101 })[100].camera.x) < 0.01, 'with nobody walking it slides 1.5 m')
   assert.match(previsWords(two(), 1), /^<Video 1> is a grey previs.*the dark grey mannequin stands for Tess, the light grey mannequin stands for Theo\.$/)
+})
+ok('only an arc films from its previs', () => {
+  const s = two()
+  assert.equal(needsPrevis(s), false, 'static')
+  for (const move of ['push', 'pull', 'track-right', 'pan-left', 'handheld']) assert.equal(needsPrevis({ ...s, camera: { ...s.camera, move } }), false, move)
+  assert.equal(needsPrevis({ ...s, people: [{ ...s.people[0], to: { x: 2, y: 1 } }, s.people[1]] }), false, 'a walk')
+  assert.equal(needsPrevis({ ...s, camera: { ...s.camera, move: 'arc-left' } }), true)
+  assert.equal(needsPrevis(null), false)
 })
 ok('a previs is a camera guide: the writer is told so, and a prompt that describes its mannequins is stopped', () => {
   const file = String.raw`C:\Users\x\AppData\Roaming\IV Studio\previs\arc_mvw.mp4`
