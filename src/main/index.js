@@ -718,7 +718,7 @@ app.whenReady().then(() => {
   ranker = new Ranker({ studio: () => studio, voices: () => voices, shinobi: () => shinobi, ffmpeg: edits.ffmpeg, dataDir: DATA })
   handle('rank:job', async (id) => (await ranker.rank(id), studio.publicJob(studio.getJob(id))))
   handle('rank:learn', (id, candidate) => ranker.learn(id, candidate))
-  reviewer = new Reviewer({ studio: () => studio, ffmpeg: edits.ffmpeg })
+  reviewer = new Reviewer({ studio: () => studio, voices: () => voices, ffmpeg: edits.ffmpeg })
   handle('review:take', async (id, candidate) => (await reviewer.review(id, candidate, writerOf(readSettings(BASE))), studio.publicJob(studio.getJob(id))))
   handle('render:enhance', async (opts) => {
     await freeVoices()

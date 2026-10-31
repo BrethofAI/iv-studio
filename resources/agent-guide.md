@@ -60,7 +60,9 @@ whole). Follow it whenever you write, stage or revise a scene yourself:
   each problem with its seconds, say what works, and pick one fix: none, revise the prompt (with the revised
   prompt, already through the checker), change a reference, split the action, use a clean stretch, or solve it
   in the edit. When the prompt already asked for what went wrong, it's an unmet instruction, not a missing
-  phrase. Show the person the review before rendering again.
+  phrase. The reviewer sees the shot's earlier reviews: a problem that came back after a revision is marked
+  `again`, and the fix moves on to a reference, a split or the clean stretch, because more words won't move an
+  H3 habit. Show the person the review before rendering again.
 
 `write_prompt` and the storyboard already follow these rules: Claude Code and Codex get the whole method, the
 local writer a short version.

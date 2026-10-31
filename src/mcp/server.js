@@ -727,7 +727,7 @@ tool('rank_takes', "Rank a finished previews job's takes: each is scored on hear
   if (!ranking) throw new Error('Only a finished previews job with its takes on this PC can be ranked.')
   return { ranking, ...(picked ? { weights: ranker.learn(jobId, picked) } : {}) }
 })
-const reviewer = new Reviewer({ studio: () => studio, ffmpeg: edits.ffmpeg })
+const reviewer = new Reviewer({ studio: () => studio, voices: () => voices, ffmpeg: edits.ffmpeg })
 tool('review_take', "Review one take against its prompt, as a director would: the person's prompt writer (Claude Code, Codex, or the local vision model) looks at frames from the take and names each problem with the seconds it happens in (identity, wardrobe, anatomy, contact, staging, order, feeling, words), says what works, and picks one fix: none, revise_prompt (with revisedPrompt, already through the checker), change_reference, split_action, clean_stretch (with from and to) or edit. Saved on the job as reviews. jobId is a previews job (with candidate) or a finish job. Then, for revise_prompt, render revisedPrompt with generate_previews into the same projectId.", { jobId: z.string(), candidate: z.number().int().min(1).max(3).optional().describe('The take, for a previews job') }, async ({ jobId, candidate }) => {
   const job = studio.getJob(jobId, { refresh: false })
   return reviewer.review(jobId, job.kind === 'finish' ? 0 : candidate || 1, writerOf(readSettings(BASE)))

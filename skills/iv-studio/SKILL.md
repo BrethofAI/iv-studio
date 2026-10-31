@@ -5,8 +5,6 @@ description: Make MiniMax H3 videos with IV Studio through its MCP server - rend
 
 If the `iv-studio` MCP tools aren't available, IV Studio has to be installed and its server added: the exact command for an install is under Settings -> Agents (MCP) in the app. Download: https://github.com/hollisorg/iv-studio/releases
 
-# Using IV Studio from an agent
-
 IV Studio is a desktop app for MiniMax H3 video on a local ComfyUI: it renders shots and continuous
 sequences with recurring characters, and cuts them together on its own timeline. Its MCP server
 (`iv-studio`) uses the same projects, renders and edits as the app window, so what you make shows up
@@ -67,7 +65,9 @@ whole). Follow it whenever you write, stage or revise a scene yourself:
   each problem with its seconds, say what works, and pick one fix: none, revise the prompt (with the revised
   prompt, already through the checker), change a reference, split the action, use a clean stretch, or solve it
   in the edit. When the prompt already asked for what went wrong, it's an unmet instruction, not a missing
-  phrase. Show the person the review before rendering again.
+  phrase. The reviewer sees the shot's earlier reviews: a problem that came back after a revision is marked
+  `again`, and the fix moves on to a reference, a split or the clean stretch, because more words won't move an
+  H3 habit. Show the person the review before rendering again.
 
 `write_prompt` and the storyboard already follow these rules: Claude Code and Codex get the whole method, the
 local writer a short version.

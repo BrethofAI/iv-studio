@@ -55,7 +55,7 @@ function ReviewCard({ review, title, videoKey, before, onRun }) {
                 {x.from}–{x.to} s
               </button>{' '}
               <span className="mono dim small">{x.kind}</span> {x.what}
-              {x.unmet && <span className="dim small"> (the prompt asked for this)</span>}
+              {x.again ? <span className="pink small"> (came back after a revision)</span> : x.unmet && <span className="dim small"> (the prompt asked for this)</span>}
             </li>
           ))}
         </ul>
@@ -72,6 +72,7 @@ function ReviewCard({ review, title, videoKey, before, onRun }) {
         )}
         {review.fix?.why ? `: ${review.fix.why}` : ''}
       </p>
+      {review.repeat && <p className="notice small">{review.repeat}</p>}
       {review.revisedPrompt && (
         <div className="review-actions">
           <button className="btn btn-small" onClick={() => onRun(review.revisedPrompt)}>

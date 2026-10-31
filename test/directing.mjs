@@ -59,6 +59,33 @@ await ok('a review is tidied: bounds, unknown kinds, the stretch, and a revision
   const c = r.tidy({ verdict: 'redo', works: [], issues: [], fix: { kind: 'revise_prompt', why: 'x', clean_from: 0, clean_to: 0 }, revised_prompt: brief.replace('waves', 'says "Hi there."') }, ctx)
   assert.match(c.revisedPrompt, /<d>\[English\] Hi there\.<\/d>/, 'quoted speech goes into the tag')
 })
+await ok('a problem that came back after a revision is marked, and unheard words are left alone', () => {
+  const r = new Reviewer({ studio: () => null, ffmpeg: ffmpegStatic.ffmpegPath })
+  const ctx = { prompt: 'x', req: { mode: 'text', seconds: 5 }, character: null }
+  const past = [{ id: 'a', revised: true, takes: [{ key: '1', fix: 'revise_prompt', unmet: [{ kind: 'space', what: 'looks at the lens' }] }] }]
+  const data = { verdict: 'usable_with_fixes', works: [], issues: [{ from: 0, to: 2, kind: 'space', what: 'still at the lens', unmet: true }, { from: 1, to: 3, kind: 'words', what: "can't confirm the line", unmet: false }], fix: { kind: 'revise_prompt', why: 'x', clean_from: 0, clean_to: 0 }, revised_prompt: '' }
+  const a = r.tidy(data, { ...ctx, past })
+  assert.equal(a.issues.length, 1, 'no transcript: the words guess is dropped')
+  assert.equal(a.issues[0].again, true)
+  assert.match(a.repeat, /another rewrite may not move them/)
+  const b = r.tidy(data, { ...ctx, past, heard: 'Twenty minutes late again.' })
+  assert.equal(b.issues.length, 2, 'heard: words issues stay')
+  const c = r.tidy(data, { ...ctx, past: [{ ...past[0], revised: false }] })
+  assert.ok(!c.issues[0].again && !c.repeat, 'the same prompt run twice is not a revision')
+})
+await ok("the history is the shot's earlier reviewed runs, finals included", () => {
+  const jobs = {
+    a: { id: 'a', kind: 'previews', createdAt: '1', plan: { request: { prompt: 'old' } }, reviews: { 1: { fix: { kind: 'revise_prompt' }, issues: [{ kind: 'space', unmet: true, what: 'lens' }] } } },
+    f: { id: 'f', kind: 'finish', parent: 'a', createdAt: '2', reviews: { final: { fix: { kind: 'edit' }, issues: [{ kind: 'emotion', unmet: true, what: 'gasp' }] } } },
+    b: { id: 'b', kind: 'previews', createdAt: '3', projectId: 'p', plan: { asked: { prompt: 'new' } } },
+    c: { id: 'c', kind: 'previews', createdAt: '4', reviews: { 1: { fix: { kind: 'none' }, issues: [] } } }
+  }
+  const studio = { getProject: () => ({ jobs: ['a', 'f', 'b', 'c'] }), getJob: (id) => jobs[id] }
+  const h = new Reviewer({ studio: () => studio, ffmpeg: ffmpegStatic.ffmpegPath }).history(jobs.b)
+  assert.equal(h.length, 1, 'only earlier runs')
+  assert.equal(h[0].revised, true)
+  assert.deepEqual(h[0].takes.map((x) => [x.key, x.unmet[0].kind]), [['1', 'space'], ['final', 'emotion']])
+})
 const clip = process.argv[2]
 if (clip)
   await ok('six frames from a real take, spread over its length', async () => {
