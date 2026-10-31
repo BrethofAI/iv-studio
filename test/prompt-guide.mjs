@@ -70,7 +70,7 @@ await ok('frames with a last picture: the FL2VA line at H3 length, one shot', ()
   assert.ok(!t.includes('[Shot 2]'), 'a second shot is folded into the one continuous shot')
 })
 await ok('frames mode answers in three parts, assembled into one shot', () => {
-  assert.deepEqual(outputSchema({ mode: 'frames', lastFrame: true }).required, ['style', 'opening', 'motion', 'ending', 'soundscape', 'music'])
+  assert.deepEqual(outputSchema({ mode: 'frames', lastFrame: true }).required, ['direction', 'style', 'opening', 'motion', 'ending', 'soundscape', 'music'])
   const t = assemble(
     {
       style: 'Live-action',

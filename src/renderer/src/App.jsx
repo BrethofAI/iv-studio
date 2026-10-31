@@ -223,8 +223,9 @@ export default function App() {
     switchSection('video')
     setPage('create')
   }
-  const editRun = (run, project) => {
-    setRunForCreate({ request: run.plan.request, asked: run.plan.asked, projectId: project.id, projectName: project.name })
+  // prompt: a revised prompt (a take review's) to start from instead of the run's own
+  const editRun = (run, project, prompt) => {
+    setRunForCreate({ request: run.plan.request, asked: prompt ? { ...(run.plan.asked || {}), prompt } : run.plan.asked, projectId: project.id, projectName: project.name })
     pickCreateKind('video')
     switchSection('video')
     setPage('create')

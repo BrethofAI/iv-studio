@@ -39,6 +39,32 @@ Modes: `text` (prompt only), `reference` (pictures, videos or audio named `<Pict
 `prepare_media` crops pictures and trims videos and sounds first (first/last frames should be
 cropped to the shot's aspect, because they're stretched to fit).
 
+## Directing a scene
+
+IV Studio directs the way Matthew Hollis's directing method says (`get_guide` with topic `directing` returns it
+whole). Follow it whenever you write, stage or revise a scene yourself:
+
+- **Purpose first.** Start from the emotional change, the visible action that shows it, and the one or two
+  details that must survive (a face, a product, a logo, a prop). Don't add lines, people, props, camera moves or
+  places just to fill the time; a quiet reaction can carry a scene.
+- **A reference map.** Give each reference a role (identity, wardrobe, logo, place, light, prop, movement,
+  blocking sketch), say which wins where two disagree, and name the few details recognition depends on. A
+  reference's pose doesn't fix the performance or the camera.
+- **Staging before camera.** Where each person starts by screen side (the viewer's left, not the character's),
+  which way they face, who they look at, how far apart, and where they move. With two people, keep the camera on
+  one side of the line between them. Then frame the action so it reads.
+- **Continuity across cuts.** Each shot opens where the last one left things: positions, hands and props, gaze,
+  direction of travel. In Projects every shot has `staging` and `ends` (`edit_film_shot`), and the next shot's
+  prompt starts from the previous one's `ends`.
+- **Review the take, not the hope.** `review_take` has the person's writer look at frames from a take and name
+  each problem with its seconds, say what works, and pick one fix: none, revise the prompt (with the revised
+  prompt, already through the checker), change a reference, split the action, use a clean stretch, or solve it
+  in the edit. When the prompt already asked for what went wrong, it's an unmet instruction, not a missing
+  phrase. Show the person the review before rendering again.
+
+`write_prompt` and the storyboard already follow these rules: Claude Code and Codex get the whole method, the
+local writer a short version.
+
 ## Writing H3 prompts
 
 MiniMax publishes its own guide to H3 prompts: `get_guide` with topic `h3-prompts` returns it. Read it before

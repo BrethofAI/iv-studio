@@ -19,6 +19,7 @@ import { ModelInstaller } from '../service/models'
 import { CONTEXT_IR_PRICE, ollamaStatus, pullModel } from '../service/prompter'
 import { Studio } from '../service/studio'
 import { Ranker } from '../service/ranking'
+import { Reviewer } from '../service/review'
 import { SCENES, TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
 import { CharacterCatalog } from '../service/characters'
@@ -80,6 +81,7 @@ let images = null
 let civitai = null
 const pending = new Set() // job ids the window is waiting on
 let ranker = null // ranks finished previews (ranking.js), set up with the services it reads
+let reviewer = null // reviews a take against its brief (review.js)
 
 function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
@@ -716,6 +718,8 @@ app.whenReady().then(() => {
   ranker = new Ranker({ studio: () => studio, voices: () => voices, shinobi: () => shinobi, ffmpeg: edits.ffmpeg, dataDir: DATA })
   handle('rank:job', async (id) => (await ranker.rank(id), studio.publicJob(studio.getJob(id))))
   handle('rank:learn', (id, candidate) => ranker.learn(id, candidate))
+  reviewer = new Reviewer({ studio: () => studio, ffmpeg: edits.ffmpeg })
+  handle('review:take', async (id, candidate) => (await reviewer.review(id, candidate, writerOf(readSettings(BASE))), studio.publicJob(studio.getJob(id))))
   handle('render:enhance', async (opts) => {
     await freeVoices()
     const job = await studio.enhanceFinal(opts)

@@ -29,6 +29,65 @@ export function Progress({ job }) {
   )
 }
 
+// A take reviewed against its prompt (review.js): the verdict, what works, each problem at its seconds (a click
+// plays the take from there), the fix, and the revised prompt to run again.
+const VERDICT = { usable: 'Usable as it is', usable_with_fixes: 'Usable, with fixes', redo: 'Redo it' }
+const ENGINE = { claude: 'Claude Code', codex: 'Codex', local: 'the local writer' }
+function ReviewCard({ review, title, videoKey, before, onRun }) {
+  const seek = (t) => {
+    const v = document.querySelector(`video[data-take="${videoKey}"]`)
+    if (v) (v.currentTime = t, v.play().catch(() => {}))
+  }
+  return (
+    <div className={`review-card ${review.verdict}`}>
+      <div className="review-head">
+        <span className="mono small">{title}</span>
+        <span className="mono pink small">{VERDICT[review.verdict]}</span>
+        <span className="dim small">by {ENGINE[review.engine] || review.engine}</span>
+      </div>
+      {review.engine === 'local' && <p className="dim small">The local writer only reviews roughly. Claude Code or Codex (Settings → Prompt writer) see far more.</p>}
+      {review.works?.length > 0 && <p className="small"><span className="dim">Works: </span>{review.works.join(' · ')}</p>}
+      {review.issues?.length > 0 && (
+        <ul className="review-issues">
+          {review.issues.map((x, i) => (
+            <li key={i}>
+              <button className="link-btn mono small" onClick={() => seek(x.from)}>
+                {x.from}–{x.to} s
+              </button>{' '}
+              <span className="mono dim small">{x.kind}</span> {x.what}
+              {x.unmet && <span className="dim small"> (the prompt asked for this)</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="small">
+        <span className="mono">{review.fix?.label}</span>
+        {review.fix?.kind === 'clean_stretch' && (
+          <>
+            {' '}
+            <button className="link-btn mono small" onClick={() => seek(review.fix.from)}>
+              {review.fix.from}–{review.fix.to} s
+            </button>
+          </>
+        )}
+        {review.fix?.why ? `: ${review.fix.why}` : ''}
+      </p>
+      {review.revisedPrompt && (
+        <div className="review-actions">
+          <button className="btn btn-small" onClick={() => onRun(review.revisedPrompt)}>
+            Edit and run again with this prompt
+          </button>
+          {review.revisedErrors?.length > 0 && <span className="notice small">The checker still finds: {review.revisedErrors.join(' ')}</span>}
+          <details>
+            <summary className="mono dim small">What it changes</summary>
+            <PromptDiff before={before} after={review.revisedPrompt} />
+          </details>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function FinishPanel({ job, candidate, onStart, notify, caps, remote }) {
   const FPS = caps?.fps || [0, 30, 50, 60, 120]
   const dlss = caps?.dlss !== false
@@ -193,6 +252,20 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
       setEnhancing((e) => ({ ...e, [f.id]: false }))
     }
   }
+  // a take reviewed against its prompt by the person's writer (review.js)
+  const [reviewing, setReviewing] = useState({})
+  async function review(job, candidate) {
+    const key = `${job.id}:${candidate}`
+    setReviewing((r) => ({ ...r, [key]: true }))
+    try {
+      const next = await window.ivstudio.review.take(job.id, candidate)
+      setJobs((all) => ({ ...all, [next.id]: next }))
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setReviewing((r) => ({ ...r, [key]: false }))
+    }
+  }
   const pick = (run, candidate) => {
     setPicked({ ...picked, [run.id]: candidate })
     if (run.ranking) window.ivstudio.rank.learn(run.id, candidate).catch(() => {})
@@ -325,9 +398,14 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                         {r.reasons?.length > 0 && <span className="small dim">{r.reasons.join(' · ')}</span>}
                       </div>
                     )}
-                    <video src={media(o.url)} controls loop preload="metadata" />
+                    <video src={media(o.url)} data-take={`${run.id}:${o.candidate}`} controls loop preload="metadata" />
                     <figcaption>
                       <span className="mono">#{o.candidate} · seed {o.seed}</span>
+                      {!remote && (
+                        <button className="link-btn mono small" disabled={!!reviewing[`${run.id}:${o.candidate}`]} onClick={() => review(run, o.candidate)}>
+                          {reviewing[`${run.id}:${o.candidate}`] ? 'Reviewing…' : 'Review'}
+                        </button>
+                      )}
                       <button className={`link-btn mono small ${isMarked(`${run.id}:${o.candidate}`) ? 'pink' : ''}`} onClick={() => mark(takeOf(o.candidate, o.url, `#${o.candidate} · seed ${o.seed}`))}>
                         {isMarked(`${run.id}:${o.candidate}`) ? 'Marked' : 'Compare'}
                       </button>
@@ -340,6 +418,11 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                 })}
               </div>
             )}
+            {previews
+              .filter((o) => run.reviews?.[o.candidate])
+              .map((o) => (
+                <ReviewCard key={`rv${o.candidate}`} review={run.reviews[o.candidate]} title={`Review of #${o.candidate}`} videoKey={`${run.id}:${o.candidate}`} before={written} onRun={(p) => editRun?.(run, project, p)} />
+              ))}
             {picked[run.id] && <FinishPanel job={run} candidate={picked[run.id]} onStart={onStart} notify={notify} caps={caps} remote={remote} />}
             {finishesOf(run.id).map((f) => {
               const final = f.outputs.find((o) => o.kind === 'final')
@@ -360,10 +443,16 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                         {isMarked(`${run.id}:${f.id}`) ? 'Marked' : 'Compare'}
                       </button>
                     )}
+                    {final?.path && !remote && (
+                      <button className="link-btn mono" disabled={!!reviewing[`${f.id}:0`]} onClick={() => review(f, 0)}>
+                        {reviewing[`${f.id}:0`] ? 'Reviewing…' : 'Review'}
+                      </button>
+                    )}
                   </div>
                   <Progress job={f} />
                   {f.status === 'error' && <p className="notice">{f.error}</p>}
-                  {final && <video className="final-video" src={media(final.url)} controls preload="metadata" />}
+                  {final && <video className="final-video" data-take={`${f.id}:final`} src={media(final.url)} controls preload="metadata" />}
+                  {f.reviews?.final && <ReviewCard review={f.reviews.final} title="Review of the final" videoKey={`${f.id}:final`} before={written} onRun={(p) => editRun?.(run, project, p)} />}
                   {final?.path && !remote && (
                     <div className="enhance-row">
                       <span className="mono dim small">Enhance:</span>

@@ -9,6 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
+import { DIRECTING, DIRECTING_SOURCE } from './directing.js'
 import { loadGuide } from './h3guide.js'
 import { harnessJson } from './harness.js'
 import { FIRST_FRAME_LINE, firstLastLine, lintPrompt } from './lint.js'
@@ -25,6 +26,12 @@ export const CONTEXT_IR_PRICE = 'about $0.02 a prompt ($0.05 with first/last fra
 const RULES = `You write prompts for MiniMax H3, a model that makes short videos with native sound (24 fps, picture and audio together).
 Write in English. Answer with JSON only, in the shape you are given.
 
+DIRECTION (decide it first, in "direction", before you write any shot)
+- purpose: the emotional change the video shows, the visible action that shows it, and the one or two details that must survive (a face, a product, a logo, a prop).
+- staging: where each person starts by screen side (screen-left is the viewer's left, not the character's), which way they face, who they look at, how far apart they are, and where they move. With two people, keep the camera on one side of the line between them.
+- Don't add dialogue, characters, props, camera moves or places the idea doesn't need, just to fill the time. A quiet reaction can carry the scene.
+- Frame the action so it reads: hands and the object for a small action, enough body and floor for a movement, the face for a reaction.
+
 DIRECTING RULES
 - Cover the whole duration with continuous action; every beat has a visible action, a reaction or consequence, and the state it leaves. End on a settled, visible result with a little time to spare.
 - Open the first shot with who is where, wardrobe, setting, light and key props, then the action.
@@ -36,7 +43,7 @@ DIRECTING RULES
 - soundscape: 1-4 sentences of ambience, physical action sounds and breaths (no dialogue, no music). music: 1-3 sentences of audience-only music, or "N/A".
 
 EXAMPLE of the shape only (do not reuse its scene, props or lines; 10 seconds, main character Mara):
-{"style": "Live-action, warm late-afternoon light, shallow depth of field.", "shots": [{"start_seconds": 0, "description": "Wide shot of a rooftop vegetable garden at golden hour: Mara stands between raised beds in a mustard apron over a white T-shirt, a green watering can in her right hand. The camera pushes in with small amplitude at slow speed. A neighbour (S1) in a striped shirt leans over the low wall and calls: <d>[English] Your tomatoes beat mine again!</d> Mara (S2) laughs and lifts the watering can in a salute."}, {"start_seconds": 6, "description": "The camera cuts to a medium shot of Mara as she plucks a ripe tomato and tosses it across the wall. The neighbour catches it with both hands and grins. Mara (S2) answers: <d>[English] Bribery works.</d> She turns back to the beds, still smiling."}], "soundscape": "A light breeze rustles the tomato leaves, water patters from the can onto soil, and city traffic hums far below. A soft thud as the tomato lands in the neighbour's hands.", "music": "N/A"}`
+{"direction": {"purpose": "Mara's quiet pride turns into a playful win over her neighbour; the tomato toss shows it. Her mustard apron and green watering can stay the same throughout.", "staging": "Mara stands screen-right between the beds, facing screen-left toward the low wall; the neighbour leans over the wall screen-left, facing her, about three metres away. The camera stays on the garden side of the wall."}, "style": "Live-action, warm late-afternoon light, shallow depth of field.", "shots": [{"start_seconds": 0, "description": "Wide shot of a rooftop vegetable garden at golden hour: Mara stands between raised beds in a mustard apron over a white T-shirt, a green watering can in her right hand. The camera pushes in with small amplitude at slow speed. A neighbour (S1) in a striped shirt leans over the low wall and calls: <d>[English] Your tomatoes beat mine again!</d> Mara (S2) laughs and lifts the watering can in a salute."}, {"start_seconds": 6, "description": "The camera cuts to a medium shot of Mara as she plucks a ripe tomato and tosses it across the wall. The neighbour catches it with both hands and grins. Mara (S2) answers: <d>[English] Bribery works.</d> She turns back to the beds, still smiling."}], "soundscape": "A light breeze rustles the tomato leaves, water patters from the can onto soil, and city traffic hums far below. A soft thud as the tomato lands in the neighbour's hands.", "music": "N/A"}`
 
 const CHARACTER_RULE = (name) =>
   `- The main character is called ${name}. Always refer to them as ${name}. Their face, hair, body and voice come from a trained character model: never describe ${name}'s face, hair, age, ethnicity, body or voice. Do describe their clothes, position, actions, expressions in action terms and what they say.`
@@ -48,6 +55,7 @@ const MODE_RULES = {
   continue: `- This prompt continues an existing video from its last frames. The first shot opens holding the source video's final arrangement (same people, positions, framing and light), then the new action follows.`,
   reference: `- Reference media are attached and named <Picture N>, <Video N> and <Audio N>, numbered separately per kind in the order listed below. Use ONLY labels that exist.
 - Also fill "subjects": each person, place, object or style the references define, one per entry, in the order you'll use them (the first is <Subject 1>). Every attached picture and video defines at least one subject, so the subjects together name every label; a picture of a room or a place is a subject (the place). One person seen in two pictures is ONE subject. Things that appear in no reference are not subjects: just describe them in the shots. "definition" says who or what it is and its main visible features, naming the picture or video it comes from, like "the young woman in <Picture 2>, with shoulder-length dark hair and a navy T-shirt".
+- In "direction", "priorities" gives each reference its role (identity, wardrobe, logo, place, light, prop, movement) and which one wins where two disagree (a dedicated shoe picture beats the shoes in a character sheet), and names the few details recognition depends on. A reference's pose doesn't fix the performance or the camera.
 - "summary": one short paragraph on what the target video is and what each reference supplies, using only the labels defined.
 - "retention": one entry per subject: the shots it appears in, how it is kept ("fully_preserved" when it appears as defined, "partially_preserved" when some defined features change, "attribute_transfer" only when its features pass to a different target subject, "weak_reference" for broad similarity of style or mood) and what is kept.
 - In the shots, refer to those people and things as <Subject 1>, <Subject 2>, describing them in full at their first appearance. A subject who speaks is written "<Subject 2> (S1)".
@@ -63,8 +71,8 @@ const SEQUENCE_RULES = `- This shot is one of several that are joined into ONE c
 
 function durationRule(seconds) {
   const s = Math.round(seconds)
-  const shots = s <= 6 ? '1-2 shots, one short line or two very short exchanges' : s <= 11 ? '1-3 shots, 2-4 short lines with visible reactions' : '1-3 shots with natural pauses'
-  return `- The video is ${s} seconds long. Plan ${shots}. Keep 0.3-0.8 seconds at the end for the reaction or result.`
+  const shots = s <= 6 ? '1-2 shots and at most one short line or two very short exchanges' : s <= 11 ? '1-3 shots and at most 2-4 short lines, each with a visible reaction' : '1-3 shots with natural pauses'
+  return `- The video is ${s} seconds long. Plan ${shots}, and only the lines the idea needs. Keep 0.3-0.8 seconds at the end for the reaction or result.`
 }
 
 const firstName = (character) => character?.name?.split(/\s+/)[0] || null
@@ -168,9 +176,12 @@ const SHOT_SCHEMA = { type: 'object', properties: { start_seconds: { type: 'numb
 // pictures and videos attached in reference mode, each of which defines at least one subject.
 export function outputSchema({ mode = 'text', sequence = false, lastFrame = false, audio = false, refs = 0 } = {}) {
   const text = { type: 'string' }
-  if (mode === 'frames') return { type: 'object', properties: { style: text, opening: text, motion: text, ending: text, soundscape: text, music: text }, required: ['style', 'opening', 'motion', 'ending', 'soundscape', 'music'] }
-  const props = { style: text, shots: { type: 'array', items: SHOT_SCHEMA, minItems: 1, maxItems: sequence || lastFrame ? 1 : 3 }, soundscape: text, music: text }
-  const required = ['style', 'shots', 'soundscape', 'music']
+  // the direction (directing.js): what the shot is for and who stands where, decided before any shot is written. In
+  // reference mode it also says which reference wins where two disagree. It isn't part of the H3 prompt.
+  const direction = { type: 'object', properties: { purpose: text, staging: text, ...(mode === 'reference' && { priorities: text }) }, required: ['purpose', 'staging', ...(mode === 'reference' ? ['priorities'] : [])] }
+  if (mode === 'frames') return { type: 'object', properties: { direction, style: text, opening: text, motion: text, ending: text, soundscape: text, music: text }, required: ['direction', 'style', 'opening', 'motion', 'ending', 'soundscape', 'music'] }
+  const props = { direction, style: text, shots: { type: 'array', items: SHOT_SCHEMA, minItems: 1, maxItems: sequence || lastFrame ? 1 : 3 }, soundscape: text, music: text }
+  const required = ['direction', 'style', 'shots', 'soundscape', 'music']
   if (mode === 'reference') {
     props.subjects = { type: 'array', items: { type: 'object', properties: { definition: { type: 'string' } }, required: ['definition'] }, ...(refs && { minItems: refs }) }
     props.summary = { type: 'string' }
@@ -197,7 +208,15 @@ IV Studio assembles the final prompt from your JSON, so don't write field names,
 ${guide.base}${mode === 'reference' && guide.ref ? `\n\n${guide.ref}` : ''}`
 }
 
-export function systemPrompt({ mode = 'text', seconds = 5, character, sequence = false, media = [], guide = null }) {
+function directingText() {
+  return `THE DIRECTING METHOD
+${DIRECTING_SOURCE}. Direct the shot this way. You answer in IV Studio's JSON shape, so "return a shot brief" means the "direction" field and the shots: there is nobody to ask, so label a working assumption inside "direction" when something minor is missing. The review part applies when you are asked to review a take.
+
+${DIRECTING}`
+}
+
+// full: the whole directing method (Claude Code, Codex); the local writer keeps to the short DIRECTION rules.
+export function systemPrompt({ mode = 'text', seconds = 5, character, sequence = false, media = [], guide = null, full = false }) {
   const parts = [RULES]
   if (character) parts.push(CHARACTER_RULE(firstName(character)))
   const lastFrame = mode === 'frames' && media.filter((m) => m.kind === 'picture').length >= 2
@@ -210,6 +229,7 @@ export function systemPrompt({ mode = 'text', seconds = 5, character, sequence =
   }
   if (sequence) parts.push(SEQUENCE_RULES)
   parts.push(durationRule(seconds))
+  if (full) parts.push('', directingText())
   const g = guideText(guide, mode)
   if (g) parts.push('', g)
   return parts.join('\n')
@@ -302,14 +322,14 @@ async function imagesFor(media, mode) {
 const LOOK_RULE = `The images attached to this message are the references, listed below. Look at them closely and write what you actually see into the shots: who is in them (face, hair, age, build, wardrobe), the objects, the place, the light and the colours. Refer to each reference by its label, and don't invent details that contradict them. "Image 1", "Image 2" are only how they're listed here: never write "Image N" in the prompt.`
 
 // What any writer is given for one prompt: the system text, the idea, the reference pictures and the JSON shape.
-async function promptRequest({ idea, mode, seconds, character, sequence, previous, media, guide, look = true }) {
+async function promptRequest({ idea, mode, seconds, character, sequence, previous, media, guide, look = true, full = false }) {
   let user = `Idea: ${withName(idea, character)}`
   if (previous) user += `\n\nThe previous shot, which this one continues from:\n${withName(previous, character)}`
   const shown = look ? await imagesFor(media, mode) : []
   const lastFrame = mode === 'frames' && media.filter((m) => m.kind === 'picture').length >= 2
   const audio = mode === 'reference' && media.some((m) => m.kind === 'audio')
   const refs = mode === 'reference' ? media.filter((m) => m.kind === 'picture' || m.kind === 'video').length : 0
-  return { system: systemPrompt({ mode, seconds, character, sequence, media, guide }), user, shown, lastFrame, schema: outputSchema({ mode, sequence, lastFrame, audio, refs }) }
+  return { system: systemPrompt({ mode, seconds, character, sequence, media, guide, full }), user, shown, lastFrame, schema: outputSchema({ mode, sequence, lastFrame, audio, refs }) }
 }
 
 // The writer's draft through the prompt checker (lint.js). What the checker can mend itself is mended; anything else
@@ -379,7 +399,7 @@ export async function writeLocal({ idea, mode = 'text', seconds = 5, character, 
 // The same prompt from the person's Claude Code or Codex (harness.js), with the whole guide: it runs off this PC's GPU.
 // Claude Code reads the pictures from the run's folder; Codex gets them attached, in order.
 export async function writeHarness({ engine, model, idea, mode = 'text', seconds = 5, character, sequence = false, previous, media = [] }) {
-  const req = await promptRequest({ idea, mode, seconds, character, sequence, previous, media, guide: await loadGuide() })
+  const req = await promptRequest({ idea, mode, seconds, character, sequence, previous, media, guide: await loadGuide(), full: true })
   const images = req.shown.map((s, i) => ({ ...s, name: `reference-${i + 1}.jpg` }))
   let user = req.user
   if (images.length)

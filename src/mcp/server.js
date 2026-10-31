@@ -13,6 +13,8 @@ import { INSTRUCTIONS, readGuide } from '../service/agent'
 import { GUIDE_SOURCE, loadGuide } from '../service/h3guide'
 import { blocking, lintPrompt } from '../service/lint'
 import { Ranker } from '../service/ranking'
+import { Reviewer } from '../service/review'
+import { DIRECTING, DIRECTING_SOURCE } from '../service/directing'
 import { menuMessage, START_MENU } from '../service/startmenu'
 import { Edits, editLength, FORMATS } from '../service/edits'
 import { EditGen, GEN_KINDS } from '../service/editgen'
@@ -103,10 +105,11 @@ const finish = {
 server.registerTool(
   'get_guide',
   {
-    description: 'How to use IV Studio: rendering shots, writing H3 prompts, sequences, timeline edits, models, characters, and the house rules. Read it once before your first render or edit. topic "h3-prompts" returns MiniMax\'s own H3 prompt-writing guide (every mode, camera moves, speakers, sound): read it before writing an H3 prompt yourself.',
-    inputSchema: { topic: z.enum(['iv-studio', 'h3-prompts']).optional().describe('iv-studio (default) or h3-prompts') }
+    description: 'How to use IV Studio: rendering shots, writing H3 prompts, sequences, timeline edits, models, characters, and the house rules. Read it once before your first render or edit. topic "h3-prompts" returns MiniMax\'s own H3 prompt-writing guide (every mode, camera moves, speakers, sound): read it before writing an H3 prompt yourself. topic "directing" returns the directing method (reference map, staging and eyelines, action timeline, reviewing a take): follow it when you direct a scene.',
+    inputSchema: { topic: z.enum(['iv-studio', 'h3-prompts', 'directing']).optional().describe('iv-studio (default), h3-prompts or directing') }
   },
   async ({ topic = 'iv-studio' }) => {
+    if (topic === 'directing') return { content: [{ type: 'text', text: `${DIRECTING_SOURCE}. In IV Studio, the shot brief is a prompt plus its references; review_take does the review step on a rendered take.\n\n${DIRECTING}` }] }
     if (topic !== 'h3-prompts') return { content: [{ type: 'text', text: readGuide(resourcesDir()) }] }
     const guide = await loadGuide()
     if (!guide) throw new Error("MiniMax's H3 prompt guide couldn't be downloaded from GitHub. Check the internet connection and try again.")
@@ -360,7 +363,7 @@ tool('grab_frame', 'A picture of one moment, to check an edit or a render by eye
 // ---------- Projects: a short film from script to rough cut (the app's Projects page; "films" here, because
 // list_projects already means shots) ----------
 const films = new Productions({ dataDir: DATA, studio: () => studio, voices: () => voices, images: () => images, catalog: () => catalog, edits, localCopy: (f) => studio.localCopy(f, VIDEOS), model: () => readSettings(BASE).ollamaModel || undefined, writer: () => writerOf(readSettings(BASE)) })
-const shotPatch = { action: z.string().optional(), camera: z.string().optional(), characters: z.array(z.string()).optional(), speaker: z.string().optional(), line: z.string().optional(), seconds: z.number().min(1).max(15).optional(), prompt: z.string().optional(), character: z.string().optional().describe('Character preset id or none') }
+const shotPatch = { action: z.string().optional(), staging: z.string().optional().describe('Who stands where by screen side at the start, facing, eyelines, distance, movement'), camera: z.string().optional(), ends: z.string().optional().describe('How the shot leaves things: positions, facing, hands and props, gaze, direction of travel; the next shot opens on it'), characters: z.array(z.string()).optional(), speaker: z.string().optional(), line: z.string().optional(), seconds: z.number().min(1).max(15).optional(), prompt: z.string().optional(), character: z.string().optional().describe('Character preset id or none') }
 tool('list_films', 'Short-film projects (the app\'s Projects page): name, logline, aspect, scenes and shots.', {}, () => ({ items: films.list() }))
 tool('create_film', `Start a short-film project. script (optional) is screenplay text: a scene starts with a heading like "INT. POTTERY STUDIO - DAY", a name in capitals on its own line with words under it is dialogue, other paragraphs are action. ${LIVE_FILM}`, {
   name: z.string().default('Untitled film'),
@@ -394,7 +397,7 @@ tool('break_down_film', 'Break the script into shots with the local writer: each
   sceneIds: z.array(z.string()).optional(),
   sketch: z.boolean().default(true)
 }, ({ filmId, ...opts }) => films.breakDown(filmId, opts))
-tool('edit_film_shot', `Change a shot (any of action, camera, characters, speaker, line, seconds, prompt, character), add one after it (add: true, with the new shot's fields), remove it (remove: true) or move it within its scene (move: -1 or 1). After changing what happens, write_film_shot_prompt rewrites its prompt. ${LIVE_FILM}`, {
+tool('edit_film_shot', `Change a shot (any of action, staging, camera, ends, characters, speaker, line, seconds, prompt, character), add one after it (add: true, with the new shot's fields), remove it (remove: true) or move it within its scene (move: -1 or 1). After changing what happens, write_film_shot_prompt rewrites its prompt. ${LIVE_FILM}`, {
   filmId: z.string(),
   sceneId: z.string(),
   shotId: z.string().optional().describe('Omit with add to add at the end of the scene'),
@@ -723,6 +726,11 @@ tool('rank_takes', "Rank a finished previews job's takes: each is scored on hear
   const ranking = job.ranking || (await ranker.rank(jobId))
   if (!ranking) throw new Error('Only a finished previews job with its takes on this PC can be ranked.')
   return { ranking, ...(picked ? { weights: ranker.learn(jobId, picked) } : {}) }
+})
+const reviewer = new Reviewer({ studio: () => studio, ffmpeg: edits.ffmpeg })
+tool('review_take', "Review one take against its prompt, as a director would: the person's prompt writer (Claude Code, Codex, or the local vision model) looks at frames from the take and names each problem with the seconds it happens in (identity, wardrobe, anatomy, contact, staging, order, feeling, words), says what works, and picks one fix: none, revise_prompt (with revisedPrompt, already through the checker), change_reference, split_action, clean_stretch (with from and to) or edit. Saved on the job as reviews. jobId is a previews job (with candidate) or a finish job. Then, for revise_prompt, render revisedPrompt with generate_previews into the same projectId.", { jobId: z.string(), candidate: z.number().int().min(1).max(3).optional().describe('The take, for a previews job') }, async ({ jobId, candidate }) => {
+  const job = studio.getJob(jobId, { refresh: false })
+  return reviewer.review(jobId, job.kind === 'finish' ? 0 : candidate || 1, writerOf(readSettings(BASE)))
 })
 process.on('exit', () => voices.release())
 studio.beforeRender = () => voices.release()

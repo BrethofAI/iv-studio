@@ -37,10 +37,13 @@ const SHOT_RULES = `You are a film director breaking one scene of a screenplay i
 - Open with a shot that shows where we are, then go closer when people talk or do something small.
 - action: what we see, present tense, one or two concrete sentences: who, where, what they do and how. Name people by their names. No camera words here.
 - A shot never cuts. Something like "close-up on her hand, then cut to a wide shot" is two shots: write them as two.
-- camera: one shot size and the camera's movement (e.g. "Wide, slow push in", "Close-up, handheld"), never two sizes with an arrow.
+- staging: where each person is at the start of the shot by screen side (screen-left is the viewer's left, not the character's), which way they face, who they look at and how far apart they are, and where they move. With two people, keep the camera on one side of the line between them for the whole scene, so they stay on the same sides of the frame.
+- camera: one shot size and the camera's movement (e.g. "Wide, slow push in", "Close-up, handheld"), never two sizes with an arrow. Choose the framing that shows the action: hands and the object for a small action, enough body and floor for a movement, the face for a reaction.
+- ends: how the shot leaves things: where each person is and which way they face, where their hands and the important props are, who they look at and which way anyone is moving. The next shot starts from exactly that, unless the scene says otherwise.
 - characters: the names of the people on screen (from the cast list, or as the script names them).
 - speaker and line: who speaks in this shot and their exact words, or "" for both.
-- seconds: 3 to 10. A spoken line needs about 1 second per 2.5 words plus 1 second.`
+- seconds: 3 to 10. A spoken line needs about 1 second per 2.5 words plus 1 second.
+- Don't add lines, people, props or camera moves the script doesn't have. A quiet reaction can carry a moment.`
 const SHOT_SCHEMA = {
   type: 'object',
   properties: {
@@ -49,8 +52,8 @@ const SHOT_SCHEMA = {
       minItems: 1,
       items: {
         type: 'object',
-        properties: { action: { type: 'string' }, camera: { type: 'string' }, characters: { type: 'array', items: { type: 'string' } }, speaker: { type: 'string' }, line: { type: 'string' }, seconds: { type: 'number' } },
-        required: ['action', 'camera', 'characters', 'speaker', 'line', 'seconds']
+        properties: { action: { type: 'string' }, staging: { type: 'string' }, camera: { type: 'string' }, characters: { type: 'array', items: { type: 'string' } }, speaker: { type: 'string' }, line: { type: 'string' }, seconds: { type: 'number' }, ends: { type: 'string' } },
+        required: ['action', 'staging', 'camera', 'characters', 'speaker', 'line', 'seconds', 'ends']
       }
     }
   },
@@ -234,11 +237,12 @@ export function withRoom(prompt, { place, description, people = [] }) {
 }
 
 // A storyboard still's prompt: a film still of the shot, in the film's look.
-export function sketchPrompt({ action, camera, place, time, description, look, faces = [] }) {
+export function sketchPrompt({ action, camera, place, time, description, look, faces = [], staging }) {
   return [
     `Cinematic film still, ${camera ? `${camera.replace(/[.\s]+$/, '').toLowerCase()} framing` : 'medium shot'}.`,
     faces.length ? `${faces.map((f, i) => `${f} is the person in picture ${i + 1}`).join('; ')}; keep their face.` : '',
     action,
+    staging ? `${staging.replace(/[.\s]+$/, '')}.` : '',
     place ? `${place}${time ? `, ${time.toLowerCase()}` : ''}${description ? `: ${description}` : ''}.` : '',
     look ? `Look: ${look}.` : 'Natural light, realistic, shallow depth of field.',
     'One single frame: no split screen, no collage, no text, no captions, no borders.'
@@ -442,7 +446,9 @@ export class Productions {
       const shots = (out.shots || []).map((s) => ({
         id: id6(),
         action: String(s.action || '').trim(),
+        staging: String(s.staging || '').trim(),
         camera: String(s.camera || '').trim(),
+        ends: String(s.ends || '').trim(),
         characters: (s.characters || []).map(String),
         // the writer sometimes copies a cue's "(to herself)" or "(V.O.)" into the name
         speaker: String(s.speaker || '').replace(/\s*\(.*?\)\s*/g, ' ').trim(),
@@ -508,10 +514,15 @@ export class Productions {
     if (!sh) throw new Error('No such shot.')
     const loc = p.locations.find((l) => l.name.toLowerCase() === (sc.location || '').toLowerCase())
     const others = sh.characters.filter((n) => n.split(/\s+/)[0].toLowerCase() !== (this.character(sh.character)?.name || '').split(/\s+/)[0].toLowerCase())
+    const before = sc.shots[sc.shots.findIndex((s) => s.id === shotId) - 1]
+    const dot = (t) => String(t).trim().replace(/[.\s]+$/, '') + '.'
     const idea = [
       loc ? `${loc.name}${sc.time ? `, ${sc.time.toLowerCase()}` : ''}${loc.description ? `: ${loc.description}` : ''}.` : sc.heading,
+      before?.ends ? `It opens as the previous shot ended: ${dot(before.ends)}` : '',
       sh.action,
+      sh.staging ? `Staging: ${dot(sh.staging)}` : '',
       sh.camera ? `Camera: ${sh.camera}.` : '',
+      sh.ends ? `It ends with: ${dot(sh.ends)}` : '',
       others.length ? `Also in the shot: ${others.join(', ')}.` : '',
       sh.line ? `${sh.speaker || 'They'} says exactly these words: "${sh.line}"` : 'No one speaks.',
       p.look?.notes ? `Look: ${p.look.notes}.` : ''
@@ -534,7 +545,7 @@ export class Productions {
   }
 
   // ---------- shots ----------
-  // Change a shot (any of action, camera, characters, speaker, line, seconds, prompt, character), add one after
+  // Change a shot (any of action, staging, camera, ends, characters, speaker, line, seconds, prompt, character), add one after
   // another (add: { after }), remove one, or move one (move: -1 | 1).
   editShot(id, sceneId, shotId, patch = {}) {
     return this.patch(id, (p) => {
@@ -547,7 +558,7 @@ export class Productions {
         return
       }
       if (patch.add) {
-        const sh = { id: id6(), action: patch.action || '', camera: patch.camera || '', characters: patch.characters || [], speaker: patch.speaker || '', line: patch.line || '', seconds: patch.seconds || 5, prompt: patch.prompt || '', character: patch.character || 'none', projectId: null, voiceLine: null }
+        const sh = { id: id6(), action: patch.action || '', staging: patch.staging || '', camera: patch.camera || '', ends: patch.ends || '', characters: patch.characters || [], speaker: patch.speaker || '', line: patch.line || '', seconds: patch.seconds || 5, prompt: patch.prompt || '', character: patch.character || 'none', projectId: null, voiceLine: null }
         sc.shots.splice(i < 0 ? sc.shots.length : i + 1, 0, sh)
         return
       }
@@ -558,7 +569,7 @@ export class Productions {
         return
       }
       const sh = sc.shots[i]
-      for (const k of ['action', 'camera', 'characters', 'speaker', 'line', 'seconds', 'prompt', 'character']) if (patch[k] !== undefined) sh[k] = patch[k]
+      for (const k of ['action', 'staging', 'camera', 'ends', 'characters', 'speaker', 'line', 'seconds', 'prompt', 'character']) if (patch[k] !== undefined) sh[k] = patch[k]
       if (patch.line !== undefined || patch.character !== undefined) sh.voiceLine = null
       sh.seconds = Math.min(15, Math.max(1, Number(sh.seconds) || 5))
     })
@@ -630,7 +641,7 @@ export class Productions {
         const place = loc?.pictures?.find((f) => fs.existsSync(f)) || null
         const refs = editor ? [...people.map((x) => x.face), place].filter(Boolean) : []
         const prompt =
-          sketchPrompt({ action: sh.action, camera: sh.camera, place: loc?.name || sc.location, time: sc.time, description: loc?.description, look: p.look?.notes, faces: people.map((x) => x.ch.name) }) +
+          sketchPrompt({ action: sh.action, camera: sh.camera, place: loc?.name || sc.location, time: sc.time, description: loc?.description, look: p.look?.notes, faces: people.map((x) => x.ch.name), staging: sh.staging }) +
           (place && refs.length ? ` The place looks like picture ${refs.length}.` : '')
         const fam = refs.length ? editor : drawer
         const rec = await images.create({ mode: refs.length ? 'edit' : 'generate', model: fam.models[0], prompt, aspect: p.aspect, megapixels: 0.5, count: 1, refs, keepAspect: true, name: `${p.name} · ${sc.location || 'scene'} · ${i + 1}`, tag: `film:${p.id}` })

@@ -817,6 +817,10 @@ function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, pre
           <textarea rows={3} defaultValue={sh.action} placeholder="Tess lifts the bowl off the wheel and turns it in the light." onBlur={(e) => e.target.value !== sh.action && edit({ action: e.target.value })} />
         </label>
         <label className="wiz-field">
+          <span className="mono small dim">Who stands where</span>
+          <textarea rows={2} defaultValue={sh.staging || ''} placeholder="Tess screen-left at the wheel, facing right; Theo in the doorway screen-right, looking at her." onBlur={(e) => e.target.value !== (sh.staging || '') && edit({ staging: e.target.value })} />
+        </label>
+        <label className="wiz-field">
           <span className="mono small dim">Camera</span>
           <input list="wiz-cameras" defaultValue={sh.camera} placeholder="Medium shot, static" onBlur={(e) => e.target.value !== sh.camera && edit({ camera: e.target.value })} />
           <datalist id="wiz-cameras">
@@ -824,6 +828,10 @@ function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, pre
               <option key={c} value={c} />
             ))}
           </datalist>
+        </label>
+        <label className="wiz-field">
+          <span className="mono small dim">How it ends (the next shot starts here)</span>
+          <textarea rows={2} defaultValue={sh.ends || ''} placeholder="Tess holds the bowl in both hands, still screen-left, now looking at Theo." onBlur={(e) => e.target.value !== (sh.ends || '') && edit({ ends: e.target.value })} />
         </label>
         <div className="wiz-field-row">
           <label className="wiz-field">

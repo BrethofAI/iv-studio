@@ -627,6 +627,44 @@ input.mini {
 .finish-panel .row {
   grid-template-columns: 130px 1fr;
 }
+.review-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  margin: 10px 0;
+  background: var(--ink-2);
+  border-left: 2px solid var(--line, #444);
+}
+.review-card.usable {
+  border-left-color: #5fbf7f;
+}
+.review-card.redo {
+  border-left-color: var(--red);
+}
+.review-card p {
+  margin: 0;
+}
+.review-head {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.review-issues {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+.review-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.review-actions details {
+  flex-basis: 100%;
+}
 .enhancer-pick {
   display: flex;
   flex-wrap: wrap;
