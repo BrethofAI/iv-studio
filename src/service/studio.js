@@ -15,6 +15,18 @@ import { contextIrGraph, fromContextIr, writeHarness, writeLocal, writeStoryLoca
 import { renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
 import { checkSetup, comboOptions } from './setup.js'
 
+// A new shot's name from its prompt: the first words of [Shot 1] (not "subject_definitions" or the frames line),
+// without the style opener, with {char} as the character's first name.
+export function shotName(prompt, character) {
+  const text = String(prompt || '')
+  // where the shot itself starts, not "(appears in [Shot 1])"
+  const first = text.match(/(?:^|\n|description:)\s*\[Shot 1\]\s*([^\n]+)/)?.[1] ?? text.replace(/^[a-z_]+:\s*/gim, '')
+  let s = first.replace(/\{char\}/g, character?.name?.split(/\s+/)[0] || 'Someone').replace(/<[^>]+>|\s*\(S\d+\)/g, '').replace(/\s+/g, ' ').trim()
+  for (let i = 0; i < 4; i++) s = s.replace(/^(?:live-action|cinematic|realistic|photorealistic|animated|documentary|film(?:ic)?|natural)[^,.;]*[,.;]\s*/i, '')
+  s = s.charAt(0).toUpperCase() + s.slice(1)
+  return s.length > 40 ? `${s.slice(0, 40).replace(/\s+\S*$/, '')}…` : s || 'Untitled shot'
+}
+
 // the bundled ffprobe, outside the asar in a packaged app
 const FFPROBE = ffmpegStatic.ffprobePath?.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
 
@@ -182,7 +194,7 @@ export class Studio {
     const { request, notes } = resolveMentions(asked, this.cast.members())
     const unknown = notes.filter((n) => n.level === 'error')
     if (unknown.length) throw new Error(unknown.map((n) => n.message).join(' '))
-    const project = projectId ? this.getProject(projectId) : this.createProject(projectName || request.prompt?.slice(0, 40))
+    const project = projectId ? this.getProject(projectId) : this.createProject(projectName || shotName(request.prompt, this.characters().find((c) => c.id === request.character)))
     const media = []
     for (const m of request.media || []) {
       // H3's media loader refuses a video without sound when it's told to pair it (a previs, a silent clip)

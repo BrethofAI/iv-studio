@@ -10,7 +10,7 @@
 // step is where the person is in the Projects wizard (idea, story, cast, board, film, watch).
 // Breaking the script down uses the local writer: one call per scene for the shot list, then one per shot
 // for its H3 prompt. Rendering, picking and finishing are Studio's own.
-import { stageFields } from './staging.js'
+import { previsWords, stageFields } from './staging.js'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -206,29 +206,39 @@ export function asFirstFrame(prompt) {
 
 // A shot that opens on its sketch (<Picture 1>) and stays in the place's picture (<Picture 2>), for reference to video:
 // the sketch fixes the first frame and the place carries its room, light and colours through the whole take.
-// Anyone else on screen (people) comes as <Picture 3>, <Picture 4>: their face carries into the shot.
+// Anyone else on screen (people) comes as the next pictures: their face carries into the shot. With previs (the
+// shot's staging board plan) its grey previs clip is <Video 1>, for the camera move and the blocking; sketch or
+// room false leaves that picture out (and renumbers the rest).
 // Written in the full-reference format of MiniMax's H3 guide; the text prompt's three fields become its last three.
-export function withRoom(prompt, { place, description, people = [] }) {
+export function withRoom(prompt, { place, description, people = [], sketch = true, room = true, previs = null }) {
   const body = String(prompt || '').trim().replace(`${FIRST_FRAME}\n\n`, '')
   const field = (name) => (body.match(new RegExp(`${name}:\\s*([\\s\\S]*?)(?=\\n\\s*\\n\\s*(?:overall_soundscape|non_diegetic_music):|$)`)) || [])[1]?.trim()
   const shots = (field('integrated_multimodal_description') ?? body).replace(/\s+(\[Shot \d+\])/g, '\n$1')
   const inShots = Array.from({ length: (shots.match(/\[Shot \d+\]/g) || ['']).length }, (_, i) => `[Shot ${i + 1}]`).join(', ')
+  let k = 0
+  const sk = sketch ? ++k : 0
+  const rm = room ? ++k : 0
+  const face = people.map(() => ++k)
+  const subject = (i) => i + 1 + (room ? 1 : 0)
+  const opens = [sk && `begins from <Picture ${sk}>`, rm && 'stays in <Subject 1> for the whole shot'].filter(Boolean).join(' and ')
+  const where = [sk && `The shot begins from <Picture ${sk}>`, rm && `takes place in <Subject 1>, the place in <Picture ${rm}>, throughout`].filter(Boolean).join(' and ')
   return [
     'subject_definitions:',
-    '<Picture 1> is the first frame of [Shot 1], the storyboard sketch of this shot.',
-    `<Subject 1> is the place in <Picture 2>: ${place || 'the set'}${description ? `, ${description.replace(/[.\s]+$/, '')}` : ''}.`,
-    ...people.map((name, i) => `<Subject ${i + 2}> is ${name}, the person in <Picture ${i + 3}>.`),
+    ...(sk ? [`<Picture ${sk}> is the first frame of [Shot 1], the storyboard sketch of this shot.`] : []),
+    ...(rm ? [`<Subject 1> is the place in <Picture ${rm}>: ${place || 'the set'}${description ? `, ${description.replace(/[.\s]+$/, '')}` : ''}.`] : []),
+    ...people.map((name, i) => `<Subject ${subject(i)}> is ${name}, the person in <Picture ${face[i]}>.`),
     '',
     'summary:',
-    `[keyframe completion + reference generation] The target video begins from <Picture 1> and stays in <Subject 1> for the whole shot.${people.length ? ` ${people.map((name, i) => `${name} is <Subject ${i + 2}>`).join(' and ')}.` : ''}`,
+    `[${sk ? 'keyframe completion + ' : ''}reference generation] The target video ${opens || 'is one shot'}.${people.length ? ` ${people.map((name, i) => `${name} is <Subject ${subject(i)}>`).join(' and ')}.` : ''}${previs ? ' Its camera move and blocking follow <Video 1>.' : ''}`,
     '',
     'retention_analysis:',
-    '<Picture 1> ([Shot 1] first frame): fully_preserved - the shot begins from it at 0.00 seconds.',
-    `<Subject 1> (appears in ${inShots}): fully_preserved - the room, its furniture, light and colours, wherever the camera looks; the framing is newly directed.`,
-    ...people.map((name, i) => `<Subject ${i + 2}> (appears in ${inShots}): fully_preserved - ${name}'s face and hair; pose and clothes follow the shot.`),
+    ...(sk ? [`<Picture ${sk}> ([Shot 1] first frame): fully_preserved - the shot begins from it at 0.00 seconds.`] : []),
+    ...(rm ? [`<Subject 1> (appears in ${inShots}): fully_preserved - the room, its furniture, light and colours, wherever the camera looks; the framing is newly directed.`] : []),
+    ...people.map((name, i) => `<Subject ${subject(i)}> (appears in ${inShots}): fully_preserved - ${name}'s face and hair; pose and clothes follow the shot.`),
+    ...(previs ? ['<Video 1> (camera movement and blocking): partially_preserved - its camera path, speed and framing, and where the people stand and walk; not its look.'] : []),
     '',
     'detailed_description:',
-    'The shot begins from <Picture 1> and takes place in <Subject 1>, the place in <Picture 2>, throughout.',
+    ...[where && `${where}.`, previs && previsWords(previs, 1)].filter(Boolean),
     shots,
     '',
     `overall_soundscape:\n${field('overall_soundscape') || 'Quiet room tone.'}`,
@@ -269,10 +279,11 @@ export class Productions {
   // studio: () => the current Studio. voices: () => the voice engine (or null). images: () => Images (sketches).
   // edits: Edits. localCopy(file): an output as a file on this PC. onChange(id): a production changed
   // (breakdown progress, renders).
-  constructor({ dataDir, studio, voices = () => null, images = () => null, catalog = () => null, edits, localCopy, onChange = () => {}, model = () => DEFAULT_LOCAL_MODEL, writer = () => ({ engine: 'local' }) }) {
+  constructor({ dataDir, studio, voices = () => null, images = () => null, previs = () => null, catalog = () => null, edits, localCopy, onChange = () => {}, model = () => DEFAULT_LOCAL_MODEL, writer = () => ({ engine: 'local' }) }) {
     this.dir = path.join(dataDir, 'productions')
     this.studio = studio
     this.voices = voices
+    this.previs = previs // the staging board in motion (previs.js), for shots whose camera moves
     this.images = images
     this.catalog = catalog // the ready-made characters, for faces of presets that have none of their own
     this.edits = edits
@@ -726,7 +737,7 @@ export class Productions {
       this.onChange(id)
     }
   }
-  async queueShot(id, shotId, { previews = 3, seed, fromSketch = true, room: useRoom = true } = {}) {
+  async queueShot(id, shotId, { previews = 3, seed, fromSketch = true, room: useRoom = true, previs: usePrevis = true } = {}) {
     const studio = this.studio()
     const p = this.get(id)
     const { sc, sh } = this.find(p, shotId)
@@ -748,13 +759,22 @@ export class Productions {
     const loc = p.locations.find((l) => l.name.toLowerCase() === (sc.location || '').toLowerCase())
     const room = sketch && useRoom ? loc?.pictures?.find((f) => fs.existsSync(f)) : null
     const said = sh.line ? sh.prompt : withSilence(sh.prompt)
+    // a staged shot whose camera moves or whose people walk films from its previs: H3 follows a previs's camera
+    // path and framing much better than the same move in words
+    const moving = usePrevis && sh.stage?.camera && ((sh.stage.camera.move || 'static') !== 'static' || sh.stage.people?.some((x) => x.to))
+    const clip = moving && this.previs() ? await this.previs().make({ stage: sh.stage, seconds, aspect: p.aspect, name: `${p.name} ${sc.shots.indexOf(sh) + 1}` }).catch(() => null) : null
+    const reference = room || clip
     // the shot's character comes from its LoRA; anyone else in the cast on screen comes from their face picture
-    const others = room ? this.onScreen(p, sh).filter((x) => x.ch.id !== sh.character) : []
+    const others = reference ? this.onScreen(p, sh).filter((x) => x.ch.id !== sh.character) : []
     const job = await studio.generatePreviews({
       projectId,
-      mode: room ? 'reference' : sketch ? 'frames' : 'text',
-      prompt: room ? withRoom(said, { place: loc.name, description: loc.description, people: others.map((x) => x.ch.name.split(/\s+/)[0]) }) : sketch ? asFirstFrame(said) : said,
-      media: room ? [{ kind: 'picture', file: sketch }, { kind: 'picture', file: room }, ...others.map((x) => ({ kind: 'picture', file: x.face }))] : sketch ? [{ kind: 'picture', file: sketch }] : [],
+      mode: reference ? 'reference' : sketch ? 'frames' : 'text',
+      prompt: reference ? withRoom(said, { place: loc?.name, description: loc?.description, people: others.map((x) => x.ch.name.split(/\s+/)[0]), sketch: !!sketch, room: !!room, previs: clip ? sh.stage : null }) : sketch ? asFirstFrame(said) : said,
+      media: reference
+        ? [...(sketch ? [{ kind: 'picture', file: sketch }] : []), ...(room ? [{ kind: 'picture', file: room }] : []), ...others.map((x) => ({ kind: 'picture', file: x.face })), ...(clip ? [{ kind: 'video', file: clip.file, hasAudio: false }] : [])]
+        : sketch
+          ? [{ kind: 'picture', file: sketch }]
+          : [],
       character: sh.character || 'none',
       seconds,
       aspect: p.aspect,
@@ -764,7 +784,7 @@ export class Productions {
       voiceLine: sh.voiceLine?.file || null,
       seed: seed ?? Math.floor(Math.random() * 1e9)
     })
-    this.patch(id, (q) => (this.find(q, shotId).sh.filmedFrom = sketch ? 'sketch' : 'prompt'))
+    this.patch(id, (q) => Object.assign(this.find(q, shotId).sh, { filmedFrom: sketch ? 'sketch' : 'prompt', previs: clip?.file || null }))
     return job
   }
   // Previews for every shot in a scene (or, with no sceneId, the whole film) that has a prompt and nothing

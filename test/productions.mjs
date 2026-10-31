@@ -1,5 +1,6 @@
 // Projects: a shot's spoken line always reaches its H3 prompt.   node test/productions.mjs
 import assert from 'node:assert/strict'
+import { shotName } from '../src/service/studio.js'
 import { asFirstFrame, beatOf, heading, placePrompt, scriptText, sketchPrompt, spokenWords, withLine, withRoom, withSilence, wordMatch } from '../src/service/productions.js'
 import { parseScript } from '../src/service/screenplay.js'
 
@@ -92,5 +93,26 @@ ok('a shot filmed from its sketch opens on <Picture 1>, once', () => {
   const f = asFirstFrame(P)
   assert.ok(f.startsWith('For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\n\nintegrated_multimodal_description:'))
   assert.equal(asFirstFrame(f), f)
+})
+ok('a moving staged shot: its previs is <Video 1>, with or without a sketch and a room', () => {
+  const stage = { people: [{ name: 'Tess', x: -1, y: 1, facing: 90 }, { name: 'Theo', x: 1, y: 1, facing: -90 }], camera: { x: 0, y: -3, facing: 0, lens: 'normal', move: 'arc-left', height: 'eye' } }
+  const all = withRoom(asFirstFrame(P), { place: 'Pottery Studio', people: ['Theo'], previs: stage })
+  assert.match(all, /<Subject 2> is Theo, the person in <Picture 3>\./)
+  assert.match(all, /Its camera move and blocking follow <Video 1>\./)
+  assert.match(all, /\n<Video 1> \(camera movement and blocking\): partially_preserved - /)
+  assert.match(all, /detailed_description:\nThe shot begins from <Picture 1> and takes place in <Subject 1>, the place in <Picture 2>, throughout\.\n<Video 1> is a grey previs/)
+  const bare = withRoom(P, { people: ['Theo'], sketch: false, room: false, previs: stage })
+  assert.ok(!/<Picture 2>|<Subject 2>|place in/.test(bare), 'no sketch and no room: Theo is <Subject 1>, <Picture 1>')
+  assert.match(bare, /<Subject 1> is Theo, the person in <Picture 1>\./)
+  assert.match(bare, /^subject_definitions:\n<Subject 1> is Theo/)
+  assert.match(bare, /\[reference generation\] The target video is one shot\. Theo is <Subject 1>\. Its camera move/)
+  assert.match(bare, /detailed_description:\n<Video 1> is a grey previs/)
+  const sketchOnly = withRoom(asFirstFrame(P), { room: false, previs: stage })
+  assert.match(sketchOnly, /detailed_description:\nThe shot begins from <Picture 1>\.\n<Video 1>/)
+})
+ok('a new shot is named from its first shot, not its field names', () => {
+  const ref = ['subject_definitions:', '<Subject 1> is {char} (S1).', '', 'retention_analysis:', '<Subject 1> (appears in [Shot 1]): fully_preserved - x', '', 'detailed_description:', '[Shot 1] Live-action, cinematic. Full shot of {char} (S1) on a rooftop at dusk with water towers.'].join('\n')
+  assert.equal(shotName(ref, { name: 'Tess Marlow' }), 'Full shot of Tess on a rooftop at dusk…')
+  assert.equal(shotName('integrated_multimodal_description: [Shot 1] A dog runs.', null), 'A dog runs.')
 })
 console.log(`${n} checks passed`)
