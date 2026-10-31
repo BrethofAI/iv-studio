@@ -5173,6 +5173,18 @@ button.nav-update:hover {
   height: 18px;
   accent-color: var(--red);
 }
+.wiz-takes-acts {
+  display: flex;
+  gap: 8px;
+}
+.wiz-line-again {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  min-height: 36px;
+}
 
 /* a shot, opened */
 .wiz-drawer {

@@ -520,7 +520,7 @@ app.whenReady().then(() => {
   handle('productions:breakDown', (id, opts) => productions.breakDown(id, opts))
   handle('productions:writePrompt', (id, sceneId, shotId) => productions.writeShotPrompt(id, sceneId, shotId))
   handle('productions:editShot', (id, sceneId, shotId, patch) => productions.editShot(id, sceneId, shotId, patch))
-  handle('productions:speak', (id, shotId) => productions.speak(id, shotId))
+  handle('productions:speak', (id, shotId, opts) => productions.speak(id, shotId, opts))
   handle('productions:render', async (id, shotId, opts) => {
     const j = await productions.render(id, shotId, opts)
     pending.add(j.id)

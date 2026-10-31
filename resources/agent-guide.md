@@ -63,27 +63,30 @@ them on). The tools say "film" because `list_projects` already means shots.
    words under it is dialogue, and other paragraphs are action.
 2. No script yet? `write_film_script` drafts one from the idea, the cast and the length (a minute or two on
    this PC). Show it to the person and change it with `set_film_script` until they're happy. Speakers who
-   share a first name with a character preset join the cast; scene headings add places.
-3. `update_film` to cast characters, describe each place (every shot there uses it; a picture helps the
-   sketches) and set the look.
-4. `break_down_film` (background, minutes): each scene becomes 3-10 s shots with one speaker at most, each
-   shot gets its H3 prompt, then a storyboard sketch (a still on this PC's picture models; the character's
-   face and the place's picture are kept). Poll `get_film` until `breakdown.state` is done and
-   `totals.sketching` is 0. `sketch_film_shots` redraws sketches.
+   share a first name with a character preset join the cast, and so do presets named in the action of a first
+   script; scene headings add places, described by the writer.
+3. `update_film` to cast characters, describe each place (every shot there uses it) and set the look.
+4. `break_down_film` (background, minutes): each scene becomes 3-10 s shots with one speaker at most, sized to
+   the film's length, each shot gets its H3 prompt, then a storyboard sketch (a still on this PC's picture
+   models). A place without a photo gets one drawn first (it shows on Cast and places), so every sketch there
+   shares its room; the faces of the cast on screen are kept. Poll `get_film` until `breakdown.state` is done
+   and `totals.sketching` is 0. `sketch_film_shots` redraws sketches.
 5. Show the person the storyboard. Change shots with `edit_film_shot`, then `write_film_shot_prompt` and
    `sketch_film_shots` for that shot. Get their OK before filming: every shot takes GPU minutes.
 6. `render_film_scene` (without sceneId, the whole film) or `render_film_shot` hunt takes; each shot is an
-   ordinary shot, also in Shots. A shot with a sketch opens exactly on it (Frames mode), so the film keeps the
-   storyboard's framing and faces (fromSketch: false films from the prompt alone). A line whose character
-   has a voice is spoken in it first, for lip-sync
-   (`speak_film_line` does it on its own). When a shot's status is pick, show the takes
-   (`state.candidates`) and `finish_film_shot` the chosen one.
+   ordinary shot, also in Shots. A shot with a sketch opens exactly on it; with its place's picture it films
+   in Reference mode, so the room stays the same however the camera moves and the other cast on screen keep
+   their faces (room: false uses the sketch alone; fromSketch: false films from the prompt alone). Every line
+   whose character has a voice is said first, for lip-sync, and read back with Whisper until every word is
+   there (the shots show `speaking`, then `queued`, meanwhile); a shot with no line is told nobody speaks.
+   `speak_film_line` with `again` makes a new take of a line; film new takes to use it. When a shot's status
+   is pick, show the takes (`state.candidates`) and `finish_film_shot` the chosen one.
 7. `build_rough_cut` lays every shot in script order on V1 of the film's edit (finished takes, else the
    picked or first preview); `export_edit` saves it as a video. Then use the Edit tools, and
    `generate_in_edit` to extend or bridge shots.
 
-H3 follows one character LoRA per shot best: a shot's `character` is its main person; others are named in
-the prompt.
+H3 follows one character LoRA per shot best: a shot's `character` is its main person; other cast on screen
+come from their face pictures (Reference mode) and are named in the prompt.
 
 ## Sequences (one continuous video)
 

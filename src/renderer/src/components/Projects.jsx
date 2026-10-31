@@ -40,6 +40,8 @@ const CAMERAS = ['Wide shot, static', 'Medium shot, static', 'Close-up, static',
 const FILM_STATE = {
   draft: ['Not planned', ''],
   ready: ['Not filmed yet', ''],
+  speaking: ['Saying the line…', 'busy'],
+  queued: ['Waiting to film', 'busy'],
   rendering: ['Filming…', 'busy'],
   pick: ['Pick a take', 'pick'],
   finishing: ['Finishing…', 'busy'],
@@ -165,7 +167,7 @@ export function ProjectPage({ productionId, notify, go, openShot, openEdit, char
   // while anything is being written, planned, sketched or filmed, look again every few seconds
   useEffect(() => {
     clearTimeout(timer.current)
-    if (v && (v.writing || v.breakdown?.state === 'running' || v.totals.rendering > 0 || v.totals.sketching > 0)) timer.current = setTimeout(load, 4000)
+    if (v && (v.writing || v.filming || v.breakdown?.state === 'running' || v.totals.rendering > 0 || v.totals.sketching > 0)) timer.current = setTimeout(load, 4000)
   }, [v])
   if (!v) return null
   const act = async (fn, ok) => {
@@ -463,7 +465,7 @@ function Cast({ v, act, characters, notify, go, setStep }) {
       )}
 
       <h2 className="wiz-q wiz-q-gap">Where does it happen?</h2>
-      <p className="wiz-help">Describe each place, or add a photo of it. Every shot there uses it.</p>
+      <p className="wiz-help">Describe each place, or add a photo of it. Every shot there uses it. With no photo, one is drawn for you when the storyboard is sketched.</p>
       <div className="wiz-places">
         {v.locations.map((l, i) => (
           <div key={l.id} className="wiz-place">
@@ -549,7 +551,20 @@ function Cast({ v, act, characters, notify, go, setStep }) {
 function Board({ v, act, characters, openShot, setStep, mode }) {
   const [open, setOpen] = useState(null) // { sceneId, shotId } in the drawer
   const [takes, setTakes] = useState(null) // shot id whose takes are being picked
-  const [previews, setPreviews] = useState(3)
+  // takes per shot, remembered on this PC
+  const [previews, setPreviewCount] = useState(() => {
+    try {
+      return Number(localStorage.getItem('iv.filmTakes')) === 2 ? 2 : 3
+    } catch {
+      return 3
+    }
+  })
+  const setPreviews = (n) => {
+    setPreviewCount(n)
+    try {
+      localStorage.setItem('iv.filmTakes', String(n))
+    } catch {}
+  }
   const [fromSketch, setFromSketch] = useState(true)
   const face = useFaces()
   const b = v.breakdown
@@ -607,7 +622,7 @@ function Board({ v, act, characters, openShot, setStep, mode }) {
           </div>
           <div className="wiz-banner-act">
             <span className="mono small dim">
-              {t.finished} done · {t.pick} to pick · {t.rendering} filming
+              {v.filming ? `Saying the lines first · ${plural(v.filming.waiting, 'shot')} to go` : `${t.finished} done · ${t.pick} to pick · ${t.rendering} filming`}
             </span>
             {t.sketched > 0 && (
               <label className="wiz-check small" title="Each shot opens exactly on its storyboard sketch, so the film keeps its framing and faces">
@@ -621,8 +636,8 @@ function Board({ v, act, characters, openShot, setStep, mode }) {
                 </button>
               ))}
             </div>
-            <button className="btn btn-primary" disabled={!toFilm.length} onClick={() => act(() => P().renderScene(v.id, null, { previews, fromSketch }), (jobs) => `Filming ${plural(jobs.length, 'shot')}.`)}>
-              {toFilm.length ? `Film ${toFilm.length === all.length ? 'every shot' : `the ${plural(toFilm.length, 'shot')} left`} · about ${estimate(toFilm, previews)} min` : 'Every shot is filmed'}
+            <button className="btn btn-primary" disabled={!toFilm.length || !!v.filming} onClick={() => act(() => P().renderScene(v.id, null, { previews, fromSketch }), (jobs) => `Filming ${plural(jobs.length, 'shot')}.`)}>
+              {v.filming ? 'Getting the shots ready…' : toFilm.length ? `Film ${toFilm.length === all.length ? 'every shot' : `the ${plural(toFilm.length, 'shot')} left`} · about ${estimate(toFilm, previews)} min` : 'Every shot is filmed'}
             </button>
           </div>
         </div>
@@ -715,7 +730,7 @@ function Board({ v, act, characters, openShot, setStep, mode }) {
         <Foot back={() => setStep('cast')} next={() => setStep('film')} label="Next: film it" disabled={planning || !all.some((s) => s.prompt)} />
       )}
       {shotAt && <ShotDrawer v={v} sceneId={open.sceneId} sh={shotAt} act={act} characters={characters} face={face} openShot={openShot} film={film} previews={previews} fromSketch={fromSketch} onTakes={() => (setOpen(null), setTakes(shotAt.id))} onClose={() => setOpen(null)} />}
-      {takesShot && <Takes v={v} sh={takesShot} act={act} onClose={() => setTakes(null)} />}
+      {takesShot && <Takes v={v} sh={takesShot} act={act} onClose={() => setTakes(null)} onOpen={() => (setTakes(null), setOpen({ sceneId: v.scenes.find((s) => s.shots.some((x) => x.id === takesShot.id)).id, shotId: takesShot.id }))} />}
     </section>
   )
 }
@@ -847,7 +862,13 @@ function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, pre
         {sh.voiceLine && (
           <div className="wiz-field">
             <span className="mono small dim">The line in {characters.find((c) => c.id === sh.character)?.name.split(' ')[0] || 'their'}'s voice</span>
-            <audio src={fileUrl(sh.voiceLine.file)} controls preload="none" />
+            <audio key={sh.voiceLine.file} src={fileUrl(sh.voiceLine.file)} controls preload="none" />
+            <span className="wiz-line-again">
+              {sh.voiceLine.heard != null && <span className="mono small dim">Heard: “{sh.voiceLine.heard}”</span>}
+              <button className="link-btn mono small" disabled={!!working} onClick={busy('speak', () => act(() => P().speak(v.id, sh.id, { again: true }), 'A new take of the line. Film new takes to use it.'))}>
+                {working === 'speak' ? 'Saying it…' : 'Say it again'}
+              </button>
+            </span>
           </div>
         )}
         <details className="wiz-more">
@@ -902,7 +923,7 @@ function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, pre
 }
 
 // A shot's takes side by side; picking one finishes it at 2 MP.
-function Takes({ v, sh, act, onClose }) {
+function Takes({ v, sh, act, onClose, onOpen }) {
   const st = sh.state
   useEffect(() => {
     const key = (e) => e.key === 'Escape' && onClose()
@@ -927,10 +948,15 @@ function Takes({ v, sh, act, onClose }) {
           ))}
         </div>
         <div className="modal-foot">
-          <span className="small dim">None of them right? Close this, open the panel and film new takes.</span>
-          <button className="btn" onClick={onClose}>
-            Close
-          </button>
+          <span className="small dim">None of them right? Open the shot to change it, say the line again or film new takes.</span>
+          <span className="wiz-takes-acts">
+            <button className="btn" onClick={onOpen}>
+              Open the shot
+            </button>
+            <button className="btn" onClick={onClose}>
+              Close
+            </button>
+          </span>
         </div>
       </div>
     </div>

@@ -32,11 +32,12 @@ const FORMAT_FOR = { '16:9': '1080p', '9:16': 'vertical', '1:1': 'square' }
 const DONE = ['success', 'error', 'cancelled']
 
 const SHOT_RULES = `You are a film director breaking one scene of a screenplay into shots for an AI video model. Each shot is one continuous camera take of 3 to 10 seconds with native sound.
-- Keep the scene's order. Cover all of its action.
+- Keep the scene's order. Cover its action within the seconds you are given for the scene: when there's more than fits, keep the moments that tell the story and every spoken line.
 - Every line of dialogue appears in exactly one shot, word for word, and a shot has at most one speaker. A long speech can be split over shots, each with its own part.
 - Open with a shot that shows where we are, then go closer when people talk or do something small.
 - action: what we see, present tense, one or two concrete sentences: who, where, what they do and how. Name people by their names. No camera words here.
-- camera: the shot size and the camera's movement (e.g. "Wide, slow push in", "Close-up, handheld").
+- A shot never cuts. Something like "close-up on her hand, then cut to a wide shot" is two shots: write them as two.
+- camera: one shot size and the camera's movement (e.g. "Wide, slow push in", "Close-up, handheld"), never two sizes with an arrow.
 - characters: the names of the people on screen (from the cast list, or as the script names them).
 - speaker and line: who speaks in this shot and their exact words, or "" for both.
 - seconds: 3 to 10. A spoken line needs about 1 second per 2.5 words plus 1 second.`
@@ -69,45 +70,124 @@ export function withLine(prompt, who, line) {
   return cut < 0 ? `${prompt.trimEnd()} ${said}` : `${prompt.slice(0, cut).trimEnd()} ${said}${prompt.slice(cut)}`
 }
 
+// A shot with no line says so, or H3 may give someone words ("Thank you.") of its own. Speaker tags go too.
+export function withSilence(prompt) {
+  if (/<d>/.test(prompt) || /nobody speaks/i.test(prompt)) return prompt
+  const quiet = String(prompt).replace(/\s*\(S\d+\)/g, '')
+  const said = 'Nobody speaks in this shot: no dialogue, only the sounds of the place.'
+  const cut = quiet.search(/\n\s*\noverall_soundscape:/)
+  return cut < 0 ? `${quiet.trimEnd()} ${said}` : `${quiet.slice(0, cut).trimEnd()} ${said}${quiet.slice(cut)}`
+}
+
+// How well a spoken take matches its line (0 to 1): its words found, in any order, against the longer of the two,
+// so a dropped word and an added one ("Mine." heard as "Mine swept") both count against it.
+export function wordMatch(line, heard) {
+  const words = (t) => String(t || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean)
+  const want = words(line)
+  const got = words(heard)
+  if (!want.length) return 1
+  const total = Math.max(want.length, got.length)
+  let n = 0
+  for (const w of want) {
+    const i = got.indexOf(w)
+    if (i >= 0) (n++, got.splice(i, 1))
+  }
+  return n / total
+}
+
 const SCRIPT_RULES = `You write short films for an AI video model that films one 3 to 10 second shot at a time, with sound and spoken lines.
 - Write the film the person describes, in plain, concrete, visual English. Show, don't explain.
+- Keep the idea's own events, twist and ending exactly as given. Never swap them for a different or simpler story: if the idea says a puzzle is finished and then an extra piece turns up, the puzzle is finished and the piece is extra.
+- Keep where people are and what they hold consistent from beat to beat: someone sitting on the floor doesn't push back a chair.
 - Keep it small: few places, few people, simple physical actions the camera can see, short spoken lines.
 - Use the cast's names for the people in it. Don't invent more than one extra person unless the idea needs them.
-- Every scene happens in one place at one time. place is a short name ("Pottery studio"), time is DAY, NIGHT, MORNING or EVENING, inside is true for interiors.
-- beats run in order. An action beat is one or two sentences of what we see. A line beat is who speaks, how (a few words, or ""), and their exact words.
-- Aim for the length you are given: about one beat per 4 seconds, and end on a clear final image or line.`
-const SCRIPT_SCHEMA = {
-  type: 'object',
-  properties: {
-    title: { type: 'string' },
-    scenes: {
-      type: 'array',
-      minItems: 1,
-      items: {
-        type: 'object',
-        properties: {
-          place: { type: 'string' },
-          time: { type: 'string' },
-          inside: { type: 'boolean' },
-          beats: { type: 'array', minItems: 1, items: { type: 'object', properties: { kind: { type: 'string', enum: ['action', 'line'] }, text: { type: 'string' }, who: { type: 'string' }, how: { type: 'string' } }, required: ['kind', 'text', 'who', 'how'] } }
-        },
-        required: ['place', 'time', 'inside', 'beats']
+- Every scene happens in one place at one time. place is a short name ("Pottery studio"), time is DAY, NIGHT, MORNING or EVENING, inside is true for interiors, and looks is one sentence on what the place looks like (the room, the light, the colours).
+- beats run in order. An action beat fills only action: one short sentence of what we see. A line beat fills speaker (a cast name), delivery (two or three words on how it's said, or "") and words: only what they say out loud, with no name, no quote marks and no "she says". Lines are short: one sentence.
+- Write exactly the number of beats you are given, and end on a clear final image or line.
+Example of three beats:
+{"kind":"action","action":"Tess lifts a finished bowl off the wheel and turns it in the light.","speaker":"","delivery":"","words":""}
+{"kind":"line","action":"","speaker":"Tess","delivery":"to herself","words":"That's the one."}
+{"kind":"action","action":"She sets it on a shelf crowded with a dozen almost identical bowls.","speaker":"","delivery":"","words":""}`
+// Lengths are capped so a small writer can't run one string on and on (Ollama holds it to the schema).
+function scriptSchema(beats) {
+  const str = (n) => ({ type: 'string', maxLength: n })
+  return {
+    type: 'object',
+    properties: {
+      title: str(60),
+      scenes: {
+        type: 'array',
+        minItems: 1,
+        maxItems: Math.max(1, Math.ceil(beats / 3)),
+        items: {
+          type: 'object',
+          properties: {
+            place: str(40),
+            time: { type: 'string', enum: ['DAY', 'NIGHT', 'MORNING', 'EVENING'] },
+            inside: { type: 'boolean' },
+            looks: str(240),
+            beats: { type: 'array', minItems: 1, maxItems: beats, items: { type: 'object', properties: { kind: { type: 'string', enum: ['action', 'line'] }, action: str(220), speaker: str(30), delivery: str(40), words: str(160) }, required: ['kind', 'action', 'speaker', 'delivery', 'words'] } }
+          },
+          required: ['place', 'time', 'inside', 'looks', 'beats']
+        }
       }
-    }
-  },
-  required: ['title', 'scenes']
+    },
+    required: ['title', 'scenes']
+  }
+}
+
+// Only the words said out loud. The writer sometimes wraps a line as prose: Theo: "It's mine," he says.
+const QUOTED = /["“]([^"“”]+)["”]/g
+const SAYS = /\b(?:he|she|they|[A-Z][a-z]+)\s+(?:says|said|asks|asked|whispers|whispered|mutters|muttered|shouts|shouted|replies|replied|adds|added|calls|snaps)\b/
+export function spokenWords(text) {
+  let t = String(text || '').trim().replace(/^[A-Z][\w'.-]*(?: [A-Z][\w'.-]*)?\s*(?:\([^)]*\))?\s*:\s*/, '')
+  const quoted = [...t.matchAll(QUOTED)].map((m) => m[1].trim().replace(/,$/, '.'))
+  if (quoted.length && (/^["“]/.test(t) || SAYS.test(t.replace(QUOTED, '')))) t = quoted.join(' ')
+  const single = t.match(/^['‘](.+)['’]$/)
+  if (single) t = single[1]
+  return t.replace(/^["“]|["”]$/g, '').trim()
+}
+
+// One beat from the writer, put right when it fills the wrong fields: the words in delivery, "Tess (quiet)" as the
+// words, or a line with nobody saying anything. Takes the older { text, who, how } shape too.
+export function beatOf(b) {
+  let kind = b.kind === 'line' ? 'line' : 'action'
+  let action = String(b.action ?? (kind === 'action' ? b.text : '') ?? '').trim()
+  const speaker = String(b.speaker ?? b.who ?? '').trim()
+  let delivery = String(b.delivery ?? b.how ?? '').trim().replace(/^\(|\)$/g, '').trim()
+  let words = String(b.words ?? (kind === 'line' ? b.text : '') ?? '').trim()
+  const first = speaker.split(/\s+/)[0].toLowerCase()
+  if (words && first && new RegExp(`^${first.replace(/[^\w]/g, '')}\\b[^.!?]*$`, 'i').test(words.replace(/\([^)]*\)/g, '').trim()) && words.split(/\s+/).length <= 3) words = ''
+  if (!words && delivery.split(/\s+/).length >= 3) [words, delivery] = [delivery, '']
+  words = spokenWords(words)
+  if (kind === 'line' && !words) kind = 'action'
+  if (kind === 'action' && !action && words && speaker) kind = 'line'
+  return kind === 'line' ? { kind, speaker, delivery, words } : { kind, action: action || words }
+}
+
+// A scene heading's place and time from the writer's, which can come as "Bus stop – rainy afternoon" + "AFTERNOON".
+const TIMES = [
+  ['NIGHT', /night|midnight|\b\d{1,2}\s*a\.?m\b|late/i],
+  ['MORNING', /morning|dawn|sunrise/i],
+  ['EVENING', /evening|dusk|sunset|twilight/i],
+  ['DAY', /day|noon|afternoon/i]
+]
+export function heading(place, time) {
+  const [name, ...rest] = String(place || 'Somewhere').split(/\s+[-–—]\s+/)
+  const said = [time, ...rest].filter(Boolean).join(' ')
+  return { place: name.trim() || 'Somewhere', time: TIMES.find(([, re]) => re.test(said))?.[0] || 'DAY' }
 }
 
 // The writer's film as screenplay text, which parseScript reads back.
 export function scriptText(out) {
   const parts = out.title ? [`Title: ${out.title.trim()}`, ''] : []
   for (const sc of out.scenes || []) {
-    parts.push(`${sc.inside === false ? 'EXT.' : 'INT.'} ${String(sc.place || 'Somewhere').toUpperCase()} - ${String(sc.time || 'DAY').toUpperCase()}`, '')
-    for (const b of sc.beats || []) {
-      const text = String(b.text || '').trim()
-      if (!text) continue
-      if (b.kind === 'line' && b.who) parts.push(String(b.who).trim().toUpperCase(), ...(b.how?.trim() ? [`(${b.how.trim().replace(/^\(|\)$/g, '')})`] : []), text.replace(/^["“]|["”]$/g, ''), '')
-      else parts.push(text, '')
+    const { place, time } = heading(sc.place, sc.time)
+    parts.push(`${sc.inside === false ? 'EXT.' : 'INT.'} ${place.toUpperCase()} - ${time}`, '')
+    for (const raw of sc.beats || []) {
+      const b = beatOf(raw)
+      if (b.kind === 'line' && b.speaker) parts.push(b.speaker.toUpperCase(), ...(b.delivery ? [`(${b.delivery})`] : []), b.words, '')
+      else if (b.kind === 'line' || b.action) parts.push(b.kind === 'line' ? b.words : b.action, '')
     }
   }
   return parts.join('\n').trim() + '\n'
@@ -120,6 +200,30 @@ export function asFirstFrame(prompt) {
   return body.startsWith(FIRST_FRAME) ? body : `${FIRST_FRAME}\n\n${body}`
 }
 
+// A shot that opens on its sketch (<Picture 1>) and stays in the place's picture (<Picture 2>), for reference to video:
+// the sketch fixes the first frame and the place carries its room, light and colours through the whole take.
+// Anyone else on screen (people) comes as <Picture 3>, <Picture 4>: their face carries into the shot.
+export function withRoom(prompt, { place, description, people = [] }) {
+  const body = String(prompt || '').trim().replace(`${FIRST_FRAME}\n\n`, '')
+  return [
+    'subject_definitions:',
+    `<Subject 1> is the place shown in <Picture 2>: ${place || 'the set'}${description ? `, ${description.replace(/[.\s]+$/, '')}` : ''}.`,
+    ...people.map((name, i) => `<Subject ${i + 2}> is ${name}, the person shown in <Picture ${i + 3}>.`),
+    '',
+    'summary:',
+    `[keyframe completion + reference generation] The target video opens exactly on <Picture 1> and stays in <Subject 1> from <Picture 2> for the whole shot.${people.length ? ` ${people.join(' and ')} look${people.length > 1 ? '' : 's'} like ${people.map((_, i) => `<Picture ${i + 3}>`).join(' and ')}.` : ''}`,
+    '',
+    'retention_analysis:',
+    '<Picture 1>: fully_preserved — the first frame, at 0.00 seconds.',
+    '<Subject 1>: attribute_transfer from <Picture 2> — the room, its furniture, light and colours carry into the target wherever the camera looks; framing is newly directed.',
+    ...people.map((name, i) => `<Subject ${i + 2}>: attribute_transfer from <Picture ${i + 3}> — ${name}'s face and hair carry into the target; pose and clothes follow the shot.`),
+    '',
+    FIRST_FRAME,
+    '',
+    body
+  ].join('\n')
+}
+
 // A storyboard still's prompt: a film still of the shot, in the film's look.
 export function sketchPrompt({ action, camera, place, time, description, look, faces = [] }) {
   return [
@@ -128,6 +232,19 @@ export function sketchPrompt({ action, camera, place, time, description, look, f
     action,
     place ? `${place}${time ? `, ${time.toLowerCase()}` : ''}${description ? `: ${description}` : ''}.` : '',
     look ? `Look: ${look}.` : 'Natural light, realistic, shallow depth of field.',
+    'One single frame: no split screen, no collage, no text, no captions, no borders.'
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
+// The empty place, drawn once so every sketch there shares its room, light and colours.
+export function placePrompt({ place, time, description, look }) {
+  return [
+    `Cinematic film still, wide establishing shot of ${place || 'the place'}${time ? `, ${time.toLowerCase()}` : ''}.`,
+    description ? `${description}.` : '',
+    'Nobody in it: an empty set, ready for the actors.',
+    look ? `Look: ${look}.` : 'Natural light, realistic.',
     'One single frame: no split screen, no collage, no text, no captions, no borders.'
   ]
     .filter(Boolean)
@@ -150,6 +267,7 @@ export class Productions {
     this.model = model
     this.running = new Map() // production id -> breakdown promise
     this.writing = new Set() // production ids whose script is being written
+    this.filming = new Map() // production id -> { speaking: shot id or null, waiting: Set of shot ids } while lines are said
   }
 
   file = (id) => path.join(this.dir, `${id}.json`)
@@ -215,12 +333,19 @@ export class Productions {
       const same = prev && JSON.stringify(prev.elements) === JSON.stringify(sc.elements)
       return { id: prev?.id || id6(), heading: sc.heading, location: sc.location, time: sc.time, elements: sc.elements, shots: same ? prev.shots : [], stale: !!prev && !same && prev.shots.length > 0 }
     })
-    // the cast: any speaker who matches a character preset joins it
+    // the cast: any speaker who matches a character preset joins it, and so does a preset named in the action
     const presets = this.studio().characters()
     const cast = [...(p.cast || [])]
+    const firstName = (n) => n.split(/\s+/)[0].toLowerCase()
     for (const who of s.speakers) {
-      const c = presets.find((x) => x.name.split(/\s+/)[0].toLowerCase() === who.split(/\s+/)[0].toLowerCase())
+      const c = presets.find((x) => firstName(x.name) === firstName(who))
       if (c && !cast.some((x) => x.characterId === c.id)) cast.push({ characterId: c.id, as: who })
+    }
+    const action = s.scenes.flatMap((sc) => sc.elements.filter((e) => e.type === 'action').map((e) => e.text)).join('\n')
+    // (only for a first script, so someone taken out of the cast stays out when the script is edited)
+    for (const c of (p.scenes || []).length ? [] : presets) {
+      const name = c.name.split(/\s+/)[0]
+      if (name.length > 1 && !cast.some((x) => x.characterId === c.id) && new RegExp(`\\b${name.replace(/[^\w]/g, '')}\\b`).test(action)) cast.push({ characterId: c.id, as: name })
     }
     // locations from the headings
     const locations = [...(p.locations || [])]
@@ -246,18 +371,23 @@ export class Productions {
     const brief = String(idea || p.logline || '').trim()
     if (!brief) throw new Error('Say what the film is about first.')
     const castNames = p.cast.map((c) => this.character(c.characterId)?.name || c.as).filter(Boolean)
+    const beats = Math.max(3, Math.round(p.targetSeconds / 4))
     const user = [
       `Idea: ${brief}`,
       p.name && p.name !== 'Untitled film' ? `Title: ${p.name}` : '',
       castNames.length ? `Cast: ${castNames.join(', ')}` : '',
-      `Length: about ${p.targetSeconds} seconds (${Math.max(1, Math.round(p.targetSeconds / 4))} beats in all).`,
+      `Beats: exactly ${beats} in all, for about ${p.targetSeconds} seconds of film.`,
       p.look?.notes ? `Look: ${p.look.notes}` : ''
     ]
       .filter(Boolean)
       .join('\n')
-    const out = await ollamaJson({ system: SCRIPT_RULES, user, schema: SCRIPT_SCHEMA, model: this.model(), cpu: await this.studio().gpuBusy().catch(() => false), temperature: 0.8 })
+    const out = await ollamaJson({ system: SCRIPT_RULES, user, schema: scriptSchema(beats), model: this.model(), cpu: await this.studio().gpuBusy().catch(() => false), temperature: 0.6 })
     if (p.name && p.name !== 'Untitled film') out.title = ''
-    return this.setScript(id, scriptText(out))
+    const q = this.setScript(id, scriptText(out))
+    // the writer's one line on each place fills a place the person hasn't described yet
+    const looks = new Map((out.scenes || []).filter((s) => s.place && s.looks?.trim()).map((s) => [String(s.place).trim().toLowerCase(), s.looks.trim()]))
+    if (!q.locations.some((l) => !l.description && looks.has(l.name.toLowerCase()))) return q
+    return this.write({ ...q, locations: q.locations.map((l) => (l.description ? l : { ...l, description: looks.get(l.name.toLowerCase()) || '' })) })
   }
 
   // ---------- breakdown ----------
@@ -294,7 +424,10 @@ export class Productions {
       if (!sc) continue
       const castNames = p.cast.map((c) => this.character(c.characterId)?.name).filter(Boolean)
       const loc = p.locations.find((l) => l.name.toLowerCase() === (sc.location || '').toLowerCase())
-      const user = [`Film: ${p.name}${p.logline ? `. ${p.logline}` : ''}`, castNames.length ? `Cast: ${castNames.join(', ')}` : '', loc?.description ? `${loc.name}: ${loc.description}` : '', p.look?.notes ? `Look: ${p.look.notes}` : '', `Scene:\n${sceneText(sc)}`].filter(Boolean).join('\n')
+      // the scene's share of the film's length, by how much script it has
+      const size = (s) => sceneText(s).length
+      const share = Math.max(6, Math.round((p.targetSeconds * size(sc)) / Math.max(1, p.scenes.reduce((n, s) => n + size(s), 0))))
+      const user = [`Film: ${p.name}${p.logline ? `. ${p.logline}` : ''}`, castNames.length ? `Cast: ${castNames.join(', ')}` : '', loc?.description ? `${loc.name}: ${loc.description}` : '', p.look?.notes ? `Look: ${p.look.notes}` : '', `Seconds for this scene: about ${share} (${Math.max(1, Math.round(share / 6))} shots or so).`, `Scene:\n${sceneText(sc)}`].filter(Boolean).join('\n')
       const out = await ollamaJson({ system: SHOT_RULES, user, schema: SHOT_SCHEMA, model: this.model(), cpu })
       const shots = (out.shots || []).map((s) => ({
         id: id6(),
@@ -327,6 +460,16 @@ export class Productions {
 
   character(cid) {
     return this.studio().characters().find((c) => c.id === cid) || null
+  }
+  // The cast characters on screen in a shot that have a face picture: the shot's own character first, then anyone
+  // else it names who is in the cast (two at most), as [{ ch, face }].
+  onScreen(p, sh) {
+    const first = (n) => String(n || '').split(/\s+/)[0].toLowerCase()
+    const ids = [sh.character, ...(sh.characters || []).map((n) => p.cast.find((c) => first(c.as) === first(n) || first(this.character(c.characterId)?.name) === first(n))?.characterId)]
+    return [...new Set(ids.filter(Boolean))]
+      .map((cid) => ({ ch: this.character(cid), face: this.facePicture(this.character(cid)) }))
+      .filter((x) => x.ch && x.face)
+      .slice(0, 2)
   }
   // A character's face picture: its own, else the ready-made catalogue's.
   facePicture(ch) {
@@ -415,7 +558,8 @@ export class Productions {
   }
 
   // The shot's line in its character's voice (for lip-sync): the file becomes the shot's voice line.
-  async speak(id, shotId) {
+  // again: a new take with fresh seeds (the voice keeps a take per seed, so the same seed gives the same take).
+  async speak(id, shotId, { again = false } = {}) {
     const p = this.get(id)
     const { sh } = this.find(p, shotId)
     if (!sh.line) throw new Error('This shot has no line to say.')
@@ -423,8 +567,19 @@ export class Productions {
     if (!voiceId) throw new Error('Give this character a voice on the Characters page first.')
     const v = this.voices()
     if (!v) throw new Error('Voices need IV Studio on this PC.')
-    const line = await v.speak({ voiceId, text: sh.line })
-    this.patch(id, (q) => (this.find(q, shotId).sh.voiceLine = { file: line.file, text: line.text, duration: line.duration }))
+    // the voice can drop a word from a short line, so each take is read back and said again (up to 3 seeds)
+    // until every word is there; the most complete take is kept
+    let best = null
+    const from = again ? 3000 + Math.floor(Math.random() * 1e6) : null
+    for (const seed of from == null ? [null, 1001, 2002] : [from, from + 1, from + 2]) {
+      const line = await v.speak({ voiceId, text: sh.line, seed })
+      const heard = await v.transcribe(line.file).catch(() => null)
+      const score = heard == null ? 1 : wordMatch(sh.line, heard)
+      if (!best || score > best.score) best = { line, score, heard }
+      if (score >= 0.99) break
+    }
+    const { line } = best
+    this.patch(id, (q) => (this.find(q, shotId).sh.voiceLine = { file: line.file, text: line.text, duration: line.duration, heard: best.heard }))
     return line
   }
 
@@ -442,18 +597,26 @@ export class Productions {
     const editor = ready(['flux2', 'flux3'], true) // they can keep the film's frame
     const drawer = ready(['flux2', 'zimage', 'flux3', 'krea2', 'qwen21', 'moss'], false)
     if (!drawer) throw new Error('Sketches need a picture model. Set one up in Settings → Setup (Flux.2 Klein or Z-Image Turbo).')
-    const p = this.get(id)
+    let p = this.get(id)
+    const todo = (sc) => sc.shots.filter((sh) => (shotIds ? shotIds.includes(sh.id) : redo || !(sh.sketch || sh.sketchSet)))
+    // a place with no photo gets one drawn first (it shows on Cast and places), or each sketch makes up its own room
+    if (editor)
+      for (const sc of p.scenes) {
+        const loc = p.locations.find((l) => l.name.toLowerCase() === (sc.location || '').toLowerCase())
+        if (!loc || !todo(sc).length || loc.pictures.some((f) => fs.existsSync(f))) continue
+        const file = await this.drawPlace(images, drawer, p, loc, sc).catch(() => null)
+        if (file) p = this.patch(id, (q) => (q.locations.find((l) => l.id === loc.id).pictures = [file]))
+      }
     const made = []
     for (const sc of p.scenes)
       for (const [i, sh] of sc.shots.entries()) {
-        if (shotIds ? !shotIds.includes(sh.id) : !redo && (sh.sketch || sh.sketchSet)) continue
+        if (!todo(sc).includes(sh)) continue
         const loc = p.locations.find((l) => l.name.toLowerCase() === (sc.location || '').toLowerCase())
-        const ch = this.character(sh.character)
-        const face = this.facePicture(ch)
+        const people = editor ? this.onScreen(p, sh) : []
         const place = loc?.pictures?.find((f) => fs.existsSync(f)) || null
-        const refs = editor ? [face, place].filter(Boolean) : []
+        const refs = editor ? [...people.map((x) => x.face), place].filter(Boolean) : []
         const prompt =
-          sketchPrompt({ action: sh.action, camera: sh.camera, place: loc?.name || sc.location, time: sc.time, description: loc?.description, look: p.look?.notes, faces: face && refs.length ? [ch.name] : [] }) +
+          sketchPrompt({ action: sh.action, camera: sh.camera, place: loc?.name || sc.location, time: sc.time, description: loc?.description, look: p.look?.notes, faces: people.map((x) => x.ch.name) }) +
           (place && refs.length ? ` The place looks like picture ${refs.length}.` : '')
         const fam = refs.length ? editor : drawer
         const rec = await images.create({ mode: refs.length ? 'edit' : 'generate', model: fam.models[0], prompt, aspect: p.aspect, megapixels: 0.5, count: 1, refs, keepAspect: true, name: `${p.name} · ${sc.location || 'scene'} · ${i + 1}`, tag: `film:${p.id}` })
@@ -461,6 +624,16 @@ export class Productions {
         made.push({ shot: sh.id, set: rec.id })
       }
     return made
+  }
+  // Draws the empty place in the film's frame and waits for it (about 20 s). Returns the picture file.
+  async drawPlace(images, fam, p, loc, sc) {
+    const rec = await images.create({ mode: 'generate', model: fam.models[0], prompt: placePrompt({ place: loc.name, time: sc.time, description: loc.description, look: p.look?.notes }), aspect: p.aspect, megapixels: 0.5, count: 1, name: `${p.name} · ${loc.name}`, tag: `film:${p.id}` })
+    for (const end = Date.now() + 600e3; Date.now() < end; await new Promise((r) => setTimeout(r, 2000))) {
+      const r = await images.get(rec.id)
+      if (r.files?.length) return r.files[0]
+      if (['error', 'cancelled'].includes(r.status)) throw new Error(r.error || 'The place picture failed.')
+    }
+    throw new Error('The place picture took too long.')
   }
   // A shot's finished sketch becomes its picture (shot.sketch); a failed one is dropped so it can be redone.
   async refreshSketches(p) {
@@ -485,16 +658,46 @@ export class Productions {
   // With voice (the default), a line its character has a voice for is said first, so the shot lip-syncs to it;
   // if the voice engine can't, the shot renders with H3's own voice. With fromSketch (the default) a shot that
   // has a sketch opens exactly on it (Frames mode), so the film keeps the storyboard's framing and faces.
-  async render(id, shotId, { previews = 3, seed, voice = true, fromSketch = true } = {}) {
-    const studio = this.studio()
-    let p = this.get(id)
-    let { sc, sh } = this.find(p, shotId)
+  async render(id, shotId, opts = {}) {
+    if (this.filming.has(id)) throw new Error('This film is already being filmed. Wait for its lines to be said.')
+    const { sh } = this.find(this.get(id), shotId)
     if (!sh.prompt.trim()) throw new Error('This shot has no prompt yet. Write it first.')
-    if (voice && sh.line && !sh.voiceLine && this.character(sh.character)?.voiceId && this.voices()) {
-      await this.speak(id, shotId).catch(() => {})
-      p = this.get(id)
-      ;({ sc, sh } = this.find(p, shotId))
+    return (await this.filmShots(id, [shotId], opts))[0]
+  }
+  // A line its character has a voice for is said first (voice), while the shot shows "Saying the line".
+  needsLine(sh, voice = true) {
+    return voice && !!sh.line && !sh.voiceLine && !!this.character(sh.character)?.voiceId && !!this.voices()
+  }
+  // Every line is said before any shot renders: a render stops the voice engine to free the GPU, so saying
+  // and rendering in turn would load the voice models again for every shot. Until then the shots show as
+  // speaking or queued, and a second Film it is refused.
+  async filmShots(id, shotIds, { voice = true, ...opts } = {}) {
+    const run = { speaking: null, waiting: new Set(shotIds) }
+    this.filming.set(id, run)
+    this.onChange(id)
+    try {
+      for (const shotId of shotIds) {
+        if (!this.needsLine(this.find(this.get(id), shotId).sh, voice)) continue
+        run.speaking = shotId
+        this.onChange(id)
+        await this.speak(id, shotId).catch(() => {}) // without the voice engine, H3 voices the line itself
+      }
+      run.speaking = null
+      const jobs = []
+      for (const shotId of shotIds) {
+        jobs.push(await this.queueShot(id, shotId, opts))
+        run.waiting.delete(shotId)
+      }
+      return jobs
+    } finally {
+      this.filming.delete(id)
+      this.onChange(id)
     }
+  }
+  async queueShot(id, shotId, { previews = 3, seed, fromSketch = true, room: useRoom = true } = {}) {
+    const studio = this.studio()
+    const p = this.get(id)
+    const { sc, sh } = this.find(p, shotId)
     let projectId = sh.projectId
     try {
       if (projectId) studio.getProject(projectId)
@@ -509,11 +712,17 @@ export class Productions {
     }
     const seconds = sh.voiceLine ? Math.min(15, Math.max(sh.seconds, Math.ceil(sh.voiceLine.duration + 0.5))) : sh.seconds
     const sketch = fromSketch && sh.sketch && fs.existsSync(sh.sketch) ? sh.sketch : null
+    // with a picture of the place too, reference to video keeps the room the same however the camera moves
+    const loc = p.locations.find((l) => l.name.toLowerCase() === (sc.location || '').toLowerCase())
+    const room = sketch && useRoom ? loc?.pictures?.find((f) => fs.existsSync(f)) : null
+    const said = sh.line ? sh.prompt : withSilence(sh.prompt)
+    // the shot's character comes from its LoRA; anyone else in the cast on screen comes from their face picture
+    const others = room ? this.onScreen(p, sh).filter((x) => x.ch.id !== sh.character) : []
     const job = await studio.generatePreviews({
       projectId,
-      mode: sketch ? 'frames' : 'text',
-      prompt: sketch ? asFirstFrame(sh.prompt) : sh.prompt,
-      media: sketch ? [{ kind: 'picture', file: sketch }] : [],
+      mode: room ? 'reference' : sketch ? 'frames' : 'text',
+      prompt: room ? withRoom(said, { place: loc.name, description: loc.description, people: others.map((x) => x.ch.name.split(/\s+/)[0]) }) : sketch ? asFirstFrame(said) : said,
+      media: room ? [{ kind: 'picture', file: sketch }, { kind: 'picture', file: room }, ...others.map((x) => ({ kind: 'picture', file: x.face }))] : sketch ? [{ kind: 'picture', file: sketch }] : [],
       character: sh.character || 'none',
       seconds,
       aspect: p.aspect,
@@ -532,9 +741,9 @@ export class Productions {
     const p = this.get(id)
     const scenes = sceneId ? p.scenes.filter((s) => s.id === sceneId) : p.scenes
     if (!scenes.length) throw new Error('No such scene.')
-    const out = []
-    for (const sc of scenes) for (const sh of sc.shots) if (sh.prompt.trim() && !sh.projectId) out.push(await this.render(id, sh.id, opts))
-    return out
+    if (this.filming.has(id)) throw new Error('This film is already being filmed. Wait for its lines to be said.')
+    const ids = scenes.flatMap((sc) => sc.shots.filter((sh) => sh.prompt.trim() && !sh.projectId).map((sh) => sh.id))
+    return ids.length ? this.filmShots(id, ids, opts) : []
   }
   // Finishes preview n of the shot's latest hunt (2 MP; with the voice line as its sound when it has one).
   async finish(id, shotId, candidate = 1, { megapixels = 2, upscale2x = false } = {}) {
@@ -578,15 +787,18 @@ export class Productions {
         if (sh.projectId)
           for (const j of studio.listJobs(sh.projectId))
             if (!DONE.includes(j.status)) await studio.refreshJob(j.id).catch(() => {})
-    const scenes = p.scenes.map((sc) => ({ ...sc, shots: sc.shots.map((sh) => ({ ...sh, state: this.shotState(sh) })) }))
+    const run = this.filming.get(id)
+    const stateOf = (sh) => (run?.speaking === sh.id ? { status: 'speaking' } : run?.waiting.has(sh.id) && !sh.projectId ? { status: 'queued' } : this.shotState(sh))
+    const scenes = p.scenes.map((sc) => ({ ...sc, shots: sc.shots.map((sh) => ({ ...sh, state: stateOf(sh) })) }))
     const all = scenes.flatMap((s) => s.shots)
     const count = (st) => all.filter((s) => s.state.status === st).length
     return {
       ...p,
       step: p.step || (all.length ? 'board' : p.scenes.length ? 'cast' : 'idea'),
       writing: this.writing.has(id),
+      filming: run ? { speaking: run.speaking, waiting: run.waiting.size } : null,
       scenes,
-      totals: { shots: all.length, seconds: all.reduce((n, s) => n + s.seconds, 0), finished: count('finished'), pick: count('pick'), rendering: count('rendering') + count('finishing'), ready: count('ready'), draft: count('draft'), sketched: all.filter((s) => s.sketch).length, sketching: all.filter((s) => s.sketchSet && !s.sketch).length }
+      totals: { shots: all.length, seconds: all.reduce((n, s) => n + s.seconds, 0), finished: count('finished'), pick: count('pick'), rendering: count('rendering') + count('finishing') + count('speaking') + count('queued'), speaking: count('speaking') + count('queued'), ready: count('ready'), draft: count('draft'), sketched: all.filter((s) => s.sketch).length, sketching: all.filter((s) => s.sketchSet && !s.sketch).length }
     }
   }
 

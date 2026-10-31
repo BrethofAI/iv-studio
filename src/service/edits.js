@@ -103,19 +103,27 @@ export class Edits {
     const hears = (c) => !c.muted && audible(tracks, c.track)
     const videoClips = e.clips.filter((c) => order[c.track] !== undefined && e.media[c.media] && (shown(tracks, c.track) || (e.media[c.media].hasAudio && hears(c)))).sort((a, b) => order[a.track] - order[b.track] || a.start - b.start)
     let last = 'base'
+    // A shown clip's sound is read from a second, sound-only input of its file. From the same input, the mix
+    // (which wants every sound from the start) made ffmpeg decode each clip's pictures long before their turn and
+    // hold them all: a 26 s film of four full-sound shots took over 30 minutes instead of 5 seconds.
+    const sounds = []
     for (const c of videoClips) {
       const m = e.media[c.media]
       const len = clipLength(c)
       if (m.kind === 'image') args.push('-loop', '1', '-t', len.toFixed(3), '-i', m.path)
       else args.push('-i', m.path)
       const i = input++
-      if (m.kind === 'video' && m.hasAudio && hears(c)) audio.push({ i, c })
+      if (m.kind === 'video' && m.hasAudio && hears(c)) shown(tracks, c.track) ? sounds.push(c) : audio.push({ i, c })
       if (!shown(tracks, c.track)) continue
       const fades = [c.fadeIn > 0 && `fade=t=in:st=0:d=${c.fadeIn}:alpha=1`, c.fadeOut > 0 && `fade=t=out:st=${Math.max(0, len - c.fadeOut).toFixed(3)}:d=${c.fadeOut}:alpha=1`].filter(Boolean)
       const trim = m.kind === 'image' ? '' : `trim=start=${c.in.toFixed(3)}:end=${c.out.toFixed(3)},`
       filters.push(`[${i}:v]${trim}setpts=PTS-STARTPTS,fps=${fps},scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=yuva420p${fades.length ? ',' + fades.join(',') : ''},setpts=PTS+${c.start.toFixed(3)}/TB[v${i}]`)
       filters.push(`[${last}][v${i}]overlay=eof_action=pass:enable='between(t,${c.start.toFixed(3)},${clipEnd(c).toFixed(3)})'[o${i}]`)
       last = `o${i}`
+    }
+    for (const c of sounds) {
+      args.push('-vn', '-i', e.media[c.media].path)
+      audio.push({ i: input++, c })
     }
     for (const c of e.clips.filter((x) => x.track[0] === 'A' && e.media[x.media] && hears(x))) {
       args.push('-i', e.media[c.media].path)
@@ -161,7 +169,7 @@ export class Edits {
     const missing = Object.values(e.media).filter((m) => e.clips.some((c) => c.media === m.id) && !fs.existsSync(m.path))
     if (missing.length) throw new Error(`Missing files: ${missing.map((m) => m.name).join(', ')}`)
     fs.mkdirSync(outDir, { recursive: true })
-    const base = `${e.name.replace(/[^\w -]+/g, '').trim() || 'edit'}_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`
+    const base = `${e.name.replace(/\s*·\s*/g, ' - ').replace(/[^\w -]+/g, '').replace(/\s+/g, ' ').trim() || 'edit'}_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`
     const outFile = path.join(outDir, `${base}.mp4`)
     const work = path.join(this.dir, 'work', id)
     fs.rmSync(work, { recursive: true, force: true })
