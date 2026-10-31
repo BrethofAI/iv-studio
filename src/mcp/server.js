@@ -10,12 +10,13 @@ import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
 import { INSTRUCTIONS, readGuide } from '../service/agent'
+import { GUIDE_SOURCE, loadGuide } from '../service/h3guide'
 import { menuMessage, START_MENU } from '../service/startmenu'
 import { Edits, editLength, FORMATS } from '../service/edits'
 import { EditGen, GEN_KINDS } from '../service/editgen'
 import { Productions } from '../service/productions'
 import { MediaTools } from '../service/media'
-import { comfyFolders, contentDir, dataDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
+import { comfyFolders, contentDir, dataDir, readSettings, resourcesDir, writerOf, writeSettings } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
@@ -93,10 +94,21 @@ const finish = {
   rerollSeed: z.number().int().optional()
 }
 
-// The full how-to, as plain markdown (resources/agent-guide.md, also the Claude Code skill).
-server.registerTool('get_guide', { description: 'How to use IV Studio: rendering shots, writing H3 prompts, sequences, timeline edits, models, characters, and the house rules. Read it once before your first render or edit.', inputSchema: {} }, () => ({
-  content: [{ type: 'text', text: readGuide(resourcesDir()) }]
-}))
+// The full how-to, as plain markdown (resources/agent-guide.md, also the Claude Code skill), or MiniMax's own H3
+// prompt guide, which is downloaded from MiniMax rather than shipped (h3guide.js).
+server.registerTool(
+  'get_guide',
+  {
+    description: 'How to use IV Studio: rendering shots, writing H3 prompts, sequences, timeline edits, models, characters, and the house rules. Read it once before your first render or edit. topic "h3-prompts" returns MiniMax\'s own H3 prompt-writing guide (every mode, camera moves, speakers, sound): read it before writing an H3 prompt yourself.',
+    inputSchema: { topic: z.enum(['iv-studio', 'h3-prompts']).optional().describe('iv-studio (default) or h3-prompts') }
+  },
+  async ({ topic = 'iv-studio' }) => {
+    if (topic !== 'h3-prompts') return { content: [{ type: 'text', text: readGuide(resourcesDir()) }] }
+    const guide = await loadGuide()
+    if (!guide) throw new Error("MiniMax's H3 prompt guide couldn't be downloaded from GitHub. Check the internet connection and try again.")
+    return { content: [{ type: 'text', text: `${GUIDE_SOURCE}. IV Studio's own notes (get_guide) still apply: {char} for the character, no face or voice for a LoRA character.\n\n${guide.base}\n\n${guide.ref}` }] }
+  }
+)
 // The start menu: offered when a chat opens without a request (get_menu), and each entry as an MCP prompt, which
 // clients like Claude Code list as slash commands.
 server.registerTool('get_menu', { description: 'The start menu: what the person can make with IV Studio. Offer it as one multiple-choice question when a chat starts and they have not said what they want; each choice comes with what to do.', inputSchema: {} }, () => ({
@@ -154,7 +166,7 @@ tool('render_out', 'Finish a version: optional colour smoothing across the joins
   scale: z.number().int().min(1).max(2).default(1),
   fps: z.number().int().default(0).describe(`Frame generation: ${FRAME_GEN_FPS.join(', ')} (0 = off)`)
 }, ({ sequenceId, ...opts }) => studio.renderOutSequence(sequenceId, opts))
-tool('write_prompt', 'Write a MiniMax H3 prompt from a plain-words idea, using the same writer as the app. engine local = free model in Ollama (default); contextir = MiniMax Context IR, paid per call, needs COMFY_ORG_API_KEY in the environment of this server.', {
+tool('write_prompt', "Write a MiniMax H3 prompt from a plain-words idea, using the same writer as the app. engine (default: the choice in Settings → Prompt writer) local = free model in Ollama; claude / codex = the Claude Code or Codex installed on this PC, on its own login; contextir = MiniMax Context IR, paid per call, needs COMFY_ORG_API_KEY in the environment of this server. local, claude and codex follow MiniMax's H3 prompt guide; Context IR is MiniMax's own rewriter.", {
   idea: z.string(),
   mode: z.enum(Object.keys(MODES)).default('text'),
   seconds: z.number().min(1).max(15).default(5),
@@ -163,18 +175,22 @@ tool('write_prompt', 'Write a MiniMax H3 prompt from a plain-words idea, using t
   media,
   sequence: z.boolean().default(false).describe('Write it as one shot of a continuous sequence (join rules)'),
   previous: z.string().optional().describe('sequence: the prompt of the previous shot'),
-  engine: z.enum(['local', 'contextir']).optional()
+  engine: z.enum(['local', 'claude', 'codex', 'contextir']).optional().describe('Defaults to the choice in Settings → Prompt writer')
 }, ({ engine, ...request }) => {
   const s = readSettings(BASE)
-  const e = engine || (s.promptEngine === 'contextir' && process.env.COMFY_ORG_API_KEY ? 'contextir' : 'local')
-  return studio.writePrompt(request, { engine: e, apiKey: process.env.COMFY_ORG_API_KEY || null, model: s.ollamaModel }).then((prompt) => ({ prompt, engine: e }))
+  const chosen = engine || (s.promptEngine === 'contextir' && !process.env.COMFY_ORG_API_KEY ? 'local' : s.promptEngine || 'local')
+  const w = writerOf({ ...s, promptEngine: chosen })
+  return studio.writePrompt(request, { engine: w.engine, apiKey: process.env.COMFY_ORG_API_KEY || null, model: w.model }).then((prompt) => ({ prompt, engine: w.engine }))
 })
-tool('write_shots_from_story', 'Split a short story into sequence shots and write each one so they join as one continuous take (free local writer).', {
+tool('write_shots_from_story', 'Split a short story into sequence shots and write each one so they join as one continuous take (the writer chosen in Settings: local, Claude Code or Codex).', {
   story: z.string(),
   shots: z.number().int().min(1).max(8).default(3),
   seconds: z.number().refine((v) => SHOT_SECONDS.includes(v)).default(10),
   character: z.string().default('tess')
-}, (args) => studio.writeStory(args, { model: readSettings(BASE).ollamaModel }).then((shots) => ({ shots })))
+}, (args) => {
+  const w = writerOf(readSettings(BASE))
+  return studio.writeStory(args, w.engine === 'claude' || w.engine === 'codex' ? w : { model: readSettings(BASE).ollamaModel }).then((shots) => ({ shots }))
+})
 tool('get_job', 'Status, progress and outputs of a job.', { jobId: z.string() }, ({ jobId }) => studio.refreshJob(jobId))
 tool('cancel_job', 'Cancel an IV Studio job (removes it from the queue or interrupts it if running); never touches other work.', { jobId: z.string() }, ({ jobId }) => studio.cancelJob(jobId))
 tool('get_outputs', 'Playable outputs (paths and URLs) with the settings that made them, for a job or a whole project.', { jobId: z.string().optional(), projectId: z.string().optional() }, async ({ jobId, projectId }) => {
@@ -325,7 +341,7 @@ tool('grab_frame', 'A picture of one moment, to check an edit or a render by eye
 
 // ---------- Projects: a short film from script to rough cut (the app's Projects page; "films" here, because
 // list_projects already means shots) ----------
-const films = new Productions({ dataDir: DATA, studio: () => studio, voices: () => voices, images: () => images, catalog: () => catalog, edits, localCopy: (f) => studio.localCopy(f, VIDEOS), model: () => readSettings(BASE).ollamaModel || undefined })
+const films = new Productions({ dataDir: DATA, studio: () => studio, voices: () => voices, images: () => images, catalog: () => catalog, edits, localCopy: (f) => studio.localCopy(f, VIDEOS), model: () => readSettings(BASE).ollamaModel || undefined, writer: () => writerOf(readSettings(BASE)) })
 const shotPatch = { action: z.string().optional(), camera: z.string().optional(), characters: z.array(z.string()).optional(), speaker: z.string().optional(), line: z.string().optional(), seconds: z.number().min(1).max(15).optional(), prompt: z.string().optional(), character: z.string().optional().describe('Character preset id or none') }
 tool('list_films', 'Short-film projects (the app\'s Projects page): name, logline, aspect, scenes and shots.', {}, () => ({ items: films.list() }))
 tool('create_film', `Start a short-film project. script (optional) is screenplay text: a scene starts with a heading like "INT. POTTERY STUDIO - DAY", a name in capitals on its own line with words under it is dialogue, other paragraphs are action. ${LIVE_FILM}`, {

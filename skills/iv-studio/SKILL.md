@@ -48,9 +48,17 @@ cropped to the shot's aspect, because they're stretched to fit).
 
 ## Writing H3 prompts
 
+MiniMax publishes its own guide to H3 prompts: `get_guide` with topic `h3-prompts` returns it. Read it before
+writing a prompt yourself; `write_prompt` already follows it.
+
 - Text mode uses three fields: `integrated_multimodal_description:` (the shot: style, place,
   clothes, camera, action and lines), `overall_soundscape:` and `non_diegetic_music:` (N/A for none).
-- Reference mode uses `subject_definitions:`, `retention_analysis:` (what each reference keeps),
+- Frames mode opens with MiniMax's alignment line: with only a first frame, `For the target video, at 0.00
+  seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.`; with a last frame too,
+  `How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the
+  0.00-second mark of the target video; Picture 2 (from Shot 1) aligns with the S.SS-second mark of the target
+  video.` (S.SS is the clip's real length on H3's frame grid), written as one continuous shot.
+- Reference mode uses `subject_definitions:`, `summary:`, `retention_analysis:` (what each reference keeps),
   `detailed_description:`, `overall_soundscape:` and `non_diegetic_music:`.
 - Dialogue: `{char} (S1) says: <d>[English] The line.</d>` One speaker label per person.
 - Never describe the character's face or voice: the LoRA carries them. Describe clothes, place,

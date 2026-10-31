@@ -71,6 +71,43 @@ function ModelSettings({ settings, setSettings, notify }) {
   )
 }
 
+// The person's own Claude Code or Codex as the writer: whether it's on this PC, and which of its models writes.
+const HARNESS = {
+  claude: { name: 'Claude Code', maker: 'Anthropic', login: 'Claude', get: 'https://claude.com/claude-code', key: 'claudeModel' },
+  codex: { name: 'Codex', maker: 'OpenAI', login: 'ChatGPT', get: 'https://openai.com/codex', key: 'codexModel' }
+}
+function HarnessWriter({ engine, settings, harness, save }) {
+  const h = HARNESS[engine]
+  if (!harness) return null
+  if (!harness.installed)
+    return (
+      <p className="small pink">
+        {h.name} isn't installed on this PC.{' '}
+        <button className="link-btn" onClick={() => window.ivstudio.links.open(h.get)}>
+          Get {h.name}
+        </button>
+      </p>
+    )
+  return (
+    <>
+      <p className="small dim">
+        Your own {h.name} on this PC writes the prompt, on your {h.login} login and plan. It runs with no tools except reading your reference pictures, and nothing is saved there. Your idea and reference pictures go to {h.maker} to write it. It
+        doesn't use this PC's GPU, so it's as quick while ComfyUI renders.
+      </p>
+      <div className="row">
+        <span className="row-label">Model</span>
+        <select value={settings[h.key] || ''} onChange={(e) => save({ [h.key]: e.target.value })}>
+          {harness.models.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    </>
+  )
+}
+
 // Prompt writer: which engine writes prompts, the free local model, and the Comfy.org key for Context IR.
 // Civitai: the person's own API key (for downloading LoRAs) and the opt-in for mature LoRAs.
 function CivitaiSettings({ settings, setSettings, notify }) {
@@ -242,12 +279,30 @@ function WriterSettings({ settings, setSettings, notify }) {
           <button className={engine === 'local' ? 'on' : ''} onClick={() => save({ promptEngine: 'local' })}>
             Local · free
           </button>
+          <button className={engine === 'claude' ? 'on' : ''} onClick={() => save({ promptEngine: 'claude' })}>
+            Claude Code
+          </button>
+          <button className={engine === 'codex' ? 'on' : ''} onClick={() => save({ promptEngine: 'codex' })}>
+            Codex
+          </button>
           <button className={engine === 'contextir' ? 'on' : ''} onClick={() => save({ promptEngine: 'contextir' })}>
             MiniMax Context IR
           </button>
         </div>
 
-        {engine === 'local' ? (
+        {engine !== 'contextir' && (
+          <p className="small dim">
+            It follows MiniMax's own H3 prompt guide, which IV Studio downloads from MiniMax the first time it writes, under the{' '}
+            <button className="link-btn" onClick={() => window.ivstudio.links.open('https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE')}>
+              MiniMax H3 Community License
+            </button>
+            .
+          </p>
+        )}
+
+        {engine === 'claude' || engine === 'codex' ? (
+          <HarnessWriter engine={engine} settings={settings} harness={status?.harnesses?.[engine]} save={save} />
+        ) : engine === 'local' ? (
           <>
             <p className="small dim">
               A model in Ollama on this PC, with IV Studio's H3 rules. Private and free. It loads only while writing, then frees the GPU for rendering.

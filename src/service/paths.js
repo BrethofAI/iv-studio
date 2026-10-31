@@ -19,12 +19,14 @@ export function resourcesDir(hint) {
 // comfyApiKey and civitaiKey are stored encrypted by the app (Electron safeStorage); they're never sent to the window.
 // civitaiMature: mature LoRAs from civitai.red on the LoRAs page, off unless the person turns it on.
 // civitaiUnblur: with civitaiMature on, mature previews show without the blur (a second, separate opt-in).
+// promptEngine: 'local' (ollamaModel), 'claude' (claudeModel) or 'codex' (codexModel) writes prompts, or 'contextir';
+// '' as a Claude Code or Codex model means the person's own default there.
 // target: 'local' (comfyUrl) or 'cloud' (cloud.url behind the gate, cloudToken; both set by the Cloud page).
 // incognito: the app works in its private set of everything made (see incognitoDir); switched by a restart.
 // outputFolder / privateFolder: the folder inside ComfyUI's output where renders save, normally and in
 // Incognito ('' = straight into output). Incognito uploads go into the same folder name under input.
 export const PRIVATE_FOLDER = 'IV Private'
-const DEFAULT_SETTINGS = { comfyUrl: 'http://127.0.0.1:8188', window: null, promptEngine: 'local', ollamaModel: 'huihui_ai/qwen3-vl-abliterated:8b-instruct', comfyApiKey: null, target: 'local', cloud: null, cloudToken: null, models: {}, civitaiKey: null, civitaiMature: false, civitaiUnblur: false, incognito: false, outputFolder: '', privateFolder: PRIVATE_FOLDER }
+const DEFAULT_SETTINGS = { comfyUrl: 'http://127.0.0.1:8188', window: null, promptEngine: 'local', ollamaModel: 'huihui_ai/qwen3-vl-abliterated:8b-instruct', claudeModel: '', codexModel: '', comfyApiKey: null, target: 'local', cloud: null, cloudToken: null, models: {}, civitaiKey: null, civitaiMature: false, civitaiUnblur: false, incognito: false, outputFolder: '', privateFolder: PRIVATE_FOLDER }
 
 // A folder name as ComfyUI takes it: relative to its output (or input) folder, forward slashes, nothing
 // that climbs out of it or that Windows won't allow.
@@ -122,4 +124,10 @@ export function writeSettings(patch, dir = dataDir()) {
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify(next, null, 2))
   return next
+}
+
+// The prompt writer chosen in Settings, as { engine, model }.
+export function writerOf(settings) {
+  const engine = settings.promptEngine || 'local'
+  return { engine, model: engine === 'claude' ? settings.claudeModel || '' : engine === 'codex' ? settings.codexModel || '' : settings.ollamaModel }
 }

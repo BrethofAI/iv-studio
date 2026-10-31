@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ask } from './Confirm'
 
+const HARNESS_NAME = { claude: 'Claude Code', codex: 'Codex' }
+
 // "Write it for me": a plain-words idea in, a finished H3 prompt out. context carries what the writer
 // should respect (mode, seconds, aspect, character, media, sequence, previous shot).
 export default function PromptWriter({ context, current, onWritten, notify, go, compact = false }) {
@@ -14,11 +16,14 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
   }, [])
 
   const engine = status?.engine || 'local'
+  const harness = engine === 'claude' || engine === 'codex'
   const blocker =
     status &&
     (engine === 'contextir'
       ? !status.hasComfyKey && 'MiniMax Context IR needs your Comfy.org API key.'
-      : !status.installed
+      : harness
+        ? !status.harnesses?.[engine]?.installed && `${HARNESS_NAME[engine]} isn't installed on this PC.`
+        : !status.installed
         ? 'The free writer needs Ollama.'
         : status.running && !status.models.some((m) => m.name === status.model) && `The writer model ${status.model} isn't installed yet.`)
 
@@ -26,7 +31,9 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
   const visual = (context.media || []).filter((m) => m.kind === 'picture' || m.kind === 'video')
   const sees = status?.models?.find((m) => m.name === status.model)?.vision
   const seeing =
-    engine === 'local' && visual.length > 0 && status?.running
+    harness && visual.length > 0
+      ? `${HARNESS_NAME[engine]} looks at your ${visual.length === 1 ? (visual[0].kind === 'video' ? 'video' : 'picture') : `${visual.length} references`} and writes what it sees.`
+      : engine === 'local' && visual.length > 0 && status?.running
       ? sees
         ? `Looks at your ${visual.length === 1 ? (visual[0].kind === 'video' ? 'video' : 'picture') : `${visual.length} references`} and writes what it sees.`
         : `${status.model} can't see pictures; choose a model marked "sees pictures" in Settings to have it look at your references.`
@@ -49,7 +56,7 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
     <div className={`writer ${compact ? 'compact' : ''}`}>
       <div className="writer-head">
         <span className="mono label writer-label">✦ Write it for me</span>
-        <span className="mono dim small">{engine === 'contextir' ? `MiniMax Context IR · ${status?.contextIrPrice?.split(' (')[0] || 'paid'}` : `Local writer · free`}</span>
+        <span className="mono dim small">{engine === 'contextir' ? `MiniMax Context IR · ${status?.contextIrPrice?.split(' (')[0] || 'paid'}` : harness ? `${HARNESS_NAME[engine]} · your plan` : `Local writer · free`}</span>
       </div>
       <div className="writer-row">
         <textarea rows={compact ? 2 : 2} value={idea} placeholder={context.sequence ? 'What happens in this shot, in plain words' : 'Your idea in plain words, e.g. Tess in a parked car at night admits she kept the letter'} onChange={(e) => setIdea(e.target.value)} />
@@ -84,7 +91,7 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
   )
 }
 
-// A short story -> every shot of a sequence (local writer).
+// A short story -> every shot of a sequence (the writer chosen in Settings; Context IR falls back to the local one).
 export function StoryWriter({ character, shotSeconds, existing, onShots, notify }) {
   const [open, setOpen] = useState(false)
   const [story, setStory] = useState('')
@@ -130,7 +137,7 @@ export function StoryWriter({ character, shotSeconds, existing, onShots, notify 
           {busy ? 'Writing…' : 'Write the shots'}
         </button>
       </div>
-      <p className="small dim writer-note">Uses the free local writer. Each shot follows the join rules so they play as one take.</p>
+      <p className="small dim writer-note">Uses the writer chosen in Settings (the local one if that's Context IR). Each shot follows the join rules so they play as one take.</p>
     </div>
   )
 }

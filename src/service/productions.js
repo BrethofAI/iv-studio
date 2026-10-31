@@ -14,7 +14,7 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { ASPECTS } from './plan.js'
-import { DEFAULT_LOCAL_MODEL, ollamaJson, writeLocal } from './prompter.js'
+import { DEFAULT_LOCAL_MODEL, ollamaJson, writeHarness, writeLocal } from './prompter.js'
 import { parseScript, sceneText } from './screenplay.js'
 import { applyOps } from './timeline.js'
 
@@ -203,24 +203,33 @@ export function asFirstFrame(prompt) {
 // A shot that opens on its sketch (<Picture 1>) and stays in the place's picture (<Picture 2>), for reference to video:
 // the sketch fixes the first frame and the place carries its room, light and colours through the whole take.
 // Anyone else on screen (people) comes as <Picture 3>, <Picture 4>: their face carries into the shot.
+// Written in the full-reference format of MiniMax's H3 guide; the text prompt's three fields become its last three.
 export function withRoom(prompt, { place, description, people = [] }) {
   const body = String(prompt || '').trim().replace(`${FIRST_FRAME}\n\n`, '')
+  const field = (name) => (body.match(new RegExp(`${name}:\\s*([\\s\\S]*?)(?=\\n\\s*\\n\\s*(?:overall_soundscape|non_diegetic_music):|$)`)) || [])[1]?.trim()
+  const shots = (field('integrated_multimodal_description') ?? body).replace(/\s+(\[Shot \d+\])/g, '\n$1')
+  const inShots = Array.from({ length: (shots.match(/\[Shot \d+\]/g) || ['']).length }, (_, i) => `[Shot ${i + 1}]`).join(', ')
   return [
     'subject_definitions:',
-    `<Subject 1> is the place shown in <Picture 2>: ${place || 'the set'}${description ? `, ${description.replace(/[.\s]+$/, '')}` : ''}.`,
-    ...people.map((name, i) => `<Subject ${i + 2}> is ${name}, the person shown in <Picture ${i + 3}>.`),
+    '<Picture 1> is the first frame of [Shot 1], the storyboard sketch of this shot.',
+    `<Subject 1> is the place in <Picture 2>: ${place || 'the set'}${description ? `, ${description.replace(/[.\s]+$/, '')}` : ''}.`,
+    ...people.map((name, i) => `<Subject ${i + 2}> is ${name}, the person in <Picture ${i + 3}>.`),
     '',
     'summary:',
-    `[keyframe completion + reference generation] The target video opens exactly on <Picture 1> and stays in <Subject 1> from <Picture 2> for the whole shot.${people.length ? ` ${people.join(' and ')} look${people.length > 1 ? '' : 's'} like ${people.map((_, i) => `<Picture ${i + 3}>`).join(' and ')}.` : ''}`,
+    `[keyframe completion + reference generation] The target video begins from <Picture 1> and stays in <Subject 1> for the whole shot.${people.length ? ` ${people.map((name, i) => `${name} is <Subject ${i + 2}>`).join(' and ')}.` : ''}`,
     '',
     'retention_analysis:',
-    '<Picture 1>: fully_preserved — the first frame, at 0.00 seconds.',
-    '<Subject 1>: attribute_transfer from <Picture 2> — the room, its furniture, light and colours carry into the target wherever the camera looks; framing is newly directed.',
-    ...people.map((name, i) => `<Subject ${i + 2}>: attribute_transfer from <Picture ${i + 3}> — ${name}'s face and hair carry into the target; pose and clothes follow the shot.`),
+    '<Picture 1> ([Shot 1] first frame): fully_preserved - the shot begins from it at 0.00 seconds.',
+    `<Subject 1> (appears in ${inShots}): fully_preserved - the room, its furniture, light and colours, wherever the camera looks; the framing is newly directed.`,
+    ...people.map((name, i) => `<Subject ${i + 2}> (appears in ${inShots}): fully_preserved - ${name}'s face and hair; pose and clothes follow the shot.`),
     '',
-    FIRST_FRAME,
+    'detailed_description:',
+    'The shot begins from <Picture 1> and takes place in <Subject 1>, the place in <Picture 2>, throughout.',
+    shots,
     '',
-    body
+    `overall_soundscape:\n${field('overall_soundscape') || 'Quiet room tone.'}`,
+    '',
+    `non_diegetic_music:\n${field('non_diegetic_music') || 'N/A'}`
   ].join('\n')
 }
 
@@ -255,7 +264,7 @@ export class Productions {
   // studio: () => the current Studio. voices: () => the voice engine (or null). images: () => Images (sketches).
   // edits: Edits. localCopy(file): an output as a file on this PC. onChange(id): a production changed
   // (breakdown progress, renders).
-  constructor({ dataDir, studio, voices = () => null, images = () => null, catalog = () => null, edits, localCopy, onChange = () => {}, model = () => DEFAULT_LOCAL_MODEL }) {
+  constructor({ dataDir, studio, voices = () => null, images = () => null, catalog = () => null, edits, localCopy, onChange = () => {}, model = () => DEFAULT_LOCAL_MODEL, writer = () => ({ engine: 'local' }) }) {
     this.dir = path.join(dataDir, 'productions')
     this.studio = studio
     this.voices = voices
@@ -264,7 +273,8 @@ export class Productions {
     this.edits = edits
     this.localCopy = localCopy
     this.onChange = onChange
-    this.model = model
+    this.model = model // the local model, for scripts and storyboard plans
+    this.writer = writer // the prompt writer chosen in Settings ({ engine, model }), for each shot's H3 prompt
     this.running = new Map() // production id -> breakdown promise
     this.writing = new Set() // production ids whose script is being written
     this.filming = new Map() // production id -> { speaking: shot id or null, waiting: Set of shot ids } while lines are said
@@ -509,7 +519,11 @@ export class Productions {
       .filter(Boolean)
       .join(' ')
     const ch = this.character(sh.character)
-    const written = await writeLocal({ idea, mode: 'text', seconds: sh.seconds, character: ch, model: this.model(), cpu: cpu ?? (await this.studio().gpuBusy().catch(() => false)) })
+    const w = this.writer()
+    const written =
+      w.engine === 'claude' || w.engine === 'codex'
+        ? await writeHarness({ engine: w.engine, model: w.model, idea, mode: 'text', seconds: sh.seconds, character: ch })
+        : await writeLocal({ idea, mode: 'text', seconds: sh.seconds, character: ch, model: this.model(), cpu: cpu ?? (await this.studio().gpuBusy().catch(() => false)) })
     const first = (x) => String(x || '').split(/\s+/)[0].toLowerCase()
     const prompt = withLine(written, ch && first(ch.name) === first(sh.speaker) ? '{char}' : sh.speaker, sh.line)
     this.patch(id, (q) => {

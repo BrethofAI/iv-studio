@@ -8,7 +8,7 @@ import { Comfy } from './comfy.js'
 import { buildPrompt, checkPrompt } from './graph.js'
 import { planFinish, planPreviews } from './plan.js'
 import { adaptGraph, capabilities } from './remote.js'
-import { contextIrGraph, fromContextIr, writeLocal, writeStoryLocal } from './prompter.js'
+import { contextIrGraph, fromContextIr, writeHarness, writeLocal, writeStoryLocal } from './prompter.js'
 import { renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
 import { checkSetup, comboOptions } from './setup.js'
 
@@ -305,13 +305,15 @@ export class Studio {
   }
 
   // ---------- prompt writer ----------
-  // request: {idea, mode, seconds, aspect, character, media, sequence, previous}. engine: local | contextir.
+  // request: {idea, mode, seconds, aspect, character, media, sequence, previous}. engine: local | claude | codex |
+  // contextir; model: the local model, or the Claude Code or Codex model ('' for the person's own default).
   async writePrompt(request, { engine = 'local', apiKey = null, model } = {}) {
     const { idea, character: charId = 'none', mode = 'text', seconds = 5, aspect = '16:9', media = [], sequence = false, previous = null } = request
     if (!idea?.trim()) throw new Error('Describe the idea first.')
     const character = charId === 'none' ? null : this.characters().find((c) => c.id === charId) || null
     const files = media.map((m) => ({ kind: m.kind, file: m.file || m.path }))
     if (engine === 'local') return writeLocal({ idea, mode, seconds, character, sequence, previous, media: files, model, cpu: await this.gpuBusy() })
+    if (engine === 'claude' || engine === 'codex') return writeHarness({ engine, model, idea, mode, seconds, character, sequence, previous, media: files })
     if (engine !== 'contextir') throw new Error(`Unknown writer "${engine}".`)
     if (!apiKey) throw new Error('MiniMax Context IR needs a Comfy.org API key. Add it in Settings → Prompt writer.')
     const staged = []
@@ -331,10 +333,12 @@ export class Studio {
     throw new Error('Context IR took too long. Try again.')
   }
 
-  async writeStory({ story, shots = 3, seconds = 10, character: charId = 'none' }, { model } = {}) {
+  // engine: local, claude or codex (Context IR writes one shot at a time, so a story falls back to local).
+  async writeStory({ story, shots = 3, seconds = 10, character: charId = 'none' }, { engine = 'local', model } = {}) {
     if (!story?.trim()) throw new Error('Write the story first.')
     const character = charId === 'none' ? null : this.characters().find((c) => c.id === charId) || null
-    return writeStoryLocal({ story, shots: Math.min(8, Math.max(1, shots)), seconds, character, model, cpu: await this.gpuBusy() })
+    const harness = engine === 'claude' || engine === 'codex'
+    return writeStoryLocal({ story, shots: Math.min(8, Math.max(1, shots)), seconds, character, engine: harness ? engine : 'local', model, cpu: harness ? false : await this.gpuBusy() })
   }
 
   // True while ComfyUI is rendering; the local writer then stays on the CPU so it can't take H3's VRAM.

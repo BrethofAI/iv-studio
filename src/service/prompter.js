@@ -1,13 +1,17 @@
 // Prompt writer: turns a plain-words idea into a MiniMax H3 prompt, so nobody has to learn the format.
 //   contextir - MiniMax's own rewriter (H3 Context IR), run as a ComfyUI partner node. Paid per call
 //               through the user's Comfy.org API key; sees the reference media.
-//   local     - a model in the user's own Ollama with IV Studio's H3 rule sheet. Free and private;
-//               the model is unloaded right after writing so H3 gets the GPU back.
+//   local     - a model in the user's own Ollama with IV Studio's H3 rule sheet and MiniMax's own H3 guide
+//               (h3guide.js). Free and private; the model is unloaded right after writing so H3 gets the GPU back.
+//   claude, codex - the person's own Claude Code or Codex (harness.js), with the same rules and guide.
 // The character is written as its first name for the writer and turned back into {char} afterwards.
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
+import { loadGuide } from './h3guide.js'
+import { harnessJson } from './harness.js'
+import { resolveFrames } from './plan.js'
 
 // The bundled ffmpeg, outside the asar in a packaged app (as in main and the MCP server).
 const unpacked = (p) => p && p.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
@@ -26,7 +30,7 @@ DIRECTING RULES
 - Open the first shot with who is where, wardrobe, setting, light and key props, then the action.
 - Use a new shot only when a cut adds new information. Later shots start at strictly increasing times inside the duration.
 - Camera: one compatible move at a time, written like "The camera pushes in with small amplitude at slow speed toward her hands." Use "The camera holds a static shot" for a locked camera.
-- Dialogue: speakers get stable IDs in the order they first speak, written right after their name, e.g. "Mara (S1)". Put ONLY the exact spoken words inside <d>[English] ...</d>, never quotation marks. Describe voice, delivery and the listener's reaction outside the tag. Keep lines short enough to say naturally in the time.
+- Dialogue: speakers get stable IDs in the order they first speak, written right after who they are, e.g. "Mara (S1)" or "the older fisherman in the orange vest (S1)". The first time someone speaks, say who they are and what their voice is like ("the older fisherman in the orange vest, with a gravelly, slow voice (S1), shouts:"); later just "the fisherman in orange (S1) says:". Never use S1 or S2 as a name on its own. Put ONLY the exact spoken words inside <d>[English] ...</d>, never quotation marks. Describe delivery and the listener's reaction outside the tag. Keep lines short enough to say naturally in the time: about 2.5 words a second, with room for reactions.
 - Describe what is seen and heard, positively and concretely. No negative prompts, no camera or render settings, no real people, no imitation of named artists or franchises.
 - Keep identities, wardrobe, props, light and screen direction consistent unless something visibly changes them.
 - soundscape: 1-4 sentences of ambience, physical action sounds and breaths (no dialogue, no music). music: 1-3 sentences of audience-only music, or "N/A".
@@ -39,11 +43,17 @@ const CHARACTER_RULE = (name) =>
 
 const MODE_RULES = {
   text: '',
-  frames: `- The video starts on a fixed first picture (and may end on a fixed last picture). The first shot describes the opening exactly as that picture shows it, then the motion away from it.`,
+  frames: `- The video starts on a fixed first picture (I2VA in MiniMax's guide) and is ONE continuous shot, written in three parts instead of "shots": "opening" is the first picture as it is, in one or two sentences (who and what, where, the light); "motion" is what happens next, two to four sentences: an action begins and develops, with the camera move and any spoken line; "ending" is the visible result it settles into. Something must move or change.`,
+  framesLast: `- The video starts on a fixed first picture and ends on a fixed last picture (FL2VA in MiniMax's guide). It is ONE continuous shot without a cut, written in three parts instead of "shots": "opening" is the first picture's state, in one or two sentences; "motion" is how it changes towards the last picture, two to four sentences (how people move, how poses, objects, camera, place and light change); "ending" is the last picture's state, described in full (who, where, wearing what, framing, light) as what the video settles into at the very end.`,
   continue: `- This prompt continues an existing video from its last frames. The first shot opens holding the source video's final arrangement (same people, positions, framing and light), then the new action follows.`,
   reference: `- Reference media are attached and named <Picture N>, <Video N> and <Audio N>, numbered separately per kind in the order listed below. Use ONLY labels that exist.
-- Also fill "subjects" (who or what each reference defines, with its visible traits; the first is <Subject 1>), "summary" (one short paragraph: what the target video is and what each reference supplies) and "retention" (what each subject carries over from its reference). In the shots, refer to those people and things as <Subject 1>, <Subject 2>.`
+- Also fill "subjects": each person, place, object or style the references define, one per entry, in the order you'll use them (the first is <Subject 1>). Every attached picture and video defines at least one subject, so the subjects together name every label; a picture of a room or a place is a subject (the place). One person seen in two pictures is ONE subject. Things that appear in no reference are not subjects: just describe them in the shots. "definition" says who or what it is and its main visible features, naming the picture or video it comes from, like "the young woman in <Picture 2>, with shoulder-length dark hair and a navy T-shirt".
+- "summary": one short paragraph on what the target video is and what each reference supplies, using only the labels defined.
+- "retention": one entry per subject: the shots it appears in, how it is kept ("fully_preserved" when it appears as defined, "partially_preserved" when some defined features change, "attribute_transfer" only when its features pass to a different target subject, "weak_reference" for broad similarity of style or mood) and what is kept.
+- In the shots, refer to those people and things as <Subject 1>, <Subject 2>, describing them in full at their first appearance. A subject who speaks is written "<Subject 2> (S1)".
+- Put one or two sentences of overall style in "style". The shots together run 350-500 words: each shot gives its composition, who is where and what they wear, the place and light, the action, the camera, and the sound.`
 }
+const AUDIO_RULE = `- For each <Audio N>, fill "audio": what it is for in the target video ("role", like "the voice-timbre reference for <Subject 1> (S1)" or "the background music") and how it is used ("relation": "reference" when only its voice, style or rhythm is followed, "partially_copy" when part of it is heard, "fully_copy" when it is the whole final soundtrack).`
 
 const SEQUENCE_RULES = `- This shot is one of several that are joined into ONE continuous take with no visible cut between them, so write exactly one shot.
 - Describe the place, light and wardrobe the same way, word for word, in every shot.
@@ -84,69 +94,126 @@ const at = (sec) => {
   return `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${s}`
 }
 
-// The writer's JSON -> the exact H3 text format. Cut times are kept strictly increasing inside the
-// duration; a shot whose time doesn't fit is folded into the shot before it.
-export function assemble(data, { mode = 'text', seconds = 5 } = {}) {
+// The opening line MiniMax's guide gives each keyframe mode (I2VA: first frame; FL2VA: first and last frame, the
+// last landing at the end of the video's real length on H3's frame grid). The guide's FL2VA line has no angle brackets.
+export const FIRST_FRAME_LINE = 'For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.'
+export const firstLastLine = (seconds, lastShot = 1) =>
+  `How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot ${lastShot}) aligns with the ${(resolveFrames(seconds) / 24).toFixed(2)}-second mark of the target video.`
+
+// What a small writer model sometimes repeats from the guide's examples inside a field: field names, shot labels, cut times.
+const FIELD_NAMES = /^\s*(?:integrated_multimodal_description|detailed_description|overall_soundscape|non_diegetic_music|subject_definitions|summary|retention_analysis)\s*:\s*/i
+const stripShot = (s) => String(s || '').trim().replace(FIELD_NAMES, '').replace(/^\[Shot \d+\]\s*/i, '').replace(/^At \d{1,2}:\d{2}(?:\.\d+)?,?\s*/i, '').trim()
+const stripField = (s) => String(s || '').trim().replace(FIELD_NAMES, '').trim()
+const sentence = (s) => (s && !/[.!?]$/.test(s) ? `${s}.` : s)
+
+const RELATIONS = ['fully_preserved', 'partially_preserved', 'attribute_transfer', 'weak_reference']
+const AUDIO_RELATIONS = ['fully_copy', 'partially_copy', 'reference', 'weak_reference']
+const pick = (v, list, fallback) => {
+  const k = String(v || '').toLowerCase().replace(/[\s-]+/g, '_')
+  return list.find((x) => x === k) || list.find((x) => k && (x.startsWith(k) || k.startsWith(x.split('_')[0]))) || fallback
+}
+
+// The writer's JSON -> the exact H3 text format of MiniMax's guide. Cut times are kept strictly increasing inside the
+// duration; a shot whose time doesn't fit is folded into the shot before it. lastFrame: frames mode with a last picture.
+export function assemble(data, { mode = 'text', seconds = 5, lastFrame = false } = {}) {
   const shots = []
-  for (const sh of Array.isArray(data?.shots) ? data.shots : []) {
-    const desc = normalizeDialogue(String(sh.description || '').trim())
+  // Frames mode answers in three parts (opening, motion, ending), one continuous shot.
+  const parts = ['opening', 'motion', 'ending'].map((k) => sentence(stripShot(data?.[k]))).filter(Boolean)
+  const given = parts.length ? [{ start_seconds: 0, description: parts.join(' ') }] : Array.isArray(data?.shots) ? data.shots : []
+  for (const sh of given) {
+    const desc = normalizeDialogue(stripShot(sh.description))
     if (!desc) continue
     const t = Number(sh.start_seconds)
     const prev = shots.at(-1)
     if (!prev) shots.push({ t: 0, desc })
-    else if (Number.isFinite(t) && t > prev.t + 0.5 && t < seconds - 0.5) shots.push({ t, desc })
+    else if (!lastFrame && Number.isFinite(t) && t > prev.t + 0.5 && t < seconds - 0.5) shots.push({ t, desc })
     else prev.desc += ` ${desc}`
   }
   if (!shots.length) throw new Error('The writer returned no shots. Try again.')
-  const style = String(data.style || '').trim()
+  const style = sentence(stripField(data.style))
   const lines = shots.map((sh, i) => (i === 0 ? `[Shot 1] ${sh.desc}` : `[Shot ${i + 1}] At ${at(sh.t)}, ${sh.desc.charAt(0).toLowerCase()}${sh.desc.slice(1)}`))
-  const sound = String(data.soundscape || '').trim() || 'Quiet room tone.'
-  const music = String(data.music || '').trim() || 'N/A'
+  const sound = stripField(data.soundscape) || 'Quiet room tone.'
+  const music = stripField(data.music) || 'N/A'
   if (mode === 'reference') {
-    const subjects = (data.subjects || []).map((x, i) => `<Subject ${i + 1}> is ${String(x.traits || '').trim().replace(/\.$/, '')}${x.reference ? `, from ${x.reference}` : ''}.`)
-    const retention = (data.retention || []).map((x, i) => `<Subject ${x.subject || i + 1}>: attribute_transfer${x.reference ? ` from ${x.reference}` : ''} - ${String(x.carries || '').trim()}`)
+    const subjects = (data.subjects || []).map((x, i) => `<Subject ${i + 1}> is ${sentence(String(x.definition || x.traits || '').trim().replace(/^<Subject \d+>\s*is\s*/i, ''))}`)
+    const audio = Array.isArray(data.audio) ? data.audio : []
+    audio.forEach((x, i) => subjects.push(`${x.label || `<Audio ${i + 1}>`} is ${sentence(String(x.role || 'a reference sound').trim())}`))
+    const allShots = lines.map((_, i) => `[Shot ${i + 1}]`).join(', ')
+    const retention = (data.retention || []).map((x, i) => {
+      const n = Number(x.subject) || i + 1
+      const inShots = (Array.isArray(x.shots) ? x.shots : []).map(Number).filter((s) => s >= 1 && s <= lines.length)
+      return `<Subject ${n}> (appears in ${inShots.length ? inShots.map((s) => `[Shot ${s}]`).join(', ') : allShots}): ${pick(x.relation, RELATIONS, 'fully_preserved')} - ${String(x.carries || '').trim()}`
+    })
+    audio.forEach((x, i) => retention.push(`${x.label || `<Audio ${i + 1}>`}: ${pick(x.relation, AUDIO_RELATIONS, 'reference')} - ${String(x.carries || x.role || '').trim()}`))
+    const relations = audio.map((x) => pick(x.relation, AUDIO_RELATIONS, 'reference'))
+    const task = ['reference generation', relations.some((r) => r.endsWith('copy')) && 'audio reuse', relations.some((r) => !r.endsWith('copy')) && 'audio reference'].filter(Boolean).join(' + ')
     return [
       `subject_definitions:\n${subjects.join('\n')}`,
-      `summary:\n[reference generation] ${String(data.summary || '').trim()}`,
+      `summary:\n[${task}] ${stripField(data.summary).replace(/^\[[^\]]*\]\s*/, '')}`,
       `retention_analysis:\n${retention.join('\n')}`,
       `detailed_description:\n${style ? `${style}\n` : ''}${lines.join('\n')}`,
       `overall_soundscape:\n${sound}`,
       `non_diegetic_music:\n${music}`
     ].join('\n\n')
   }
+  // The base modes put the style at the start of [Shot 1] and the shots on one line, as the guide's cases do.
   const first = style ? [`[Shot 1] ${style} ${shots[0].desc}`, ...lines.slice(1)] : lines
-  const body = [`integrated_multimodal_description:\n${first.join('\n')}`, `overall_soundscape:\n${sound}`, `non_diegetic_music:\n${music}`].join('\n\n')
-  return mode === 'frames' ? `For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\n\n${body}` : body
+  const body = [`integrated_multimodal_description: ${first.join(' ')}`, `overall_soundscape: ${sound}`, `non_diegetic_music: ${music}`].join('\n\n')
+  if (mode !== 'frames') return body
+  return `${lastFrame ? firstLastLine(seconds, shots.length) : FIRST_FRAME_LINE}\n\n${body}`
 }
 
 const SHOT_SCHEMA = { type: 'object', properties: { start_seconds: { type: 'number' }, description: { type: 'string' } }, required: ['start_seconds', 'description'] }
 
-// JSON shape the local writer must answer in (Ollama structured output).
-export function outputSchema({ mode = 'text', sequence = false } = {}) {
-  const props = { style: { type: 'string' }, shots: { type: 'array', items: SHOT_SCHEMA, minItems: 1, maxItems: sequence ? 1 : 3 }, soundscape: { type: 'string' }, music: { type: 'string' } }
+// JSON shape the writer must answer in (Ollama structured output, or the harness CLI's). Frames mode asks for the
+// shot in three required parts, because a small model left to one description only restates the picture. refs:
+// pictures and videos attached in reference mode, each of which defines at least one subject.
+export function outputSchema({ mode = 'text', sequence = false, lastFrame = false, audio = false, refs = 0 } = {}) {
+  const text = { type: 'string' }
+  if (mode === 'frames') return { type: 'object', properties: { style: text, opening: text, motion: text, ending: text, soundscape: text, music: text }, required: ['style', 'opening', 'motion', 'ending', 'soundscape', 'music'] }
+  const props = { style: text, shots: { type: 'array', items: SHOT_SCHEMA, minItems: 1, maxItems: sequence || lastFrame ? 1 : 3 }, soundscape: text, music: text }
   const required = ['style', 'shots', 'soundscape', 'music']
   if (mode === 'reference') {
-    props.subjects = { type: 'array', items: { type: 'object', properties: { reference: { type: 'string' }, traits: { type: 'string' } }, required: ['reference', 'traits'] } }
+    props.subjects = { type: 'array', items: { type: 'object', properties: { definition: { type: 'string' } }, required: ['definition'] }, ...(refs && { minItems: refs }) }
     props.summary = { type: 'string' }
-    props.retention = { type: 'array', items: { type: 'object', properties: { subject: { type: 'integer' }, reference: { type: 'string' }, carries: { type: 'string' } }, required: ['subject', 'reference', 'carries'] } }
+    props.retention = { type: 'array', items: { type: 'object', properties: { subject: { type: 'integer' }, shots: { type: 'array', items: { type: 'integer' } }, relation: { type: 'string', enum: RELATIONS }, carries: { type: 'string' } }, required: ['subject', 'shots', 'relation', 'carries'] } }
     required.push('subjects', 'summary', 'retention')
+    if (audio) {
+      props.audio = { type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, role: { type: 'string' }, relation: { type: 'string', enum: AUDIO_RELATIONS }, carries: { type: 'string' } }, required: ['label', 'role', 'relation'] } }
+      required.push('audio')
+    }
   }
   return { type: 'object', properties: props, required }
 }
 
 const withName = (text, character) => (firstName(character) ? String(text).replaceAll('{char}', firstName(character)) : String(text).replaceAll('{char}', 'the main character'))
 
-export function systemPrompt({ mode = 'text', seconds = 5, character, sequence = false, media = [] }) {
+// MiniMax's guide, as the writer reads it after IV Studio's rules: the base guide for every mode, its
+// full-reference guide too in reference mode. IV Studio's JSON shape and character rule still come first.
+function guideText(guide, mode) {
+  if (!guide) return ''
+  return `MINIMAX'S OWN H3 PROMPT GUIDE
+MiniMax, who made H3, wrote the guide below. Follow it for the content and wording of every field: style, composition, shots and cuts, camera moves (type, amplitude, speed), speakers and their voices, dialogue, voiceover, on-screen text, sound and music. Where it and IV Studio's rules above differ, follow the guide, except that you still answer in IV Studio's JSON shape and keep the main-character rule.
+IV Studio assembles the final prompt from your JSON, so don't write field names, the opening alignment line, [Shot N] labels or cut times yourself: "style" opens [Shot 1]${mode === 'reference' ? ' (in reference mode it is the one or two style sentences before [Shot 1])' : ''}, each shot's "description" is that shot's text, and "soundscape" and "music" are overall_soundscape and non_diegetic_music.
+
+${guide.base}${mode === 'reference' && guide.ref ? `\n\n${guide.ref}` : ''}`
+}
+
+export function systemPrompt({ mode = 'text', seconds = 5, character, sequence = false, media = [], guide = null }) {
   const parts = [RULES]
   if (character) parts.push(CHARACTER_RULE(firstName(character)))
-  if (MODE_RULES[mode]) parts.push(MODE_RULES[mode])
+  const lastFrame = mode === 'frames' && media.filter((m) => m.kind === 'picture').length >= 2
+  if (MODE_RULES[lastFrame ? 'framesLast' : mode]) parts.push(MODE_RULES[lastFrame ? 'framesLast' : mode])
   if (mode === 'reference' && media.length) {
     const count = { picture: 0, video: 0, audio: 0 }
     const label = { picture: 'Picture', video: 'Video', audio: 'Audio' }
     parts.push('Attached references, in order:\n' + media.map((m) => `<${label[m.kind]} ${++count[m.kind]}> (${m.kind}: ${path.basename(m.file || m.path || '')})`).join('\n'))
+    if (count.audio) parts.push(AUDIO_RULE)
   }
   if (sequence) parts.push(SEQUENCE_RULES)
   parts.push(durationRule(seconds))
+  const g = guideText(guide, mode)
+  if (g) parts.push('', g)
   return parts.join('\n')
 }
 
@@ -234,7 +301,18 @@ async function imagesFor(media, mode) {
   return shown
 }
 
-const LOOK_RULE = `The images attached to this message are the references, listed below. Look at them closely and write what you actually see into the shots: who is in them (face, hair, age, build, wardrobe), the objects, the place, the light and the colours. Refer to each reference by its label, and don't invent details that contradict them.`
+const LOOK_RULE = `The images attached to this message are the references, listed below. Look at them closely and write what you actually see into the shots: who is in them (face, hair, age, build, wardrobe), the objects, the place, the light and the colours. Refer to each reference by its label, and don't invent details that contradict them. "Image 1", "Image 2" are only how they're listed here: never write "Image N" in the prompt.`
+
+// What any writer is given for one prompt: the system text, the idea, the reference pictures and the JSON shape.
+async function promptRequest({ idea, mode, seconds, character, sequence, previous, media, guide, look = true }) {
+  let user = `Idea: ${withName(idea, character)}`
+  if (previous) user += `\n\nThe previous shot, which this one continues from:\n${withName(previous, character)}`
+  const shown = look ? await imagesFor(media, mode) : []
+  const lastFrame = mode === 'frames' && media.filter((m) => m.kind === 'picture').length >= 2
+  const audio = mode === 'reference' && media.some((m) => m.kind === 'audio')
+  const refs = mode === 'reference' ? media.filter((m) => m.kind === 'picture' || m.kind === 'video').length : 0
+  return { system: systemPrompt({ mode, seconds, character, sequence, media, guide }), user, shown, lastFrame, schema: outputSchema({ mode, sequence, lastFrame, audio, refs }) }
+}
 
 // cpu: keep the model off the GPU (used while ComfyUI is rendering, so H3 keeps its VRAM).
 export async function writeLocal({ idea, mode = 'text', seconds = 5, character, sequence = false, previous, media = [], model, cpu = false }) {
@@ -243,25 +321,38 @@ export async function writeLocal({ idea, mode = 'text', seconds = 5, character, 
   const name = model || DEFAULT_LOCAL_MODEL
   const info = status.models.find((m) => m.name === name)
   if (!info) throw new Error(`The writer model ${name} isn't in Ollama yet. Install it in Settings → Prompt writer.`)
-  let user = `Idea: ${withName(idea, character)}`
-  if (previous) user += `\n\nThe previous shot, which this one continues from:\n${withName(previous, character)}`
-  const message = { role: 'user', content: user }
-  if (info.vision) {
-    const shown = await imagesFor(media, mode)
-    if (shown.length) {
-      message.images = shown.map((s) => s.data)
-      message.content += `\n\n${LOOK_RULE}\n${shown.map((s, i) => `Image ${i + 1}: ${s.label}`).join('\n')}`
-    }
+  // On the CPU (ComfyUI is rendering) the full-reference part of the guide makes a prompt take over five minutes,
+  // so it's left out there; IV Studio's reference rules and layout still apply.
+  const full = await loadGuide()
+  const guide = full && cpu ? { base: full.base } : full
+  const req = await promptRequest({ idea, mode, seconds, character, sequence, previous, media, guide, look: info.vision })
+  const message = { role: 'user', content: req.user }
+  if (req.shown.length) {
+    message.images = req.shown.map((s) => s.data)
+    message.content += `\n\n${LOOK_RULE}\n${req.shown.map((s, i) => `Image ${i + 1}: ${s.label}`).join('\n')}`
   }
   const r = await fetch(`${OLLAMA_URL}/api/chat`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ model: name, stream: false, format: outputSchema({ mode, sequence }), keep_alive: 0, options: { temperature: 0.6, num_ctx: 8192, ...(cpu ? { num_gpu: 0 } : {}) }, messages: [{ role: 'system', content: systemPrompt({ mode, seconds, character, sequence, media }) }, message] }),
-    signal: AbortSignal.timeout(300000)
+    body: JSON.stringify({ model: name, stream: false, format: req.schema, keep_alive: 0, options: { temperature: 0.6, num_ctx: guide ? (guide.ref ? 24576 : 16384) : 8192, ...(cpu ? { num_gpu: 0 } : {}) }, messages: [{ role: 'system', content: req.system }, message] }),
+    signal: AbortSignal.timeout(600000)
   })
   if (!r.ok) throw new Error(`Ollama: ${(await r.text()).slice(0, 300)}`)
   const out = await r.json()
-  return cleanPrompt(assemble(parseJson(out.message?.content), { mode, seconds }), character)
+  return cleanPrompt(assemble(parseJson(out.message?.content), { mode, seconds, lastFrame: req.lastFrame }), character)
+}
+
+// The same prompt from the person's Claude Code or Codex (harness.js), with the whole guide: it runs off this PC's GPU.
+// Claude Code reads the pictures from the run's folder; Codex gets them attached, in order.
+export async function writeHarness({ engine, model, idea, mode = 'text', seconds = 5, character, sequence = false, previous, media = [] }) {
+  const req = await promptRequest({ idea, mode, seconds, character, sequence, previous, media, guide: await loadGuide() })
+  const images = req.shown.map((s, i) => ({ ...s, name: `reference-${i + 1}.jpg` }))
+  let user = req.user
+  if (images.length)
+    user += `\n\n${engine === 'claude' ? LOOK_RULE.replace('The images attached to this message are', 'The image files in your working folder are') : LOOK_RULE}\n${images.map((s, i) => `Image ${i + 1} (${s.name}): ${s.label}`).join('\n')}${engine === 'claude' ? '\nOpen each one with the Read tool before you write.' : ''}`
+  user += '\n\nAnswer with the JSON object only.'
+  const data = await harnessJson({ engine, model, system: req.system, user, schema: req.schema, images })
+  return cleanPrompt(assemble(data, { mode, seconds, lastFrame: req.lastFrame }), character)
 }
 
 function parseJson(text) {
@@ -289,22 +380,25 @@ export async function ollamaJson({ system, user, schema, model, cpu = false, ctx
   return parseJson((await r.json()).message?.content)
 }
 
-// A short story -> one prompt per shot, written to join as one continuous take.
-export async function writeStoryLocal({ story, shots, seconds, character, model, cpu = false }) {
-  await ensureOllama()
-  const name = model || DEFAULT_LOCAL_MODEL
-  const sys = `${systemPrompt({ mode: 'text', seconds, character, sequence: true })}
+// A short story -> one prompt per shot, written to join as one continuous take. engine: 'local' (Ollama) or a
+// harness ('claude', 'codex').
+export async function writeStoryLocal({ story, shots, seconds, character, model, cpu = false, engine = 'local' }) {
+  const sys = `${systemPrompt({ mode: 'text', seconds, character, sequence: true, guide: await loadGuide() })}
 TASK: Split the story into exactly ${shots} consecutive shots of ${seconds} seconds each, following every rule above. Each item of "prompts" is one shot in the single-shot JSON shape of the example (style, shots with exactly one entry, soundscape, music).`
-  const single = outputSchema({ sequence: true })
-  const r = await fetch(`${OLLAMA_URL}/api/chat`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ model: name, stream: false, format: { type: 'object', properties: { prompts: { type: 'array', items: single, minItems: shots, maxItems: shots } }, required: ['prompts'] }, keep_alive: 0, options: { temperature: 0.6, num_ctx: 16384, ...(cpu ? { num_gpu: 0 } : {}) }, messages: [{ role: 'system', content: sys }, { role: 'user', content: `Story: ${withName(story, character)}` }] }),
-    signal: AbortSignal.timeout(600000)
-  })
-  if (!r.ok) throw new Error(`Ollama: ${(await r.text()).slice(0, 300)}`)
-  const out = await r.json()
-  const list = parseJson(out.message?.content).prompts
+  const schema = { type: 'object', properties: { prompts: { type: 'array', items: outputSchema({ sequence: true }), minItems: shots, maxItems: shots } }, required: ['prompts'] }
+  let list
+  if (engine !== 'local') list = (await harnessJson({ engine, model, system: sys, user: `Story: ${withName(story, character)}\n\nAnswer with the JSON object only.`, schema, timeoutMs: 600000 })).prompts
+  else {
+    await ensureOllama()
+    const r = await fetch(`${OLLAMA_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: model || DEFAULT_LOCAL_MODEL, stream: false, format: schema, keep_alive: 0, options: { temperature: 0.6, num_ctx: 16384, ...(cpu ? { num_gpu: 0 } : {}) }, messages: [{ role: 'system', content: sys }, { role: 'user', content: `Story: ${withName(story, character)}` }] }),
+      signal: AbortSignal.timeout(600000)
+    })
+    if (!r.ok) throw new Error(`Ollama: ${(await r.text()).slice(0, 300)}`)
+    list = parseJson((await r.json()).message?.content).prompts
+  }
   if (!Array.isArray(list) || !list.length) throw new Error('The writer did not return a shot list. Try again.')
   return list.slice(0, shots).map((p) => cleanPrompt(assemble(p, { seconds }), character))
 }

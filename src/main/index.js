@@ -2,7 +2,8 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, scree
 import fs from 'node:fs'
 import path from 'node:path'
 import { Readable } from 'node:stream'
-import { comfyFolders, dataDir, incognitoDir, readSettings, resourcesDir, writeSettings } from '../service/paths'
+import { comfyFolders, dataDir, incognitoDir, readSettings, resourcesDir, writerOf, writeSettings } from '../service/paths'
+import { harnessStatus } from '../service/harness'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
 import { Edits, FORMATS } from '../service/edits'
@@ -505,7 +506,7 @@ app.whenReady().then(() => {
   })
   handle('editgen:cancel', (id, genId) => editgen.cancel(id, genId))
   // ---------- Projects (a short film from script to rough cut) ----------
-  const productions = new Productions({ dataDir: DATA, studio: () => studio, voices: () => voices, images: () => images, catalog: () => catalog, edits, localCopy, onChange: (id) => send('productions:changed', { id }), model: () => readSettings(BASE).ollamaModel || undefined })
+  const productions = new Productions({ dataDir: DATA, studio: () => studio, voices: () => voices, images: () => images, catalog: () => catalog, edits, localCopy, onChange: (id) => send('productions:changed', { id }), model: () => readSettings(BASE).ollamaModel || undefined, writer: () => writerOf(readSettings(BASE)) })
   handle('productions:list', () => productions.list())
   handle('productions:get', (id) => productions.view(id))
   handle('productions:create', (opts) => productions.create(opts))
@@ -628,13 +629,16 @@ app.whenReady().then(() => {
       }
     }
   })
-  handle('prompts:status', async () => ({ ...(await ollamaStatus()), engine: readSettings(BASE).promptEngine, model: readSettings(BASE).ollamaModel, hasComfyKey: !!readSettings(BASE).comfyApiKey, contextIrPrice: CONTEXT_IR_PRICE }))
+  handle('prompts:status', async () => ({ ...(await ollamaStatus()), engine: readSettings(BASE).promptEngine, model: readSettings(BASE).ollamaModel, hasComfyKey: !!readSettings(BASE).comfyApiKey, contextIrPrice: CONTEXT_IR_PRICE, harnesses: harnessStatus() }))
   handle('prompts:write', (request) => {
     const s = readSettings(BASE)
-    const engine = request?.engine || s.promptEngine
-    return studio.writePrompt(request, { engine, apiKey: engine === 'contextir' ? comfyKey() : null, model: s.ollamaModel })
+    const w = writerOf(request?.engine ? { ...s, promptEngine: request.engine } : s)
+    return studio.writePrompt(request, { engine: w.engine, apiKey: w.engine === 'contextir' ? comfyKey() : null, model: w.model })
   })
-  handle('prompts:story', (request) => studio.writeStory(request, { model: readSettings(BASE).ollamaModel }))
+  handle('prompts:story', (request) => {
+    const w = writerOf(readSettings(BASE))
+    return studio.writeStory(request, w.engine === 'claude' || w.engine === 'codex' ? w : { model: readSettings(BASE).ollamaModel })
+  })
   handle('prompts:pull', (model) => pullModel(model, (ev) => send('prompts:pull', { model, ...ev })))
   handle('settings:set', (patch) => {
     const { comfyApiKey, cloudToken, civitaiKey, cloud, target, ...safe } = patch || {}
