@@ -11,6 +11,7 @@ import path from 'node:path'
 import { z } from 'zod'
 import { INSTRUCTIONS, readGuide } from '../service/agent'
 import { GUIDE_SOURCE, loadGuide } from '../service/h3guide'
+import { blocking, lintPrompt } from '../service/lint'
 import { menuMessage, START_MENU } from '../service/startmenu'
 import { Edits, editLength, FORMATS } from '../service/edits'
 import { EditGen, GEN_KINDS } from '../service/editgen'
@@ -125,7 +126,20 @@ tool('check_setup', 'Report ComfyUI, GPU, node packs, models and characters, wit
 tool('list_characters', 'Character presets (LoRA, strength, trigger word).', {}, () => studio.characters())
 tool('list_projects', 'Projects in the IV Studio library, newest first.', {}, () => studio.listProjects())
 tool('plan_render', 'Validate a request and resolve size, frames, duration, seeds and the finished size, without rendering.', { ...request, finish: z.object(finish).partial().optional() }, ({ finish: f, ...r }) => studio.planRender(r, f || {}))
-tool('generate_previews', 'Start preview candidates. Returns a job at once; follow with get_job.', { ...request, projectId: z.string().optional(), projectName: z.string().optional() }, async (args) => (readSettings(BASE).target === 'cloud' || (await voices.release()), studio.generatePreviews(args)))
+// The prompt checker (src/service/lint.js) for a request: its context is the request's own mode, length and media.
+const checkRequest = (r) => {
+  const ch = r.character && r.character !== 'none' ? studio.characters().find((c) => c.id === r.character) : null
+  return lintPrompt(r.prompt || '', { mode: r.mode, seconds: r.seconds, media: r.media || [], character: ch ? { name: ch.name, trigger: ch.trigger } : null, voiceLine: r.voiceLine })
+}
+tool('list_cast', 'Who and what a prompt can mention with @: character presets (@Tess: the picked character becomes {char}; anyone else with a face picture is attached as a reference) and places (@BusStop: attached as the place). A shot that mentions a member with a picture renders in References mode with the pictures attached, as <Subject N>.', {}, () => ({ items: studio.cast.members().map(({ handle, kind, name, picture, description, film }) => ({ mention: `@${handle}`, kind, name, hasPicture: !!picture, description, film })) }))
+tool('save_place', 'Save a place to mention as @Name in any prompt: a name, a picture (an image file path) and a short description of the room or setting.', { name: z.string(), picture: z.string().describe('An image file path'), description: z.string().default(''), id: z.string().optional().describe('To change a saved place') }, (args) => studio.cast.savePlace(args))
+tool('check_prompt', "Check an H3 prompt before rendering: the prompt checker lists what H3 is likely to misread (wrong opening line for frames, cut times past the end, more lines than fit the time, quotes or names inside <d>, missing speaker IDs, references attached but never named, describing a LoRA character's face, filler words, too many camera moves). Each finding has a level (error blocks generate_previews unless force), a message and sometimes fix: the whole prompt mended.", { ...request }, (args) => ({ findings: checkRequest(args) }))
+tool('generate_previews', 'Start preview candidates. Returns a job at once; follow with get_job. The prompt checker runs first: errors stop it (fix them, or pass force: true when you mean it).', { ...request, projectId: z.string().optional(), projectName: z.string().optional(), force: z.boolean().default(false) }, async ({ force, ...args }) => {
+  const errors = blocking(checkRequest(args))
+  if (errors.length && !force) throw new Error(`The prompt checker found ${errors.length} error${errors.length > 1 ? 's' : ''}: ${errors.map((f) => f.message).join(' | ')} Fix the prompt (check_prompt gives fixes), or pass force: true.`)
+  if (readSettings(BASE).target !== 'cloud') await voices.release()
+  return studio.generatePreviews(args)
+})
 tool('finish_candidate', "Finish one preview candidate (2 MP pass + DLSS, optional RTX 2x and frame generation) from its recorded settings. Reuses the candidate's saved latent.", { jobId: z.string().describe('The previews job id'), ...finish }, (args) => studio.finishCandidate(args))
 const sequenceFields = {
   name: z.string().optional(),

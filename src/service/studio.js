@@ -8,6 +8,7 @@ import { Comfy } from './comfy.js'
 import { buildPrompt, checkPrompt } from './graph.js'
 import { planFinish, planPreviews } from './plan.js'
 import { adaptGraph, capabilities } from './remote.js'
+import { Cast, resolveMentions } from './cast.js'
 import { contextIrGraph, fromContextIr, writeHarness, writeLocal, writeStoryLocal } from './prompter.js'
 import { renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
 import { checkSetup, comboOptions } from './setup.js'
@@ -51,6 +52,20 @@ export class Studio {
     this.comfy = new Comfy(comfyUrl, `iv-studio-${randomUUID().slice(0, 8)}`, comfyToken)
     this.outputDir = outputDir || null
     this.progress = new Map() // promptId -> {value, max, node}
+    this.cast = new Cast({ dataDir, characters: () => this.characters(), facePicture: (c) => this.facePicture(c, resourcesDir) })
+  }
+
+  // A character's face picture: its own, else the ready-made catalogue's (resources/characters).
+  facePicture(ch, resourcesDir) {
+    if (ch?.picture && fs.existsSync(ch.picture)) return ch.picture
+    try {
+      const dir = path.join(resourcesDir, 'characters')
+      const ready = JSON.parse(fs.readFileSync(path.join(dir, 'catalog.json'), 'utf8')).characters.find((c) => c.id === ch?.id)
+      const file = ready?.picture && path.join(dir, ready.picture)
+      return file && fs.existsSync(file) ? file : null
+    } catch {
+      return null
+    }
   }
 
   // ---------- characters ----------
@@ -130,9 +145,11 @@ export class Studio {
   }
 
   // ---------- planning ----------
-  planRender(request, finish) {
+  // With @ mentions resolved as a render would (cast.js); notes says what they turned into.
+  planRender(asked, finish) {
+    const { request, notes } = resolveMentions(asked, this.cast.members())
     const plan = planPreviews(request, this.characters())
-    const out = { resolved: plan.resolved, groups: plan.groups }
+    const out = { resolved: plan.resolved, groups: plan.groups, notes, mode: request.mode }
     if (finish !== false) out.finish = planFinish(plan, { candidate: 1, ...(finish || {}) }).resolved
     return out
   }
@@ -149,7 +166,11 @@ export class Studio {
 
   // characterOverride: a character that isn't a saved preset (a training's checkpoint under test).
   async generatePreviews(input) {
-    const { projectId, projectName, characterOverride, ...request } = input
+    const { projectId, projectName, characterOverride, ...asked } = input
+    // @ mentions (cast.js): the picked character's becomes {char}; anyone or anywhere else with a picture is attached
+    const { request, notes } = resolveMentions(asked, this.cast.members())
+    const unknown = notes.filter((n) => n.level === 'error')
+    if (unknown.length) throw new Error(unknown.map((n) => n.message).join(' '))
     const project = projectId ? this.getProject(projectId) : this.createProject(projectName || request.prompt?.slice(0, 40))
     const media = []
     for (const m of request.media || []) media.push({ ...m, file: await this.stage(m.file || m.path, 'minimax_h3') })
@@ -158,6 +179,8 @@ export class Studio {
     const plan = planPreviews({ ...request, media, voiceLine, ...(characterOverride && { character: characterOverride.id }) }, characters)
     const unet = this.models[plan.request.mode]
     if (unet) plan.values[`${MODEL_NODES[plan.request.mode]}.unet_name`] = unet
+    // the run keeps what was asked as written (mentions and all, media as local files), for "Edit and run again"
+    plan.asked = { prompt: asked.prompt, mode: asked.mode, media: (asked.media || []).map((m) => ({ kind: m.kind, file: m.file || m.path })), voiceLine: asked.voiceLine || null }
     const run = project.jobs.length + 1
     const name = `${slug(project.name)}_${project.id}_r${run}`
     plan.values['80'] = name

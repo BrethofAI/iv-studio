@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { media } from '../media'
 import Hero from './Hero'
+import Findings from './Findings'
+import { CompareViewer, PromptDiff, runChanges } from './Compare'
+import { lintPrompt } from '../../../service/lint'
 
 const DONE = ['success', 'error', 'cancelled']
 const FINAL_MP = [1, 1.5, 2]
@@ -116,11 +119,20 @@ function FinishPanel({ job, candidate, onStart, notify, caps }) {
   )
 }
 
-export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps, remote }) {
+export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps, remote, editRun, characters = [] }) {
   const [project, setProject] = useState(null)
   const [jobIds, setJobIds] = useState([])
   const [picked, setPicked] = useState({})
   const [name, setName] = useState('')
+  // takes marked for Compare (up to two): { key, url, label, prompt }; the viewer opens when there are two
+  const [marked, setMarked] = useState([])
+  const [comparing, setComparing] = useState(false)
+  const mark = (take) => {
+    const next = marked.some((m) => m.key === take.key) ? marked.filter((m) => m.key !== take.key) : [...marked, take].slice(-2)
+    setMarked(next)
+    if (next.length === 2) setComparing(true)
+  }
+  const isMarked = (key) => marked.some((m) => m.key === key)
 
   const load = useCallback(async () => {
     const { project, jobs } = await window.ivstudio.projects.get(projectId)
@@ -153,15 +165,39 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
         <input className="shot-name" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name !== project.name && window.ivstudio.projects.rename(projectId, name)} />
       </Hero>
       <div className="shot-actions">
-        <button className="btn btn-small" onClick={() => go('create')}>
-          New run
-        </button>
+        {runs[0] && editRun ? (
+          <button className="btn btn-small" onClick={() => editRun(runs[0], project)}>
+            Edit the latest and run again
+          </button>
+        ) : (
+          <button className="btn btn-small" onClick={() => go('create')}>
+            New run
+          </button>
+        )}
+        {marked.length === 1 && <span className="mono dim small">1 take marked: mark another to compare them</span>}
       </div>
+      {comparing && marked.length === 2 && (
+        <CompareViewer
+          a={marked[0]}
+          b={marked[1]}
+          onClose={() => {
+            setComparing(false)
+            setMarked([])
+          }}
+        />
+      )}
 
       {runs.length === 0 && <p className="dim">No runs yet.</p>}
       {runs.map((run, i) => {
         const previews = run.outputs.filter((o) => o.kind === 'preview')
         const req = run.plan.request || {}
+        const written = run.plan.asked?.prompt ?? req.prompt
+        const before = runs[i + 1]
+        const changes = runChanges(req, before?.plan.request)
+        const ch = characters.find((c) => c.id === req.character)
+        const findings = req.prompt ? lintPrompt(req.prompt, { mode: req.mode, seconds: req.seconds, media: req.media || [], character: ch ? { name: ch.name, trigger: ch.trigger } : null, voiceLine: req.voiceLine }) : []
+        const notes = findings.filter((f) => f.level !== 'info').length
+        const takeOf = (key, url, label) => ({ key: `${run.id}:${key}`, url: media(url), label: `Run ${runs.length - i} · ${label}`, prompt: written })
         return (
           <section key={run.id} className="run">
             <div className="run-head">
@@ -170,14 +206,35 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                 {req.mode} · {run.plan.resolved?.width}×{run.plan.resolved?.height} · {run.plan.resolved?.seconds} s · seed {req.seed}
                 {run.seconds ? ` · ${run.seconds} s render` : ''}
               </span>
+              {changes.length > 0 && <span className="run-changes mono small">changed: {changes.join(' · ')}</span>}
+              {editRun && (
+                <button className="link-btn mono small run-edit" onClick={() => editRun(run, project)}>
+                  Edit and run again
+                </button>
+              )}
             </div>
             <Progress job={run} />
             {run.status === 'error' && <p className="notice">{run.error}</p>}
             {req.prompt && (
               <details className="run-prompt">
-                <summary className="mono dim">Prompt</summary>
-                <pre>{req.prompt}</pre>
-                <button className="link-btn small" onClick={() => navigator.clipboard.writeText(req.prompt).then(() => notify('Prompt copied.', 'info'), () => notify('Could not copy the prompt.'))}>
+                <summary className="mono dim">
+                  Prompt{notes ? ` · ${notes} checker note${notes > 1 ? 's' : ''}` : ''}
+                </summary>
+                <pre>{written}</pre>
+                {written !== req.prompt && (
+                  <details className="run-resolved">
+                    <summary className="mono dim small">As rendered (with the @ mentions resolved)</summary>
+                    <pre>{req.prompt}</pre>
+                  </details>
+                )}
+                {before?.plan.request?.prompt && before.plan.request.prompt !== req.prompt && (
+                  <details className="run-resolved">
+                    <summary className="mono dim small">What changed since run {runs.length - i - 1}</summary>
+                    <PromptDiff before={before.plan.asked?.prompt ?? before.plan.request.prompt} after={written} />
+                  </details>
+                )}
+                <Findings findings={findings} compact />
+                <button className="link-btn small" onClick={() => navigator.clipboard.writeText(written).then(() => notify('Prompt copied.', 'info'), () => notify('Could not copy the prompt.'))}>
                   Copy the prompt
                 </button>
               </details>
@@ -189,6 +246,9 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                     <video src={media(o.url)} controls loop preload="metadata" />
                     <figcaption>
                       <span className="mono">#{o.candidate} · seed {o.seed}</span>
+                      <button className={`link-btn mono small ${isMarked(`${run.id}:${o.candidate}`) ? 'pink' : ''}`} onClick={() => mark(takeOf(o.candidate, o.url, `#${o.candidate} · seed ${o.seed}`))}>
+                        {isMarked(`${run.id}:${o.candidate}`) ? 'Marked' : 'Compare'}
+                      </button>
                       <button className="btn btn-small" onClick={() => setPicked({ ...picked, [run.id]: o.candidate })}>
                         {picked[run.id] === o.candidate ? 'Picked' : 'Pick'}
                       </button>
@@ -210,6 +270,11 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                     {final?.path && (
                       <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(final).catch((err) => notify(err.message))}>
                         {remote ? 'Download' : 'Show in folder'}
+                      </button>
+                    )}
+                    {final?.url && (
+                      <button className={`link-btn mono ${isMarked(`${run.id}:${f.id}`) ? 'pink' : ''}`} onClick={() => mark(takeOf(f.id, final.url, `final of #${f.plan.finish?.candidate}`))}>
+                        {isMarked(`${run.id}:${f.id}`) ? 'Marked' : 'Compare'}
                       </button>
                     )}
                   </div>

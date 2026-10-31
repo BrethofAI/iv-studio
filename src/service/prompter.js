@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { loadGuide } from './h3guide.js'
 import { harnessJson } from './harness.js'
-import { resolveFrames } from './plan.js'
+import { FIRST_FRAME_LINE, firstLastLine, lintPrompt } from './lint.js'
 
 // The bundled ffmpeg, outside the asar in a packaged app (as in main and the MCP server).
 const unpacked = (p) => p && p.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
@@ -95,10 +95,8 @@ const at = (sec) => {
 }
 
 // The opening line MiniMax's guide gives each keyframe mode (I2VA: first frame; FL2VA: first and last frame, the
-// last landing at the end of the video's real length on H3's frame grid). The guide's FL2VA line has no angle brackets.
-export const FIRST_FRAME_LINE = 'For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.'
-export const firstLastLine = (seconds, lastShot = 1) =>
-  `How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot ${lastShot}) aligns with the ${(resolveFrames(seconds) / 24).toFixed(2)}-second mark of the target video.`
+// last landing at the end of the video's real length on H3's frame grid), shared with the prompt checker.
+export { FIRST_FRAME_LINE, firstLastLine }
 
 // What a small writer model sometimes repeats from the guide's examples inside a field: field names, shot labels, cut times.
 const FIELD_NAMES = /^\s*(?:integrated_multimodal_description|detailed_description|overall_soundscape|non_diegetic_music|subject_definitions|summary|retention_analysis)\s*:\s*/i
@@ -314,7 +312,39 @@ async function promptRequest({ idea, mode, seconds, character, sequence, previou
   return { system: systemPrompt({ mode, seconds, character, sequence, media, guide }), user, shown, lastFrame, schema: outputSchema({ mode, sequence, lastFrame, audio, refs }) }
 }
 
-// cpu: keep the model off the GPU (used while ComfyUI is rendering, so H3 keeps its VRAM).
+// The writer's draft through the prompt checker (lint.js). What the checker can mend itself is mended; anything else
+// that matters goes back to the writer once (again: findings text, the draft's JSON -> a corrected JSON, or null to
+// skip), and the better of the two drafts is kept.
+const REDO = new Set(['missing-field', 'no-shot-1', 'cut-order', 'cut-late', 'speech-too-long', 'speech-long', 'name-in-line', 'no-speaker', 'untagged-speech', 'reference-missing', 'reference-unused', 'subject-undefined', 'char-face', 'char-missing', 'frames-cut', 'too-many-shots'])
+const MEND = new Set(['frames-line', 'quoted-line', 'filler'])
+const checkerContext = ({ mode, seconds, media, character }) => ({ mode, seconds, media, character: character ? { name: character.name, trigger: character.trigger } : null })
+function mended(prompt, ctx) {
+  let text = prompt
+  for (let i = 0; i < 4; i++) {
+    const f = lintPrompt(text, ctx).find((x) => MEND.has(x.code) && x.fix)
+    if (!f) break
+    text = f.fix
+  }
+  return text
+}
+const score = (findings) => findings.reduce((n, f) => n + (f.level === 'error' ? 10 : f.level === 'warning' && REDO.has(f.code) ? 1 : 0), 0)
+async function checked(data, { assembleOpts, character, ctx, again }) {
+  const draft = mended(cleanPrompt(assemble(data, assembleOpts), character), ctx)
+  const issues = lintPrompt(draft, ctx).filter((f) => f.level === 'error' || REDO.has(f.code))
+  if (!issues.length || !again) return draft
+  const note = `IV Studio's prompt checker found these problems in your answer:\n${issues.map((f) => `- ${f.message}`).join('\n')}\nAnswer again with the whole JSON object, in the same shape, changing only what fixes these problems.`
+  try {
+    const fixed = await again(note, JSON.stringify(data))
+    if (!fixed) return draft
+    const second = mended(cleanPrompt(assemble(fixed, assembleOpts), character), ctx)
+    return score(lintPrompt(second, ctx)) < score(lintPrompt(draft, ctx)) ? second : draft
+  } catch {
+    return draft
+  }
+}
+
+// cpu: keep the model off the GPU (used while ComfyUI is rendering, so H3 keeps its VRAM). On the CPU the draft is
+// mended but not sent back for a second pass, which would double a slow write.
 export async function writeLocal({ idea, mode = 'text', seconds = 5, character, sequence = false, previous, media = [], model, cpu = false }) {
   await ensureOllama()
   const status = await ollamaStatus()
@@ -331,15 +361,19 @@ export async function writeLocal({ idea, mode = 'text', seconds = 5, character, 
     message.images = req.shown.map((s) => s.data)
     message.content += `\n\n${LOOK_RULE}\n${req.shown.map((s, i) => `Image ${i + 1}: ${s.label}`).join('\n')}`
   }
-  const r = await fetch(`${OLLAMA_URL}/api/chat`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ model: name, stream: false, format: req.schema, keep_alive: 0, options: { temperature: 0.6, num_ctx: guide ? (guide.ref ? 24576 : 16384) : 8192, ...(cpu ? { num_gpu: 0 } : {}) }, messages: [{ role: 'system', content: req.system }, message] }),
-    signal: AbortSignal.timeout(600000)
-  })
-  if (!r.ok) throw new Error(`Ollama: ${(await r.text()).slice(0, 300)}`)
-  const out = await r.json()
-  return cleanPrompt(assemble(parseJson(out.message?.content), { mode, seconds, lastFrame: req.lastFrame }), character)
+  const chat = async (messages) => {
+    const r = await fetch(`${OLLAMA_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: name, stream: false, format: req.schema, keep_alive: 0, options: { temperature: 0.6, num_ctx: guide ? (guide.ref ? 24576 : 16384) : 8192, ...(cpu ? { num_gpu: 0 } : {}) }, messages: [{ role: 'system', content: req.system }, ...messages] }),
+      signal: AbortSignal.timeout(600000)
+    })
+    if (!r.ok) throw new Error(`Ollama: ${(await r.text()).slice(0, 300)}`)
+    return parseJson((await r.json()).message?.content)
+  }
+  const data = await chat([message])
+  const again = cpu ? null : (note, previous) => chat([message, { role: 'assistant', content: previous }, { role: 'user', content: note }])
+  return checked(data, { assembleOpts: { mode, seconds, lastFrame: req.lastFrame }, character, ctx: checkerContext({ mode, seconds, media, character }), again })
 }
 
 // The same prompt from the person's Claude Code or Codex (harness.js), with the whole guide: it runs off this PC's GPU.
@@ -352,7 +386,8 @@ export async function writeHarness({ engine, model, idea, mode = 'text', seconds
     user += `\n\n${engine === 'claude' ? LOOK_RULE.replace('The images attached to this message are', 'The image files in your working folder are') : LOOK_RULE}\n${images.map((s, i) => `Image ${i + 1} (${s.name}): ${s.label}`).join('\n')}${engine === 'claude' ? '\nOpen each one with the Read tool before you write.' : ''}`
   user += '\n\nAnswer with the JSON object only.'
   const data = await harnessJson({ engine, model, system: req.system, user, schema: req.schema, images })
-  return cleanPrompt(assemble(data, { mode, seconds, lastFrame: req.lastFrame }), character)
+  const again = (note, previous) => harnessJson({ engine, model, system: req.system, user: `${user}\n\nYour previous answer:\n${previous}\n\n${note}`, schema: req.schema, images })
+  return checked(data, { assembleOpts: { mode, seconds, lastFrame: req.lastFrame }, character, ctx: checkerContext({ mode, seconds, media, character }), again })
 }
 
 function parseJson(text) {

@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, screen, shell } from 'electron'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { Readable } from 'node:stream'
 import { comfyFolders, dataDir, incognitoDir, readSettings, resourcesDir, writerOf, writeSettings } from '../service/paths'
@@ -703,6 +704,21 @@ app.whenReady().then(() => {
   handle('render:planFinish', (jobId, finish) => studio.planFinishJob(jobId, finish))
   // A voice engine still holding the GPU would slow H3 down: let it go before a render on this PC.
   const freeVoices = () => (readSettings(BASE).target === 'cloud' ? null : voices.release())
+  // The title bar's GPU and memory readout: this PC's RAM, and the GPU as ComfyUI sees it (none in cloud mode).
+  handle('system:stats', async () => {
+    if (readSettings(BASE).target === 'cloud') return null
+    const st = await studio.comfy.systemStats().catch(() => null)
+    const d = st?.devices?.[0]
+    return {
+      ram: { total: os.totalmem(), free: os.freemem() },
+      gpu: d ? { name: String(d.name).replace(/^cuda:\d+\s*/, '').replace(/\s*:.*$/, ''), total: d.vram_total, free: d.vram_free, comfyHeld: d.torch_vram_total } : null
+    }
+  })
+  // @ mentions: the cast (characters) and places a prompt can name, and the places themselves
+  handle('cast:list', () => studio.cast.members())
+  handle('cast:places', () => studio.cast.places())
+  handle('cast:savePlace', (place) => studio.cast.savePlace(place))
+  handle('cast:deletePlace', (id) => studio.cast.deletePlace(id))
   handle('render:previews', async (request) => {
     await freeVoices()
     const job = await studio.generatePreviews(request)

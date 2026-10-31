@@ -6,6 +6,7 @@ import ivMarkClosed from './assets/iv-mark-closed.png'
 import { ConfirmHost, ask } from './components/Confirm'
 import Library from './components/Library'
 import Cloud, { CloudMeter } from './components/Cloud'
+import SystemMeter from './components/SystemMeter'
 import { EditEditor, EditList } from './components/Edit'
 import { SequenceEditor, SequenceList } from './components/Sequences'
 import Settings from './components/Settings'
@@ -83,6 +84,8 @@ export default function App() {
   const [pictureForCreate, setPictureForCreate] = useState(null)
   // a character picked on the dashboard (New shot with them)
   const [characterForCreate, setCharacterForCreate] = useState(null)
+  // a shot's run on its way back to Create to be edited and run again in the same shot
+  const [runForCreate, setRunForCreate] = useState(null)
   const [projectId, setProjectId] = useState(null)
   const [sequenceId, setSequenceId] = useState(null)
   const [productionId, setProductionId] = useState(null) // the open Project
@@ -220,6 +223,12 @@ export default function App() {
     switchSection('video')
     setPage('create')
   }
+  const editRun = (run, project) => {
+    setRunForCreate({ request: run.plan.request, asked: run.plan.asked, projectId: project.id, projectName: project.name })
+    pickCreateKind('video')
+    switchSection('video')
+    setPage('create')
+  }
   const sendToCreate = (line) => {
     setLineForCreate(line)
     switchSection('video')
@@ -227,7 +236,7 @@ export default function App() {
   }
 
   const ready = setup?.ready
-  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, editRun, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
 
   // Incognito: a private set of everything made, switched by restarting (see main's BASE / DATA). The eye
@@ -267,7 +276,7 @@ export default function App() {
           {setup?.remote && <span className="mono cloud-badge">Cloud</span>}
           <span className="mono">{!setup ? 'Checking ComfyUI' : ready ? 'ComfyUI ready' : `${missing} to fix`}</span>
           {setup?.items?.find((i) => i.id === 'gpu') && <span className="mono dim">{setup.items.find((i) => i.id === 'gpu').detail}</span>}
-          {setup?.remote && <CloudMeter onOpen={() => setPage('cloud')} />}
+          {setup?.remote ? <CloudMeter onOpen={() => setPage('cloud')} /> : setup && <SystemMeter />}
         </div>
       </header>
       <nav className="nav">
@@ -302,7 +311,7 @@ export default function App() {
           (createKind === 'image' ? (
             <Images {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} />
           ) : (
-            <Create {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} incomingLine={lineForCreate} clearIncomingLine={() => setLineForCreate(null)} incomingLora={loraForCreate} clearIncomingLora={() => setLoraForCreate(null)} incomingPicture={pictureForCreate} clearIncomingPicture={() => setPictureForCreate(null)} incomingCharacter={characterForCreate} clearIncomingCharacter={() => setCharacterForCreate(null)} />
+            <Create {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} incomingLine={lineForCreate} clearIncomingLine={() => setLineForCreate(null)} incomingLora={loraForCreate} clearIncomingLora={() => setLoraForCreate(null)} incomingPicture={pictureForCreate} clearIncomingPicture={() => setPictureForCreate(null)} incomingCharacter={characterForCreate} clearIncomingCharacter={() => setCharacterForCreate(null)} incomingRun={runForCreate} clearIncomingRun={() => setRunForCreate(null)} />
           ))}
         {page === 'loras' && <LorasPage {...ctx} />}
         {page === 'voices' && <VoicesPage {...ctx} />}

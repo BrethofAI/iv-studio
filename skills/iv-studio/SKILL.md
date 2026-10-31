@@ -51,6 +51,14 @@ cropped to the shot's aspect, because they're stretched to fit).
 MiniMax publishes its own guide to H3 prompts: `get_guide` with topic `h3-prompts` returns it. Read it before
 writing a prompt yourself; `write_prompt` already follows it.
 
+- **Check before rendering.** `check_prompt` (same arguments as `generate_previews`) lists what H3 is likely to
+  misread, each with a level and sometimes a `fix` (the whole prompt mended). `generate_previews` refuses a prompt
+  with errors unless you pass `force: true`; fix them instead unless the person says otherwise.
+- **@ mentions.** `list_cast` gives what a prompt can name: `@Tess` (the picked character becomes `{char}`),
+  another character with a face picture, or a place (`@BusStop`). A shot that mentions someone or somewhere with a
+  picture renders in References mode with the pictures attached, each as `<Subject N>`. `save_place` adds a place
+  (a name, a picture and a few words). The person sees the same mentions in Create.
+
 - Text mode uses three fields: `integrated_multimodal_description:` (the shot: style, place,
   clothes, camera, action and lines), `overall_soundscape:` and `non_diegetic_music:` (N/A for none).
 - Frames mode opens with MiniMax's alignment line: with only a first frame, `For the target video, at 0.00

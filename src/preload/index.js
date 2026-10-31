@@ -220,6 +220,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
     huntShot: call('sequences:huntShot'),
     finishShot: call('sequences:finishShot')
   },
+  system: { stats: call('system:stats') },
+  cast: { list: call('cast:list'), places: call('cast:places'), savePlace: call('cast:savePlace'), deletePlace: call('cast:deletePlace') },
   render: { plan: call('render:plan'), planFinish: call('render:planFinish'), previews: call('render:previews'), finish: call('render:finish') },
   jobs: { watch: call('jobs:watch'), cancel: call('jobs:cancel'), onUpdate: on('jobs:update') },
   files: { pick: call('files:pick'), reveal: call('files:reveal') },

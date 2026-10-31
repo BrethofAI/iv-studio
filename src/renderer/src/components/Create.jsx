@@ -3,6 +3,9 @@ import Hero from './Hero'
 import { MediaEditor, MediaTile } from './MediaEditor'
 import PromptWriter from './PromptWriter'
 import { LoraPicker, LoraThumb, loraTitle, useYours } from './Loras'
+import Findings from './Findings'
+import { MentionBox, MentionNotes, PlaceDialog } from './Mentions'
+import { blocking, lintPrompt } from '../../../service/lint'
 
 const MODES = [
   ['text', 'Text', 'Just the prompt.'],
@@ -37,8 +40,9 @@ const withLine = (prompt, text) => {
   return m ? prompt.replace(m[0], `<d>[${m[1]}] ${text}</d>`) : prompt
 }
 
-export default function Create({ setup, characters, notify, openShot, go, incomingLine, clearIncomingLine, incomingLora, clearIncomingLora, incomingPicture, clearIncomingPicture, incomingCharacter, clearIncomingCharacter, kindSwitch }) {
+export default function Create({ setup, characters, notify, openShot, go, incomingLine, clearIncomingLine, incomingLora, clearIncomingLora, incomingPicture, clearIncomingPicture, incomingCharacter, clearIncomingCharacter, incomingRun, clearIncomingRun, kindSwitch }) {
   const [form, setForm] = useState({
+    projectId: null, // set when editing a shot's run: the new run joins that shot
     projectName: '',
     mode: 'text',
     character: 'none',
@@ -57,6 +61,12 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     extraLoras: []
   })
   const [advanced, setAdvanced] = useState(false)
+  // @ mentions: the cast and places a prompt can name (cast.js), and the new-place dialog with what to do after it
+  const [members, setMembers] = useState([])
+  const [newPlace, setNewPlace] = useState(null)
+  useEffect(() => {
+    window.ivstudio.cast.list().then(setMembers, () => setMembers([]))
+  }, [characters])
   const [plan, setPlan] = useState(null)
   const [planError, setPlanError] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -68,7 +78,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   }, [characters])
 
   const request = useMemo(() => {
-    const { projectName, voiceItem, ...r } = form
+    const { projectId, projectName, voiceItem, ...r } = form
     return { ...r, character: r.character ?? 'none', media: r.media.map((m) => ({ kind: m.kind, file: m.path })) }
   }, [form])
 
@@ -130,6 +140,35 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     takeLine(incomingLine)
     clearIncomingLine?.()
   }, [incomingLine])
+  // "Edit and run again" from a shot: its run as written (mentions and local files), to change and render into that shot
+  useEffect(() => {
+    if (!incomingRun) return
+    const { request: q, asked, projectId, projectName } = incomingRun
+    const media = (asked?.media || q.media || []).map((m) => ({ kind: m.kind, path: m.file || m.path }))
+    setForm((f) => ({
+      ...f,
+      projectId,
+      projectName,
+      mode: asked?.mode || q.mode,
+      character: q.character ?? 'none',
+      prompt: asked?.prompt ?? q.prompt,
+      aspect: q.aspect || f.aspect,
+      megapixels: q.megapixels || f.megapixels,
+      seconds: q.seconds || f.seconds,
+      previews: q.previews || f.previews,
+      seed: q.seed ?? f.seed,
+      steps: q.steps || f.steps,
+      overlapFrames: q.overlapFrames || f.overlapFrames,
+      refmods: q.refmods || [],
+      retention: q.retention ?? 1,
+      extraLoras: q.extraLoras || [],
+      voiceLine: asked?.voiceLine || null,
+      voiceItem: asked?.voiceLine ? { kind: 'audio', path: asked.voiceLine } : null,
+      media
+    }))
+    media.forEach((m, i) => window.ivstudio.media.probe(m.path).then((info) => setForm((f) => ({ ...f, media: f.media.map((x, j) => (j === i && x.path === m.path ? { ...x, info } : x)) })), () => {}))
+    clearIncomingRun?.()
+  }, [incomingRun])
   // "New shot" with a character from the dashboard
   useEffect(() => {
     if (!incomingCharacter) return
@@ -203,7 +242,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   async function hunt() {
     setBusy(true)
     try {
-      const job = await window.ivstudio.render.previews({ ...request, projectName: form.projectName || undefined })
+      const job = await window.ivstudio.render.previews({ ...request, projectId: form.projectId || undefined, projectName: form.projectName || undefined })
       notify('Previews started. You can keep working; they appear here as they finish.', 'info')
       openShot(job.projectId)
     } catch (err) {
@@ -214,6 +253,14 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   }
 
   const char = characters.find((c) => c.id === form.character)
+  // The prompt checker (src/service/lint.js) on every edit; its errors hold back the hunt unless rendered anyway.
+  const findings = useMemo(
+    () => (form.prompt.trim() ? lintPrompt(form.prompt, { mode: form.mode, seconds: form.seconds, media: form.media, character: char ? { name: char.name, trigger: char.trigger } : null, voiceLine: form.voiceLine, mentions: members.map((m) => m.handle) }) : []),
+    [form.prompt, form.mode, form.seconds, form.media, form.voiceLine, char, members]
+  )
+  const errors = blocking(findings)
+  const [anyway, setAnyway] = useState(false)
+  useEffect(() => setAnyway(false), [form.prompt])
   const r = plan?.resolved
   const refmodsAvailable = setup?.refmods || []
   const blocked = setup && !setup.ready
@@ -222,6 +269,15 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     <div className="create">
       <Hero art="create" title="Create" kicker="New shot" />
       {kindSwitch}
+
+      {form.projectId && (
+        <p className="notice editing-run">
+          Editing a run of <b>{form.projectName}</b>: the new run joins that shot, next to the others.{' '}
+          <button className="link-btn" onClick={() => set({ projectId: null, projectName: '' })}>
+            Make it a new shot instead
+          </button>
+        </p>
+      )}
 
       {blocked && (
         <p className="notice">
@@ -358,7 +414,28 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             Insert template
           </button>
         </div>
-        <textarea className="prompt" rows={9} value={form.prompt} placeholder="Describe the shot: clothes, place, camera, action and the lines. Never the face or voice; the character carries those." onChange={(e) => set({ prompt: e.target.value })} />
+        <MentionBox
+          className="prompt"
+          rows={9}
+          value={form.prompt}
+          members={members}
+          onNewPlace={(then) => setNewPlace(() => then)}
+          placeholder="Describe the shot: clothes, place, camera, action and the lines. Never the face or voice; the character carries those. Type @ for your cast and places."
+          onChange={(prompt) => set({ prompt })}
+        />
+        <MentionNotes notes={plan?.notes} />
+        {form.prompt.trim() && <Findings findings={findings} onFix={(prompt) => set({ prompt })} />}
+        {newPlace && (
+          <PlaceDialog
+            notify={notify}
+            onClose={() => setNewPlace(null)}
+            onSaved={(place, list) => {
+              setMembers(list)
+              setNewPlace(null)
+              if (place) newPlace(place)
+            }}
+          />
+        )}
 
         <div className="row voice-row">
           <span className="row-label">Voice line</span>
@@ -499,6 +576,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             <>
               <span className="mono">
                 {r.previews} preview{r.previews > 1 ? 's' : ''} · {r.width} × {r.height} · {r.seconds} s · {r.model}
+                {plan.mode && plan.mode !== form.mode ? ' · References (for the @ pictures)' : ''}
               </span>
               <span className="mono dim">
                 {r.frames} frames · finish at 2 MP → {plan.finish.width} × {plan.finish.height}
@@ -508,8 +586,13 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             <span className="mono pink">{planError}</span>
           )}
         </div>
-        <button className="btn btn-primary" disabled={busy || !form.prompt.trim() || !r || blocked} onClick={hunt}>
-          {busy ? 'Starting…' : `Hunt ${r?.previews || ''} preview${r?.previews > 1 ? 's' : ''}`}
+        {errors.length > 0 && !anyway && (
+          <button className="link-btn mono small go-anyway" onClick={() => setAnyway(true)}>
+            Render anyway
+          </button>
+        )}
+        <button className="btn btn-primary" disabled={busy || !form.prompt.trim() || !r || blocked || (errors.length > 0 && !anyway)} onClick={hunt}>
+          {busy ? 'Starting…' : errors.length && !anyway ? `Fix ${errors.length} error${errors.length > 1 ? 's' : ''} first` : `Hunt ${r?.previews || ''} preview${r?.previews > 1 ? 's' : ''}`}
         </button>
       </section>
       {editItem && <MediaEditor item={editItem} shotAspect={form.aspect} hint={editing === 'voice' ? 'Keep just the line to lip-sync. Write the same words in the prompt.' : editHint[form.mode]} onApply={applyEdit} onClose={() => setEditing(null)} notify={notify} />}

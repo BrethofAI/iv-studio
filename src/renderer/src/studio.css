@@ -106,6 +106,242 @@
   font: 400 14px/1.55 var(--mono);
   min-height: 180px;
 }
+/* The prompt checker's findings under a prompt (Findings.jsx) */
+.findings {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+.findings ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.finding {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 4px;
+  background: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.finding.error {
+  border-left-color: var(--red);
+}
+.finding.warning {
+  border-left-color: var(--pink);
+}
+.finding.info {
+  border-left-color: var(--line-strong);
+  color: var(--paper-dim);
+}
+.finding-icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--ink-3);
+}
+.finding.error .finding-icon {
+  background: var(--red);
+  color: var(--ink);
+}
+.finding.warning .finding-icon {
+  color: var(--pink);
+}
+.findings > .link-btn {
+  justify-self: start;
+}
+.findings-clean {
+  margin: 8px 0 0;
+  color: var(--paper-dim);
+}
+.findings.compact .finding {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.go-anyway {
+  margin-right: 10px;
+}
+/* A shot's runs as versions, and two takes compared (Shot.jsx, Compare.jsx) */
+.run-changes {
+  color: var(--pink);
+}
+.run-edit {
+  margin-left: auto;
+}
+.run-resolved {
+  margin: 6px 0;
+}
+.prompt-diff {
+  white-space: pre-wrap;
+  font: 400 12px/1.55 var(--mono);
+  margin: 6px 0;
+}
+.prompt-diff .added {
+  background: rgba(241, 157, 172, 0.22);
+  color: var(--paper);
+}
+.prompt-diff .removed {
+  text-decoration: line-through;
+  color: var(--paper-dim);
+  background: rgba(244, 72, 89, 0.14);
+}
+.editing-run {
+  border-left: 3px solid var(--pink);
+}
+.compare {
+  width: min(1400px, 96vw);
+  max-height: 94vh;
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+}
+.compare-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.compare-head .link-btn {
+  margin-left: auto;
+}
+.compare-side {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.compare-side figure {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.compare-side video,
+.compare-wipe video {
+  width: 100%;
+  max-height: 62vh;
+  background: #000;
+  border-radius: 4px;
+}
+.compare-wipe {
+  position: relative;
+  display: grid;
+}
+.compare-wipe video {
+  grid-area: 1 / 1;
+}
+.wipe-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--paper);
+  pointer-events: none;
+}
+.wipe-slider {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: ew-resize;
+}
+.wipe-label {
+  position: absolute;
+  top: 8px;
+  padding: 2px 6px;
+  background: rgba(16, 12, 14, 0.7);
+  border-radius: 3px;
+  pointer-events: none;
+}
+.wipe-label.left {
+  left: 8px;
+}
+.wipe-label.right {
+  right: 8px;
+}
+.compare-transport {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+/* @ mentions in the prompt (Mentions.jsx) */
+.mention-box {
+  position: relative;
+}
+.mention-menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  min-width: 300px;
+  max-width: 420px;
+  background: var(--ink-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.mention-menu li {
+  display: grid;
+  grid-template-columns: 32px auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.mention-menu li.on,
+.mention-menu li:hover {
+  background: var(--ink-3);
+}
+.mention-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  background: var(--ink-3);
+  font: 600 14px/1 var(--display);
+}
+.mention-thumb.add {
+  color: var(--pink);
+  font-size: 18px;
+}
+.mention-notes {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.place-dialog {
+  width: min(560px, 92vw);
+}
+.place-picture {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.place-picture img {
+  width: 120px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 4px;
+}
 .media {
   display: grid;
   gap: 10px;
@@ -241,13 +477,18 @@ input.mini {
 }
 .run-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 18px;
+  gap: 6px 18px;
 }
 .run-head h2 {
   font: 600 26px/1 var(--display);
   text-transform: uppercase;
   margin: 0;
+  white-space: nowrap;
+}
+.run-head .run-edit {
+  white-space: nowrap;
 }
 /* the whole prompt, scrolling inside its box when it's long */
 .run-prompt pre {
@@ -803,6 +1044,39 @@ input.mini {
 .cloud-meter.on .cloud-meter-dot {
   opacity: 1;
   animation: cloud-meter-pulse 1.6s ease-in-out infinite;
+}
+/* This PC's GPU and RAM in use, beside "ComfyUI ready" (SystemMeter.jsx) */
+.system-meter {
+  display: inline-flex;
+  gap: 12px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--paper-dim);
+  font-variant-numeric: tabular-nums;
+}
+.system-meter-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.system-meter-bar {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.system-meter-bar span {
+  display: block;
+  height: 100%;
+  background: var(--paper-dim);
+}
+.system-meter-part.full {
+  color: var(--red);
+}
+.system-meter-part.full .system-meter-bar span {
+  background: var(--red);
 }
 @keyframes cloud-meter-pulse {
   50% {
