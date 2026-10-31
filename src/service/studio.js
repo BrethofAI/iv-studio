@@ -60,6 +60,11 @@ const now = () => new Date().toISOString()
 
 // SeedVR2 models for Enhance, best first: what's in ComfyUI's SEEDVR2 folder decides.
 const ENHANCE_MODELS = ['seedvr2_ema_3b_fp16.safetensors', 'seedvr2_ema_3b_fp8_e4m3fn.safetensors', 'seedvr2_ema_3b-Q8_0.gguf']
+// Frames per SeedVR2 batch (4n+1) by output size, sized for a 24 GB card: 21 at 1440 spilled into shared memory
+// (16 min for 5 s) and ran out of memory at 2160 after 41 min. Bigger outputs take smaller batches and, at 4K,
+// swap half the DiT's blocks to the CPU.
+export const seedvr2Batch = (resolution) =>
+  resolution > 1440 ? { batch: 5, overlap: 1, swap: 16 } : resolution > 1080 ? { batch: 9, overlap: 2, swap: 0 } : { batch: 21, overlap: 3, swap: 0 }
 
 export class Studio {
   // models: { text, frames, reference, continue, take, retake } -> a UNET name per workflow (Settings).
@@ -304,11 +309,12 @@ export class Studio {
     const dit = ENHANCE_MODELS.find((m) => dits.includes(m)) || dits[0]
     const fps = source.plan?.resolved?.fps || 24
     const name = `${path.basename(out.path).replace(/\.[^.]+$/, '').replace(/-audio$/, '')}_enhanced_${resolution}`
+    const { batch, overlap, swap } = seedvr2Batch(resolution)
     const graph = {
       load: { class_type: 'VHS_LoadVideoPath', inputs: { video: out.path, force_rate: 0, custom_width: 0, custom_height: 0, frame_load_cap: 0, skip_first_frames: 0, select_every_nth: 1, format: 'AnimateDiff' } },
-      dit: { class_type: 'SeedVR2LoadDiTModel', inputs: { model: dit, device: 'cuda:0', blocks_to_swap: 0, offload_device: 'cpu', cache_model: false, attention_mode: 'sdpa' } },
+      dit: { class_type: 'SeedVR2LoadDiTModel', inputs: { model: dit, device: 'cuda:0', blocks_to_swap: swap, offload_device: 'cpu', cache_model: false, attention_mode: 'sdpa' } },
       vae: { class_type: 'SeedVR2LoadVAEModel', inputs: { model: 'ema_vae_fp16.safetensors', device: 'cuda:0', encode_tiled: true, decode_tiled: true, offload_device: 'cpu', cache_model: false } },
-      up: { class_type: 'SeedVR2VideoUpscaler', inputs: { image: ['load', 0], dit: ['dit', 0], vae: ['vae', 0], seed: 42, resolution, max_resolution: 0, batch_size: 21, uniform_batch_size: false, color_correction: 'lab', temporal_overlap: 3, offload_device: 'cpu' } },
+      up: { class_type: 'SeedVR2VideoUpscaler', inputs: { image: ['load', 0], dit: ['dit', 0], vae: ['vae', 0], seed: 42, resolution, max_resolution: 0, batch_size: batch, uniform_batch_size: false, color_correction: 'lab', temporal_overlap: overlap, offload_device: 'cpu' } },
       save: { class_type: 'VHS_VideoCombine', inputs: { images: ['up', 0], audio: ['load', 2], frame_rate: fps, loop_count: 0, filename_prefix: `H3/enhanced/${name}`, format: 'video/h264-mp4', pix_fmt: 'yuv420p', crf: 16, save_metadata: true, trim_to_audio: false, pingpong: false, save_output: true } }
     }
     const project = source.projectId ? this.getProject(source.projectId) : null
