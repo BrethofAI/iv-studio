@@ -15,7 +15,7 @@ const H = 1080
 // so a whole-page capture comes out with blank stretches.
 const MAX_SCREENS = 10
 
-async function waitFor(fn, ms, what) {
+export async function waitFor(fn, ms, what) {
   const end = Date.now() + ms
   for (;;) {
     const v = await fn().catch(() => null)
@@ -26,7 +26,7 @@ async function waitFor(fn, ms, what) {
 }
 
 // A minimal DevTools client: send(method, params) and once(event).
-function devtools(wsUrl) {
+export function devtools(wsUrl) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(wsUrl)
     let n = 0

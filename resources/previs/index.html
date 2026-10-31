@@ -1,0 +1,88 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>IV Studio previs</title>
+<style>html,body{margin:0;background:#bdbdbd;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<script type="importmap">{ "imports": { "three": "./three.module.min.js" } }</script>
+<script type="module">
+// IV Studio's previs page (previs.js drives it in headless Edge): plain grey mannequins and boxes on a grey
+// floor, drawn one pose at a time. The floor plan's (x, y) is three's (x, -z); a facing of 0 looks along +y.
+import * as THREE from 'three'
+
+const SHADES = [0x4a4a4a, 0xd6d6d6, 0x8c8c8c, 0xf2f2f2]
+let renderer, scene, cam, people = []
+
+function mannequin(i) {
+  const g = new THREE.Group()
+  const m = new THREE.MeshStandardMaterial({ color: SHADES[i % 4] })
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.95, 6, 16), m)
+  body.position.y = 0.95
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 24, 16), m)
+  head.position.y = 1.67
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 12), m)
+  nose.rotation.x = Math.PI / 2
+  nose.position.set(0, 1.67, 0.17)
+  const parts = [body, head, nose]
+  if (i % 4 === 2) {
+    // the third one has a white band so it can't be confused with the others
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.235, 0.235, 0.12, 24), new THREE.MeshStandardMaterial({ color: 0xffffff }))
+    band.position.y = 1.15
+    parts.push(band)
+  }
+  for (const p of parts) (p.castShadow = true), g.add(p)
+  scene.add(g)
+  return g
+}
+
+window.setup = ({ width, height, count }) => {
+  renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
+  renderer.setSize(width, height)
+  renderer.shadowMap.enabled = true
+  document.body.appendChild(renderer.domElement)
+  scene = new THREE.Scene()
+  scene.background = new THREE.Color(0xbdbdbd)
+  scene.fog = new THREE.Fog(0xbdbdbd, 12, 30)
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: 0x9a9a9a }))
+  floor.rotation.x = -Math.PI / 2
+  floor.receiveShadow = true
+  scene.add(floor)
+  const grid = new THREE.GridHelper(60, 60, 0x7a7a7a, 0x8a8a8a)
+  grid.position.y = 0.002
+  scene.add(grid)
+  // a few fixed boxes around the room, so a camera move reads as parallax
+  for (const [x, y, h] of [[-5, 5, 2.5], [5, 4, 1.5], [6, -4, 3], [-6, -3, 1.2], [0, 8, 4], [-3, -7, 2]]) {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(1.2, h, 1.2), new THREE.MeshStandardMaterial({ color: 0xa8a8a8 }))
+    b.position.set(x, h / 2, -y)
+    b.castShadow = b.receiveShadow = true
+    scene.add(b)
+  }
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x777777, 1.6))
+  const sun = new THREE.DirectionalLight(0xffffff, 1.6)
+  sun.position.set(4, 8, 5)
+  sun.castShadow = true
+  scene.add(sun)
+  cam = new THREE.PerspectiveCamera(40, width / height, 0.1, 100)
+  people = Array.from({ length: count }, (_, i) => mannequin(i))
+  return true
+}
+
+// fov: the vertical field of view in degrees. pose: { camera: {x, y, z, aim: {x, y, z}}, people: [{x, y, facing}] }
+window.draw = (pose, fov) => {
+  cam.fov = fov
+  cam.updateProjectionMatrix()
+  cam.position.set(pose.camera.x, pose.camera.z, -pose.camera.y)
+  cam.lookAt(pose.camera.aim.x, pose.camera.aim.z, -pose.camera.aim.y)
+  pose.people.forEach((p, i) => {
+    people[i].position.set(p.x, 0, -p.y)
+    people[i].rotation.y = ((180 - p.facing) * Math.PI) / 180
+  })
+  renderer.render(scene, cam)
+  return renderer.domElement.toDataURL('image/png')
+}
+window.ready = true
+</script>
+</body>
+</html>

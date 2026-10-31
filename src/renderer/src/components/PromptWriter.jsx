@@ -1,17 +1,34 @@
 import { useEffect, useState } from 'react'
 import { ask } from './Confirm'
 import StageBoard from './StageBoard'
-import { cameraWords, stagingWords } from '../../../service/staging'
+import { cameraWords, defaultStage, previsWords, stagingWords } from '../../../service/staging'
 
 const HARNESS_NAME = { claude: 'Claude Code', codex: 'Codex' }
 
 // "Write it for me": a plain-words idea in, a finished H3 prompt out. context carries what the writer
 // should respect (mode, seconds, aspect, character, media, sequence, previous shot). names: who can go on the
-// staging board; its exact screen-side words go to the writer with the idea.
-export default function PromptWriter({ context, current, onWritten, notify, go, compact = false, names = null }) {
+// staging board; its exact screen-side words go to the writer with the idea. onPrevis(clip): the board's grey
+// previs clip, for the form to add as a video reference (then the words name it as <Video n>).
+export default function PromptWriter({ context, current, onWritten, notify, go, compact = false, names = null, onPrevis = null }) {
   const [idea, setIdea] = useState('')
   const [board, setBoard] = useState(false)
   const [stage, setStage] = useState(null)
+  const [previs, setPrevis] = useState(null)
+  const [drawing, setDrawing] = useState(false)
+  // the clip still in the references, as which video
+  const previsN = previs ? (context.media || []).filter((m) => m.kind === 'video').findIndex((m) => m.file === previs.file) + 1 : 0
+  async function makePrevis() {
+    setDrawing(true)
+    try {
+      const clip = await window.ivstudio.previs.make({ stage, seconds: context.seconds, aspect: context.aspect, name: idea.slice(0, 30) || 'previs' })
+      setPrevis({ ...clip, stage })
+      onPrevis(clip)
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setDrawing(false)
+    }
+  }
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState(null)
   const [undo, setUndo] = useState(null)
@@ -47,9 +64,9 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
   async function write() {
     setBusy(true)
     try {
-      const staged = board && stage?.people?.length ? `${idea.trim()}
-Staging (follow it exactly): ${stagingWords(stage)}
-Camera: ${cameraWords(stage)}.` : idea
+      const staged =
+        (board && stage?.people?.length ? `${idea.trim()}\nStaging (follow it exactly): ${stagingWords(stage)}\nCamera: ${cameraWords(stage)}.` : idea) +
+        (previsN ? `\n${previsWords(previs.stage, previsN)} Say so in the prompt, with these words.` : '')
       const text = await window.ivstudio.prompts.write({ ...context, idea: staged })
       setUndo(current || '')
       onWritten(text)
@@ -73,11 +90,21 @@ Camera: ${cameraWords(stage)}.` : idea
         </button>
       </div>
       {names && (
-        <button className={`link-btn mono small writer-stage ${board ? 'pink' : ''}`} onClick={() => setBoard(!board)}>
+        <button className={`link-btn mono small writer-stage ${board ? 'pink' : ''}`} onClick={() => (setBoard(!board), !stage && setStage(defaultStage(names.slice(0, 1))))}>
           {board ? '✦ Leave the staging to the writer' : '✦ Stage it on a board'}
         </button>
       )}
       {names && board && <StageBoard stage={stage} names={names} start={names.slice(0, 1)} onChange={setStage} />}
+      {names && board && onPrevis && (
+        <p className="small writer-note">
+          <button className="btn btn-small" disabled={drawing || !stage?.people?.length} onClick={makePrevis}>
+            {drawing ? 'Drawing…' : previsN ? 'Draw the previs again' : 'Make a previs clip'}
+          </button>{' '}
+          <span className="dim">
+            {previsN ? `The previs is <Video ${previsN}> in your references; the writer tells H3 to follow its camera move.` : 'A grey clip of the camera move and the walks, added as a reference. H3 follows a moving camera far better from a previs than from words.'}
+          </span>
+        </p>
+      )}
       {seeing && !blocker && <p className={`small writer-note ${sees ? 'dim' : 'pink'}`}>✦ {seeing}</p>}
       {blocker && (
         <p className="small pink writer-note">

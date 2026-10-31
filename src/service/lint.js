@@ -4,6 +4,7 @@
 // anyway; fix, when given, is the whole prompt with the problem mended. The rules follow MiniMax's own H3 guide
 // and what IV Studio's test renders showed.
 import { resolveFrames } from './plan.js'
+import { isPrevis } from './staging.js'
 
 export const FIRST_FRAME_LINE = 'For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.'
 export const firstLastLine = (seconds, lastShot = 1) =>
@@ -134,6 +135,13 @@ export function lintPrompt(prompt, { mode = 'text', seconds = 5, media = [], cha
     const named = new Set([...text.matchAll(new RegExp(`<${label} (\\d+)>`, 'g'))].map((m) => Number(m[1])))
     for (const k of named) if (k > have[kind] && !(mode === 'frames' && kind === 'picture')) add('error', 'reference-missing', `The prompt names <${label} ${k}>, but only ${have[kind]} ${kind}${have[kind] === 1 ? ' is' : 's are'} attached.`)
     if (mode === 'reference') for (let k = 1; k <= have[kind]; k++) if (!named.has(k)) add('warning', 'reference-unused', `<${label} ${k}> is attached but the prompt never names it, so H3 may ignore it.`)
+  }
+  // a previs only guides the camera and the blocking: if the prompt describes its mannequins, H3 may draw them
+  const previsAt = media.filter((m) => m.kind === 'video').findIndex((m) => isPrevis(m.file || m.path)) + 1
+  if (mode === 'reference' && previsAt) {
+    const outside = text.replace(/<Video \d+> is a grey previs[^\n]*?not its look[^.\n]*\./g, '')
+    if (/mannequin|grey (?:figure|stage|box)|gray (?:figure|stage|box)/i.test(outside))
+      add('error', 'previs-look', `<Video ${previsAt}> is a previs: only its camera move and where people stand count. The prompt describes its mannequins or grey stage, so H3 may draw them; describe the real people and place instead.`)
   }
   if (mode === 'reference' && s.subject_definitions) {
     const defined = new Set([...s.subject_definitions.matchAll(/<Subject (\d+)>/g)].map((m) => m[1]))

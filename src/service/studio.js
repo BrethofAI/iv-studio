@@ -4,7 +4,9 @@
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { Comfy } from './comfy.js'
+import { probe } from './media.js'
 import { buildPrompt, checkPrompt } from './graph.js'
 import { planFinish, planPreviews } from './plan.js'
 import { adaptGraph, capabilities, withLivePreview } from './remote.js'
@@ -12,6 +14,9 @@ import { Cast, resolveMentions } from './cast.js'
 import { contextIrGraph, fromContextIr, writeHarness, writeLocal, writeStoryLocal } from './prompter.js'
 import { renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
 import { checkSetup, comboOptions } from './setup.js'
+
+// the bundled ffprobe, outside the asar in a packaged app
+const FFPROBE = ffmpegStatic.ffprobePath?.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
 
 const DEFAULT_CHARACTERS = [
   { id: 'tess', name: 'Tess Marlow', lora: 'MiniMax H3\\tess\\tess_mmh3-000040.safetensors', strength: 0.8, trigger: 't3ss4', voiceRefmod: 'characters/tess_audio', visualRefmod: 'characters/tess_visual' }
@@ -179,7 +184,12 @@ export class Studio {
     if (unknown.length) throw new Error(unknown.map((n) => n.message).join(' '))
     const project = projectId ? this.getProject(projectId) : this.createProject(projectName || request.prompt?.slice(0, 40))
     const media = []
-    for (const m of request.media || []) media.push({ ...m, file: await this.stage(m.file || m.path, 'minimax_h3') })
+    for (const m of request.media || []) {
+      // H3's media loader refuses a video without sound when it's told to pair it (a previs, a silent clip)
+      const local = m.file || m.path
+      const sound = m.kind === 'video' && m.hasAudio === undefined && local && fs.existsSync(local) ? { hasAudio: (await probe(FFPROBE, local).catch(() => null))?.hasAudio ?? true } : {}
+      media.push({ ...m, ...sound, file: await this.stage(local, 'minimax_h3') })
+    }
     const voiceLine = request.voiceLine ? await this.stage(request.voiceLine, 'iv_studio') : null
     const characters = characterOverride ? [...this.characters(), characterOverride] : this.characters()
     const plan = planPreviews({ ...request, media, voiceLine, ...(characterOverride && { character: characterOverride.id }) }, characters)

@@ -154,3 +154,93 @@ export function lineCheck(before, stage) {
 
 // A stage as the shot's fields: staging (words) and camera (shot size and move).
 export const stageFields = (stage) => ({ staging: stagingWords(stage), camera: cameraWords(stage) })
+
+// ---------- previs: the plan in motion ----------
+// The previs is a grey clip of the board in motion (previs.js renders it): the camera's move and the walks, frame
+// by frame. Each frame: camera {x, y, z, aim: {x, y, z}} and people [{x, y, facing}], in metres and degrees.
+export const SHADE_WORDS = ['dark grey', 'light grey', 'mid-grey striped', 'white']
+const EYE = { eye: 1.6, low: 0.6, high: 3.2 }
+const smooth = (t) => t * t * (3 - 2 * t)
+const lerp = (a, b, t) => a + (b - a) * t
+const turnTo = (a, b, t) => a + ((((b - a) % 360) + 540) % 360 - 180) * t
+
+// Where the camera looks: the middle of the people it sees, else 4 m ahead.
+function aimPoint(stage) {
+  const seen = (stage.people || []).filter((p) => project(stage, p).on)
+  if (seen.length) return { x: seen.reduce((s, p) => s + p.x, 0) / seen.length, y: seen.reduce((s, p) => s + p.y, 0) / seen.length }
+  const f = dir(stage.camera.facing)
+  return { x: stage.camera.x + f.x * 4, y: stage.camera.y + f.y * 4 }
+}
+
+export function previsFrames(stage, { frames = 124 } = {}) {
+  const c = stage.camera
+  const z = EYE[c.height] || EYE.eye
+  const aimZ = c.height === 'low' ? 1.5 : c.height === 'high' ? 0.9 : 1.4
+  const target = aimPoint(stage)
+  const r = Math.hypot(c.x - target.x, c.y - target.y) || 3
+  const bearing = deg(Math.atan2(c.x - target.x, c.y - target.y)) // from the target to the camera
+  const left = dir(c.facing - 90)
+  // an arc goes the way that moves the camera to its own left (arc-left) or right
+  const leftwards = dot(dir(bearing + 90), left) > 0 ? 1 : -1
+  const out = []
+  for (let i = 0; i < frames; i++) {
+    const t = frames > 1 ? i / (frames - 1) : 0
+    const e = smooth(t)
+    let cam = { x: c.x, y: c.y }
+    let facing = c.facing
+    let aim = null
+    switch (c.move) {
+      case 'push':
+      case 'pull': {
+        const d = (c.move === 'push' ? 1 : -1) * Math.min(1.5, r * 0.4) * e
+        const f = dir(c.facing)
+        cam = { x: c.x + f.x * d, y: c.y + f.y * d }
+        break
+      }
+      case 'pan-left':
+      case 'pan-right':
+        facing = c.facing + (c.move === 'pan-left' ? -25 : 25) * e
+        break
+      case 'arc-left':
+      case 'arc-right': {
+        const a = bearing + (c.move === 'arc-left' ? 1 : -1) * leftwards * 90 * e
+        cam = { x: target.x + Math.sin(rad(a)) * r, y: target.y + Math.cos(rad(a)) * r }
+        aim = target
+        break
+      }
+      case 'track-left':
+      case 'track-right': {
+        const s = (c.move === 'track-left' ? 1 : -1) * 1.5 * e
+        cam = { x: c.x + left.x * s, y: c.y + left.y * s }
+        break
+      }
+      case 'handheld': {
+        // a fixed, gentle wobble (the same clip every time)
+        cam = { x: c.x + 0.05 * Math.sin(t * 7.1) + 0.03 * Math.sin(t * 13.7), y: c.y + 0.04 * Math.sin(t * 5.3) }
+        facing = c.facing + 1.2 * Math.sin(t * 9.4)
+        break
+      }
+    }
+    const f = dir(facing)
+    aim = aim ? { x: aim.x, y: aim.y } : { x: cam.x + f.x * r, y: cam.y + f.y * r }
+    const people = (stage.people || []).map((p) => {
+      if (!p.to) return { x: p.x, y: p.y, facing: p.facing }
+      // they turn to walk, walk from 10% to 75% of the shot, then turn back to their own facing
+      const walkDir = deg(Math.atan2(p.to.x - p.x, p.to.y - p.y))
+      const w = smooth(Math.min(1, Math.max(0, (t - 0.1) / 0.65)))
+      const facingNow = t < 0.1 ? turnTo(p.facing, walkDir, t / 0.1) : t < 0.75 ? walkDir : turnTo(walkDir, p.facing, smooth(Math.min(1, (t - 0.75) / 0.15)))
+      return { x: lerp(p.x, p.to.x, w), y: lerp(p.y, p.to.y, w), facing: facingNow }
+    })
+    out.push({ camera: { x: cam.x, y: cam.y, z, aim: { x: aim.x, y: aim.y, z: aimZ } }, people })
+  }
+  return out
+}
+
+// A previs clip, by where previs.js keeps it (the app data's previs folder).
+export const isPrevis = (file) => /[\\/]previs[\\/][^\\/]+\.mp4$/i.test(String(file || ''))
+
+// What the prompt says about a previs clip used as <Video n>.
+export function previsWords(stage, n = 1) {
+  const who = (stage.people || []).map((p, i) => `the ${SHADE_WORDS[i % 4]} mannequin stands for ${first(p.name)}`).join(', ')
+  return `<Video ${n}> is a grey previs of the camera move and the blocking only: plain mannequins and boxes on a bare grey stage. Follow its camera path, speed and framing, and where the people stand and walk, not its look${who ? `; ${who}` : ''}.`
+}

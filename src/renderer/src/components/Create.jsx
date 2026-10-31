@@ -409,6 +409,11 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
           context={{ mode: form.mode, seconds: form.seconds, aspect: form.aspect, character: form.character ?? 'none', media: form.media.map((m) => ({ kind: m.kind, file: m.path })) }}
           current={form.prompt}
           names={char ? [char.name, ...characters.filter((c) => c.id !== char.id).map((c) => c.name), 'Someone'] : ['Someone', ...characters.map((c) => c.name)]}
+          onPrevis={(clip) => {
+            // a previs is a video reference: References mode keeps the pictures (Text has none)
+            if (form.mode !== 'reference') set({ mode: 'reference', media: form.media.filter((m) => m.kind === 'picture') })
+            addFiles([{ kind: 'video', path: clip.file }])
+          }}
           onWritten={(prompt) => set({ prompt })}
           notify={notify}
           go={go}

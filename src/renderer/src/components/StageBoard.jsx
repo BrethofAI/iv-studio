@@ -56,7 +56,15 @@ export default function StageBoard({ stage, names = [], start = null, before = n
   }
   const setPerson = (i, patch) => commit({ ...s, people: s.people.map((p, k) => (k === i ? { ...p, ...patch } : p)) })
   const setCam = (patch) => commit({ ...s, camera: { ...s.camera, ...patch } })
-  const add = (name) => commit({ ...s, people: [...s.people, { name, x: 0, y: 0.5, facing: 180, to: null, lookAt: null }] })
+  // someone new stands in the first free place beside the others, turned to them
+  const add = (name) => {
+    const x = [0, 1, -1, 2, -2, 3, -3].find((v) => !s.people.some((p) => Math.abs(p.x - v) < 0.6 && Math.abs(p.y - 1) < 0.6)) ?? 0
+    const others = s.people.length ? s.people.reduce((a, p) => a + p.x, 0) / s.people.length : x
+    const facing = s.people.length ? (others < x ? -90 : 90) : 180
+    // someone alone and still facing the camera turns to the newcomer
+    const people = s.people.map((p) => (s.people.length === 1 && p.facing === 180 && !p.to ? { ...p, facing: p.x < x ? 90 : -90, lookAt: name } : p))
+    commit({ ...s, people: [...people, { name, x, y: 1, facing, to: null, lookAt: s.people.length === 1 ? s.people[0].name : null }] })
+  }
   const remove = (i) => commit({ ...s, people: s.people.filter((_, k) => k !== i).map((p) => (p.lookAt === s.people[i].name ? { ...p, lookAt: null } : p)) })
   const words = useMemo(() => stagingWords(s), [s])
   const cam = useMemo(() => cameraWords(s), [s])

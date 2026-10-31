@@ -13,6 +13,7 @@ import { DIRECTING, DIRECTING_SOURCE } from './directing.js'
 import { loadGuide } from './h3guide.js'
 import { harnessJson } from './harness.js'
 import { FIRST_FRAME_LINE, firstLastLine, lintPrompt } from './lint.js'
+import { isPrevis } from './staging.js'
 
 // The bundled ffmpeg, outside the asar in a packaged app (as in main and the MCP server).
 const unpacked = (p) => p && p.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
@@ -216,6 +217,9 @@ ${DIRECTING}`
 }
 
 // full: the whole directing method (Claude Code, Codex); the local writer keeps to the short DIRECTION rules.
+// A previs (previs.js) steers the camera and the blocking; its mannequins and boxes must never become the subjects.
+const PREVIS_RULE = (n) => `- <Video ${n}> is a grey previs: plain mannequins and boxes stand in for the people and the set. Use it ONLY for the camera's path, speed and framing, and where the people stand and walk. Never define a <Subject> from it and never mention mannequins, grey, boxes or its look anywhere: the people are the character and cast of the idea, the place is the idea's, and its greys say nothing about clothes, colours or light. Name it once in the description, as the idea words it, and in retention_analysis as "<Video ${n}> (camera movement and blocking): partially_preserved - ...".`
+
 export function systemPrompt({ mode = 'text', seconds = 5, character, sequence = false, media = [], guide = null, full = false }) {
   const parts = [RULES]
   if (character) parts.push(CHARACTER_RULE(firstName(character)))
@@ -224,8 +228,10 @@ export function systemPrompt({ mode = 'text', seconds = 5, character, sequence =
   if (mode === 'reference' && media.length) {
     const count = { picture: 0, video: 0, audio: 0 }
     const label = { picture: 'Picture', video: 'Video', audio: 'Audio' }
-    parts.push('Attached references, in order:\n' + media.map((m) => `<${label[m.kind]} ${++count[m.kind]}> (${m.kind}: ${path.basename(m.file || m.path || '')})`).join('\n'))
+    parts.push('Attached references, in order:\n' + media.map((m) => `<${label[m.kind]} ${++count[m.kind]}> (${isPrevis(m.file || m.path) ? 'video: a grey previs, for the camera move and blocking only' : `${m.kind}: ${path.basename(m.file || m.path || '')}`})`).join('\n'))
     if (count.audio) parts.push(AUDIO_RULE)
+    const p = media.filter((m) => m.kind === 'video').findIndex((m) => isPrevis(m.file || m.path)) + 1
+    if (p) parts.push(PREVIS_RULE(p))
   }
   if (sequence) parts.push(SEQUENCE_RULES)
   parts.push(durationRule(seconds))
@@ -278,7 +284,10 @@ export function imagePlan(media, mode) {
     if (!file || !fs.existsSync(file)) continue
     if (m.kind === 'picture' && mode === 'frames' && k <= 2) plan.push({ file, label: k === 1 ? 'the first frame (the video opens exactly on it)' : 'the last frame (the video ends on it)' })
     else if (m.kind === 'picture' && mode === 'reference') plan.push({ file, label: `<Picture ${k}>` })
-    else if (m.kind === 'video' && mode === 'reference') plan.push({ file, at: 0.15, label: `<Video ${k}>, a frame near its start` }, { file, at: 0.6, label: `<Video ${k}>, a frame later on` })
+    else if (m.kind === 'video' && mode === 'reference') {
+      const what = isPrevis(file) ? ' (the grey previs: camera and blocking only)' : ''
+      plan.push({ file, at: 0.15, label: `<Video ${k}>${what}, a frame near its start` }, { file, at: 0.6, label: `<Video ${k}>${what}, a frame later on` })
+    }
     else if (m.kind === 'video' && mode === 'continue' && k === 1) plan.push({ file, at: 'end', label: 'the last frame of the video this shot continues' })
   }
   return plan.slice(0, MAX_IMAGES)

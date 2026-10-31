@@ -14,6 +14,7 @@ import { GUIDE_SOURCE, loadGuide } from '../service/h3guide'
 import { blocking, lintPrompt } from '../service/lint'
 import { Ranker } from '../service/ranking'
 import { Reviewer } from '../service/review'
+import { Previs } from '../service/previs'
 import { CAMERA_MOVES, lineCheck } from '../service/staging'
 import { DIRECTING, DIRECTING_SOURCE } from '../service/directing'
 import { menuMessage, START_MENU } from '../service/startmenu'
@@ -742,6 +743,8 @@ tool('rank_takes', "Rank a finished previews job's takes: each is scored on hear
   return { ranking, ...(picked ? { weights: ranker.learn(jobId, picked) } : {}) }
 })
 const reviewer = new Reviewer({ studio: () => studio, voices: () => voices, ffmpeg: edits.ffmpeg })
+const previs = new Previs({ resourcesDir: resourcesDir(), dataDir: DATA, browser: () => shinobi.browser(), ffmpeg: edits.ffmpeg })
+tool('make_previs', "Draw a staging board plan in motion: a grey previs clip (plain mannequins and boxes) of the camera's move and the walks, about 3 s on this PC. H3 follows a previs's camera path and framing much better than the same move in words. Put the clip in generate_previews' media as a video in reference mode, and put words (it names <Video 1>; renumber it if other videos come first) into the prompt. Only worth it when the camera moves (arc, push, pull, track, pan) or someone walks; a static shot needs only the staging words.", { stage: stageSchema, seconds: z.number().min(1).max(15).default(5), aspect: z.enum(Object.keys(ASPECTS)).default('16:9') }, ({ stage, seconds, aspect }) => previs.make({ stage, seconds, aspect }))
 tool('review_take', "Review one take against its prompt, as a director would: the person's prompt writer (Claude Code, Codex, or the local vision model) looks at frames from the take and names each problem with the seconds it happens in (identity, wardrobe, anatomy, contact, staging, order, feeling, words), says what works, and picks one fix: none, revise_prompt (with revisedPrompt, already through the checker), change_reference, split_action, clean_stretch (with from and to) or edit. Saved on the job as reviews. jobId is a previews job (with candidate) or a finish job. Then, for revise_prompt, render revisedPrompt with generate_previews into the same projectId.", { jobId: z.string(), candidate: z.number().int().min(1).max(3).optional().describe('The take, for a previews job') }, async ({ jobId, candidate }) => {
   const job = studio.getJob(jobId, { refresh: false })
   return reviewer.review(jobId, job.kind === 'finish' ? 0 : candidate || 1, writerOf(readSettings(BASE)))

@@ -223,6 +223,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
   system: { stats: call('system:stats') },
   rank: { job: call('rank:job'), learn: call('rank:learn') },
   review: { take: call('review:take') },
+  previs: { make: call('previs:make') },
   cast: { list: call('cast:list'), places: call('cast:places'), savePlace: call('cast:savePlace'), deletePlace: call('cast:deletePlace') },
   render: { plan: call('render:plan'), planFinish: call('render:planFinish'), previews: call('render:previews'), finish: call('render:finish'), enhance: call('render:enhance') },
   jobs: { watch: call('jobs:watch'), cancel: call('jobs:cancel'), onUpdate: on('jobs:update'), onLive: on('jobs:live') },

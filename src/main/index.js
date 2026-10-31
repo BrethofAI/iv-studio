@@ -20,6 +20,7 @@ import { CONTEXT_IR_PRICE, ollamaStatus, pullModel } from '../service/prompter'
 import { Studio } from '../service/studio'
 import { Ranker } from '../service/ranking'
 import { Reviewer } from '../service/review'
+import { Previs } from '../service/previs'
 import { SCENES, TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
 import { CharacterCatalog } from '../service/characters'
@@ -720,6 +721,9 @@ app.whenReady().then(() => {
   handle('rank:learn', (id, candidate) => ranker.learn(id, candidate))
   reviewer = new Reviewer({ studio: () => studio, voices: () => voices, ffmpeg: edits.ffmpeg })
   handle('review:take', async (id, candidate) => (await reviewer.review(id, candidate, writerOf(readSettings(BASE))), studio.publicJob(studio.getJob(id))))
+  // a staging board in motion: a grey previs clip for <Video n> (Edge or Chrome draws it, about 3 s)
+  const previs = new Previs({ resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), dataDir: DATA, browser: () => shinobi.browser(), ffmpeg: edits.ffmpeg })
+  handle('previs:make', (opts) => previs.make(opts))
   handle('render:enhance', async (opts) => {
     await freeVoices()
     const job = await studio.enhanceFinal(opts)
