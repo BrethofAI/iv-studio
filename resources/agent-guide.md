@@ -47,6 +47,18 @@ writing a prompt yourself; `write_prompt` already follows it.
 - **Check before rendering.** `check_prompt` (same arguments as `generate_previews`) lists what H3 is likely to
   misread, each with a level and sometimes a `fix` (the whole prompt mended). `generate_previews` refuses a prompt
   with errors unless you pass `force: true`; fix them instead unless the person says otherwise.
+- **Ranked takes.** When a previews run finishes in the app, its takes are ranked: every spoken line heard back,
+  looking like the picked character, no freezing, sharpness against the others. `get_job` shows `ranking` (each
+  take's parts, score and reasons, the best marked when it stands out). `rank_takes` ranks a run now, and with
+  `picked` records the person's choice, which shifts the weights towards what they keep picking.
+- **Quality.** `steps: 4` is Draft (quicker previews); 8 is the default. The finish is the same either way.
+- **Enhancer.** A finish's `enhancer` is `dlss` (the default: DLSS 5 in the finish, with the optional RTX 2x and
+  frame generation) or `seedvr2` (the finish skips DLSS, then SeedVR2 restores detail to a short side of
+  `enhanceResolution`, 1080, 1440 or 2160, at 24 fps; slower). The SeedVR2 step is its own job, started by itself
+  when the finish is done; `get_job` on the finish shows its id as `enhanceJob`. Ask the person which they want
+  when it matters: DLSS 5 is quick, SeedVR2 adds more real detail to faces and textures.
+- **Enhance afterwards.** `enhance_final` runs an already finished video through either engine as a new job in the
+  same shot: `engine: "seedvr2"` with `resolution`, or `engine: "dlss"` with `scale` 1 (clean up) or 2. This PC only.
 - **@ mentions.** `list_cast` gives what a prompt can name: `@Tess` (the picked character becomes `{char}`),
   another character with a face picture, or a place (`@BusStop`). A shot that mentions someone or somewhere with a
   picture renders in References mode with the pictures attached, each as `<Subject N>`. `save_place` adds a place

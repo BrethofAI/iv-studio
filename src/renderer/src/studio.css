@@ -504,8 +504,31 @@ input.mini {
 }
 .progress {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 14px;
+}
+/* a running render's latest step, live (Live.jsx) */
+.live-frame {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+.live-frame img {
+  max-width: 448px;
+  max-height: 300px;
+  border-radius: 4px;
+  background: #000;
+  image-rendering: auto;
+}
+.live-frame.compact {
+  margin-top: 6px;
+}
+.live-frame.compact img {
+  max-width: 100%;
+  max-height: 96px;
 }
 .bar {
   flex: 1;
@@ -549,6 +572,34 @@ input.mini {
   border: 1px solid var(--line);
   background: var(--ink-2);
 }
+/* a ranked take (ranking.js): its score and reasons above the video, the best one marked */
+.take-rank {
+  display: grid;
+  gap: 2px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  min-height: 44px;
+}
+.candidate.best {
+  border-color: var(--pink);
+}
+.candidate.best .take-rank .mono {
+  color: var(--pink);
+}
+.rank-btn {
+  margin: 6px 0;
+}
+.enhance-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.final.enhanced {
+  margin-top: 14px;
+  border-left: 3px solid var(--pink);
+  padding-left: 12px;
+}
 .candidate.on {
   border-color: var(--red);
 }
@@ -575,6 +626,12 @@ input.mini {
 }
 .finish-panel .row {
   grid-template-columns: 130px 1fr;
+}
+.enhancer-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
 }
 .finish-go {
   display: flex;

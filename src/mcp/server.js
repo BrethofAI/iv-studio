@@ -12,6 +12,7 @@ import { z } from 'zod'
 import { INSTRUCTIONS, readGuide } from '../service/agent'
 import { GUIDE_SOURCE, loadGuide } from '../service/h3guide'
 import { blocking, lintPrompt } from '../service/lint'
+import { Ranker } from '../service/ranking'
 import { menuMessage, START_MENU } from '../service/startmenu'
 import { Edits, editLength, FORMATS } from '../service/edits'
 import { EditGen, GEN_KINDS } from '../service/editgen'
@@ -92,7 +93,9 @@ const finish = {
   upscale2x: z.boolean().default(false).describe('RTX 2x after DLSS (2 MP -> about 4K)'),
   fps: z.number().int().default(0).describe(`Frame generation: ${FRAME_GEN_FPS.join(', ')} (0 = off)`),
   audio: z.enum(['pass', 'preview', 'voice']).default('pass').describe('Final sound: the 2 MP pass, the picked preview (keeps a cloned voice), or the voice line itself'),
-  rerollSeed: z.number().int().optional()
+  rerollSeed: z.number().int().optional(),
+  enhancer: z.enum(['dlss', 'seedvr2']).default('dlss').describe('dlss: DLSS 5 in the finish (noise reduction, upscale2x, fps). seedvr2: the finish skips DLSS and SeedVR2 then restores detail to enhanceResolution (24 fps); follow the enhanceJob of the finish job with get_job'),
+  enhanceResolution: z.union([z.literal(1080), z.literal(1440), z.literal(2160)]).default(1080).describe('seedvr2: the short side')
 }
 
 // The full how-to, as plain markdown (resources/agent-guide.md, also the Claude Code skill), or MiniMax's own H3
@@ -133,6 +136,7 @@ const checkRequest = (r) => {
 }
 tool('list_cast', 'Who and what a prompt can mention with @: character presets (@Tess: the picked character becomes {char}; anyone else with a face picture is attached as a reference) and places (@BusStop: attached as the place). A shot that mentions a member with a picture renders in References mode with the pictures attached, as <Subject N>.', {}, () => ({ items: studio.cast.members().map(({ handle, kind, name, picture, description, film }) => ({ mention: `@${handle}`, kind, name, hasPicture: !!picture, description, film })) }))
 tool('save_place', 'Save a place to mention as @Name in any prompt: a name, a picture (an image file path) and a short description of the room or setting.', { name: z.string(), picture: z.string().describe('An image file path'), description: z.string().default(''), id: z.string().optional().describe('To change a saved place') }, (args) => studio.cast.savePlace(args))
+tool('enhance_final', "Enhance a finished shot: engine seedvr2 (SeedVR2 3B restores detail and upscales to a short side of resolution, sound kept) or dlss (DLSS 5 with the finish's own noise reduction, at scale 1 or 2). A new job in the same shot; follow with get_job. On this PC's ComfyUI only. jobId is the finish job.", { jobId: z.string(), engine: z.enum(['seedvr2', 'dlss']).default('seedvr2'), resolution: z.union([z.literal(1080), z.literal(1440), z.literal(2160)]).default(1080).describe('seedvr2: the short side'), scale: z.union([z.literal(1), z.literal(2)]).default(1).describe('dlss: 1 cleans up at the same size, 2 doubles it') }, async (args) => (readSettings(BASE).target === 'cloud' || (await voices.release()), studio.enhanceFinal(args)))
 tool('check_prompt', "Check an H3 prompt before rendering: the prompt checker lists what H3 is likely to misread (wrong opening line for frames, cut times past the end, more lines than fit the time, quotes or names inside <d>, missing speaker IDs, references attached but never named, describing a LoRA character's face, filler words, too many camera moves). Each finding has a level (error blocks generate_previews unless force), a message and sometimes fix: the whole prompt mended.", { ...request }, (args) => ({ findings: checkRequest(args) }))
 tool('generate_previews', 'Start preview candidates. Returns a job at once; follow with get_job. The prompt checker runs first: errors stop it (fix them, or pass force: true when you mean it).', { ...request, projectId: z.string().optional(), projectName: z.string().optional(), force: z.boolean().default(false) }, async ({ force, ...args }) => {
   const errors = blocking(checkRequest(args))
@@ -140,7 +144,7 @@ tool('generate_previews', 'Start preview candidates. Returns a job at once; foll
   if (readSettings(BASE).target !== 'cloud') await voices.release()
   return studio.generatePreviews(args)
 })
-tool('finish_candidate', "Finish one preview candidate (2 MP pass + DLSS, optional RTX 2x and frame generation) from its recorded settings. Reuses the candidate's saved latent.", { jobId: z.string().describe('The previews job id'), ...finish }, (args) => studio.finishCandidate(args))
+tool('finish_candidate', "Finish one preview candidate (2 MP pass, then DLSS 5 with optional RTX 2x and frame generation, or SeedVR2 with enhancer seedvr2) from its recorded settings. Reuses the candidate's saved latent.", { jobId: z.string().describe('The previews job id'), ...finish }, (args) => studio.finishCandidate(args))
 const sequenceFields = {
   name: z.string().optional(),
   method: z.enum(['take', 'shots']).optional().describe('take: every shot in one seamless render. shots: hunt and finish shot by shot, each continuing from the last.'),
@@ -712,6 +716,14 @@ tool('save_character', 'Add a character preset, or update one by id. The LoRA mu
 })
 // ---------- Audio: voices and spoken lines (IV Studio's own engine: VoxCPM2 and Whisper) ----------
 const voices = new Voices({ dataDir: DATA, resourcesDir: resourcesDir(), ffmpeg: edits.ffmpeg, comfy: studio.comfy })
+// Take ranking (ranking.js): the same scores the window shows, saved on the job
+const ranker = new Ranker({ studio: () => studio, voices: () => voices, shinobi: () => shinobi, ffmpeg: edits.ffmpeg, dataDir: DATA })
+tool('rank_takes', "Rank a finished previews job's takes: each is scored on hearing every spoken line (Whisper, when the prompt has lines and voices are set up), looking like the picked character (InsightFace, when the face models are set up), not freezing, and sharpness against the others; the best is marked with its reasons. The app ranks runs on its own as they finish; get_job then shows ranking. Pass picked to record the person's choice, which teaches the weights.", { jobId: z.string(), picked: z.number().int().min(1).max(3).optional().describe("The take the person chose, to learn from") }, async ({ jobId, picked }) => {
+  const job = studio.getJob(jobId)
+  const ranking = job.ranking || (await ranker.rank(jobId))
+  if (!ranking) throw new Error('Only a finished previews job with its takes on this PC can be ranked.')
+  return { ranking, ...(picked ? { weights: ranker.learn(jobId, picked) } : {}) }
+})
 process.on('exit', () => voices.release())
 studio.beforeRender = () => voices.release()
 tool('voice_status', `Whether IV Studio's voice engine is set up (${VOICE_ENGINES.map((e) => `${e.label}: ${e.note}`).join(' ')} Whisper large-v3 turbo, MIT, reads the words in recordings). installed false: ask the person to press Set up voices on Audio > Voices, or run setup_voices with their OK.`, {}, () => voices.status())

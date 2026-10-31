@@ -20,8 +20,25 @@ export function capabilities(objectInfo, systemStats) {
     dlss: !!objectInfo.DLSS5_Enhance_Video,
     rife: !!objectInfo['RIFE VFI'],
     upscale2x: !!objectInfo.DLSS5_Enhance_Video || upscalers.includes(CLOUD_UPSCALER),
-    fps: objectInfo.DLSS5_Enhance_Video ? DLSS_FPS : objectInfo['RIFE VFI'] ? CLOUD_FPS : [0]
+    fps: objectInfo.DLSS5_Enhance_Video ? DLSS_FPS : objectInfo['RIFE VFI'] ? CLOUD_FPS : [0],
+    // KJNodes' per-step preview with H3's tiny VAE (models/vae_approx/taeh3.safetensors), for live previews
+    livePreview: comboOptions(objectInfo.ModelPreviewOverrideKJ?.input?.optional?.tiny_vae).includes(LIVE_TAE)
   }
+}
+const comboOptions = (spec) => (Array.isArray(spec?.[0]) ? spec[0] : spec?.[1]?.options) || []
+
+// Live previews: the model that feeds the preview samplers (the preview guider, node 14) is wrapped in KJNodes'
+// ModelPreviewOverrideKJ, which sends a small picture of each step over ComfyUI's websocket (kj_preview_override)
+// to the client that queued the prompt. Only previews; the finishing pass is left as it is.
+export const LIVE_TAE = 'taeh3.safetensors'
+export const LIVE_NODE = 'iv_live'
+export function withLivePreview(graph, { guider = '14', size = 448 } = {}) {
+  const g = structuredClone(graph)
+  const model = g[guider]?.inputs?.model
+  if (!model || g[LIVE_NODE]) return g
+  g[LIVE_NODE] = { class_type: 'ModelPreviewOverrideKJ', inputs: { model, max_resolution: size, jpeg_quality: 72, suppress_default_preview: true, preview_frames: 1, preview_fps: 12, tiny_vae: LIVE_TAE } }
+  g[guider].inputs.model = [LIVE_NODE, 0]
+  return g
 }
 
 function slashes(v) {

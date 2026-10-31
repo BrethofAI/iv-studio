@@ -18,6 +18,7 @@ import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { ModelInstaller } from '../service/models'
 import { CONTEXT_IR_PRICE, ollamaStatus, pullModel } from '../service/prompter'
 import { Studio } from '../service/studio'
+import { Ranker } from '../service/ranking'
 import { SCENES, TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
 import { CharacterCatalog } from '../service/characters'
@@ -78,6 +79,7 @@ let music = null
 let images = null
 let civitai = null
 const pending = new Set() // job ids the window is waiting on
+let ranker = null // ranks finished previews (ranking.js), set up with the services it reads
 
 function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
@@ -112,6 +114,8 @@ function makeStudio() {
   if (!installer?.running) installer = new ModelInstaller({ comfy: studio.comfy, manifest: studio.manifest, onUpdate: (u) => send('models:update', u) })
   stopWatch = studio.watch((msg) => {
     if (msg.type === 'progress' || msg.type === 'executing' || msg.type === 'execution_success' || msg.type === 'execution_error') pump()
+    // a live preview step: to the window, keyed by the prompt (the shot page and the queue match it to their job)
+    if (msg.type === 'iv_live') send('jobs:live', msg.data)
   })
 }
 
@@ -126,6 +130,10 @@ async function pump() {
         const job = await studio.refreshJob(id)
         send('jobs:update', job)
         if (['success', 'error', 'cancelled'].includes(job.status)) pending.delete(id)
+        // a SeedVR2 finish starts its enhance step (Studio.refreshJob): watch that too
+        if (job.enhanceJob && !pending.has(job.enhanceJob)) pending.add(job.enhanceJob)
+        // finished previews are ranked in the background (ranking.js); the window hears when it's done
+        if (job.kind === 'previews' && job.status === 'success' && !job.ranking && ranker) ranker.rank(id).then((r) => r && send('jobs:update', studio.publicJob(studio.getJob(id))), () => {})
       } catch (err) {
         send('jobs:update', { id, status: 'unknown', note: err.message })
       }
@@ -704,6 +712,16 @@ app.whenReady().then(() => {
   handle('render:planFinish', (jobId, finish) => studio.planFinishJob(jobId, finish))
   // A voice engine still holding the GPU would slow H3 down: let it go before a render on this PC.
   const freeVoices = () => (readSettings(BASE).target === 'cloud' ? null : voices.release())
+  // Take ranking: after a previews run finishes, and when asked; picks teach it
+  ranker = new Ranker({ studio: () => studio, voices: () => voices, shinobi: () => shinobi, ffmpeg: edits.ffmpeg, dataDir: DATA })
+  handle('rank:job', async (id) => (await ranker.rank(id), studio.publicJob(studio.getJob(id))))
+  handle('rank:learn', (id, candidate) => ranker.learn(id, candidate))
+  handle('render:enhance', async (opts) => {
+    await freeVoices()
+    const job = await studio.enhanceFinal(opts)
+    pending.add(job.id)
+    return job
+  })
   // The title bar's GPU and memory readout: this PC's RAM, and the GPU as ComfyUI sees it (none in cloud mode).
   handle('system:stats', async () => {
     if (readSettings(BASE).target === 'cloud') return null

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { LiveFrame } from './Live'
 import { ask } from './Confirm'
 
 // The render queue at the foot of the sidebar: what ComfyUI is rendering and what waits, from any page, so the
@@ -14,7 +15,8 @@ const KIND = {
   music: 'Song',
   replace: 'Replace',
   still: 'Picture',
-  write_prompt: 'Prompt writer'
+  write_prompt: 'Prompt writer',
+  enhance: 'Enhance'
 }
 const kindLabel = (k) => (k?.startsWith('picture') ? 'Picture' : KIND[k] || 'Render')
 const clock = (ms) => {
@@ -78,6 +80,7 @@ export default function RenderQueue({ remote, notify, open }) {
                   <span style={{ width: `${pct ?? 0}%` }} />
                 </span>
               )}
+              {item.state === 'running' && item.ours && <LiveFrame promptId={item.promptId} compact />}
             </button>
             {item.ours && (
               <button className="render-queue-x" title="Cancel this render" onClick={() => cancel(item)}>

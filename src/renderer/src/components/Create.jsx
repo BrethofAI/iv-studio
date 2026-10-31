@@ -15,6 +15,12 @@ const MODES = [
 ]
 const ASPECTS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9']
 const PREVIEW_MP = [0.3, 0.4, 0.6, 0.8]
+// Preview quality: the turbo add-on IV Studio uses (DMAD) was trained for 4 steps; Standard gives it 8. A finish
+// re-uses the picked preview's latent, so the 2 MP pass is the same either way.
+const QUALITY = [
+  [4, 'Draft', '4 steps: about 40% quicker previews, a touch softer. Good for hunting.'],
+  [8, 'Standard', '8 steps: the default.']
+]
 
 const TEMPLATE = `integrated_multimodal_description: [Shot 1] Live-action, filmed on a smartphone. There is no writing anywhere in the picture: no signs, no labels, no captions. A medium close-up of {char}, a woman wearing ___, ___. The camera is handheld, a gentle sway. {char} (S1) ___, then says: <d>[English] ___</d>
 
@@ -505,6 +511,17 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             </div>
           </div>
         )}
+        <div className="row">
+          <span className="row-label">Quality</span>
+          <div className="segmented">
+            {QUALITY.map(([steps, label]) => (
+              <button key={steps} className={form.steps === steps ? 'on' : ''} onClick={() => set({ steps })}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <span className="dim small">{QUALITY.find(([s]) => s === form.steps)?.[2] || `${form.steps} steps (set under Advanced)`}</span>
+        </div>
         <div className="row">
           <span className="row-label">Seed</span>
           <div className="seed">

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { media } from '../media'
 import Hero from './Hero'
 import Findings from './Findings'
+import { LiveFrame } from './Live'
 import { CompareViewer, PromptDiff, runChanges } from './Compare'
 import { lintPrompt } from '../../../service/lint'
 
@@ -23,14 +24,16 @@ export function Progress({ job }) {
       <button className="link-btn mono" onClick={() => window.ivstudio.jobs.cancel(job.id)}>
         Cancel
       </button>
+      {job.status !== 'queued' && <LiveFrame promptId={job.promptId} takes={job.plan?.resolved?.previews || 1} />}
     </div>
   )
 }
 
-function FinishPanel({ job, candidate, onStart, notify, caps }) {
+function FinishPanel({ job, candidate, onStart, notify, caps, remote }) {
   const FPS = caps?.fps || [0, 30, 50, 60, 120]
   const dlss = caps?.dlss !== false
-  const [opts, setOpts] = useState({ megapixels: 2, upscale2x: false, fps: 0, audio: 'pass' })
+  const [opts, setOpts] = useState({ megapixels: 2, upscale2x: false, fps: 0, audio: 'pass', enhancer: 'dlss', enhanceResolution: 1080 })
+  const seedvr2 = opts.enhancer === 'seedvr2'
   const [size, setSize] = useState(null)
   const [busy, setBusy] = useState(false)
   const set = (patch) => setOpts((o) => ({ ...o, ...patch }))
@@ -70,27 +73,58 @@ function FinishPanel({ job, candidate, onStart, notify, caps }) {
           </div>
         </div>
       )}
-      <div className="row">
-        <span className="row-label">{dlss ? 'RTX upscale' : '2× upscale'}</span>
-        <div className="segmented">
-          <button className={!opts.upscale2x ? 'on' : ''} onClick={() => set({ upscale2x: false })}>
-            Off
-          </button>
-          <button className={opts.upscale2x ? 'on' : ''} onClick={() => set({ upscale2x: true })}>
-            2×
-          </button>
+      {dlss && !remote && (
+        <div className="row">
+          <span className="row-label">Enhancer</span>
+          <div className="enhancer-pick">
+            <div className="segmented">
+              <button className={!seedvr2 ? 'on' : ''} onClick={() => set({ enhancer: 'dlss' })}>
+                DLSS 5
+              </button>
+              <button className={seedvr2 ? 'on' : ''} onClick={() => set({ enhancer: 'seedvr2', upscale2x: false, fps: 0 })}>
+                SeedVR2
+              </button>
+            </div>
+            <span className="dim small">{seedvr2 ? 'Restores detail after the finish. Slower; 24 fps.' : 'Cleans up and can upscale 2× and add frames. Quick.'}</span>
+          </div>
         </div>
-      </div>
-      <div className="row">
-        <span className="row-label">Frame rate</span>
-        <div className="segmented">
-          {FPS.map((f) => (
-            <button key={f} className={opts.fps === f ? 'on' : ''} onClick={() => set({ fps: f })}>
-              {f ? f : '24'}
-            </button>
-          ))}
+      )}
+      {seedvr2 ? (
+        <div className="row">
+          <span className="row-label">SeedVR2 size</span>
+          <div className="segmented">
+            {[1080, 1440, 2160].map((r) => (
+              <button key={r} className={opts.enhanceResolution === r ? 'on' : ''} onClick={() => set({ enhanceResolution: r })}>
+                {r}p
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="row">
+            <span className="row-label">{dlss ? 'RTX upscale' : '2× upscale'}</span>
+            <div className="segmented">
+              <button className={!opts.upscale2x ? 'on' : ''} onClick={() => set({ upscale2x: false })}>
+                Off
+              </button>
+              <button className={opts.upscale2x ? 'on' : ''} onClick={() => set({ upscale2x: true })}>
+                2×
+              </button>
+            </div>
+          </div>
+          <div className="row">
+            <span className="row-label">Frame rate</span>
+            <div className="segmented">
+              {FPS.map((f) => (
+                <button key={f} className={opts.fps === f ? 'on' : ''} onClick={() => set({ fps: f })}>
+                  {f ? f : '24'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
       {!single && (
         <div className="row">
           <span className="row-label">Sound</span>
@@ -133,6 +167,36 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
     if (next.length === 2) setComparing(true)
   }
   const isMarked = (key) => marked.some((m) => m.key === key)
+  // take ranking (ranking.js): runs as they finish are ranked by the app; older ones on request
+  const [ranking, setRanking] = useState({})
+  async function rank(run) {
+    setRanking((r) => ({ ...r, [run.id]: true }))
+    try {
+      const job = await window.ivstudio.rank.job(run.id)
+      setJobs((all) => ({ ...all, [job.id]: job }))
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setRanking((r) => ({ ...r, [run.id]: false }))
+    }
+  }
+  // Enhance (SeedVR2) on a finished video: a new job under it
+  const [enhancing, setEnhancing] = useState({})
+  async function enhance(f, opts) {
+    setEnhancing((e) => ({ ...e, [f.id]: true }))
+    try {
+      onStart(await window.ivstudio.render.enhance({ jobId: f.id, ...opts }))
+      notify(`Enhancing with ${opts.engine === 'dlss' ? `DLSS 5 at ${opts.scale}×` : `SeedVR2 at ${opts.resolution}p`}. It shows here when it's done.`, 'info')
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setEnhancing((e) => ({ ...e, [f.id]: false }))
+    }
+  }
+  const pick = (run, candidate) => {
+    setPicked({ ...picked, [run.id]: candidate })
+    if (run.ranking) window.ivstudio.rank.learn(run.id, candidate).catch(() => {})
+  }
 
   const load = useCallback(async () => {
     const { project, jobs } = await window.ivstudio.projects.get(projectId)
@@ -149,6 +213,11 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
   }, [load])
 
   const jobs = useMemo(() => jobIds.map((id) => live[id]).filter(Boolean), [jobIds, live])
+  // a finish with SeedVR2 as its enhancer starts its enhance step when it's done: that job joins the page
+  useEffect(() => {
+    const chained = jobs.map((j) => j.enhanceJob).filter((id) => id && !jobIds.includes(id))
+    if (chained.length) load()
+  }, [jobs, jobIds, load])
   const runs = jobs.filter((j) => j.kind === 'previews').reverse()
   const finishesOf = (id) => jobs.filter((j) => j.parent === id).reverse()
 
@@ -239,25 +308,39 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                 </button>
               </details>
             )}
+            {previews.length > 1 && !run.ranking && (
+              <button className="link-btn mono small rank-btn" disabled={!!ranking[run.id]} onClick={() => rank(run)}>
+                {ranking[run.id] ? 'Ranking the takes… (a minute when there are lines to hear)' : '★ Rank these takes'}
+              </button>
+            )}
             {previews.length > 0 && (
               <div className={`candidates n${previews.length}`}>
-                {previews.map((o) => (
-                  <figure key={o.candidate} className={`candidate ${picked[run.id] === o.candidate ? 'on' : ''}`}>
+                {previews.map((o) => {
+                  const r = run.ranking?.takes?.find((t) => t.candidate === o.candidate)
+                  return (
+                  <figure key={o.candidate} className={`candidate ${picked[run.id] === o.candidate ? 'on' : ''} ${r?.best ? 'best' : ''}`}>
+                    {r && (
+                      <div className="take-rank" title={Object.entries(r.parts).filter(([, v]) => v != null).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(' · ')}>
+                        <span className="mono small">{r.best ? '★ Best take' : `Score ${Math.round((r.score ?? 0) * 100)}`}</span>
+                        {r.reasons?.length > 0 && <span className="small dim">{r.reasons.join(' · ')}</span>}
+                      </div>
+                    )}
                     <video src={media(o.url)} controls loop preload="metadata" />
                     <figcaption>
                       <span className="mono">#{o.candidate} · seed {o.seed}</span>
                       <button className={`link-btn mono small ${isMarked(`${run.id}:${o.candidate}`) ? 'pink' : ''}`} onClick={() => mark(takeOf(o.candidate, o.url, `#${o.candidate} · seed ${o.seed}`))}>
                         {isMarked(`${run.id}:${o.candidate}`) ? 'Marked' : 'Compare'}
                       </button>
-                      <button className="btn btn-small" onClick={() => setPicked({ ...picked, [run.id]: o.candidate })}>
+                      <button className="btn btn-small" onClick={() => pick(run, o.candidate)}>
                         {picked[run.id] === o.candidate ? 'Picked' : 'Pick'}
                       </button>
                     </figcaption>
                   </figure>
-                ))}
+                  )
+                })}
               </div>
             )}
-            {picked[run.id] && <FinishPanel job={run} candidate={picked[run.id]} onStart={onStart} notify={notify} caps={caps} />}
+            {picked[run.id] && <FinishPanel job={run} candidate={picked[run.id]} onStart={onStart} notify={notify} caps={caps} remote={remote} />}
             {finishesOf(run.id).map((f) => {
               const final = f.outputs.find((o) => o.kind === 'final')
               return (
@@ -265,7 +348,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                   <div className="final-head">
                     <span className="mono pink">Final · candidate {f.plan.finish?.candidate}</span>
                     <span className="mono dim">
-                      {f.plan.resolved?.width}×{f.plan.resolved?.height} · {f.plan.resolved?.fps} fps{f.seconds ? ` · ${f.seconds} s render` : ''}
+                      {f.plan.resolved?.finishWidth ? `${f.plan.resolved.finishWidth}×${f.plan.resolved.finishHeight}, SeedVR2 to ` : ''}{f.plan.resolved?.width}×{f.plan.resolved?.height} · {f.plan.resolved?.fps} fps{f.seconds ? ` · ${f.seconds} s render` : ''}
                     </span>
                     {final?.path && (
                       <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(final).catch((err) => notify(err.message))}>
@@ -281,6 +364,48 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                   <Progress job={f} />
                   {f.status === 'error' && <p className="notice">{f.error}</p>}
                   {final && <video className="final-video" src={media(final.url)} controls preload="metadata" />}
+                  {final?.path && !remote && (
+                    <div className="enhance-row">
+                      <span className="mono dim small">Enhance:</span>
+                      {caps?.dlss !== false &&
+                        [1, 2].map((scale) => (
+                          <button key={`d${scale}`} className="btn btn-small" disabled={!!enhancing[f.id]} onClick={() => enhance(f, { engine: 'dlss', scale })}>
+                            DLSS 5 · {scale}×
+                          </button>
+                        ))}
+                      {[1080, 1440].map((r) => (
+                        <button key={`s${r}`} className="btn btn-small" disabled={!!enhancing[f.id]} onClick={() => enhance(f, { engine: 'seedvr2', resolution: r })}>
+                          SeedVR2 · {r}p
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {jobs
+                    .filter((e) => e.kind === 'enhance' && e.parent === f.id)
+                    .map((e) => {
+                      const out = e.outputs?.find((o) => o.kind === 'final')
+                      return (
+                        <div key={e.id} className="final enhanced">
+                          <div className="final-head">
+                            <span className="mono pink">Enhanced · {e.plan?.enhance?.engine === 'dlss' ? `DLSS 5 ${e.plan.enhance.scale}×` : `SeedVR2 ${e.plan?.enhance?.resolution}p`}</span>
+                            <span className="mono dim">{e.seconds ? `${e.seconds} s render` : ''}</span>
+                            {out?.path && (
+                              <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(out).catch((err) => notify(err.message))}>
+                                Show in folder
+                              </button>
+                            )}
+                            {out?.url && final?.url && (
+                              <button className="link-btn mono" onClick={() => (setMarked([takeOf(f.id, final.url, `final of #${f.plan.finish?.candidate}`), takeOf(e.id, out.url, e.plan?.enhance?.engine === 'dlss' ? `DLSS 5 ${e.plan.enhance.scale}×` : `SeedVR2 ${e.plan?.enhance?.resolution}p`)]), setComparing(true))}>
+                                Compare with the final
+                              </button>
+                            )}
+                          </div>
+                          <Progress job={e} />
+                          {e.status === 'error' && <p className="notice">{e.error}</p>}
+                          {out && <video className="final-video" src={media(out.url)} controls preload="metadata" />}
+                        </div>
+                      )
+                    })}
                 </div>
               )
             })}
