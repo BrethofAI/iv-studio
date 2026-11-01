@@ -304,24 +304,30 @@ export function facePrompt({ role, description, look }) {
     .join(' ')
 }
 
-// More views of a place from its photo, so a shot that looks the other way still finds the same room.
+// More views of a place from its photo, so a shot from another angle still finds the same room: the QMA camera
+// angles LoRA on Qwen Image 2.1's edit (gribbliest/qwen-image-2.1-qma-camera-angles, Apache-2.0), with camera-only
+// prompts as its card advises. Tested on a living room (2026-11-01): the quarter turn, the side and the wide view
+// are real camera moves in the same room; its "back view" kept facing the windows, so there is no reverse.
+// (Without the LoRA, Flux 3 Klein and Qwen 2.1 edits redrew the same view whatever the words said.)
 export const ANGLES = {
-  reverse: 'The same place seen from the opposite side: the camera stands where the far wall was and looks back toward where this picture was taken. Keep the same room, materials, light and colours.',
-  wide: 'A wider view of the same place from further back, showing more of it around what this picture shows. Keep the same room, materials, light and colours.'
+  quarter: '<qma> front-right quarter view eye-level shot medium shot',
+  side: '<qma> left side view eye-level shot medium shot',
+  wide: '<qma> front view eye-level shot wide shot'
 }
-export function anglePrompt(view, { place, description, look }) {
-  return [ANGLES[view], `It is ${place || 'the place'}${description ? `: ${description}` : ''}.`, 'Nobody in it.', look ? `Look: ${look}.` : '', 'One single frame: no split screen, no collage, no text, no captions, no borders.'].filter(Boolean).join(' ')
-}
-// Which picture of a place suits a shot: the reverse view when the camera on its board looks back into the room
-// (or the words say reverse), the wide view for a wide or establishing shot, else the place's own photo.
+// Which picture of a place suits a shot: the wide view for a wide or establishing shot; for a camera turned away
+// from the photo's direction on its staging board (or words like reverse, side, profile), the side view; for a slight
+// turn (or over-the-shoulder, three-quarter), the quarter view; else the place's own photo.
 export function placePicture(loc, sh = {}) {
   const has = (f) => f && fs.existsSync(f)
   const main = (loc?.pictures || []).find(has) || null
   // (an angle drawn from an older photo no longer matches the place)
   const view = (v) => (loc?.angles || []).find((a) => a.view === v && has(a.file) && (!a.from || a.from === main))?.file || null
-  const facing = sh.stage?.camera ? ((((Number(sh.stage.camera.facing) || 0) % 360) + 360) % 360) : null
-  if ((facing != null && facing > 100 && facing < 260) || /\breverse\b/i.test(sh.camera || '')) return view('reverse') || main
-  if (/\b(wide|establishing|extreme long|long shot)\b/i.test(sh.camera || '')) return view('wide') || main
+  const words = sh.camera || ''
+  const raw = sh.stage?.camera ? ((((Number(sh.stage.camera.facing) || 0) % 360) + 360) % 360) : null
+  const turn = raw == null ? 0 : Math.min(raw, 360 - raw)
+  if (/\b(wide|establishing|extreme long|long shot)\b/i.test(words)) return view('wide') || main
+  if (turn > 70 || /\b(reverse|side|profile)\b/i.test(words)) return view('side') || main
+  if (turn >= 20 || /\b(over the shoulder|over-the-shoulder|three-quarter|quarter)\b/i.test(words)) return view('quarter') || main
   return main
 }
 
@@ -796,7 +802,7 @@ export class Productions {
     const editor = ready(['flux2', 'flux3'], true)
     const drawer = ready(['flux2', 'zimage', 'flux3', 'krea2', 'qwen21', 'moss'], false)
     if (!drawer) throw new Error(`${what} need a picture model. Set one up in Settings → Setup (Flux.2 Klein or Z-Image Turbo).`)
-    return { images, editor, drawer }
+    return { images, editor, drawer, st }
   }
   // Waits for a picture set (about 20 s) and returns its first file.
   async picture(images, rec, what) {
@@ -830,22 +836,25 @@ export class Productions {
     })
     return this.madeUp(q, role)
   }
-  // More views of a place, drawn from its photo by an editing model: reverse (looking back into the room) and wide.
+  // More views of a place, drawn from its photo with the QMA camera angles LoRA (see ANGLES): quarter, side and wide.
   // Sketches and shots then take the view that suits their camera (placePicture).
-  // Not offered in the window or over MCP: tested 2026-11-01, Flux 3 Klein and Qwen Image 2.1 edits redraw the same
-  // view whatever the words say. It waits on a camera-angle LoRA for one of them.
   async drawAngles(id, locationId, { views = Object.keys(ANGLES) } = {}) {
-    const { images, editor } = await this.pictureModels('Angles')
-    if (!editor) throw new Error('Angles need Flux.2 Klein or Flux 3 Klein (they draw from the place’s photo). Set one up in Settings → Setup.')
+    const { images, st } = await this.pictureModels('Angles')
+    const qwen = st.families.find((f) => f.id === 'qwen21' && f.ready && f.edit && f.models.length)
+    const info = await this.studio().comfy.objectInfo('LoraLoaderModelOnly').catch(() => null)
+    const field = info?.LoraLoaderModelOnly?.input?.required?.lora_name
+    const lora = (field?.[1]?.options || field?.[0] || []).find((n) => /qwen-image-2\.1-qma-camera-angles/i.test(n))
+    if (!qwen || !lora) throw new Error('More angles need Qwen Image 2.1 and the QMA camera angles LoRA. Get them in Settings → Setup.')
+    const model = qwen.models.find((m) => !/[-_]UC[-_]/i.test(m)) || qwen.models[0]
     const p = this.get(id)
     const loc = p.locations.find((l) => l.id === locationId)
     if (!loc) throw new Error('No such place.')
     const photo = loc.pictures.find((f) => fs.existsSync(f))
     if (!photo) throw new Error('Add or draw a photo of the place first; the angles are drawn from it.')
-    const sc = p.scenes.find((s) => (s.location || '').toLowerCase() === loc.name.toLowerCase())
     const angles = []
+    // the LoRA card's settings: strength 1, 30 steps, CFG 3, about 1 MP (about 50 s a view on the 4090)
     for (const view of views.filter((v) => ANGLES[v])) {
-      const rec = await images.create({ mode: 'edit', model: editor.models[0], prompt: anglePrompt(view, { place: `${loc.name}${sc?.time ? `, ${sc.time.toLowerCase()}` : ''}`, description: loc.description, look: p.look?.notes }), refs: [photo], aspect: p.aspect, keepAspect: true, megapixels: 0.5, count: 1, name: `${p.name} · ${loc.name} · ${view}`, tag: `film:${p.id}` })
+      const rec = await images.create({ mode: 'edit', model, prompt: ANGLES[view], loras: [{ name: lora, strength: 1 }], refs: [photo], megapixels: 1, steps: 30, cfg: 3, count: 1, seed: 42, name: `${p.name} · ${loc.name} · ${view}`, tag: `film:${p.id}` })
       angles.push({ view, file: await this.picture(images, rec, `${view} view`), from: photo })
     }
     const q = this.patch(id, (x) => {

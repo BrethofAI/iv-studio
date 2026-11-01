@@ -441,6 +441,10 @@ tool('draw_film_face', `Draw a face for someone in the film no character preset 
   if (readSettings(BASE).target !== 'cloud') await voices.release()
   return films.drawFace(filmId, role, { again })
 })
+tool('draw_place_angles', `Draw more views of a film's place from its photo with the QMA camera angles LoRA on Qwen Image 2.1's edit (both from Settings → Setup): quarter (a quarter turn), side (from the side) and wide (from further back). There is no true reverse: the LoRA's back view keeps facing the same way. Sketches and shots then pick the view that suits their camera: wide for wide or establishing shots, side for a staged camera turned well away or words like reverse or profile, quarter for a slight turn or over-the-shoulder. About 50 s a view on this PC, free. ${LIVE_FILM}`, { filmId: z.string(), locationId: z.string(), views: z.array(z.enum(['quarter', 'side', 'wide'])).optional() }, async ({ filmId, locationId, views }) => {
+  if (readSettings(BASE).target !== 'cloud') await voices.release()
+  return films.drawAngles(filmId, locationId, views ? { views } : {})
+})
 tool('use_film_recording', `Use a recording (any sound file: the person's own voice, an actor, a take from elsewhere) as a shot's line, so the shot lip-syncs to it and its finish uses it; 14 s at most. Whisper reads it back when voices are set up (heard); a shot with no line yet takes the words heard, into its prompt too. Film new takes to use it. ${LIVE_FILM}`, { filmId: z.string(), shotId: z.string(), file: z.string() }, ({ filmId, shotId, file }) => films.useRecording(filmId, shotId, file))
 tool('build_rough_cut', `Put every shot of a film in script order on V1 of its edit (made the first time): the finished take, else the picked or first preview. Rebuilding replaces V1 only. Returns the edit id, how many shots went in, and which are missing; get_edit and export_edit take it from there. ${LIVE}`, { filmId: z.string() }, ({ filmId }) => films.roughCut(filmId))
 

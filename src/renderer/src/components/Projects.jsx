@@ -38,6 +38,7 @@ const LOOKS = [
   ['Dreamy', 'soft haze, pastel colours, glowing backlight'],
   ['Animated', 'stylised 3D animation, bright saturated colours, soft shapes']
 ]
+const ANGLE_NAMES = { quarter: 'Turned a little', side: 'From the side', wide: 'Wider' }
 const CAMERAS = ['Wide shot, static', 'Medium shot, static', 'Close-up, static', 'Wide shot, slow push in', 'Medium shot, handheld', 'Close-up, slow push in', 'Tracking shot following them', 'Over the shoulder']
 const FILM_STATE = {
   draft: ['Not planned', ''],
@@ -506,6 +507,21 @@ function Cast({ v, act, characters, notify, go, setStep }) {
                 Remove place
               </button>
             </span>
+            {l.pictures[0] && (
+              <div className="wiz-angles">
+                {(l.angles || [])
+                  .filter((a) => ANGLE_NAMES[a.view] && (!a.from || a.from === l.pictures[0]))
+                  .map((a) => (
+                    <figure key={a.view} title={ANGLE_NAMES[a.view]}>
+                      <img src={fileUrl(a.file)} alt="" style={{ aspectRatio: ratio(v.aspect) }} />
+                      <figcaption className="mono small dim">{ANGLE_NAMES[a.view]}</figcaption>
+                    </figure>
+                  ))}
+                <button className="link-btn mono small" disabled={!!drawing} title="The same place from a quarter turn, from the side and from further back, so shots from other angles keep the room (about a minute each)" onClick={draw(l.id, () => P().drawAngles(v.id, l.id), 'More angles drawn. Turned and wide shots use them.')}>
+                  {drawing === l.id ? 'Drawing the angles…' : (l.angles || []).some((a) => ANGLE_NAMES[a.view] && (!a.from || a.from === l.pictures[0])) ? 'Draw the angles again' : '+ More angles'}
+                </button>
+              </div>
+            )}
           </div>
         ))}
         <button className="wiz-place wiz-place-add" onClick={() => save({ locations: [...v.locations, { name: 'New place', description: '', pictures: [] }] })}>

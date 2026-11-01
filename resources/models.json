@@ -137,6 +137,20 @@
       "optionalFor": "designing characters"
     },
     {
+      "id": "qma",
+      "label": "QMA camera angles LoRA (Qwen Image 2.1, Apache-2.0)",
+      "loader": "LoraLoaderModelOnly.lora_name",
+      "match": "qwen-image-2.1-qma-camera-angles.safetensors",
+      "folder": "loras/Qwen 2.1",
+      "url": "https://huggingface.co/gribbliest/qwen-image-2.1-qma-camera-angles/resolve/main/qwen-image-2.1-qma-camera-angles.safetensors",
+      "size": 318820224,
+      "needed_for": [
+        "angles"
+      ],
+      "optional": true,
+      "optionalFor": "more angles of a place (Projects)"
+    },
+    {
       "id": "sam31",
       "label": "SAM 3.1 (tracks people and objects)",
       "loader": "CheckpointLoaderSimple.ckpt_name",
