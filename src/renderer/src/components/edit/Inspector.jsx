@@ -48,6 +48,20 @@ export default function Inspector({ clip, media, meta, settings, markers, selMar
             </button>
           ))}
         </div>
+        {meta.loudness && (
+          <>
+            <span className="dim small" title="How loud the exported film is: Online is about -14 LUFS, right for phones and the web">
+              Loudness
+            </span>
+            <div className="segmented ed-seg">
+              {Object.entries(meta.loudness).map(([id, l]) => (
+                <button key={id} className={(settings.loudness || 'web') === id ? 'on' : ''} title={l.lufs ? `${l.lufs} LUFS` : 'Leave the sound as mixed'} onClick={() => onSettings({ loudness: id })}>
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
         <p className="mono label ed-insp-gap">Markers</p>
         {markers.length === 0 && <p className="small dim">Press M to drop one at the playhead.</p>}
         {markers.map((mk) => (

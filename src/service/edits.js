@@ -19,6 +19,13 @@ export const FORMATS = {
   vertical: { width: 1080, height: 1920, label: 'Vertical 9:16' },
   square: { width: 1080, height: 1080, label: 'Square 1:1' }
 }
+// How loud an export comes out (settings.loudness; web when unset): measured over the whole film and brought to
+// the target with ffmpeg's loudnorm in two passes. The short films came out near -19.5 LUFS, quiet on a phone.
+export const LOUDNESS = {
+  web: { label: 'Online', lufs: -14, peak: -1.5 },
+  tv: { label: 'TV', lufs: -23, peak: -1 },
+  off: { label: 'As mixed' }
+}
 
 const readJson = (file, fallback) => {
   try {
@@ -193,10 +200,58 @@ export class Edits {
       })
     })
     fs.rmSync(work, { recursive: true, force: true })
+    const loudness = await this.normalize(outFile, e.settings.loudness || 'web')
     const fresh = this.get(id)
-    fresh.exports = [...(fresh.exports || []), { file: outFile, at: now(), seconds: Math.round((Date.now() - t0) / 1000), format: e.settings.format, fps: e.settings.fps }]
+    fresh.exports = [...(fresh.exports || []), { file: outFile, at: now(), seconds: Math.round((Date.now() - t0) / 1000), format: e.settings.format, fps: e.settings.fps, loudness }]
     this.write(fresh)
     return outFile
+  }
+
+  // Brings an exported film's sound to a loudness target (LOUDNESS) in place: measure the whole film, then one gain
+  // with a peak limiter under the ceiling, and measure again (a second, smaller correction when the limiter took
+  // too much). loudnorm's own second pass stopped at -16.1 on a -16.9 film whose peaks sat near the ceiling. The
+  // picture is copied. Returns { target, before, after } in LUFS, or null when off or silent.
+  async normalize(file, preset = 'web') {
+    const t = LOUDNESS[preset]
+    if (!t?.lufs) return null
+    const measure = async (f) => {
+      const err = await this.runErr(['-hide_banner', '-nostats', '-i', f, '-vn', '-af', `loudnorm=I=${t.lufs}:TP=${t.peak}:print_format=json`, '-f', 'null', '-'])
+      return Number(JSON.parse(err.slice(err.lastIndexOf('{'), err.lastIndexOf('}') + 1)).input_i)
+    }
+    const before = await measure(file)
+    if (!Number.isFinite(before) || before < -70) return null // no sound to normalize
+    const limit = Math.pow(10, (t.peak - 0.5) / 20).toFixed(4) // sample peaks a little under the true-peak ceiling
+    const tmp = file.replace(/\.mp4$/i, '.loud.mp4')
+    if (Math.abs(t.lufs - before) <= 0.4) return { target: t.lufs, before: +before.toFixed(1), after: +before.toFixed(1) }
+    // A film whose loud parts already touch the ceiling (Last Watch: -16.6 LUFS, peaks at -0.1) can't reach the
+    // target without crushing them: more gain only goes into the limiter (+5.5 dB gave -14.9). So a second pass
+    // tries a little more gain, and is kept only if it got at least 0.3 LU louder for it.
+    const pass = async (gain, out) => {
+      await this.run(['-y', '-hide_banner', '-loglevel', 'error', '-i', file, '-map', '0', '-c:v', 'copy', '-af', `volume=${gain.toFixed(2)}dB,alimiter=limit=${limit}:level=false:attack=5:release=60,aresample=48000`, '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out])
+      return measure(out)
+    }
+    const gain = t.lufs - before
+    let now = await pass(gain, tmp)
+    if (t.lufs - now > 0.4) {
+      const more = tmp.replace(/\.loud\.mp4$/, '.louder.mp4')
+      const again = await pass(gain + Math.min(3, t.lufs - now), more)
+      if (again - now >= 0.3) {
+        fs.renameSync(more, tmp)
+        now = again
+      } else fs.rmSync(more, { force: true })
+    }
+    fs.renameSync(tmp, file)
+    return { target: t.lufs, before: +before.toFixed(1), after: +now.toFixed(1) }
+  }
+  // ffmpeg's report (stderr), for filters that print what they measured.
+  runErr(args) {
+    return new Promise((resolve, reject) => {
+      const p = spawn(this.ffmpeg, args, { windowsHide: true })
+      let err = ''
+      p.stderr.on('data', (d) => (err += d))
+      p.on('error', reject)
+      p.on('close', (code) => (code === 0 ? resolve(err) : reject(new Error(err.trim().split('\n').pop() || `ffmpeg exited ${code}`))))
+    })
   }
 
   cancelExport(id) {

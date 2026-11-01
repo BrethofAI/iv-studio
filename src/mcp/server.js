@@ -18,7 +18,7 @@ import { Previs } from '../service/previs'
 import { CAMERA_MOVES, lineCheck } from '../service/staging'
 import { DIRECTING, DIRECTING_SOURCE } from '../service/directing'
 import { menuMessage, START_MENU } from '../service/startmenu'
-import { Edits, editLength, FORMATS } from '../service/edits'
+import { Edits, editLength, FORMATS, LOUDNESS } from '../service/edits'
 import { EditGen, GEN_KINDS } from '../service/editgen'
 import { Productions } from '../service/productions'
 import { MediaTools } from '../service/media'
@@ -276,14 +276,15 @@ tool('create_edit', 'Create an empty edit.', { name: z.string().default('Untitle
   const e = edits.create(name)
   return describe(edits.save(e.id, { settings: { format, fps } }))
 })
-tool('set_edit_settings', `Rename an edit or change its export format (${Object.entries(FORMATS).map(([k, f]) => `${k} = ${f.label}`).join(', ')}) and frame rate. ${LIVE}`, {
+tool('set_edit_settings', `Rename an edit or change its export format (${Object.entries(FORMATS).map(([k, f]) => `${k} = ${f.label}`).join(', ')}), frame rate or loudness: web (the default) brings the sound to about -14 LUFS for phones and the web, tv to -23 LUFS, off leaves it as mixed. A film whose loud parts already touch the ceiling stops a little short rather than being crushed; each export records its loudness before and after. ${LIVE}`, {
   editId: z.string(),
   name: z.string().min(1).optional(),
   format: z.enum(Object.keys(FORMATS)).optional(),
-  fps: z.number().int().min(12).max(60).optional()
-}, ({ editId, name, format, fps }) => {
+  fps: z.number().int().min(12).max(60).optional(),
+  loudness: z.enum(Object.keys(LOUDNESS)).optional()
+}, ({ editId, name, format, fps, loudness }) => {
   const e = edits.get(editId)
-  return describe(edits.save(editId, { name, settings: { ...e.settings, ...(format && { format }), ...(fps && { fps }) } }))
+  return describe(edits.save(editId, { name, settings: { ...e.settings, ...(format && { format }), ...(fps && { fps }), ...(loudness && { loudness }) } }))
 })
 tool('delete_edit', 'Delete an edit (the timeline only: its media files and exported videos stay). Ask the person first.', { editId: z.string() }, ({ editId }) => edits.remove(editId))
 tool('add_media', `Add files to an edit's media bin: local video, picture or audio paths, and/or IV Studio renders by key (list_renders; cloud renders download to Videos\\IV Studio). Returns the new media ids. With append, each also goes on the end of V1 (video, pictures) or A1 (sound), in the order given. ${LIVE}`, {

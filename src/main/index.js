@@ -7,7 +7,7 @@ import { comfyFolders, dataDir, incognitoDir, readSettings, resourcesDir, writer
 import { harnessStatus } from '../service/harness'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
-import { Edits, FORMATS } from '../service/edits'
+import { Edits, FORMATS, LOUDNESS } from '../service/edits'
 import { EditGen } from '../service/editgen'
 import { Productions } from '../service/productions'
 import { DEFAULT_TRACKS } from '../service/timeline'
@@ -442,7 +442,7 @@ app.whenReady().then(() => {
 
   handle('media:probe', (file) => mediaTools.probe(file))
   handle('media:prepare', (opts) => mediaTools.prepare(opts))
-  handle('edits:meta', () => ({ tracks: DEFAULT_TRACKS, formats: FORMATS }))
+  handle('edits:meta', () => ({ tracks: DEFAULT_TRACKS, formats: FORMATS, loudness: LOUDNESS }))
   handle('edits:list', () => edits.list())
   handle('edits:get', (id) => edits.get(id))
   handle('edits:create', (name) => edits.create(name))
