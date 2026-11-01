@@ -10,6 +10,7 @@
 // step is where the person is in the Projects wizard (idea, story, cast, board, film, watch).
 // Breaking the script down uses the local writer: one call per scene for the shot list, then one per shot
 // for its H3 prompt. Rendering, picking and finishing are Studio's own.
+import { withLine } from './lint.js'
 import { needsPrevis, previsWords, stageFields } from './staging.js'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
@@ -67,18 +68,8 @@ const SHOT_SCHEMA = {
   required: ['shots']
 }
 
-// The writer sometimes leaves a shot's line out of its prompt. Without its <d> tag H3 makes up its own words,
-// so a missing line goes at the end of the last [Shot] paragraph.
-export function withLine(prompt, who, line) {
-  const words = String(line || '').trim()
-  if (!words) return prompt
-  const norm = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-  const tags = [...prompt.matchAll(/<d>(?:\[[^\]]*\])?([\s\S]*?)<\/d>/g)].map((m) => norm(m[1]))
-  if (tags.some((t) => t && (t.includes(norm(words)) || norm(words).includes(t)))) return prompt
-  const said = `${who || 'They'} says: <d>[English] ${words.replace(/^["“]|["”]$/g, '')}</d>`
-  const cut = prompt.search(/\n\s*\noverall_soundscape:/)
-  return cut < 0 ? `${prompt.trimEnd()} ${said}` : `${prompt.slice(0, cut).trimEnd()} ${said}${prompt.slice(cut)}`
-}
+// withLine lives with the prompt checker now (Create's writers use it too)
+export { withLine }
 
 // A shot with no line says so, or H3 may give someone words ("Thank you.") of its own. Speaker tags go too.
 export function withSilence(prompt) {

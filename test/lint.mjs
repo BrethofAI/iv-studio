@@ -2,6 +2,7 @@
 //   node test/lint.mjs
 import assert from 'node:assert/strict'
 import { blocking, firstLastLine, FIRST_FRAME_LINE, lintPrompt, sections } from '../src/service/lint.js'
+import { keepIdeaLine } from '../src/service/prompter.js'
 
 let n = 0
 const ok = (name, fn) => {
@@ -90,5 +91,14 @@ ok('wording: filler words (with a fix), too many camera moves', () => {
 ok('mentions: an unknown @name is an error', () => {
   assert.ok(codes(CLEAN.replace('{char} in a green', '@Mara in a green'), { seconds: 8, mentions: ['Tess', 'BusStop'] }).includes('mention-unknown'))
   assert.ok(!codes(CLEAN.replace('{char} in a green', '@tess in a green'), { seconds: 8, mentions: ['Tess'] }).includes('mention-unknown'))
+})
+ok('a line quoted in the idea is kept when the writer drops it', () => {
+  const dropped = CLEAN.replace(/ \{char\} \(S1\) looks up and says: <d>[^<]*<\/d>/, '')
+  assert.ok(!dropped.includes('<d>'))
+  const kept = keepIdeaLine(dropped, 'Tess waits at a bus stop. She sighs, "Of course it\'s late."', tess)
+  assert.match(kept, /\{char\} \(S1\) says: <d>\[English\] Of course it's late\.<\/d>\n\noverall_soundscape/)
+  assert.ok(!codes(kept, { seconds: 8, character: tess }).includes('no-speaker'))
+  assert.equal(keepIdeaLine(CLEAN, 'Tess says "Bus is late again."', tess), CLEAN)
+  assert.equal(keepIdeaLine(dropped, 'Tess says "Hi." and Theo says "Bye."', tess), dropped)
 })
 console.log(`${n} checks passed`)

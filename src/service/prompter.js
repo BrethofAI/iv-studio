@@ -12,7 +12,7 @@ import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { DIRECTING, DIRECTING_SOURCE } from './directing.js'
 import { loadGuide } from './h3guide.js'
 import { harnessJson } from './harness.js'
-import { FIRST_FRAME_LINE, firstLastLine, lintPrompt } from './lint.js'
+import { FIRST_FRAME_LINE, firstLastLine, lintPrompt, withLine } from './lint.js'
 import { isPrevis } from './staging.js'
 
 // The bundled ffmpeg, outside the asar in a packaged app (as in main and the MCP server).
@@ -372,6 +372,13 @@ async function checked(data, { assembleOpts, character, ctx, again }) {
   }
 }
 
+// A line quoted in the idea is said in the shot, even when the writer leaves it out (the local one sometimes does).
+// Only a single quoted line: with more, who says which is the writer's call.
+export function keepIdeaLine(prompt, idea, character) {
+  const quoted = [...String(idea || '').matchAll(/["“]([^"”]{2,})["”]/g)].map((m) => m[1].trim())
+  return quoted.length === 1 ? withLine(prompt, character ? '{char} (S1)' : 'Someone', quoted[0]) : prompt
+}
+
 // cpu: keep the model off the GPU (used while ComfyUI is rendering, so H3 keeps its VRAM). On the CPU the draft is
 // mended but not sent back for a second pass, which would double a slow write.
 export async function writeLocal({ idea, mode = 'text', seconds = 5, character, sequence = false, previous, media = [], model, cpu = false }) {
@@ -402,7 +409,7 @@ export async function writeLocal({ idea, mode = 'text', seconds = 5, character, 
   }
   const data = await chat([message])
   const again = cpu ? null : (note, previous) => chat([message, { role: 'assistant', content: previous }, { role: 'user', content: note }])
-  return checked(data, { assembleOpts: { mode, seconds, lastFrame: req.lastFrame }, character, ctx: checkerContext({ mode, seconds, media, character }), again })
+  return keepIdeaLine(await checked(data, { assembleOpts: { mode, seconds, lastFrame: req.lastFrame }, character, ctx: checkerContext({ mode, seconds, media, character }), again }), idea, character)
 }
 
 // The same prompt from the person's Claude Code or Codex (harness.js), with the whole guide: it runs off this PC's GPU.
@@ -416,7 +423,7 @@ export async function writeHarness({ engine, model, idea, mode = 'text', seconds
   user += '\n\nAnswer with the JSON object only.'
   const data = await harnessJson({ engine, model, system: req.system, user, schema: req.schema, images })
   const again = (note, previous) => harnessJson({ engine, model, system: req.system, user: `${user}\n\nYour previous answer:\n${previous}\n\n${note}`, schema: req.schema, images })
-  return checked(data, { assembleOpts: { mode, seconds, lastFrame: req.lastFrame }, character, ctx: checkerContext({ mode, seconds, media, character }), again })
+  return keepIdeaLine(await checked(data, { assembleOpts: { mode, seconds, lastFrame: req.lastFrame }, character, ctx: checkerContext({ mode, seconds, media, character }), again }), idea, character)
 }
 
 function parseJson(text) {

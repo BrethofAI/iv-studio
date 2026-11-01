@@ -36,6 +36,19 @@ function withSpeaker(text) {
   return named.replace(/<d>/g, (tag, at) => (/\(S1\)[^<]{0,12}$/.test(named.slice(Math.max(0, at - 40), at)) ? tag : `{char} (S1) says: ${tag}`))
 }
 
+// The writer sometimes leaves a line out of its prompt. Without its <d> tag H3 makes up its own words,
+// so a missing line goes at the end of the last [Shot] paragraph.
+export function withLine(prompt, who, line) {
+  const words = String(line || '').trim()
+  if (!words) return prompt
+  const norm = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  const tags = [...prompt.matchAll(/<d>(?:\[[^\]]*\])?([\s\S]*?)<\/d>/g)].map((m) => norm(m[1]))
+  if (tags.some((t) => t && (t.includes(norm(words)) || norm(words).includes(t)))) return prompt
+  const said = `${who || 'They'} says: <d>[English] ${words.replace(/^["“]|["”]$/g, '')}</d>`
+  const cut = prompt.search(/\n\s*\noverall_soundscape:/)
+  return cut < 0 ? `${prompt.trimEnd()} ${said}` : `${prompt.slice(0, cut).trimEnd()} ${said}${prompt.slice(cut)}`
+}
+
 const count = (text, re) => (String(text).match(re) || []).length
 const sentences = (text) => String(text).split(/(?<=[.!?])\s+/)
 
