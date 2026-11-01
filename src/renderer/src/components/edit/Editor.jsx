@@ -160,9 +160,12 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
         setHist(histRef.current)
         editRef.current = fresh
         setEdit(fresh)
-        const text = describeChange(e, fresh)
+        // new footage the person asked for (Extend, Fill, Retake) landing is not an agent's doing
+        const landed = (fresh.gens || []).filter((g) => g.placedClip && fresh.clips.some((c) => c.id === g.placedClip) && !e.clips.some((c) => c.id === g.placedClip))
+        const text = landed.length ? `${landed.map((g) => g.name).join(', ')}: landed on the timeline` : describeChange(e, fresh)
+        const who = landed.length ? 'New footage' : 'Agent'
         const at = new Date()
-        setAgent((a) => ({ text, at, mark: histRef.current.past.length, undone: false, log: [{ text, at }, ...(a?.log || [])].slice(0, 12) }))
+        setAgent((a) => ({ text, who, at, mark: histRef.current.past.length, undone: false, log: [{ text, at }, ...(a?.log || [])].slice(0, 12) }))
       }),
     [editId]
   )
@@ -368,7 +371,7 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
   // goes on the first video track above the clip that is free over the same stretch (a new one when none is).
   async function cutOut(clip) {
     const m = edit.media[clip.media]
-    const what = await ask({ kicker: 'Cut out', title: 'Keep only…', message: 'Who or what stays: "person", "the woman", "the dog", "the red car". It is found in every frame and the rest turns see-through. The cut-out goes on the track above, over this clip.', input: { value: 'person' }, confirm: 'Cut out' })
+    const what = await ask({ kicker: 'Cut out', title: 'Keep only…', message: 'Who or what stays, in plain words: "person", "dog", "bird", "car". A fancier name ("bluebird") can catch someone else while the thing is off screen. It is found in every frame and the rest turns see-through. The cut-out goes on the track above, over this clip.', input: { value: 'person' }, confirm: 'Cut out' })
     if (!what) return
     notify(`Cutting out "${what}": about half a minute for a 5 s clip.`, 'info')
     try {
@@ -593,7 +596,7 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
         {agent && (
           <div className={`ed-agent ${agent.undone ? 'undone' : ''}`} role="status">
             <span className="ed-agent-dot" />
-            <span className="mono label">Agent</span>
+            <span className="mono label">{agent.who || 'Agent'}</span>
             <span className="ed-agent-text">{agent.undone ? `Undone: ${agent.text.toLowerCase()}` : agent.text}</span>
             <span className="mono dim small">{agent.at.toLocaleTimeString()}</span>
             {agent.log.length > 1 && (

@@ -11,6 +11,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { ASPECTS } from './plan.js'
 import { RETAKE_MODES } from './sequence.js'
+import { shotName } from './studio.js'
 import { applyOps, clipEnd, tracksOf } from './timeline.js'
 
 export const GEN_KINDS = ['extend', 'bridge', 'retake']
@@ -241,9 +242,10 @@ export class EditGen {
       gen = { kind: 'retake', track: c.track, at: round(from), anchor: c.id, pos: 'start', rel: round(from - c.start), length: round(to - from), clip: c.id, insert: false, mode, trimStart: start, finishJob: job.id }
     }
 
-    const who = studio.characters().find((x) => x.id === character)?.name.split(' ')[0] || 'the character'
-    const words = spec.prompt.replaceAll('{char}', who).replace(/^(live-action|cinematic)[,.]?\s*/i, '')
-    gen = { id, ...gen, status: 'rendering', prompt: spec.prompt, character, name: spec.name || `${{ extend: 'Extend', bridge: spec.gap ? 'Fill' : 'Bridge', retake: 'Retake' }[spec.kind]}: ${words.slice(0, 40)}`, createdAt: new Date().toISOString() }
+    // named from the idea the person typed, else from the shot's own words (not the prompt's field names)
+    const idea = String(spec.idea || '').replace(/\s+/g, ' ').trim()
+    const words = idea ? (idea.length > 40 ? `${idea.slice(0, 40).replace(/\s+\S*$/, '')}…` : idea) : shotName(spec.prompt, studio.characters().find((x) => x.id === character))
+    gen = { id, ...gen, status: 'rendering', prompt: spec.prompt, character, name: spec.name || `${{ extend: 'Extend', bridge: spec.gap ? 'Fill' : 'Bridge', retake: 'Retake' }[spec.kind]}: ${words}`, createdAt: new Date().toISOString() }
     this.saveGens(editId, (gens) => [...gens, gen])
     return gen
   }

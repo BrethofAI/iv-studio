@@ -217,7 +217,11 @@ export function asFirstFrame(prompt) {
 // shot's staging board plan) its grey previs clip is <Video 1>, for the camera move and the blocking; sketch or
 // room false leaves that picture out (and renumbers the rest).
 // Written in the full-reference format of MiniMax's H3 guide; the text prompt's three fields become its last three.
-export function withRoom(prompt, { place, description, people = [], sketch = true, room = true, previs = null }) {
+// An outdoor scene's place picture is kept as a place: told "the room, its furniture", H3 opened outdoor shots on a
+// furnished room (outside: EXT. scenes, see isOutside).
+export const isOutside = (sc) => sc?.inside === false || /^\s*EXT\b/i.test(sc?.heading || '')
+
+export function withRoom(prompt, { place, description, people = [], sketch = true, room = true, previs = null, outside = false }) {
   const body = String(prompt || '').trim().replace(`${FIRST_FRAME}\n\n`, '')
   const field = (name) => (body.match(new RegExp(`${name}:\\s*([\\s\\S]*?)(?=\\n\\s*\\n\\s*(?:overall_soundscape|non_diegetic_music):|$)`)) || [])[1]?.trim()
   const shots = (field('integrated_multimodal_description') ?? body).replace(/\s+(\[Shot \d+\])/g, '\n$1')
@@ -240,7 +244,7 @@ export function withRoom(prompt, { place, description, people = [], sketch = tru
     '',
     'retention_analysis:',
     ...(sk ? [`<Picture ${sk}> ([Shot 1] first frame): fully_preserved - the shot begins from it at 0.00 seconds.`] : []),
-    ...(rm ? [`<Subject 1> (appears in ${inShots}): fully_preserved - the room, its furniture, light and colours, wherever the camera looks; the framing is newly directed.`] : []),
+    ...(rm ? [`<Subject 1> (appears in ${inShots}): fully_preserved - ${outside ? 'the place, its ground, plants and sky' : 'the room, its furniture'}, light and colours, wherever the camera looks; the framing is newly directed.`] : []),
     // (a drawn face is a studio portrait: H3 once cut to it whole, plain background and all)
     ...people.map((name, i) => `<Subject ${subject(i)}> (appears in ${inShots}): partially_preserved - ${name}'s face and hair only; pose, clothes, light and background follow the shot, and the picture itself never appears as a frame.`),
     ...(previs ? ['<Video 1> (camera movement and blocking): partially_preserved - its camera path, speed and framing, and where the people stand and walk; not its look.'] : []),
@@ -249,7 +253,7 @@ export function withRoom(prompt, { place, description, people = [], sketch = tru
     ...[where && `${where}.`, previs && previsWords(previs, 1)].filter(Boolean),
     shots,
     '',
-    `overall_soundscape:\n${field('overall_soundscape') || 'Quiet room tone.'}`,
+    `overall_soundscape:\n${field('overall_soundscape') || (outside ? 'The quiet sounds of the place.' : 'Quiet room tone.')}`,
     '',
     `non_diegetic_music:\n${field('non_diegetic_music') || 'N/A'}`
   ].join('\n')
@@ -969,7 +973,7 @@ export class Productions {
     const job = await studio.generatePreviews({
       projectId,
       mode: reference ? 'reference' : sketch ? 'frames' : 'text',
-      prompt: reference ? withRoom(said, { place: loc?.name, description: loc?.description, people: others.map((x) => x.ch.name.split(/\s+/)[0]), sketch: !!sketch, room: !!room, previs: clip ? sh.stage : null }) : sketch ? asFirstFrame(said) : said,
+      prompt: reference ? withRoom(said, { place: loc?.name, description: loc?.description, people: others.map((x) => x.ch.name.split(/\s+/)[0]), sketch: !!sketch, room: !!room, previs: clip ? sh.stage : null, outside: isOutside(sc) }) : sketch ? asFirstFrame(said) : said,
       media: reference
         ? [...(sketch ? [{ kind: 'picture', file: sketch }] : []), ...(room ? [{ kind: 'picture', file: room }] : []), ...others.map((x) => ({ kind: 'picture', file: x.face })), ...(clip ? [{ kind: 'video', file: clip.file, hasAudio: false }] : [])]
         : sketch

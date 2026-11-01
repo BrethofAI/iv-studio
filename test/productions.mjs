@@ -4,7 +4,7 @@ import { shotName } from '../src/service/studio.js'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { Productions, animaticPlan, asFirstFrame, beatOf, facePrompt, heading, oneTake, placePicture, placePrompt, scriptText, sketchPrompt, spokenWords, withLine, withRoom, withSilence, wordMatch } from '../src/service/productions.js'
+import { Productions, animaticPlan, asFirstFrame, beatOf, facePrompt, heading, isOutside, oneTake, placePicture, placePrompt, scriptText, sketchPrompt, spokenWords, withLine, withRoom, withSilence, wordMatch } from '../src/service/productions.js'
 import { parseScript } from '../src/service/screenplay.js'
 
 let n = 0
@@ -91,6 +91,13 @@ ok('a shot with a room opens on <Picture 1> and stays in <Picture 2>', () => {
   assert.match(inline, /<Subject 2> is Theo, the person in <Picture 3>\./)
   assert.match(inline, /Theo is <Subject 2>\./)
   assert.match(inline, /<Subject 2> \(appears in \[Shot 1\], \[Shot 2\]\): partially_preserved - Theo's face and hair only/)
+})
+ok('an outdoor place is kept as a place, not a room', () => {
+  const out = withRoom(asFirstFrame(P.replace('\n\noverall_soundscape:\nRain taps.', '')), { place: "Farmer's Field", outside: true })
+  assert.ok(!/room|furniture/i.test(out), out)
+  assert.match(out, /fully_preserved - the place, its ground, plants and sky, light and colours/)
+  assert.ok(isOutside({ heading: 'EXT. FARMER’S FIELD - EVENING' }) && isOutside({ inside: false }) && !isOutside({ heading: 'INT. KITCHEN - NIGHT' }))
+  assert.match(withRoom(asFirstFrame(P), { place: 'Pottery Studio' }), /fully_preserved - the room, its furniture/)
 })
 ok('a shot filmed from its sketch opens on <Picture 1>, once', () => {
   const f = asFirstFrame(P)

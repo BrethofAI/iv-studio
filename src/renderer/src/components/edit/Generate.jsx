@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { media } from '../../media'
 import { fileUrl } from './model'
 
@@ -25,8 +25,15 @@ export function ContextMenu({ x, y, items, onClose }) {
       window.removeEventListener('keydown', esc)
     }
   }, [])
+  // kept inside the window by its real size (a hint can wrap an item onto two lines)
+  const ref = useRef(null)
+  const [at, setAt] = useState({ left: x, top: y })
+  useLayoutEffect(() => {
+    const r = ref.current.getBoundingClientRect()
+    setAt({ left: Math.max(8, Math.min(x, window.innerWidth - r.width - 8)), top: Math.max(8, Math.min(y, window.innerHeight - r.height - 8)) })
+  }, [x, y])
   return (
-    <div className="tl-menu" style={{ left: Math.min(x, window.innerWidth - 280), top: Math.min(y, window.innerHeight - 40 * items.length - 20) }} onPointerDown={(e) => e.stopPropagation()}>
+    <div ref={ref} className="tl-menu" style={at} onPointerDown={(e) => e.stopPropagation()}>
       {items.map((it, i) =>
         it === '-' ? (
           <div key={i} className="tl-menu-sep" />
@@ -98,7 +105,7 @@ export function GenDialog({ edit, spec, characters, notify, onStart, onClose }) 
   async function go() {
     setBusy('Starting…')
     try {
-      await onStart({ ...spec, prompt, character, seconds, mode, ...(spec.kind === 'extend' && { overlap }), from: Number(from), to: Number(to), extraLoras: prep?.origin?.extraLoras || [], aspect: prep?.aspect })
+      await onStart({ ...spec, prompt, idea: idea.trim(), character, seconds, mode, ...(spec.kind === 'extend' && { overlap }), from: Number(from), to: Number(to), extraLoras: prep?.origin?.extraLoras || [], aspect: prep?.aspect })
       onClose()
     } catch (err) {
       notify(err.message)

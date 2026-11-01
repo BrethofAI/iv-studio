@@ -22,7 +22,7 @@ export function shotName(prompt, character) {
   // where the shot itself starts, not "(appears in [Shot 1])"
   const first = text.match(/(?:^|\n|description:)\s*\[Shot 1\]\s*([^\n]+)/)?.[1] ?? text.replace(/^[a-z_]+:\s*/gim, '')
   let s = first.replace(/\{char\}/g, character?.name?.split(/\s+/)[0] || 'Someone').replace(/<[^>]+>|\s*\(S\d+\)/g, '').replace(/\s+/g, ' ').trim()
-  for (let i = 0; i < 4; i++) s = s.replace(/^(?:live-action|cinematic|realistic|photorealistic|animated|documentary|film(?:ic)?|natural)[^,.;]*[,.;]\s*/i, '')
+  for (let i = 0; i < 4; i++) s = s.replace(/^(?:3d\s+)?(?:live-action|cinematic|realistic|photorealistic|animated|documentary|film(?:ic)?|natural)[^,.;]*[,.;]\s*/i, '')
   s = s.charAt(0).toUpperCase() + s.slice(1)
   return s.length > 40 ? `${s.slice(0, 40).replace(/\s+\S*$/, '')}…` : s || 'Untitled shot'
 }
