@@ -74,6 +74,9 @@ ok('the character: missing {char}, and describing the face the LoRA carries', ()
 ok('wording: filler words (with a fix), too many camera moves', () => {
   const f = lintPrompt(CLEAN.replace('Live-action, cinematic,', 'Live-action, masterpiece, 8k, cinematic,'), { seconds: 8 }).find((x) => x.code === 'filler')
   assert.ok(f && !/masterpiece|8k/.test(f.fix))
+  // three in a row leave no doubled commas behind
+  const g = lintPrompt(CLEAN.replace('Live-action, cinematic,', 'Live-action, cinematic, masterpiece, 8k, highly detailed,'), { seconds: 8 }).find((x) => x.code === 'filler')
+  assert.ok(g && g.fix.includes('Live-action, cinematic, ') && !/,\s*,/.test(g.fix))
   assert.ok(codes(CLEAN.replace('The camera pushes in', 'The camera pans left, tilts up, zooms in and pushes in'), { seconds: 8 }).includes('camera-load'))
 })
 ok('mentions: an unknown @name is an error', () => {

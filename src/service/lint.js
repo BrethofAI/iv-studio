@@ -159,7 +159,7 @@ export function lintPrompt(prompt, { mode = 'text', seconds = 5, media = [], cha
 
   // ---- wording
   const filler = [...new Set((text.match(FILLER) || []).map((w) => w.toLowerCase()))]
-  if (filler.length) add('info', 'filler', `"${filler.join('", "')}" describe how good it should look, which H3 doesn't act on. Describe what is seen instead.`, text.replace(FILLER, '').replace(/ ,/g, ',').replace(/,\s*,/g, ',').replace(/ {2,}/g, ' '))
+  if (filler.length) add('info', 'filler', `"${filler.join('", "')}" describe how good it should look, which H3 doesn't act on. Describe what is seen instead.`, text.replace(FILLER, '').replace(/ ,/g, ',').replace(/,(\s*,)+/g, ',').replace(/ {2,}/g, ' '))
   if (body) {
     for (const shot of body.split(/(?=\[Shot \d+\])/)) {
       const moves = CAMERA_MOVES.filter(([, re]) => re.test(shot)).map(([name]) => name)
