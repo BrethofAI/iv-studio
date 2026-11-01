@@ -13,7 +13,7 @@ const even = (v) => Math.max(2, Math.floor(v / 2) * 2)
 // What a file is: kind, duration, size and whether it has sound, from ffprobe.
 export function probe(ffprobe, file) {
   return new Promise((resolve, reject) => {
-    const p = spawn(ffprobe, ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width,height,r_frame_rate', '-of', 'json', file], { windowsHide: true })
+    const p = spawn(ffprobe, ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,codec_name,width,height,r_frame_rate:stream_tags=alpha_mode', '-of', 'json', file], { windowsHide: true })
     let out = ''
     p.stdout.on('data', (d) => (out += d))
     p.on('error', reject)
@@ -29,7 +29,9 @@ export function probe(ffprobe, file) {
         width: video?.width || null,
         height: video?.height || null,
         fps: kind === 'video' && d ? +(n / d).toFixed(3) : null,
-        hasAudio: info.streams?.some((s) => s.codec_type === 'audio') || false
+        hasAudio: info.streams?.some((s) => s.codec_type === 'audio') || false,
+        // a WebM with a see-through background (a cut-out): ffmpeg keeps it only through the libvpx decoder
+        ...(kind === 'video' && video?.tags?.alpha_mode === '1' ? { alpha: true, codec: video.codec_name } : {})
       })
     })
   })

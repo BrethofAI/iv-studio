@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 // IV Studio's own confirmation dialog, in place of the system box:
 //   if (await ask({ title: 'Delete "Theo"?', message: 'Its videos stay on disk.', confirm: 'Delete', danger: true })) ...
+// With input ({ value, placeholder }), it asks for a few words and resolves with them (false when cancelled or empty).
 // <ConfirmHost /> is mounted once in App and shows whatever ask() requests.
 let open = null
 export function ask(options) {
@@ -11,13 +12,17 @@ export function ask(options) {
 export function ConfirmHost() {
   const [req, setReq] = useState(null)
   const okRef = useRef(null)
+  const inputRef = useRef(null)
+  const [text, setText] = useState('')
   useEffect(() => {
     open = setReq
     return () => (open = null)
   }, [])
   useEffect(() => {
     if (!req) return
-    okRef.current?.focus()
+    setText(req.input?.value || '')
+    if (req.input) setTimeout(() => inputRef.current?.select(), 0)
+    else okRef.current?.focus()
     const onKey = (e) => {
       if (e.key === 'Escape') answer(false)
       else if (e.key === 'Enter') answer(true)
@@ -26,7 +31,8 @@ export function ConfirmHost() {
     return () => window.removeEventListener('keydown', onKey)
   }, [req])
   function answer(yes) {
-    req.resolve(yes)
+    const words = (inputRef.current?.value || '').trim()
+    req.resolve(req.input ? (yes && words ? words : false) : yes)
     setReq(null)
   }
   if (!req) return null
@@ -36,6 +42,7 @@ export function ConfirmHost() {
         <p className="mono label">{req.kicker || (req.danger ? 'Are you sure?' : 'Confirm')}</p>
         <h2 id="confirm-title">{req.title}</h2>
         {req.message && <p className="confirm-message">{req.message}</p>}
+        {req.input && <input ref={inputRef} className="confirm-input" value={text} placeholder={req.input.placeholder || ''} onChange={(e) => setText(e.target.value)} />}
         {req.details && (
           <dl className="confirm-details">
             {req.details.map(([k, v]) => (

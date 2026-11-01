@@ -6,7 +6,7 @@ import SourceMonitor from './SourceMonitor'
 import Timeline from './Timeline'
 import { ContextMenu, GenDialog, PickDialog } from './Generate'
 import { ask } from '../Confirm'
-import { FRAME, clipEnd, clipFor, clipLength, describeChange, editLength, editPoints, insert, newId, nextTrackId, overwrite, remove, split, timecode, titleClip, tracksOf } from './model'
+import { FRAME, clipEnd, clipFor, clipLength, describeChange, editLength, editPoints, insert, newId, nextTrackId, overwrite, remove, split, timecode, titleClip, tracksOf, videoLayers } from './model'
 
 // Panel sizes, remembered between sessions: bin and effect-controls widths, the source monitor's share
 // of the two monitors, and the timeline's height.
@@ -329,6 +329,7 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
         disabled: !video || m.kind === 'image',
         onClick: () => setGenSpec({ kind: 'retake', clip: clip.id, from: +Math.max(clip.start, at - 1).toFixed(2), to: +Math.min(clipEnd(clip), at + 1).toFixed(2) })
       })
+      items.push({ label: 'Cut out…', hint: 'keep only who or what you name', disabled: !video || !!m.alpha, onClick: () => cutOut(clip) })
     } else if (gap?.to != null && gap.to - gap.from > FRAME) {
       items.push({ label: `Fill this gap…`, hint: `${(gap.to - gap.from).toFixed(2)} s`, disabled: gap.to - gap.from > 15, onClick: () => setGenSpec({ kind: 'bridge', gap }) })
     } else if (gap) {
@@ -336,6 +337,33 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
       if (before) items.push({ label: 'Extend the clip before…', hint: 'carry it on 5 to 15 s', onClick: () => setGenSpec({ kind: 'extend', clip: before.id }) })
     }
     if (items.length) setMenu({ x: e.clientX, y: e.clientY, items })
+  }
+  // A cut-out of a clip (SAM 3 on this PC): only who or what the person names stays, the rest is see-through. It
+  // goes on the first video track above the clip that is free over the same stretch (a new one when none is).
+  async function cutOut(clip) {
+    const m = edit.media[clip.media]
+    const what = await ask({ kicker: 'Cut out', title: 'Keep only…', message: 'Who or what stays: "person", "the woman", "the dog", "the red car". It is found in every frame and the rest turns see-through. The cut-out goes on the track above, over this clip.', input: { value: 'person' }, confirm: 'Cut out' })
+    if (!what) return
+    notify(`Cutting out "${what}": about half a minute for a 5 s clip.`, 'info')
+    try {
+      const r = await window.ivstudio.cutouts.make({ file: m.path, what, name: m.name })
+      const e = editRef.current
+      const all = tracksOf(e)
+      const layers = videoLayers(all)
+      const free = (t) => !t.locked && !e.clips.some((x) => x.track === t.id && x.start < clipEnd(clip) - 1e-3 && clipEnd(x) > clip.start + 1e-3)
+      let target = layers.slice(layers.findIndex((t) => t.id === clip.track) + 1).find(free)
+      let tracks = e.tracks
+      if (!target) {
+        target = { id: nextTrackId(all, 'video'), kind: 'video' }
+        tracks = [...all, { ...target, label: target.id }]
+      }
+      // muted: the clip underneath already plays the same sound
+      const c = { ...clipFor(r.media, target.id, clip.start), in: m.kind === 'image' ? 0 : clip.in, out: m.kind === 'image' ? clipLength(clip) : Math.min(clip.out, r.media.duration || clip.out), muted: true }
+      commit({ media: { ...e.media, [r.media.id]: r.media }, clips: [...e.clips, c], tracks })
+      notify(`"${what}" cut out (${Math.round(r.coverage * 100)}% of the frame) on ${target.id}.`, 'info')
+    } catch (err) {
+      notify(err.message)
+    }
   }
   async function startGen(spec) {
     clearTimeout(saveTimer.current)

@@ -125,6 +125,9 @@ contextBridge.exposeInMainWorld('ivstudio', {
   reels: {
     make: call('reels:make')
   },
+  cutouts: {
+    make: call('cutouts:make')
+  },
   edits: {
     meta: call('edits:meta'),
     list: call('edits:list'),

@@ -11,6 +11,7 @@ import { Edits, FORMATS, LOUDNESS } from '../service/edits'
 import { EditGen } from '../service/editgen'
 import { Productions } from '../service/productions'
 import { Reels } from '../service/reel'
+import { Cutouts } from '../service/cutout'
 import { DEFAULT_TRACKS } from '../service/timeline'
 import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
 import { initUpdater, updateState } from './updater'
@@ -248,6 +249,13 @@ app.whenReady().then(() => {
   // Reel: pictures and a song cut to the beat, as an edit (Workflows → Reel).
   const reels = new Reels({ dataDir: DATA, edits })
   handle('reels:make', (opts) => reels.make(opts))
+  // Cut-outs: keep only who or what you name, see-through elsewhere (SAM 3.1 on this PC's ComfyUI).
+  const cutouts = new Cutouts({ dataDir: DATA, studio: () => studio, edits })
+  handle('cutouts:make', async (opts) => {
+    await voices.release()
+    const r = await cutouts.make(opts)
+    return { ...r, media: await edits.addMedia(r.file, { type: 'cutout', from: opts.file, what: r.what }) }
+  })
   // Crop and trim references before they go to H3 (Create's media editor).
   const mediaTools = new MediaTools({ dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
   // ---------- Audio: voices (IV Studio's own engine speaks: VoxCPM2 and Whisper in its data folder) ----------

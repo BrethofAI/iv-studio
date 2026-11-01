@@ -38,7 +38,7 @@ const PREVIEW_SAVES = { 1: '42', 2: '118', 3: '128' }
 // big models never share the GPU (Z-Image or MiniMax Music next to H3 overflows a 24 GB card and 64 GB of RAM).
 // Jobs of the same family keep their models: a finish reuses its preview's cached latent.
 // Create -> Image jobs are 'picture:<family>' (see images.js), so switching image models unloads too.
-const FAMILIES = { music: 'music', still: 'image', enhance: 'seedvr2' }
+const FAMILIES = { music: 'music', still: 'image', enhance: 'seedvr2', cutout: 'sam' }
 const familyOf = (kind) => FAMILIES[kind] || (String(kind).startsWith('picture:') ? String(kind) : 'h3')
 // The UNETLoader each mode of the IV Studio workflow uses (Settings can swap its model).
 export const MODEL_NODES = { text: '101', frames: '201', reference: '301', continue: '601' }
@@ -712,6 +712,14 @@ export class Studio {
         for (const t of out.text || []) if (typeof t === 'string' && /\.(mp4|webm|mov)$/i.test(t)) list.push(this.fileFromPath(t, nid === fin ? 'final' : 'video'))
         for (const img of out.images || []) if (/\.(png|jpe?g|webp)$/i.test(img.filename)) list.push(file(img, 'image'))
       }
+      return list
+    }
+    if (job.plan?.cutout) {
+      // a cut-out's mask (cutout.js): a picture from SaveImage, or the mask video
+      const o = outputs.mask
+      const img = (o?.images || [])[0]
+      const vid = (o?.gifs || []).find((f) => /\.mp4$/i.test(f.filename))
+      if (img || vid) list.push(file(img || vid, 'mask'))
       return list
     }
     if (job.plan?.enhance) {

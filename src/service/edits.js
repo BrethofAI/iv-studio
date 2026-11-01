@@ -118,6 +118,8 @@ export class Edits {
       const m = e.media[c.media]
       const len = clipLength(c)
       if (m.kind === 'image') args.push('-loop', '1', '-t', len.toFixed(3), '-i', m.path)
+      // a cut-out's see-through background survives only ffmpeg's libvpx decoder
+      else if (m.alpha) args.push('-c:v', m.codec === 'vp8' ? 'libvpx' : 'libvpx-vp9', '-i', m.path)
       else args.push('-i', m.path)
       const i = input++
       if (m.kind === 'video' && m.hasAudio && hears(c)) shown(tracks, c.track) ? sounds.push(c) : audio.push({ i, c })

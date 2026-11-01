@@ -22,6 +22,7 @@ import { Edits, editLength, FORMATS, LOUDNESS } from '../service/edits'
 import { EditGen, GEN_KINDS } from '../service/editgen'
 import { Productions } from '../service/productions'
 import { Reels } from '../service/reel'
+import { Cutouts } from '../service/cutout'
 import { MediaTools } from '../service/media'
 import { comfyFolders, contentDir, dataDir, readSettings, resourcesDir, writerOf, writeSettings } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
@@ -478,6 +479,15 @@ tool('pick_generation', `Pick which of a bridge's previews to finish (candidate 
 })
 tool('cancel_generation', 'Stop a generation (only ones you started, or the person asked you to) and remove its placeholder.', { editId: z.string(), genId: z.string() }, async ({ editId, genId }) => ({ removed: await editgen.cancel(editId, genId) }))
 
+const cutouts = new Cutouts({ dataDir: DATA, studio: () => studio, edits })
+tool('cut_out', `Cut out who or what you name from a picture or video (SAM 3.1 on this PC's ComfyUI, free): what stays is found in every frame and the rest turns see-through. Returns a PNG (pictures) or a WebM with a see-through background and the video's sound, plus coverage (how much of the frame stays). About 15 s for a picture and 30 s for a 5 s clip. Put it on a track above other footage (add_media, then edit_timeline); export_edit keeps it see-through. Fails when nothing matching is found: try other words ("person", "the dog").`, {
+  file: z.string().describe('A picture or video on this PC'),
+  what: z.string().default('person').describe('Who or what stays: "person", "the woman", "the dog", "the red car"'),
+  soften: z.number().min(0).max(6).default(1.2).describe('Edge softness in pixels')
+}, async (args) => {
+  if (readSettings(BASE).target !== 'cloud') await voices.release()
+  return cutouts.make(args)
+})
 const reels = new Reels({ dataDir: DATA, edits })
 tool('make_reel', `Make a reel: pictures (and video clips), in order, cut to a song's beat with a slow move on each picture (push in, drift, pull out), as a new edit with the song on A1 fading out at the end. The beat is found from the song itself (tempo and bar-aligned cuts; a song without a clear pulse is cut evenly). pace: calm (about 3 s a picture), normal (about 2 s) or fast (about 1 s), always a whole number of beats. format: 1080p, vertical or square. It ends with the pictures or the song (or length), whichever comes first; returns the edit id, its length, the BPM found, and how many pictures fit. Seconds on this PC, free; then get_edit, edit_timeline and export_edit. ${LIVE}`, {
   items: z.array(z.string()).min(1).describe('Picture or video files, in order'),

@@ -219,6 +219,11 @@ Pass `character` when the clip shows one. Each takes GPU minutes; poll `list_gen
 The person sees a striped placeholder on the timeline while it works, and the result lands as an
 ordinary clip they can undo. Retake needs ComfyUI on this PC.
 
+`cut_out` keeps only who or what you name in a picture or clip (SAM 3.1, free, seconds): a PNG or a WebM
+with a see-through background. Put it on a track above other footage (add_media, edit_timeline, muted when
+the clip underneath has the same sound); export_edit keeps it see-through. The editor's right-click
+"Cut out…" does the same over the clip it was made from.
+
 ## Models and characters
 
 - `list_h3_models` and `set_workflow_model` choose the H3 model per workflow (some suit realism,
