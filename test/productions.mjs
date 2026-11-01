@@ -177,6 +177,10 @@ ok('the person\'s own picture becomes a made-up role\'s face, and their sketches
   assert.throws(() => films.useFace(p.id, 'Farmer', touch(dir, 'notes.txt')), /PNG, JPEG or WebP/)
   assert.throws(() => films.useFace(p.id, 'Farmer', path.join(dir, 'missing.png')), /Pick a picture/)
   assert.ok(films.list().every((f) => f.id), 'the faces folder is not read as a film')
+  // a bird who speaks, the dog and the farmer all in one shot: all three keep their faces
+  films.useFace(p.id, 'Bluebird', art)
+  const three = films.onScreen(films.get(p.id), { speaker: 'BLUEBIRD', characters: ['BLUEBIRD', 'BRAMBLE', 'FARMER'], character: 'none' })
+  assert.deepEqual(three.map((x) => x.ch.name), ['Bluebird', 'Bramble', 'Farmer'])
   fs.rmSync(dir, { recursive: true, force: true })
 })
 ok('a place keeps its angles, and a shot takes the view that suits its camera', () => {

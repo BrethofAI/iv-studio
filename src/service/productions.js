@@ -553,7 +553,8 @@ export class Productions {
     return this.studio().characters().find((c) => c.id === cid) || null
   }
   // The people on screen in a shot who have a face picture: the shot's own character first, then anyone else it
-  // names who is in the cast, then made-up people with a drawn face (two at most), as [{ ch, face, made }].
+  // names who is in the cast, then made-up people with a face (three at most: a shot of a man, his dog and a bird
+  // drew the man from nothing with two), as [{ ch, face, made }].
   onScreen(p, sh) {
     const names = [...(sh.speaker ? [sh.speaker] : []), ...(sh.characters || [])]
     const ids = [sh.character, ...names.map((n) => p.cast.find((c) => c.characterId && (first(c.as) === first(n) || first(this.character(c.characterId)?.name) === first(n)))?.characterId)]
@@ -561,7 +562,7 @@ export class Productions {
     const made = [...new Map(names.map((n) => this.madeUp(p, n)).filter((c) => c?.face && fs.existsSync(c.face)).map((c) => [first(c.as), c])).values()]
       .filter((c) => !presets.some((x) => first(x.ch.name) === first(c.as)))
       .map((c) => ({ ch: { id: `made:${first(c.as)}`, name: nameCase(c.as) }, face: c.face, made: true }))
-    return [...presets, ...made].slice(0, 2)
+    return [...presets, ...made].slice(0, 3)
   }
   // A made-up person's cast entry (someone no character preset plays), or null.
   madeUp(p, name) {
