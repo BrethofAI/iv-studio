@@ -128,6 +128,9 @@ contextBridge.exposeInMainWorld('ivstudio', {
   cutouts: {
     make: call('cutouts:make')
   },
+  reframes: {
+    make: call('reframes:make')
+  },
   edits: {
     meta: call('edits:meta'),
     list: call('edits:list'),

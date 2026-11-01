@@ -219,6 +219,11 @@ with a see-through background. Put it on a track above other footage (add_media,
 the clip underneath has the same sound); export_edit keeps it see-through. The editor's right-click
 "Cut out…" does the same over the clip it was made from.
 
+`reframe` puts a video or picture in another frame shape (9:16, 1:1, 4:5, 16:9) by drawing what lies beyond its
+edges: the original stays as it is in the middle and the bars are filled (video with H3's masked edit, a few
+minutes for 5 s, up to 15 s; pictures with Qwen 2.1's outpaint LoRA, about 30 s). Give `about` a sentence on
+what it shows. The editor's right-click "Reframe to …" fits a clip to the edit's format and swaps it in place.
+
 ## Models and characters
 
 - `list_h3_models` and `set_workflow_model` choose the H3 model per workflow (some suit realism,

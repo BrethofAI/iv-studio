@@ -30,6 +30,12 @@ function useLayout() {
   return [layout, set]
 }
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+// the frame shape of each export format, for Reframe
+const SHAPE_OF = { '1080p': '16:9', '4k': '16:9', vertical: '9:16', square: '1:1' }
+const shapeFits = (m, format) => {
+  const [a, b] = (SHAPE_OF[format] || '9:16').split(':').map(Number)
+  return !m?.width || !m?.height || Math.abs(m.width / m.height - a / b) < 0.03
+}
 function dragSplit(e, onMove) {
   e.preventDefault()
   const x0 = e.clientX
@@ -330,6 +336,7 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
         onClick: () => setGenSpec({ kind: 'retake', clip: clip.id, from: +Math.max(clip.start, at - 1).toFixed(2), to: +Math.min(clipEnd(clip), at + 1).toFixed(2) })
       })
       items.push({ label: 'Cut out…', hint: 'keep only who or what you name', disabled: !video || !!m.alpha, onClick: () => cutOut(clip) })
+      items.push({ label: `Reframe to ${SHAPE_OF[edit.settings.format] || '9:16'}…`, hint: 'draw what lies beyond its edges', disabled: !video || !!m.alpha || shapeFits(m, edit.settings.format), onClick: () => reframe(clip) })
     } else if (gap?.to != null && gap.to - gap.from > FRAME) {
       items.push({ label: `Fill this gap…`, hint: `${(gap.to - gap.from).toFixed(2)} s`, disabled: gap.to - gap.from > 15, onClick: () => setGenSpec({ kind: 'bridge', gap }) })
     } else if (gap) {
@@ -337,6 +344,24 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
       if (before) items.push({ label: 'Extend the clip before…', hint: 'carry it on 5 to 15 s', onClick: () => setGenSpec({ kind: 'extend', clip: before.id }) })
     }
     if (items.length) setMenu({ x: e.clientX, y: e.clientY, items })
+  }
+  // A clip of another shape redrawn to fill the edit's frame (H3 for video, Qwen's outpaint for pictures): the new
+  // version takes the clip's place, keeping its timing; Undo brings the old one back.
+  async function reframe(clip) {
+    const m = edit.media[clip.media]
+    const shape = SHAPE_OF[edit.settings.format] || '9:16'
+    const ok = await ask({ kicker: 'Reframe', title: `Reframe to ${shape}?`, message: `${m.kind === 'image' ? 'The picture' : 'The shot'} is kept as it is in the middle, and what lies beyond its edges is drawn to fill the ${shape} frame. ${m.kind === 'image' ? 'About half a minute.' : 'A few minutes on this PC for a 5 s shot (up to 15 s of it).'}`, confirm: 'Reframe' })
+    if (!ok) return
+    notify(`Reframing ${m.name} to ${shape}…`, 'info')
+    try {
+      const r = await window.ivstudio.reframes.make({ file: m.path, shape, about: m.source?.label || '' })
+      const e = editRef.current
+      const len = clipLength(clip)
+      commit({ media: { ...e.media, [r.media.id]: r.media }, clips: e.clips.map((x) => (x.id === clip.id ? { ...x, media: r.media.id, in: m.kind === 'image' ? 0 : Math.min(x.in, Math.max(0, (r.media.duration || len) - len)), out: m.kind === 'image' ? len : Math.min(x.in, Math.max(0, (r.media.duration || len) - len)) + Math.min(len, r.media.duration || len) } : x)) })
+      notify(`Reframed to ${shape}: ${Math.round(r.filled * 100)}% of the frame drawn.`, 'info')
+    } catch (err) {
+      notify(err.message)
+    }
   }
   // A cut-out of a clip (SAM 3 on this PC): only who or what the person names stays, the rest is see-through. It
   // goes on the first video track above the clip that is free over the same stretch (a new one when none is).

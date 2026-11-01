@@ -23,6 +23,7 @@ import { EditGen, GEN_KINDS } from '../service/editgen'
 import { Productions } from '../service/productions'
 import { Reels } from '../service/reel'
 import { Cutouts } from '../service/cutout'
+import { Reframes } from '../service/reframe'
 import { MediaTools } from '../service/media'
 import { comfyFolders, contentDir, dataDir, readSettings, resourcesDir, writerOf, writeSettings } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
@@ -479,6 +480,17 @@ tool('pick_generation', `Pick which of a bridge's previews to finish (candidate 
 })
 tool('cancel_generation', 'Stop a generation (only ones you started, or the person asked you to) and remove its placeholder.', { editId: z.string(), genId: z.string() }, async ({ editId, genId }) => ({ removed: await editgen.cancel(editId, genId) }))
 
+const reframes = new Reframes({ dataDir: DATA, studio: () => studio, edits, images: () => images })
+tool('reframe', `Put a video or picture in a new frame shape (9:16, 1:1, 4:5 or 16:9) by drawing what lies beyond its edges instead of cropping: it is kept as it is in the middle and the bars are filled. Video: MiniMax H3's masked edit on this PC (the original picture and sound are held; up to 15 s; a few minutes for 5 s); about tells H3 what the shot shows. Picture: Qwen Image 2.1 with the outpaint LoRA, the original pasted back (about 30 s). zoom above 1 crops into it first, so less is drawn. Returns the file and how much of the frame was drawn (filled). Free, local; check the result before using it.`, {
+  file: z.string(),
+  shape: z.enum(['9:16', '1:1', '4:5', '16:9']).default('9:16'),
+  about: z.string().default('').describe('What it shows, in a sentence'),
+  zoom: z.number().min(1).max(2).default(1),
+  seed: z.number().int().default(42)
+}, async (args) => {
+  if (readSettings(BASE).target !== 'cloud') await voices.release()
+  return /\.(png|jpe?g|webp|bmp)$/i.test(args.file) ? reframes.makePicture(args) : reframes.make(args)
+})
 const cutouts = new Cutouts({ dataDir: DATA, studio: () => studio, edits })
 tool('cut_out', `Cut out who or what you name from a picture or video (SAM 3.1 on this PC's ComfyUI, free): what stays is found in every frame and the rest turns see-through. Returns a PNG (pictures) or a WebM with a see-through background and the video's sound, plus coverage (how much of the frame stays). About 15 s for a picture and 30 s for a 5 s clip. Put it on a track above other footage (add_media, then edit_timeline); export_edit keeps it see-through. Fails when nothing matching is found: try other words ("person", "the dog").`, {
   file: z.string().describe('A picture or video on this PC'),

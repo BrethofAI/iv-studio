@@ -12,6 +12,7 @@ import { EditGen } from '../service/editgen'
 import { Productions } from '../service/productions'
 import { Reels } from '../service/reel'
 import { Cutouts } from '../service/cutout'
+import { Reframes } from '../service/reframe'
 import { DEFAULT_TRACKS } from '../service/timeline'
 import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
 import { initUpdater, updateState } from './updater'
@@ -255,6 +256,13 @@ app.whenReady().then(() => {
     await voices.release()
     const r = await cutouts.make(opts)
     return { ...r, media: await edits.addMedia(r.file, { type: 'cutout', from: opts.file, what: r.what }) }
+  })
+  // Reframe: a shot or picture in a new frame shape, with what lies beyond its edges drawn (H3 / Qwen outpaint).
+  const reframes = new Reframes({ dataDir: DATA, studio: () => studio, edits, images: () => images })
+  handle('reframes:make', async (opts) => {
+    await voices.release()
+    const r = /\.(png|jpe?g|webp|bmp)$/i.test(opts.file) ? await reframes.makePicture(opts) : await reframes.make(opts)
+    return { ...r, media: await edits.addMedia(r.file, { type: 'reframe', from: opts.file, shape: r.shape }) }
   })
   // Crop and trim references before they go to H3 (Create's media editor).
   const mediaTools = new MediaTools({ dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })

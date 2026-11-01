@@ -722,6 +722,12 @@ export class Studio {
       if (img || vid) list.push(file(img || vid, 'mask'))
       return list
     }
+    if (job.plan?.reframe) {
+      // a reframed shot (reframe.js): the saved video with its sound
+      const v = videoOf(outputs.save)
+      if (v) list.push(file(v, 'final'))
+      return list
+    }
     if (job.plan?.enhance) {
       // Enhance: SeedVR2's saved video (with its sound), or the path DLSS 5 answers with
       const v = (o) => (o?.gifs || []).filter((f) => /\.mp4$/i.test(f.filename)).sort((a, b) => /-audio/.test(b.filename) - /-audio/.test(a.filename))[0]

@@ -19,6 +19,15 @@ export default function Preview({ clips, media, tracks, format, time, playing, r
   // One element per clip that has media.
   useEffect(() => {
     const map = els.current
+    // first drop elements whose clip is gone or now shows another file (a reframe swaps a clip's media in place),
+    // so the loop below makes the new one at once
+    for (const [id, el] of map) {
+      if (!clips.some((c) => c.id === id && media[c.media]?.path && fileUrl(media[c.media].path) === el.src)) {
+        el.pause?.()
+        el.removeAttribute('src')
+        map.delete(id)
+      }
+    }
     for (const c of clips) {
       const m = media[c.media]
       if (!m || map.has(c.id)) continue
@@ -31,13 +40,6 @@ export default function Preview({ clips, media, tracks, format, time, playing, r
         el.addEventListener('loadeddata', () => !state.current.playing && draw(state.current.time))
       } else el.onload = () => draw(state.current.time)
       map.set(c.id, el)
-    }
-    for (const [id, el] of map) {
-      if (!clips.some((c) => c.id === id && media[c.media]?.path && fileUrl(media[c.media].path) === el.src)) {
-        el.pause?.()
-        el.removeAttribute('src')
-        map.delete(id)
-      }
     }
   }, [clips, media])
 
