@@ -2,7 +2,7 @@
 //   node test/lint.mjs
 import assert from 'node:assert/strict'
 import { blocking, firstLastLine, FIRST_FRAME_LINE, lintPrompt, sections } from '../src/service/lint.js'
-import { keepIdeaLine } from '../src/service/prompter.js'
+import { keepIdeaLine, keepIdeaMedium } from '../src/service/prompter.js'
 
 let n = 0
 const ok = (name, fn) => {
@@ -100,5 +100,11 @@ ok('a line quoted in the idea is kept when the writer drops it', () => {
   assert.ok(!codes(kept, { seconds: 8, character: tess }).includes('no-speaker'))
   assert.equal(keepIdeaLine(CLEAN, 'Tess says "Bus is late again."', tess), CLEAN)
   assert.equal(keepIdeaLine(dropped, 'Tess says "Hi." and Theo says "Bye."', tess), dropped)
+})
+ok('the medium the idea asks for replaces a written Live-action', () => {
+  assert.match(keepIdeaMedium(CLEAN, 'An animated short: the old farmer from <Picture 1> and his dog'), /\[Shot 1\] Animated film, cinematic,/)
+  assert.match(keepIdeaMedium(CLEAN, 'a 3D animated scene in a kitchen'), /3D animated film, cinematic/)
+  assert.match(keepIdeaMedium(CLEAN, 'claymation: a fox steals a pie'), /Stop-motion clay animation/)
+  assert.equal(keepIdeaMedium(CLEAN, 'Tess waits at a bus stop in the rain'), CLEAN)
 })
 console.log(`${n} checks passed`)

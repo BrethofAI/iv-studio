@@ -39,6 +39,7 @@ DIRECTING RULES
 - Use a new shot only when a cut adds new information. Later shots start at strictly increasing times inside the duration.
 - Camera: one compatible move at a time, written like "The camera pushes in with small amplitude at slow speed toward her hands." Use "The camera holds a static shot" for a locked camera.
 - Dialogue: speakers get stable IDs in the order they first speak, written right after who they are, e.g. "Mara (S1)" or "the older fisherman in the orange vest (S1)". The first time someone speaks, say who they are and what their voice is like ("the older fisherman in the orange vest, with a gravelly, slow voice (S1), shouts:"); later just "the fisherman in orange (S1) says:". Never use S1 or S2 as a name on its own. Put ONLY the exact spoken words inside <d>[English] ...</d>, never quotation marks. Describe delivery and the listener's reaction outside the tag. Keep lines short enough to say naturally in the time: about 2.5 words a second, with room for reactions.
+- "style" names the medium first. When the pictures you are shown are animated, drawn, painted, clay or 3D renders, say so ("3D animated film, soft painterly light") and never "Live-action"; use "Live-action" only for photographs, filmed footage or no pictures at all.
 - Describe what is seen and heard, positively and concretely. No negative prompts, no camera or render settings, no real people, no imitation of named artists or franchises.
 - Keep identities, wardrobe, props, light and screen direction consistent unless something visibly changes them.
 - soundscape: 1-4 sentences of ambience, physical action sounds and breaths (no dialogue, no music). music: 1-3 sentences of audience-only music, or "N/A".
@@ -379,6 +380,21 @@ export function keepIdeaLine(prompt, idea, character) {
   return quoted.length === 1 ? withLine(prompt, character ? '{char} (S1)' : 'Someone', quoted[0]) : prompt
 }
 
+// The medium the idea asks for wins over a writer that wrote "Live-action" anyway (the local one reads a 3D animated
+// frame as a photograph).
+const MEDIA = [
+  [/\bclay|claymation|stop[- ]motion/i, 'Stop-motion clay animation'],
+  [/\banime\b/i, 'Anime'],
+  [/\bhand[- ]drawn|\bdrawn\b|illustrat|\bcartoon/i, 'Hand-drawn animation'],
+  [/\bpainted|painterly|watercolou?r/i, 'Painted animation'],
+  [/\b3d\b|\bcgi\b|\bpixar/i, '3D animated film'],
+  [/\banimat/i, 'Animated film']
+]
+export function keepIdeaMedium(prompt, idea) {
+  const medium = MEDIA.find(([re]) => re.test(String(idea || '')))?.[1]
+  return medium ? prompt.replace(/\bLive-action\b/gi, medium) : prompt
+}
+
 // cpu: keep the model off the GPU (used while ComfyUI is rendering, so H3 keeps its VRAM). On the CPU the draft is
 // mended but not sent back for a second pass, which would double a slow write.
 export async function writeLocal({ idea, mode = 'text', seconds = 5, character, sequence = false, previous, media = [], model, cpu = false }) {
@@ -409,7 +425,7 @@ export async function writeLocal({ idea, mode = 'text', seconds = 5, character, 
   }
   const data = await chat([message])
   const again = cpu ? null : (note, previous) => chat([message, { role: 'assistant', content: previous }, { role: 'user', content: note }])
-  return keepIdeaLine(await checked(data, { assembleOpts: { mode, seconds, lastFrame: req.lastFrame }, character, ctx: checkerContext({ mode, seconds, media, character }), again }), idea, character)
+  return keepIdeaMedium(keepIdeaLine(await checked(data, { assembleOpts: { mode, seconds, lastFrame: req.lastFrame }, character, ctx: checkerContext({ mode, seconds, media, character }), again }), idea, character), idea)
 }
 
 // The same prompt from the person's Claude Code or Codex (harness.js), with the whole guide: it runs off this PC's GPU.
@@ -423,7 +439,7 @@ export async function writeHarness({ engine, model, idea, mode = 'text', seconds
   user += '\n\nAnswer with the JSON object only.'
   const data = await harnessJson({ engine, model, system: req.system, user, schema: req.schema, images })
   const again = (note, previous) => harnessJson({ engine, model, system: req.system, user: `${user}\n\nYour previous answer:\n${previous}\n\n${note}`, schema: req.schema, images })
-  return keepIdeaLine(await checked(data, { assembleOpts: { mode, seconds, lastFrame: req.lastFrame }, character, ctx: checkerContext({ mode, seconds, media, character }), again }), idea, character)
+  return keepIdeaMedium(keepIdeaLine(await checked(data, { assembleOpts: { mode, seconds, lastFrame: req.lastFrame }, character, ctx: checkerContext({ mode, seconds, media, character }), again }), idea, character), idea)
 }
 
 function parseJson(text) {
