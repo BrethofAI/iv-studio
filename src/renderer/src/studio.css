@@ -5888,3 +5888,78 @@ button.nav-update:hover {
   background: #000;
   object-fit: contain;
 }
+
+/* Workflows → Reel */
+.reel-page .reel-h {
+  margin: 28px 0 10px;
+  font: 700 18px/1 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.reel-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.reel-item {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  width: 132px;
+}
+.reel-item img,
+.reel-item video {
+  width: 132px;
+  height: 92px;
+  object-fit: cover;
+  border: 1px solid var(--line-strong);
+}
+.reel-item figcaption {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.reel-item figcaption span {
+  flex: 1;
+}
+.reel-add {
+  width: 132px;
+  height: 92px;
+  border: 1px dashed var(--line-strong);
+  background: none;
+  color: var(--paper-dim);
+  cursor: pointer;
+  font: 700 14px/1.2 var(--display);
+  text-transform: uppercase;
+}
+.reel-songs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.reel-song {
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--ink-2);
+  color: var(--cream);
+  text-align: left;
+  cursor: pointer;
+}
+.reel-song.on {
+  border-color: rgba(244, 72, 89, 0.8);
+}
+.reel-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.reel-name {
+  min-width: 220px;
+}
+.reel-make {
+  margin-top: 16px;
+}

@@ -122,6 +122,9 @@ contextBridge.exposeInMainWorld('ivstudio', {
     info: call('agents:info'),
     installSkill: call('agents:installSkill')
   },
+  reels: {
+    make: call('reels:make')
+  },
   edits: {
     meta: call('edits:meta'),
     list: call('edits:list'),

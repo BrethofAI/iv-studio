@@ -10,6 +10,7 @@ import { Cloud, GPUS } from '../service/cloud'
 import { Edits, FORMATS, LOUDNESS } from '../service/edits'
 import { EditGen } from '../service/editgen'
 import { Productions } from '../service/productions'
+import { Reels } from '../service/reel'
 import { DEFAULT_TRACKS } from '../service/timeline'
 import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
 import { initUpdater, updateState } from './updater'
@@ -244,6 +245,9 @@ app.whenReady().then(() => {
     ffprobe: unpacked(ffmpegStatic.ffprobePath),
     fontFile: path.join(resourcesDir(path.join(app.getAppPath(), 'resources')), 'fonts', 'BarlowCondensed-SemiBold.ttf')
   })
+  // Reel: pictures and a song cut to the beat, as an edit (Workflows → Reel).
+  const reels = new Reels({ dataDir: DATA, edits })
+  handle('reels:make', (opts) => reels.make(opts))
   // Crop and trim references before they go to H3 (Create's media editor).
   const mediaTools = new MediaTools({ dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
   // ---------- Audio: voices (IV Studio's own engine speaks: VoxCPM2 and Whisper in its data folder) ----------

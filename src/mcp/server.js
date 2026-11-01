@@ -21,6 +21,7 @@ import { menuMessage, START_MENU } from '../service/startmenu'
 import { Edits, editLength, FORMATS, LOUDNESS } from '../service/edits'
 import { EditGen, GEN_KINDS } from '../service/editgen'
 import { Productions } from '../service/productions'
+import { Reels } from '../service/reel'
 import { MediaTools } from '../service/media'
 import { comfyFolders, contentDir, dataDir, readSettings, resourcesDir, writerOf, writeSettings } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
@@ -477,6 +478,15 @@ tool('pick_generation', `Pick which of a bridge's previews to finish (candidate 
 })
 tool('cancel_generation', 'Stop a generation (only ones you started, or the person asked you to) and remove its placeholder.', { editId: z.string(), genId: z.string() }, async ({ editId, genId }) => ({ removed: await editgen.cancel(editId, genId) }))
 
+const reels = new Reels({ dataDir: DATA, edits })
+tool('make_reel', `Make a reel: pictures (and video clips), in order, cut to a song's beat with a slow move on each picture (push in, drift, pull out), as a new edit with the song on A1 fading out at the end. The beat is found from the song itself (tempo and bar-aligned cuts; a song without a clear pulse is cut evenly). pace: calm (about 3 s a picture), normal (about 2 s) or fast (about 1 s), always a whole number of beats. format: 1080p, vertical or square. It ends with the pictures or the song (or length), whichever comes first; returns the edit id, its length, the BPM found, and how many pictures fit. Seconds on this PC, free; then get_edit, edit_timeline and export_edit. ${LIVE}`, {
+  items: z.array(z.string()).min(1).describe('Picture or video files, in order'),
+  song: z.string().describe('A sound file (a song from list_music has a file)'),
+  pace: z.enum(['calm', 'normal', 'fast']).default('normal'),
+  format: z.enum(['1080p', 'vertical', 'square']).default('1080p'),
+  length: z.number().min(3).optional().describe('At most this many seconds'),
+  name: z.string().default('Reel')
+}, (args) => reels.make(args))
 tool('export_edit', `Render the whole edit to one MP4 (H.264 + AAC) in Videos\\IV Studio\\Edits, or outDir. Returns at once; follow with get_edit_export. The export runs inside this MCP server, so it stops if the server stops.`, {
   editId: z.string(),
   outDir: z.string().optional()

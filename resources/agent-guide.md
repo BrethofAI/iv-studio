@@ -277,6 +277,9 @@ IV Studio makes songs and instrumentals on this PC's ComfyUI, free. Two engines:
 3. Use its `file`: `add_media` files (append true puts it on A1 of an edit), or trim it with
    `prepare_media` and pass it as `voiceLine` to `generate_previews` so a character sings it.
 4. The same settings and seed give the same song; a new seed gives a new take.
+5. A reel: `make_reel` with pictures (or clips) in order and a song's `file` cuts them to its beat, a whole
+   number of beats each (pace calm, normal or fast) with slow moves on the pictures, as a new edit. It finds
+   the beat itself and keeps the cuts on the song's bars; check the BPM it returns, then `export_edit`.
 
 ## Shinobi: edits you cut as an agent
 
