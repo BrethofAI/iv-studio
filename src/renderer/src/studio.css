@@ -5852,6 +5852,18 @@ button.nav-update:hover {
   width: 100%;
   font-size: 13px;
 }
+/* Draw their face now · Use a picture */
+.wiz-role-acts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 14px;
+}
+.wiz-extra-name {
+  width: 220px;
+  max-width: 100%;
+  font-size: 13px;
+}
 .wiz-angles {
   display: flex;
   flex-wrap: wrap;

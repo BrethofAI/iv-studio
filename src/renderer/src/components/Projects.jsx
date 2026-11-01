@@ -431,6 +431,20 @@ function Cast({ v, act, characters, notify, go, setStep }) {
     if (list.length) save({ locations: v.locations.map((x, j) => (j === i ? { ...x, pictures: [list[0], ...x.pictures.filter((p) => p !== list[0])] } : x)) })
   }
   const setPlace = (i, patch) => save({ locations: v.locations.map((x, j) => (j === i ? { ...x, ...patch } : x)) })
+  // the person's own picture as a made-up role's face, instead of a drawn one
+  const facePicture = async (role) => {
+    const files = await window.ivstudio.files.pick('picture')
+    const file = (Array.isArray(files) ? files : files ? [files] : []).map((f) => f.path || f)[0]
+    if (file) act(() => P().useFace(v.id, role, file), `${role} has your picture as their face. Their sketches are marked to redraw.`)
+  }
+  // someone who appears but never speaks (an animal, a passer-by): a made-up role so they can have a face too
+  const [extra, setExtra] = useState('')
+  const addExtra = () => {
+    const name = extra.trim()
+    if (!name || roles.some((r) => first(r) === first(name))) return setExtra('')
+    save({ cast: [...v.cast, { as: name, characterId: null, description: '', face: null }] }, `${name} is in the cast.`)
+    setExtra('')
+  }
   const preset = LOOKS.find(([, t]) => t === look)
   return (
     <section className="wiz-page">
@@ -454,7 +468,7 @@ function Cast({ v, act, characters, notify, go, setStep }) {
               <div className="wiz-role-face">{pic ? <img src={fileUrl(pic)} alt="" /> : <span>{role.slice(0, 1)}</span>}</div>
               <span className="wiz-role-name">{role}</span>
               <select value={c?.characterId || ''} onChange={(e) => castRole(role, e.target.value)} aria-label={`Who plays ${role}`}>
-                <option value="">{speakers.includes(role) || made ? 'A drawn face' : 'Not in it'}</option>
+                <option value="">{speakers.includes(role) || made ? 'Made up for this film' : 'Not in it'}</option>
                 {characters.map((x) => (
                   <option key={x.id} value={x.id}>
                     Played by {x.name}
@@ -465,15 +479,27 @@ function Cast({ v, act, characters, notify, go, setStep }) {
               {!ch && (speakers.includes(role) || made) && (
                 <>
                   <textarea rows={2} key={`d${made?.description || ''}`} defaultValue={made?.description || ''} placeholder="What do they look like? Age, hair, clothes." aria-label={`What ${role} looks like`} onBlur={(e) => e.target.value !== (made?.description || '') && setMade(role, { description: e.target.value })} />
-                  <button className="link-btn mono small" disabled={!!drawing} onClick={draw(role, () => P().drawFace(v.id, role, { again: !!made?.face }), `${role}'s face is drawn. Their sketches are marked to redraw.`)}>
-                    {drawing === role ? 'Drawing…' : made?.face ? 'Draw a new face' : 'Draw their face now'}
-                  </button>
-                  {!made?.face && drawing !== role && <span className="mono small dim">Or it's drawn when the storyboard is sketched.</span>}
+                  <span className="wiz-role-acts">
+                    <button className="link-btn mono small" disabled={!!drawing} onClick={draw(role, () => P().drawFace(v.id, role, { again: !!made?.face }), `${role}'s face is drawn. Their sketches are marked to redraw.`)}>
+                      {drawing === role ? 'Drawing…' : made?.face ? 'Draw a new face' : 'Draw their face now'}
+                    </button>
+                    <button className="link-btn mono small" disabled={!!drawing} onClick={() => facePicture(role)}>
+                      Use a picture
+                    </button>
+                  </span>
+                  {!made?.face && drawing !== role && <span className="mono small dim">Or it's drawn when the storyboard is sketched. A picture of just their face works best.</span>}
                 </>
               )}
             </div>
           )
         })}
+      </div>
+      <div className="wiz-extras">
+        <span className="small dim">Someone who doesn't speak:</span>
+        <input className="wiz-extra-name" value={extra} placeholder="A name, e.g. Bramble the dog" aria-label="Someone who doesn't speak" onChange={(e) => setExtra(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addExtra()} />
+        <button className="btn btn-small" disabled={!extra.trim()} onClick={addExtra}>
+          Add
+        </button>
       </div>
       {extras.length > 0 && (
         <div className="wiz-extras">

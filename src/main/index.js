@@ -576,6 +576,7 @@ app.whenReady().then(() => {
     await voices.release()
     return productions.drawFace(id, role, opts)
   })
+  handle('productions:useFace', (id, role, file) => productions.useFace(id, role, file))
   handle('productions:drawAngles', async (id, locationId, opts) => {
     await voices.release()
     return productions.drawAngles(id, locationId, opts)

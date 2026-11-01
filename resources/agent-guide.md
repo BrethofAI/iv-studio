@@ -133,7 +133,9 @@ them on). The tools say "film" because `list_projects` already means shots.
    script; scene headings add places, described by the writer.
 3. `update_film` to cast characters, describe each place (every shot there uses it) and set the look. Someone
    no character preset plays gets a face drawn for the film (`draw_film_face`, or when sketching), from the
-   description on their cast entry, and keeps it in every sketch and shot. With the QMA camera angles LoRA set
+   description on their cast entry, and keeps it in every sketch and shot. When the person has their own art
+   for them (a reference sheet, concept art), `use_film_face` makes that picture the face instead; someone who
+   never speaks (an animal, a passer-by) is added to the cast by name first. With the QMA camera angles LoRA set
    up, `draw_place_angles` draws a place from a quarter turn, the side and further back, so turned and wide
    shots keep the room (there is no true reverse view).
 4. `break_down_film` (background, minutes): each scene becomes 3-10 s shots with one speaker at most, sized to

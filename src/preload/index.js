@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     animatic: call('productions:animatic'),
     useRecording: call('productions:useRecording'),
     drawFace: call('productions:drawFace'),
+    useFace: call('productions:useFace'),
     drawAngles: call('productions:drawAngles'),
     onChanged: on('productions:changed')
   },

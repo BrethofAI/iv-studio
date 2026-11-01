@@ -827,6 +827,26 @@ export class Productions {
     })
     return this.madeUp(q, role)
   }
+  // The person's own picture as a made-up role's face (concept art, a reference sheet, a photo of an actor who
+  // agreed): copied into the film's faces/ folder and kept on their cast entry, like a drawn face. Their existing
+  // sketches are marked to redraw.
+  useFace(id, role, file) {
+    if (!file || !fs.existsSync(file)) throw new Error('Pick a picture of their face.')
+    if (!/\.(png|jpe?g|webp)$/i.test(file)) throw new Error('Use a PNG, JPEG or WebP picture.')
+    const p = this.get(id)
+    const entry = this.madeUp(p, role) || { as: role, characterId: null, description: '', face: null }
+    const dir = path.join(this.dir, 'faces')
+    fs.mkdirSync(dir, { recursive: true })
+    const face = path.join(dir, `${id}_${first(entry.as).toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'face'}_${Date.now()}${path.extname(file).toLowerCase()}`)
+    fs.copyFileSync(file, face)
+    const q = this.patch(id, (x) => {
+      const old = this.madeUp(x, role)
+      if (old) old.face = face
+      else x.cast.push({ ...entry, face })
+      for (const sc of x.scenes) for (const sh of sc.shots) if ((sh.sketch || sh.sketchSet) && [sh.speaker, ...(sh.characters || [])].some((n) => first(n) === first(role))) sh.sketchStale = true
+    })
+    return this.madeUp(q, role)
+  }
   // More views of a place, drawn from its photo with the QMA camera angles LoRA (see ANGLES): quarter, side and wide.
   // Sketches and shots then take the view that suits their camera (placePicture).
   async drawAngles(id, locationId, { views = Object.keys(ANGLES) } = {}) {
