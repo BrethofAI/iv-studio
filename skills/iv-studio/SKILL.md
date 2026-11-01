@@ -138,8 +138,7 @@ them on). The tools say "film" because `list_projects` already means shots.
    script; scene headings add places, described by the writer.
 3. `update_film` to cast characters, describe each place (every shot there uses it) and set the look. Someone
    no character preset plays gets a face drawn for the film (`draw_film_face`, or when sketching), from the
-   description on their cast entry, and keeps it in every sketch and shot. `draw_place_angles` draws a place
-   from the other side and from further back, for shots that look back into the room or go wide.
+   description on their cast entry, and keeps it in every sketch and shot.
 4. `break_down_film` (background, minutes): each scene becomes 3-10 s shots with one speaker at most, sized to
    the film's length, each shot gets its H3 prompt, then a storyboard sketch (a still on this PC's picture
    models). A place without a photo gets one drawn first (it shows on Cast and places), so every sketch there
@@ -158,8 +157,8 @@ them on). The tools say "film" because `list_projects` already means shots.
    `speak_film_line` with `again` makes a new take of a line; film new takes to use it. When a shot's status
    is pick, show the takes (`state.candidates`) and `finish_film_shot` the chosen one. A recording of a line
    (`use_film_recording`) replaces the voice: the shot lip-syncs to it. A shot with `continues` films on
-   from the previous shot's take as one unbroken take, so film and pick that shot first; the rough cut starts
-   it where the earlier take ends.
+   from the previous shot's take as one unbroken take, so film and pick that shot first. It renders one take
+   (Continue mode makes one), and the rough cut starts it where the earlier take ends.
 7. `build_rough_cut` lays every shot in script order on V1 of the film's edit (finished takes, else the
    picked or first preview); `export_edit` saves it as a video. Then use the Edit tools, and
    `generate_in_edit` to extend or bridge shots.

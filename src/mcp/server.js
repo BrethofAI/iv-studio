@@ -381,7 +381,7 @@ tool('create_film', `Start a short-film project. script (optional) is screenplay
   script: z.string().optional()
 }, (args) => films.create(args))
 tool('get_film', 'A short-film project with its brief, cast, locations, props, look, scenes and every shot (what we see, camera, speaker and line, seconds, prompt, character) and where each shot is: state.status draft, ready, rendering, pick (previews to choose from, in state.candidates), finishing, finished (state.final) or error. Totals add it up.', { filmId: z.string() }, ({ filmId }) => films.view(filmId))
-tool('update_film', `Change a film's brief or assets: name, logline, aspect, targetSeconds, look {notes, loras:[{name, strength}]}, cast [{characterId, as}] (a made-up person no preset plays is {characterId: null, as, description, face}), locations and props [{name, description, pictures:[paths]}]. Lists replace the old ones whole; a location keeps its drawn angles when you pass its id. ${LIVE_FILM}`, {
+tool('update_film', `Change a film's brief or assets: name, logline, aspect, targetSeconds, look {notes, loras:[{name, strength}]}, cast [{characterId, as}] (a made-up person no preset plays is {characterId: null, as, description, face}), locations and props [{name, description, pictures:[paths]}]. Lists replace the old ones whole. ${LIVE_FILM}`, {
   filmId: z.string(),
   name: z.string().optional(),
   logline: z.string().optional(),
@@ -440,10 +440,6 @@ tool('make_animatic', `The storyboard as a film before anything is filmed: each 
 tool('draw_film_face', `Draw a face for someone in the film no character preset plays (a made-up role, by the name the script uses), from their description in the cast when it has one. It is kept on their cast entry, and every sketch and shot of them uses it (their shots film in References mode with the face), so they look the same throughout. Sketching draws one for every such speaker without a face; again: a new face. Their existing sketches are marked to redraw. About 20 s on this PC. ${LIVE_FILM}`, { filmId: z.string(), role: z.string(), again: z.boolean().default(false) }, async ({ filmId, role, again }) => {
   if (readSettings(BASE).target !== 'cloud') await voices.release()
   return films.drawFace(filmId, role, { again })
-})
-tool('draw_place_angles', `Draw more views of a film's place from its photo with an editing model (Flux.2 or Flux 3 Klein): reverse (from the other side, looking back) and wide (from further back). Sketches and shots then pick the view that suits their camera: reverse when a staged camera looks back into the room or the camera words say reverse, wide for wide or establishing shots. About 20 s a view. ${LIVE_FILM}`, { filmId: z.string(), locationId: z.string(), views: z.array(z.enum(['reverse', 'wide'])).optional() }, async ({ filmId, locationId, views }) => {
-  if (readSettings(BASE).target !== 'cloud') await voices.release()
-  return films.drawAngles(filmId, locationId, views ? { views } : {})
 })
 tool('use_film_recording', `Use a recording (any sound file: the person's own voice, an actor, a take from elsewhere) as a shot's line, so the shot lip-syncs to it and its finish uses it; 14 s at most. Whisper reads it back when voices are set up (heard); a shot with no line yet takes the words heard, into its prompt too. Film new takes to use it. ${LIVE_FILM}`, { filmId: z.string(), shotId: z.string(), file: z.string() }, ({ filmId, shotId, file }) => films.useRecording(filmId, shotId, file))
 tool('build_rough_cut', `Put every shot of a film in script order on V1 of its edit (made the first time): the finished take, else the picked or first preview. Rebuilding replaces V1 only. Returns the edit id, how many shots went in, and which are missing; get_edit and export_edit take it from there. ${LIVE}`, { filmId: z.string() }, ({ filmId }) => films.roughCut(filmId))

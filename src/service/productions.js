@@ -23,6 +23,8 @@ import { applyOps } from './timeline.js'
 const now = () => new Date().toISOString()
 const id6 = () => randomUUID().slice(0, 6)
 const first = (x) => String(x || '').split(/\s+/)[0].toLowerCase() // people match by first name
+// a script's cue in capitals ("KEEPER") reads as a name ("Keeper")
+const nameCase = (n) => (n && n === n.toUpperCase() ? n.toLowerCase().replace(/\b\w/g, (x) => x.toUpperCase()) : n)
 const readJson = (file, fallback) => {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'))
@@ -33,6 +35,8 @@ const readJson = (file, fallback) => {
 const STEPS = ['idea', 'story', 'cast', 'board', 'film', 'watch']
 const FORMAT_FOR = { '16:9': '1080p', '9:16': 'vertical', '1:1': 'square' }
 const DONE = ['success', 'error', 'cancelled']
+// Continue mode's previews open with the source's last 23 frames (its 22-frame overlap and one more; measured)
+const CONTINUE_OVERLAP = 23 / 24
 
 const SHOT_RULES = `You are a film director breaking one scene of a screenplay into shots for an AI video model. Each shot is one continuous camera take of 3 to 10 seconds with native sound.
 - Keep the scene's order. Cover its action within the seconds you are given for the scene: when there's more than fits, keep the moments that tell the story and every spoken line.
@@ -201,6 +205,16 @@ export function scriptText(out) {
 
 // A shot's text prompt as a Frames prompt: H3 opens on <Picture 1> (the shot's sketch) when the prompt says so.
 const FIRST_FRAME = 'For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.'
+// A film shot is one unbroken take, but writers still add "[Shot 2] At 00:03.000, close-up of ..." (and H3 then
+// cuts; with a face picture attached it once cut to the picture itself). Later [Shot n] parts are folded into
+// [Shot 1] as what happens next in the same take.
+export function oneTake(prompt) {
+  return String(prompt || '')
+    .replace(/\s*\n\s*\[Shot (?:[2-9]|\d{2,})\]\s*(?:At \d{1,2}:\d{2}(?:\.\d+)?,?\s*)?/g, ' Then, in the same unbroken take, ')
+    .replace(/unbroken take, (?:a |an )?(extreme close-up|close-up|medium close-up|medium shot|wide shot|full shot) (of|on)\b/gi, (_, size, w) => `unbroken take, the camera moves into a ${size.toLowerCase()} ${w}`)
+    .replace(/unbroken take, (The|His|Her|He|She|They|Their|It|Its|A|An) /g, (_, w) => `unbroken take, ${w.toLowerCase()} `)
+}
+
 export function asFirstFrame(prompt) {
   const body = String(prompt || '').trim()
   return body.startsWith(FIRST_FRAME) ? body : `${FIRST_FRAME}\n\n${body}`
@@ -236,7 +250,8 @@ export function withRoom(prompt, { place, description, people = [], sketch = tru
     'retention_analysis:',
     ...(sk ? [`<Picture ${sk}> ([Shot 1] first frame): fully_preserved - the shot begins from it at 0.00 seconds.`] : []),
     ...(rm ? [`<Subject 1> (appears in ${inShots}): fully_preserved - the room, its furniture, light and colours, wherever the camera looks; the framing is newly directed.`] : []),
-    ...people.map((name, i) => `<Subject ${subject(i)}> (appears in ${inShots}): fully_preserved - ${name}'s face and hair; pose and clothes follow the shot.`),
+    // (a drawn face is a studio portrait: H3 once cut to it whole, plain background and all)
+    ...people.map((name, i) => `<Subject ${subject(i)}> (appears in ${inShots}): partially_preserved - ${name}'s face and hair only; pose, clothes, light and background follow the shot, and the picture itself never appears as a frame.`),
     ...(previs ? ['<Video 1> (camera movement and blocking): partially_preserved - its camera path, speed and framing, and where the people stand and walk; not its look.'] : []),
     '',
     'detailed_description:',
@@ -316,7 +331,7 @@ export function animaticPlan(scenes) {
   return scenes.flatMap((sc) =>
     sc.shots.map((sh, i) => {
       const seconds = +Math.max(sh.seconds || 5, sh.voiceLine?.duration ? sh.voiceLine.duration + 0.4 : 0).toFixed(2)
-      const row = { shot: sh.id, scene: sc.heading, n: i + 1, at: +at.toFixed(2), seconds, sketch: sh.sketch && !sh.sketchStale ? sh.sketch : null, line: sh.line ? `${sh.speaker ? `${sh.speaker}: ` : ''}${sh.line}` : '', action: sh.action || '', voice: sh.voiceLine?.file || null }
+      const row = { shot: sh.id, scene: sc.heading, n: i + 1, at: +at.toFixed(2), seconds, sketch: sh.sketch && !sh.sketchStale ? sh.sketch : null, line: sh.line ? `${sh.speaker ? `${nameCase(sh.speaker)}: ` : ''}${sh.line}` : '', action: sh.action || '', voice: sh.voiceLine?.file || null }
       at += seconds
       return row
     })
@@ -548,7 +563,7 @@ export class Productions {
     const presets = [...new Set(ids.filter((x) => x && x !== 'none'))].map((cid) => ({ ch: this.character(cid), face: this.facePicture(this.character(cid)), made: false })).filter((x) => x.ch && x.face)
     const made = [...new Map(names.map((n) => this.madeUp(p, n)).filter((c) => c?.face && fs.existsSync(c.face)).map((c) => [first(c.as), c])).values()]
       .filter((c) => !presets.some((x) => first(x.ch.name) === first(c.as)))
-      .map((c) => ({ ch: { id: `made:${first(c.as)}`, name: c.as }, face: c.face, made: true }))
+      .map((c) => ({ ch: { id: `made:${first(c.as)}`, name: nameCase(c.as) }, face: c.face, made: true }))
     return [...presets, ...made].slice(0, 2)
   }
   // A made-up person's cast entry (someone no character preset plays), or null.
@@ -605,7 +620,8 @@ export class Productions {
       sh.ends ? `It ends with: ${dot(sh.ends)}` : '',
       others.length ? `Also in the shot: ${others.join(', ')}.` : '',
       sh.line ? `${sh.speaker || 'They'} says exactly these words: "${sh.line}"` : 'No one speaks.',
-      p.look?.notes ? `Look: ${p.look.notes}.` : ''
+      p.look?.notes ? `Look: ${p.look.notes}.` : '',
+      'It is one continuous take with no cuts: write a single [Shot 1].'
     ]
       .filter(Boolean)
       .join(' ')
@@ -615,7 +631,7 @@ export class Productions {
       w.engine === 'claude' || w.engine === 'codex'
         ? await writeHarness({ engine: w.engine, model: w.model, idea, mode: 'text', seconds: sh.seconds, character: ch })
         : await writeLocal({ idea, mode: 'text', seconds: sh.seconds, character: ch, model: this.model(), cpu: cpu ?? (await this.studio().gpuBusy().catch(() => false)) })
-    const prompt = withLine(written, ch && first(ch.name) === first(sh.speaker) ? '{char}' : sh.speaker, sh.line)
+    const prompt = oneTake(withLine(written, ch && first(ch.name) === first(sh.speaker) ? '{char}' : sh.speaker, sh.line))
     this.patch(id, (q) => {
       const t = q.scenes.find((s) => s.id === sceneId)?.shots.find((s) => s.id === shotId)
       if (t) t.prompt = prompt
@@ -816,6 +832,8 @@ export class Productions {
   }
   // More views of a place, drawn from its photo by an editing model: reverse (looking back into the room) and wide.
   // Sketches and shots then take the view that suits their camera (placePicture).
+  // Not offered in the window or over MCP: tested 2026-11-01, Flux 3 Klein and Qwen Image 2.1 edits redraw the same
+  // view whatever the words say. It waits on a camera-angle LoRA for one of them.
   async drawAngles(id, locationId, { views = Object.keys(ANGLES) } = {}) {
     const { images, editor } = await this.pictureModels('Angles')
     if (!editor) throw new Error('Angles need Flux.2 Klein or Flux 3 Klein (they draw from the place’s photo). Set one up in Settings → Setup.')
@@ -911,7 +929,7 @@ export class Productions {
       projectId = shot.id
       this.patch(id, (q) => (this.find(q, shotId).sh.projectId = projectId))
     }
-    const said = sh.line ? sh.prompt : withSilence(sh.prompt)
+    const said = oneTake(sh.line ? sh.prompt : withSilence(sh.prompt))
     if (sh.continues) return this.queueContinued(p, sc, sh, { projectId, said, previews, seed })
     const seconds = sh.voiceLine ? Math.min(15, Math.max(sh.seconds, Math.ceil(sh.voiceLine.duration + 0.5))) : sh.seconds
     const sketch = fromSketch && sh.sketch && !sh.sketchStale && fs.existsSync(sh.sketch) ? sh.sketch : null
@@ -945,12 +963,12 @@ export class Productions {
       voiceLine: sh.voiceLine?.file || null,
       seed: seed ?? Math.floor(Math.random() * 1e9)
     })
-    this.patch(id, (q) => Object.assign(this.find(q, shotId).sh, { filmedFrom: sketch ? 'sketch' : 'prompt', previs: clip?.file || null, continueTrim: null }))
+    this.patch(id, (q) => Object.assign(this.find(q, shotId).sh, { filmedFrom: sketch ? 'sketch' : 'prompt', previs: clip?.file || null }))
     return job
   }
   // A continuous shot carries straight on from the previous shot's take (its finished take, else the picked or first
-  // preview) as one unbroken take: Continue mode from that take's last 4 seconds. Continue replays those seconds
-  // before the new part, so the cut starts it continueTrim seconds in.
+  // preview) as one unbroken take: Continue mode from that take's last 4 seconds. Its takes open with a replay of
+  // the previous take, which the cut leaves out (roughCut).
   async queueContinued(p, sc, sh, { projectId, said, previews, seed }) {
     const n = sc.shots.indexOf(sh)
     const prev = sc.shots[n - 1]
@@ -972,7 +990,7 @@ export class Productions {
       prompt: said,
       character: sh.character || 'none',
       // Continue counts its 22-frame overlap inside the length (H3 stops at 15 s)
-      seconds: Math.min(15, +(sh.seconds + 23 / 24).toFixed(2)),
+      seconds: Math.min(15, +(sh.seconds + CONTINUE_OVERLAP).toFixed(2)),
       overlapFrames: 22,
       aspect: p.aspect,
       megapixels: 0.4,
@@ -981,7 +999,7 @@ export class Productions {
       seed: seed ?? Math.floor(Math.random() * 1e9),
       media: [{ kind: 'video', file: src, duration: cut.duration, width: cut.width, height: cut.height, hasAudio: true }]
     })
-    this.patch(p.id, (q) => Object.assign(this.find(q, sh.id).sh, { filmedFrom: 'continue', previs: null, continueTrim: +cut.duration.toFixed(3) }))
+    this.patch(p.id, (q) => Object.assign(this.find(q, sh.id).sh, { filmedFrom: 'continue', previs: null }))
     return job
   }
   // Previews for every shot in a scene (or, with no sceneId, the whole film) that has a prompt and nothing
@@ -1019,7 +1037,9 @@ export class Productions {
     }
     const last = (kind) => jobs.filter((j) => j.kind === kind).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0]
     const pv = last('previews')
-    const fin = last('finish')
+    // a finish counts only for the newest hunt: new takes mean the shot is being redone, so an older finished take
+    // (still in Shots) no longer stands for it in the cut or as what a one-take shot carries on from
+    const fin = [last('finish')].find((f) => f && (!pv || f.parent === pv.id || String(f.createdAt) > String(pv.createdAt)))
     const out = { previewsJob: pv?.id || null, previewsStatus: pv?.status || null, finishJob: fin?.id || null, finishStatus: fin?.status || null }
     out.candidates = pv?.status === 'success' ? (pv.outputs || []).filter((o) => o.kind === 'preview').map((o) => ({ n: o.candidate, url: o.url, path: o.path })) : []
     const finalOut = fin?.status === 'success' ? (fin.outputs || []).find((o) => o.kind === 'final') || (fin.outputs || []).find((o) => /before_dlss$/.test(o.kind)) : null
@@ -1085,8 +1105,15 @@ export class Productions {
           m = await this.edits.addMedia(file, { type: 'iv', label: `${sc.location || sc.heading} · ${sh.action.slice(0, 40)}`, production: v.id })
           media[m.id] = m
         }
-        // a continuous shot opens with a replay of the previous take's last seconds: it starts where they end
-        const from = sh.continueTrim && sh.continueTrim < m.duration - 0.5 ? sh.continueTrim : 0
+        // a continuous shot opens with a replay of the previous take: its previews repeat the last 23 frames, its
+        // finished take ("continued") the whole 4 s source. Either way the new footage is the preview's length less
+        // those 23 frames, so the cut keeps that much from the end.
+        let from = 0
+        if (sh.filmedFrom === 'continue' && st.candidates?.length) {
+          const pv = await probe(this.edits.ffprobe, await this.localCopy(st.candidates[0])).catch(() => null)
+          const fresh = pv?.duration ? pv.duration - CONTINUE_OVERLAP : 0
+          if (fresh > 0.5 && fresh < m.duration) from = +(m.duration - fresh).toFixed(3)
+        }
         ops.push({ op: 'add_clip', media: m.id, track: 'V1', start: at, in: from, out: m.duration })
         at += m.duration - from
         placed++

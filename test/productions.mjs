@@ -4,7 +4,7 @@ import { shotName } from '../src/service/studio.js'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { Productions, animaticPlan, asFirstFrame, beatOf, facePrompt, heading, placePicture, placePrompt, scriptText, sketchPrompt, spokenWords, withLine, withRoom, withSilence, wordMatch } from '../src/service/productions.js'
+import { Productions, animaticPlan, asFirstFrame, beatOf, facePrompt, heading, oneTake, placePicture, placePrompt, scriptText, sketchPrompt, spokenWords, withLine, withRoom, withSilence, wordMatch } from '../src/service/productions.js'
 import { parseScript } from '../src/service/screenplay.js'
 
 let n = 0
@@ -90,7 +90,7 @@ ok('a shot with a room opens on <Picture 1> and stays in <Picture 2>', () => {
   assert.match(inline, /\n\[Shot 1\] A\.\n\[Shot 2\] At 00:03\.000, B\.\n\noverall_soundscape:\nWind\./)
   assert.match(inline, /<Subject 2> is Theo, the person in <Picture 3>\./)
   assert.match(inline, /Theo is <Subject 2>\./)
-  assert.match(inline, /<Subject 2> \(appears in \[Shot 1\], \[Shot 2\]\): fully_preserved - Theo's face/)
+  assert.match(inline, /<Subject 2> \(appears in \[Shot 1\], \[Shot 2\]\): partially_preserved - Theo's face and hair only/)
 })
 ok('a shot filmed from its sketch opens on <Picture 1>, once', () => {
   const f = asFirstFrame(P)
@@ -184,6 +184,30 @@ ok('the animatic holds each shot for its length, longer for a long line, and onl
     ['b', 2, 6.6, 4, null, '', null],
     ['c', 1, 10.6, 3, null, '', null]
   ])
+})
+ok('a film shot is one take: a written cut is folded into it (a face picture was cut to whole)', () => {
+  const p = ['detailed_description:', '[Shot 1] Wide static shot: Keeper stands at the glass. The camera holds.', '[Shot 2] At 00:03.000, the Keeper turns toward the camera.', '[Shot 3] At 00:04.500, close-up of his weathered hand on the lever.', '', 'overall_soundscape:', 'Wind.'].join('\n')
+  const o = oneTake(p)
+  assert.equal((o.match(/\[Shot \d+\]/g) || []).join(), '[Shot 1]')
+  assert.match(o, /The camera holds\. Then, in the same unbroken take, the Keeper turns toward the camera\. Then, in the same unbroken take, the camera moves into a close-up of his weathered hand on the lever\.\n\noverall_soundscape:/)
+  assert.equal(oneTake('[Shot 1] A dog runs.'), '[Shot 1] A dog runs.', 'one shot is left alone')
+  const people = withRoom(p, { people: ['Keeper'], sketch: true, room: true })
+  assert.match(people, /<Subject 2> \(appears in .*\): partially_preserved - Keeper's face and hair only; .* the picture itself never appears as a frame\./)
+})
+ok('a finished take stands for its shot only until the shot is filmed again', () => {
+  const dir = tmp()
+  const jobs = [
+    { id: 'pv1', kind: 'previews', status: 'success', createdAt: '2026-10-30T10:00:00Z', outputs: [{ kind: 'preview', candidate: 1, path: 'old1.mp4' }] },
+    { id: 'fin1', kind: 'finish', parent: 'pv1', status: 'success', createdAt: '2026-10-30T10:05:00Z', outputs: [{ kind: 'final', path: 'old-final.mp4' }], plan: { finish: { candidate: 1 } } }
+  ]
+  const films = new Productions({ dataDir: dir, studio: () => ({ characters: () => [], listJobs: () => jobs }) })
+  const sh = { projectId: 'x', prompt: 'p' }
+  assert.equal(films.shotState(sh).final.path, 'old-final.mp4')
+  jobs.push({ id: 'pv2', kind: 'previews', status: 'success', createdAt: '2026-11-01T10:00:00Z', outputs: [{ kind: 'preview', candidate: 1, path: 'new1.mp4' }] })
+  const st = films.shotState(sh)
+  assert.equal(st.final, undefined, 'new takes: the old final no longer stands for the shot')
+  assert.deepEqual([st.status, st.candidates[0].path], ['pick', 'new1.mp4'])
+  fs.rmSync(dir, { recursive: true, force: true })
 })
 ok('a continuous shot needs a shot before it in its scene', () => {
   const dir = tmp()

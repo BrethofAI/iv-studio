@@ -5847,27 +5847,10 @@ button.nav-update:hover {
   }
 }
 
-/* Projects, phase 4: drawn faces, more angles of a place, continuous shots, the animatic */
+/* Projects, phase 4: drawn faces, continuous shots, the animatic */
 .wiz-role textarea {
   width: 100%;
   font-size: 13px;
-}
-.wiz-angles {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 8px;
-}
-.wiz-angles figure {
-  display: grid;
-  gap: 2px;
-  margin: 0;
-  width: 92px;
-}
-.wiz-angles img {
-  width: 100%;
-  object-fit: cover;
-  border: 1px solid var(--line-strong);
 }
 .wiz-panel-cont {
   position: absolute;

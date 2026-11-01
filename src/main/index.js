@@ -556,10 +556,6 @@ app.whenReady().then(() => {
     await voices.release()
     return productions.drawFace(id, role, opts)
   })
-  handle('productions:drawAngles', async (id, locationId, opts) => {
-    await voices.release()
-    return productions.drawAngles(id, locationId, opts)
-  })
   // The editor's full-screen workspace: the window itself goes full screen too.
   handle('window:fullScreen', (on) => {
     win.setFullScreen(!!on)

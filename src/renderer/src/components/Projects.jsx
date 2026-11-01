@@ -38,7 +38,6 @@ const LOOKS = [
   ['Dreamy', 'soft haze, pastel colours, glowing backlight'],
   ['Animated', 'stylised 3D animation, bright saturated colours, soft shapes']
 ]
-const ANGLE_NAMES = { reverse: 'From the other side', wide: 'Wider' }
 const CAMERAS = ['Wide shot, static', 'Medium shot, static', 'Close-up, static', 'Wide shot, slow push in', 'Medium shot, handheld', 'Close-up, slow push in', 'Tracking shot following them', 'Over the shoulder']
 const FILM_STATE = {
   draft: ['Not planned', ''],
@@ -454,7 +453,7 @@ function Cast({ v, act, characters, notify, go, setStep }) {
               <div className="wiz-role-face">{pic ? <img src={fileUrl(pic)} alt="" /> : <span>{role.slice(0, 1)}</span>}</div>
               <span className="wiz-role-name">{role}</span>
               <select value={c?.characterId || ''} onChange={(e) => castRole(role, e.target.value)} aria-label={`Who plays ${role}`}>
-                <option value="">{speakers.includes(role) || made ? 'A face drawn for this film' : 'Not in it'}</option>
+                <option value="">{speakers.includes(role) || made ? 'A drawn face' : 'Not in it'}</option>
                 {characters.map((x) => (
                   <option key={x.id} value={x.id}>
                     Played by {x.name}
@@ -507,21 +506,6 @@ function Cast({ v, act, characters, notify, go, setStep }) {
                 Remove place
               </button>
             </span>
-            {l.pictures[0] && (
-              <div className="wiz-angles">
-                {(l.angles || [])
-                  .filter((a) => !a.from || a.from === l.pictures[0])
-                  .map((a) => (
-                    <figure key={a.view} title={ANGLE_NAMES[a.view]}>
-                      <img src={fileUrl(a.file)} alt="" style={{ aspectRatio: ratio(v.aspect) }} />
-                      <figcaption className="mono small dim">{ANGLE_NAMES[a.view]}</figcaption>
-                    </figure>
-                  ))}
-                <button className="link-btn mono small" disabled={!!drawing} title="The same place from the other side and from further back, for shots that look the other way" onClick={draw(l.id, () => P().drawAngles(v.id, l.id), 'More angles drawn. Shots looking the other way, or wide, use them.')}>
-                  {drawing === l.id ? 'Drawing the angles…' : (l.angles || []).some((a) => !a.from || a.from === l.pictures[0]) ? 'Draw the angles again' : '+ More angles'}
-                </button>
-              </div>
-            )}
           </div>
         ))}
         <button className="wiz-place wiz-place-add" onClick={() => save({ locations: [...v.locations, { name: 'New place', description: '', pictures: [] }] })}>
@@ -960,7 +944,7 @@ function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, pre
         <label className="wiz-field">
           <span className="mono small dim">Character in this shot</span>
           <select value={sh.character || 'none'} onChange={(e) => edit({ character: e.target.value })}>
-            <option value="none">No character (H3 makes someone up)</option>
+            <option value="none">No character preset (anyone made up keeps their drawn face)</option>
             {characters.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -999,7 +983,7 @@ function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, pre
           </span>
         )}
         {i > 0 && (
-          <label className="wiz-check small" title="This shot films on from the end of the shot before it, as one unbroken take: no cut. Film the shot before first.">
+          <label className="wiz-check small" title="This shot films on from the end of the shot before it, as one unbroken take: no cut. Film and pick the shot before first; this one is filmed as a single take.">
             <input type="checkbox" checked={!!sh.continues} onChange={(e) => edit({ continues: e.target.checked }, false)} /> Carry straight on from shot {i} (one unbroken take)
           </label>
         )}
