@@ -28,6 +28,14 @@ const CAMERA_MOVES = [
 ]
 const FACE_WORDS = /\b(hair|eyes?|eyebrows?|face|freckles?|skin|beard|moustache|mustache|nose|lips|cheeks?|jaw|ethnic\w*|voice)\b/i
 
+// Every line said by the one speaker, the picked character: "then says: <d>" → "then {char} (S1) says: <d>"
+// (a pronoun just before the verb gives way to the name); a line with no verb before it gets "{char} (S1) says:".
+const SPEECH_VERB = /(?:\b(?:she|he|they)\s+)?\b(says|asks|whispers|shouts|replies|answers|calls|mutters|murmurs|sighs)\b(\s*:?\s*)<d>/gi
+function withSpeaker(text) {
+  const named = text.replace(SPEECH_VERB, (_, verb, gap) => `{char} (S1) ${verb.toLowerCase()}${gap}<d>`)
+  return named.replace(/<d>/g, (tag, at) => (/\(S1\)[^<]{0,12}$/.test(named.slice(Math.max(0, at - 40), at)) ? tag : `{char} (S1) says: ${tag}`))
+}
+
 const count = (text, re) => (String(text).match(re) || []).length
 const sentences = (text) => String(text).split(/(?<=[.!?])\s+/)
 
@@ -117,7 +125,9 @@ export function lintPrompt(prompt, { mode = 'text', seconds = 5, media = [], cha
   for (const m of text.matchAll(/<d>/g)) {
     const before = text.slice(Math.max(0, m.index - 220), m.index)
     if (!/\((?:S\d+)(?:,S\d+)*\)/.test(before)) {
-      add('warning', 'no-speaker', `A line ("${text.slice(m.index + 3, m.index + 50).replace(/<\/d>[\s\S]*/, '').replace(/^\s*\[[^\]]+\]\s*/, '')}…") has no speaker ID just before it. Every line needs its speaker's ID, as in "Mara (S1) says:", each time they speak.`)
+      // with a character picked and no speaker IDs anywhere, the picked character is the one speaker: name them
+      const fix = character && /\{char\}/.test(text) && !/\(S\d+/.test(text) ? withSpeaker(text) : undefined
+      add('warning', 'no-speaker', `A line ("${text.slice(m.index + 3, m.index + 50).replace(/<\/d>[\s\S]*/, '').replace(/^\s*\[[^\]]+\]\s*/, '')}…") has no speaker ID just before it. Every line needs its speaker's ID, as in "Mara (S1) says:", each time they speak.`, fix)
       break
     }
   }

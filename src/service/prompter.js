@@ -345,7 +345,7 @@ async function promptRequest({ idea, mode, seconds, character, sequence, previou
 // that matters goes back to the writer once (again: findings text, the draft's JSON -> a corrected JSON, or null to
 // skip), and the better of the two drafts is kept.
 const REDO = new Set(['missing-field', 'no-shot-1', 'cut-order', 'cut-late', 'speech-too-long', 'speech-long', 'name-in-line', 'no-speaker', 'untagged-speech', 'reference-missing', 'reference-unused', 'subject-undefined', 'char-face', 'char-missing', 'frames-cut', 'too-many-shots'])
-const MEND = new Set(['frames-line', 'quoted-line', 'filler'])
+const MEND = new Set(['frames-line', 'quoted-line', 'filler', 'no-speaker'])
 const checkerContext = ({ mode, seconds, media, character }) => ({ mode, seconds, media, character: character ? { name: character.name, trigger: character.trigger } : null })
 function mended(prompt, ctx) {
   let text = prompt
