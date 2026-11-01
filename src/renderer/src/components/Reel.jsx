@@ -54,7 +54,7 @@ export default function Reel({ notify, openEdit }) {
   }
   return (
     <div className="reel-page">
-      <Hero art="music" title="Reel" kicker="Pictures and a song, cut to the beat" />
+      <Hero art="music" title="Reel" kicker="Pictures and a song, cut to the beat" help="reel" />
       <p className="lede">
         Add pictures in the order they should play, pick a song, and IV Studio cuts them to its beat with a slow move on each picture.
         <span className="lede-small dim">It lands in Edit as an ordinary edit, so you can trim, reorder, add titles and export it there.</span>

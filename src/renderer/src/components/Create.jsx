@@ -77,6 +77,12 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const [planError, setPlanError] = useState(null)
   const [busy, setBusy] = useState(false)
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
+  // Learn's Try it can open Create on a mode
+  useEffect(() => {
+    const go = (e) => e.detail?.create === 'video' && e.detail.mode && set({ mode: e.detail.mode, media: [] })
+    window.addEventListener('iv:learn', go)
+    return () => window.removeEventListener('iv:learn', go)
+  }, [])
 
   useEffect(() => {
     // a picked character that was deleted falls back to None (the default)

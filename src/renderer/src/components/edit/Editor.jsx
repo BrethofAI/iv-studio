@@ -6,6 +6,7 @@ import SourceMonitor from './SourceMonitor'
 import Timeline from './Timeline'
 import { ContextMenu, GenDialog, PickDialog } from './Generate'
 import { ask } from '../Confirm'
+import Help from '../Help'
 import { FRAME, clipEnd, clipFor, clipLength, describeChange, editLength, editPoints, insert, newId, nextTrackId, overwrite, remove, split, timecode, titleClip, tracksOf, videoLayers } from './model'
 
 // Panel sizes, remembered between sessions: bin and effect-controls widths, the source monitor's share
@@ -443,6 +444,9 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
           {format.label} · {edit.settings.fps} fps · {timecode(length)}
         </span>
         <div className="ed-export">
+          <span className="ed-help">
+            <Help page="edit" />
+          </span>
           <button className="btn btn-small" onClick={() => toggleFocus()} title={focus ? 'Back to IV Studio (Esc)' : 'Full-screen workspace (F11)'}>
             {focus ? 'Exit full screen' : '⤢ Full screen'}
           </button>

@@ -1,3 +1,5 @@
+import Help from './Help'
+
 // Each page's own banner art (assets/pages/<name>.webp): the eye's artwork with the eye swapped for the page's
 // subject, made the same way as the closed eye (docs/art/README.md). The dashboard keeps the eye itself.
 export const ART = Object.fromEntries(
@@ -7,8 +9,9 @@ export const ART = Object.fromEntries(
 // The page header from the "What If?" artwork: a heavy condensed title and a spaced kicker on the dark
 // left, the page's art fading in on the right (art names one from assets/pages; none is the eye; Incognito
 // shows the closed eye everywhere). children go in place of the title (editable names); back is a link
-// pinned to the top left.
-export default function Hero({ art, title, kicker, back, children }) {
+// pinned to the top left. help: which page's tips its "?" shows (learn.js TIPS); by default the art's, false
+// for none.
+export default function Hero({ art, title, kicker, back, children, help }) {
   return (
     <header className="hero">
       <div className="hero-eye" aria-hidden="true" style={ART[art] ? { '--hero-art': `url("${ART[art]}")` } : undefined} />
@@ -16,6 +19,11 @@ export default function Hero({ art, title, kicker, back, children }) {
         <button className="link-btn mono hero-back" onClick={back.onClick}>
           ← {back.label}
         </button>
+      )}
+      {help !== false && (
+        <div className="hero-help">
+          <Help art={art} page={help} />
+        </div>
       )}
       <div className="hero-text">
         {title && <h1 className="hero-title">{title}</h1>}

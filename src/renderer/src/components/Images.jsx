@@ -56,6 +56,12 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
   const [more, setMore] = useState(false)
   const [yours, , reloadYours] = useYours()
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
+  // Learn's Try it can open Image on Generate or Edit
+  useEffect(() => {
+    const go = (e) => e.detail?.create === 'image' && e.detail.mode && set({ mode: e.detail.mode })
+    window.addEventListener('iv:learn', go)
+    return () => window.removeEventListener('iv:learn', go)
+  }, [])
 
   useEffect(() => {
     I().status().then(setStatus, (err) => setStatus({ error: err.message, families: [] }))

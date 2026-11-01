@@ -5963,3 +5963,141 @@ button.nav-update:hover {
 .reel-make {
   margin-top: 16px;
 }
+
+/* Learn: the page, the "?" on each banner, and the tutorial player */
+.hero-help {
+  position: absolute;
+  z-index: 2;
+  top: 18px;
+  right: 24px;
+}
+.help-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: rgba(16, 12, 14, 0.82);
+  color: var(--cream);
+  font: 700 18px/1 var(--display);
+  cursor: pointer;
+}
+.help-btn:hover {
+  border-color: rgba(244, 72, 89, 0.8);
+}
+.help-panel {
+  position: fixed;
+  z-index: 60;
+  top: 96px;
+  right: 32px;
+  display: grid;
+  gap: 10px;
+  width: min(380px, calc(100vw - 64px));
+  padding: 16px 18px;
+  border: 1px solid var(--line-strong);
+  background: var(--ink-2);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+.help-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.help-panel ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+.ed-help {
+  display: inline-flex;
+  margin-right: 6px;
+}
+.ed-help .help-btn {
+  width: 30px;
+  height: 30px;
+  font-size: 15px;
+}
+.learn-search {
+  width: min(720px, 100%);
+  margin: 4px 0 26px;
+  padding: 14px 16px;
+  font-size: 17px;
+}
+.learn-news {
+  margin: 0 0 22px;
+  padding: 14px 18px;
+  border: 1px solid rgba(244, 72, 89, 0.6);
+  background: var(--ink-2);
+}
+.learn-news ul {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+.learn-group {
+  margin-bottom: 30px;
+}
+.learn-h {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  margin: 0 0 12px;
+  font: 800 22px/1 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.learn-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+}
+.learn-card {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 6px;
+  padding: 10px 10px 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--ink-2);
+}
+.learn-clip {
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  border: 0;
+  background: #0b0809 center / cover no-repeat;
+  overflow: hidden;
+  cursor: default;
+}
+.learn-clip video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+}
+.learn-title {
+  font: 700 17px/1.1 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.learn-try {
+  justify-self: start;
+  min-height: 34px;
+}
+.learn-history {
+  margin: 10px 0 30px;
+}
+.learn-history ul {
+  margin: 6px 0 14px;
+  padding-left: 18px;
+}
+.learn-player {
+  width: min(1100px, 94vw);
+}
+.learn-player video {
+  display: block;
+  width: 100%;
+  max-height: 72vh;
+  background: #000;
+}

@@ -18,6 +18,8 @@ import { LinesPage, VoicesPage } from './components/Voices'
 import { MusicPage } from './components/Music'
 import MediaLibrary from './components/MediaLibrary'
 import Dashboard from './components/Dashboard'
+import Learn from './components/Learn'
+import { unseenNews } from './learn'
 import { ProjectPage, ProjectsList } from './components/Projects'
 import RenderQueue from './components/RenderQueue'
 import { LorasPage } from './components/Loras'
@@ -33,6 +35,7 @@ import { SizzleList, SizzleProject } from './components/Sizzle'
 const SECTIONS = {
   video: [
     ['home', 'Dashboard'],
+    ['learn', 'Learn'],
     ['create', 'Create'],
     ['projects', 'Projects'],
     ['library', 'Shots'],
@@ -231,6 +234,33 @@ export default function App() {
     switchSection('video')
     setPage('create')
   }
+  // Learn's Try it: the page a card lives on (Create in the right switch and mode). The mode reaches Create and
+  // Image through the iv:learn event, once they've opened.
+  const learnGo = (to) => {
+    switchSection(to.section || 'video')
+    if (to.create) pickCreateKind(to.create)
+    setPage(to.page)
+    if (to.mode) setTimeout(() => window.dispatchEvent(new CustomEvent('iv:learn', { detail: to })), 250)
+  }
+  const [seenNews, setSeenNews] = useState(() => {
+    try {
+      return localStorage.getItem('iv.seenNews')
+    } catch {
+      return null
+    }
+  })
+  // The "?" panels' "More on the Learn page" (Help.jsx), which sits outside App's props
+  useEffect(() => {
+    const go = (e) => learnGo(e.detail)
+    window.addEventListener('iv:go', go)
+    return () => window.removeEventListener('iv:go', go)
+  })
+  const markNewsSeen = (version) => {
+    setSeenNews(version)
+    try {
+      localStorage.setItem('iv.seenNews', version)
+    } catch {}
+  }
   const sendToCreate = (line) => {
     setLineForCreate(line)
     switchSection('video')
@@ -287,6 +317,7 @@ export default function App() {
             <span className="mono dim">{String(i + 1).padStart(2, '0')}</span>
             {label}
             {id === 'settings' && missing > 0 && <span className="nav-dot" />}
+            {id === 'learn' && unseenNews(info?.version, seenNews) && <span className="nav-dot" title="What's new" />}
           </button>
         ))}
         <div className="nav-foot mono">
@@ -309,6 +340,7 @@ export default function App() {
       </nav>
       <main className={`page ${page === 'edit' ? 'page-editor' : ''}`}>
         {page === 'home' && <Dashboard {...ctx} start={startTool} startShotWith={startShotWith} />}
+        {page === 'learn' && <Learn learnGo={learnGo} version={info?.version} seenNews={seenNews} markNewsSeen={markNewsSeen} />}
         {page === 'create' &&
           (createKind === 'image' ? (
             <Images {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} />
