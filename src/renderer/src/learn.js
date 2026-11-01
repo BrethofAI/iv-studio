@@ -47,7 +47,7 @@ export const GROUPS = [
     video: 't2',
     cards: [
       { id: 'film', title: 'A short film', line: 'Idea to finished film in six steps.', to: { page: 'projects' }, words: 'story script movie projects storyboard' },
-      { id: 'faces', title: 'Faces for everyone', line: 'Made-up people keep one face.', to: { page: 'projects' }, words: 'consistent character face drawn' },
+      { id: 'faces', title: 'Faces for everyone', line: 'Made-up people keep one face: drawn, or your own picture.', to: { page: 'projects' }, words: 'consistent character face drawn picture concept art reference sheet dog animal' },
       { id: 'rooms', title: 'One room, every shot', line: 'A place photo keeps the set the same; More angles draws it from new sides.', to: { page: 'projects' }, words: 'location set place angles consistent room' },
       { id: 'animatic', title: 'See it before you film it', line: 'The animatic plays your storyboard with its lines.', to: { page: 'projects' }, words: 'animatic pacing preview storyboard' },
       { id: 'onetake', title: 'No cut between shots', line: 'One shot carries straight on from the last.', to: { page: 'projects' }, words: 'one take oner continuous no cut' },
@@ -122,7 +122,7 @@ export const TIPS = {
   shots: { video: 't1', tips: ['The ★ marks the best-scoring take; picking one teaches it your taste.', 'Compare plays two takes side by side or as a wipe, in step.', 'Review names what’s off with its time, and one fix. If a fix fails twice it suggests another kind.', 'Enhance works on any finished take, any time later.'] },
   projects: { video: 't2', tips: ['Play the animatic before filming: it costs seconds, not GPU minutes.', 'A sketch drawn before you changed a shot isn’t used until you redraw it.', 'A recorded line keeps your timing better than a generated one.', 'One-take shots make a single take, so film and pick the shot before first.', 'More angles (on a place) helps shots that look another way keep the room.'] },
   edit: { video: 't3', tips: ['Right-click a clip for Extend, Retake, Cut out and Reframe.', 'Right-click empty track space to fill a gap.', 'F11 is full screen; Esc comes back.', 'Click empty timeline for the edit’s settings, loudness included.'] },
-  characters: { video: 't4', tips: ['Training shows its cost before it starts, and runs on your own Modal account.', 'Give a character a voice on Audio → Voices; their shots then speak in it.', 'In a short film, anyone without a character gets a drawn face of their own.'] },
+  characters: { video: 't4', tips: ['Training shows its cost before it starts, and runs on your own Modal account.', 'Give a character a voice on Audio → Voices; their shots then speak in it.', 'In a short film, anyone without a character gets a drawn face, or your own picture with Use a picture.'] },
   audio: { video: 't4', tips: ['A line can go straight into a shot with Use in a shot.', 'MiniMax Music sings words clearly; ACE-Step is quick for backgrounds.', 'A MiniMax song’s length follows its lyrics: write full verses for a full song.', 'Pictures plus a song make a reel on Workflows → Reel.'] },
   workflows: { video: 't7', tips: ['Reel finds a song’s beat by itself.', 'Cut out and Reframe also live in the editor’s right-click menu.', 'Sizzle and Shinobi work best with an agent connected (Settings → Agents).'] },
   reel: { video: 't5', tips: ['Each picture holds a whole number of beats, and the cuts keep to the song’s bars.', 'Calm, Normal and Fast set about 3, 2 and 1 second a picture.', 'It lands in Edit as an ordinary edit, ready to trim and export.'] },
@@ -141,7 +141,7 @@ export const NEWS = [
     version: '0.2.3',
     items: [
       { card: 'film', text: 'Projects: a short film from an idea in six steps, with a storyboard, an animatic and every shot filmed for you.' },
-      { card: 'faces', text: 'Made-up people in a film get one drawn face and keep it.' },
+      { card: 'faces', text: 'Made-up people in a film keep one face: drawn, or your own picture (Use a picture). Someone who never speaks, like a dog, can be added too.' },
       { card: 'rooms', text: 'More angles of a place keep every shot in the same room.' },
       { card: 'onetake', text: 'One-take shots carry straight on from the shot before.' },
       { card: 'writer', text: 'Write it for me can use Claude Code or Codex, follows MiniMax’s own guide, and looks at your references.' },
