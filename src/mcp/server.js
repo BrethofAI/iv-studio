@@ -371,7 +371,7 @@ const stageSchema = z
     camera: z.object({ x: z.number(), y: z.number(), facing: z.number(), lens: z.enum(['wide', 'normal', 'long']).default('normal'), move: z.enum(Object.keys(CAMERA_MOVES)).default('static'), height: z.enum(['eye', 'low', 'high']).default('eye') })
   })
   .describe('A staging board plan in metres on an 8 x 8 m floor centred on 0,0 (x to the right, y into the room; the camera usually at y -3 facing 0). Its words fill staging and camera unless those are given too.')
-const shotPatch = { stage: stageSchema.optional(), action: z.string().optional(), staging: z.string().optional().describe('Who stands where by screen side at the start, facing, eyelines, distance, movement'), camera: z.string().optional(), ends: z.string().optional().describe('How the shot leaves things: positions, facing, hands and props, gaze, direction of travel; the next shot opens on it'), characters: z.array(z.string()).optional(), speaker: z.string().optional(), line: z.string().optional(), seconds: z.number().min(1).max(15).optional(), prompt: z.string().optional(), character: z.string().optional().describe('Character preset id or none') }
+const shotPatch = { stage: stageSchema.optional(), action: z.string().optional(), staging: z.string().optional().describe('Who stands where by screen side at the start, facing, eyelines, distance, movement'), camera: z.string().optional(), ends: z.string().optional().describe('How the shot leaves things: positions, facing, hands and props, gaze, direction of travel; the next shot opens on it'), characters: z.array(z.string()).optional(), speaker: z.string().optional(), line: z.string().optional(), seconds: z.number().min(1).max(15).optional(), prompt: z.string().optional(), character: z.string().optional().describe('Character preset id or none'), continues: z.boolean().optional().describe("Film on from the end of the previous shot's take as one unbroken take (Continue mode); film and pick the previous shot first") }
 tool('list_films', 'Short-film projects (the app\'s Projects page): name, logline, aspect, scenes and shots.', {}, () => ({ items: films.list() }))
 tool('create_film', `Start a short-film project. script (optional) is screenplay text: a scene starts with a heading like "INT. POTTERY STUDIO - DAY", a name in capitals on its own line with words under it is dialogue, other paragraphs are action. ${LIVE_FILM}`, {
   name: z.string().default('Untitled film'),
@@ -381,7 +381,7 @@ tool('create_film', `Start a short-film project. script (optional) is screenplay
   script: z.string().optional()
 }, (args) => films.create(args))
 tool('get_film', 'A short-film project with its brief, cast, locations, props, look, scenes and every shot (what we see, camera, speaker and line, seconds, prompt, character) and where each shot is: state.status draft, ready, rendering, pick (previews to choose from, in state.candidates), finishing, finished (state.final) or error. Totals add it up.', { filmId: z.string() }, ({ filmId }) => films.view(filmId))
-tool('update_film', `Change a film's brief or assets: name, logline, aspect, targetSeconds, look {notes, loras:[{name, strength}]}, cast [{characterId, as}], locations and props [{name, description, pictures:[paths]}]. Lists replace the old ones whole. ${LIVE_FILM}`, {
+tool('update_film', `Change a film's brief or assets: name, logline, aspect, targetSeconds, look {notes, loras:[{name, strength}]}, cast [{characterId, as}] (a made-up person no preset plays is {characterId: null, as, description, face}), locations and props [{name, description, pictures:[paths]}]. Lists replace the old ones whole; a location keeps its drawn angles when you pass its id. ${LIVE_FILM}`, {
   filmId: z.string(),
   name: z.string().optional(),
   logline: z.string().optional(),
@@ -389,8 +389,8 @@ tool('update_film', `Change a film's brief or assets: name, logline, aspect, tar
   targetSeconds: z.number().min(10).max(3600).optional(),
   step: z.enum(['idea', 'story', 'cast', 'board', 'film', 'watch']).optional().describe('The wizard step the person sees'),
   look: z.object({ notes: z.string().optional(), loras: z.array(z.object({ name: z.string(), strength: z.number() })).optional() }).optional(),
-  cast: z.array(z.object({ characterId: z.string(), as: z.string().optional() })).optional(),
-  locations: z.array(z.object({ name: z.string(), description: z.string().optional(), pictures: z.array(z.string()).optional() })).optional(),
+  cast: z.array(z.object({ characterId: z.string().nullable(), as: z.string().optional(), description: z.string().optional(), face: z.string().nullable().optional() })).optional(),
+  locations: z.array(z.object({ id: z.string().optional(), name: z.string(), description: z.string().optional(), pictures: z.array(z.string()).optional() })).optional(),
   props: z.array(z.object({ name: z.string(), description: z.string().optional(), pictures: z.array(z.string()).optional() })).optional()
 }, ({ filmId, ...patch }) => films.update(filmId, patch))
 tool('set_film_script', `Replace a film's script (screenplay text, see create_film). Scenes are read from it; scenes that didn't change keep their shots, changed ones are marked stale. Speakers who share a first name with a character preset join the cast, and the scene headings add locations. ${LIVE_FILM}`, { filmId: z.string(), script: z.string().min(1) }, ({ filmId, script }) => films.setScript(filmId, script))
@@ -436,6 +436,16 @@ tool('render_film_scene', 'Hunt previews for every shot in a scene (or, without 
   return { items: await films.renderScene(filmId, sceneId, opts) }
 })
 tool('finish_film_shot', 'Finish take n of a shot\'s latest previews at 2 MP (with its spoken line as the sound when it has one).', { filmId: z.string(), shotId: z.string(), candidate: z.number().int().min(1).max(3), megapixels: z.number().min(0.5).max(4).default(2), upscale2x: z.boolean().default(false) }, ({ filmId, shotId, candidate, ...opts }) => films.finish(filmId, shotId, candidate, opts))
+tool('make_animatic', `The storyboard as a film before anything is filmed: each sketch held for its shot's length with a slow push-in, the shot's spoken line where it has one, and the words on screen (a shot with no sketch shows its action on a dark card). A few seconds on this PC, free. voice: first say every line whose character has a voice (the voice engine, about 5-40 s a line). Returns the file, its length and how many shots have sketches and spoken lines; show it to the person before filming. ${LIVE_FILM}`, { filmId: z.string(), voice: z.boolean().default(false) }, ({ filmId, voice }) => films.animatic(filmId, { voice }))
+tool('draw_film_face', `Draw a face for someone in the film no character preset plays (a made-up role, by the name the script uses), from their description in the cast when it has one. It is kept on their cast entry, and every sketch and shot of them uses it (their shots film in References mode with the face), so they look the same throughout. Sketching draws one for every such speaker without a face; again: a new face. Their existing sketches are marked to redraw. About 20 s on this PC. ${LIVE_FILM}`, { filmId: z.string(), role: z.string(), again: z.boolean().default(false) }, async ({ filmId, role, again }) => {
+  if (readSettings(BASE).target !== 'cloud') await voices.release()
+  return films.drawFace(filmId, role, { again })
+})
+tool('draw_place_angles', `Draw more views of a film's place from its photo with an editing model (Flux.2 or Flux 3 Klein): reverse (from the other side, looking back) and wide (from further back). Sketches and shots then pick the view that suits their camera: reverse when a staged camera looks back into the room or the camera words say reverse, wide for wide or establishing shots. About 20 s a view. ${LIVE_FILM}`, { filmId: z.string(), locationId: z.string(), views: z.array(z.enum(['reverse', 'wide'])).optional() }, async ({ filmId, locationId, views }) => {
+  if (readSettings(BASE).target !== 'cloud') await voices.release()
+  return films.drawAngles(filmId, locationId, views ? { views } : {})
+})
+tool('use_film_recording', `Use a recording (any sound file: the person's own voice, an actor, a take from elsewhere) as a shot's line, so the shot lip-syncs to it and its finish uses it; 14 s at most. Whisper reads it back when voices are set up (heard); a shot with no line yet takes the words heard, into its prompt too. Film new takes to use it. ${LIVE_FILM}`, { filmId: z.string(), shotId: z.string(), file: z.string() }, ({ filmId, shotId, file }) => films.useRecording(filmId, shotId, file))
 tool('build_rough_cut', `Put every shot of a film in script order on V1 of its edit (made the first time): the finished take, else the picked or first preview. Rebuilding replaces V1 only. Returns the edit id, how many shots went in, and which are missing; get_edit and export_edit take it from there. ${LIVE}`, { filmId: z.string() }, ({ filmId }) => films.roughCut(filmId))
 
 // New footage from inside an edit: the same Extend, Fill/Bridge and Retake as the editor's right-click menu.

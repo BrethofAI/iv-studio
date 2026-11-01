@@ -24,7 +24,7 @@ description: Make MiniMax H3 videos with IV Studio through its MCP server - rend
 
 ${setup}
 
-${guide.replace(/^# .*\n+/, '')}`
+${guide.replace(/^# .*(\r?\n)+/, '')}`
 }
 
 export function pasteMessage(mcp) {

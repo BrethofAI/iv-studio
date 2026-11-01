@@ -38,6 +38,7 @@ const LOOKS = [
   ['Dreamy', 'soft haze, pastel colours, glowing backlight'],
   ['Animated', 'stylised 3D animation, bright saturated colours, soft shapes']
 ]
+const ANGLE_NAMES = { reverse: 'From the other side', wide: 'Wider' }
 const CAMERAS = ['Wide shot, static', 'Medium shot, static', 'Close-up, static', 'Wide shot, slow push in', 'Medium shot, handheld', 'Close-up, slow push in', 'Tracking shot following them', 'Over the shoulder']
 const FILM_STATE = {
   draft: ['Not planned', ''],
@@ -413,7 +414,16 @@ function Cast({ v, act, characters, notify, go, setStep }) {
   const speakers = [...new Set(v.scenes.flatMap((s) => s.elements.filter((e) => e.type === 'dialogue').map((e) => e.who)))]
   const roles = [...speakers, ...v.cast.filter((c) => !speakers.some((s) => first(s) === first(c.as))).map((c) => c.as)]
   const playedBy = (role) => v.cast.find((c) => first(c.as) === first(role))
-  const castRole = (role, characterId) => save({ cast: [...v.cast.filter((c) => first(c.as) !== first(role)), ...(characterId ? [{ characterId, as: role }] : [])] })
+  const madeUp = (role) => v.cast.find((c) => !c.characterId && first(c.as) === first(role))
+  // a speaker no character plays gets a face drawn for this film (kept with its description); anyone else is taken out
+  const castRole = (role, characterId) => {
+    const old = madeUp(role)
+    const drawn = { as: role, characterId: null, description: old?.description || '', face: old?.face || null }
+    save({ cast: [...v.cast.filter((c) => first(c.as) !== first(role)), ...(characterId ? [{ characterId, as: role }] : speakers.includes(role) ? [drawn] : [])] })
+  }
+  const setMade = (role, patch) => save({ cast: [...v.cast.filter((c) => first(c.as) !== first(role)), { as: role, characterId: null, description: '', face: null, ...madeUp(role), ...patch }] })
+  const [drawing, setDrawing] = useState('')
+  const draw = (key, fn, ok) => async () => (setDrawing(key), await act(fn, ok), setDrawing(''))
   const extras = characters.filter((c) => !v.cast.some((x) => x.characterId === c.id))
   const pictureFor = async (i) => {
     const files = await window.ivstudio.files.pick('picture')
@@ -437,12 +447,14 @@ function Cast({ v, act, characters, notify, go, setStep }) {
         {roles.map((role) => {
           const c = playedBy(role)
           const ch = characters.find((x) => x.id === c?.characterId)
+          const made = ch ? null : madeUp(role)
+          const pic = face(ch) || made?.face
           return (
-            <div key={role} className={`wiz-role ${ch ? 'on' : ''}`}>
-              <div className="wiz-role-face">{face(ch) ? <img src={fileUrl(face(ch))} alt="" /> : <span>{role.slice(0, 1)}</span>}</div>
+            <div key={role} className={`wiz-role ${ch || made?.face ? 'on' : ''}`}>
+              <div className="wiz-role-face">{pic ? <img src={fileUrl(pic)} alt="" /> : <span>{role.slice(0, 1)}</span>}</div>
               <span className="wiz-role-name">{role}</span>
               <select value={c?.characterId || ''} onChange={(e) => castRole(role, e.target.value)} aria-label={`Who plays ${role}`}>
-                <option value="">{speakers.includes(role) ? 'Made up each shot' : 'Not in it'}</option>
+                <option value="">{speakers.includes(role) || made ? 'A face drawn for this film' : 'Not in it'}</option>
                 {characters.map((x) => (
                   <option key={x.id} value={x.id}>
                     Played by {x.name}
@@ -450,6 +462,15 @@ function Cast({ v, act, characters, notify, go, setStep }) {
                 ))}
               </select>
               {ch && !ch.voiceId && <span className="mono small dim">No voice yet: H3 gives them one.</span>}
+              {!ch && (speakers.includes(role) || made) && (
+                <>
+                  <textarea rows={2} key={`d${made?.description || ''}`} defaultValue={made?.description || ''} placeholder="What do they look like? Age, hair, clothes." aria-label={`What ${role} looks like`} onBlur={(e) => e.target.value !== (made?.description || '') && setMade(role, { description: e.target.value })} />
+                  <button className="link-btn mono small" disabled={!!drawing} onClick={draw(role, () => P().drawFace(v.id, role, { again: !!made?.face }), `${role}'s face is drawn. Their sketches are marked to redraw.`)}>
+                    {drawing === role ? 'Drawing…' : made?.face ? 'Draw a new face' : 'Draw their face now'}
+                  </button>
+                  {!made?.face && drawing !== role && <span className="mono small dim">Or it's drawn when the storyboard is sketched.</span>}
+                </>
+              )}
             </div>
           )
         })}
@@ -486,6 +507,21 @@ function Cast({ v, act, characters, notify, go, setStep }) {
                 Remove place
               </button>
             </span>
+            {l.pictures[0] && (
+              <div className="wiz-angles">
+                {(l.angles || [])
+                  .filter((a) => !a.from || a.from === l.pictures[0])
+                  .map((a) => (
+                    <figure key={a.view} title={ANGLE_NAMES[a.view]}>
+                      <img src={fileUrl(a.file)} alt="" style={{ aspectRatio: ratio(v.aspect) }} />
+                      <figcaption className="mono small dim">{ANGLE_NAMES[a.view]}</figcaption>
+                    </figure>
+                  ))}
+                <button className="link-btn mono small" disabled={!!drawing} title="The same place from the other side and from further back, for shots that look the other way" onClick={draw(l.id, () => P().drawAngles(v.id, l.id), 'More angles drawn. Shots looking the other way, or wide, use them.')}>
+                  {drawing === l.id ? 'Drawing the angles…' : (l.angles || []).some((a) => !a.from || a.from === l.pictures[0]) ? 'Draw the angles again' : '+ More angles'}
+                </button>
+              </div>
+            )}
           </div>
         ))}
         <button className="wiz-place wiz-place-add" onClick={() => save({ locations: [...v.locations, { name: 'New place', description: '', pictures: [] }] })}>
@@ -580,6 +616,14 @@ function Board({ v, act, characters, openShot, setStep, mode }) {
   const shotAt = open && v.scenes.find((s) => s.id === open.sceneId)?.shots.find((s) => s.id === open.shotId)
   const takesShot = takes && all.find((s) => s.id === takes)
   const film = mode === 'film'
+  // the animatic: { making } while it's built, then { file, seconds, ... } in a player
+  const [animatic, setAnimatic] = useState(null)
+  const playAnimatic = async (voice) => {
+    setAnimatic({ making: true, voice })
+    const r = await act(() => P().animatic(v.id, { voice }))
+    setAnimatic(r?.file ? { ...r, open: true } : null)
+  }
+  const unvoiced = all.filter((s) => s.line && !s.voiceLine && characters.find((c) => c.id === s.character)?.voiceId).length
 
   if (!v.scenes.length)
     return (
@@ -657,6 +701,9 @@ function Board({ v, act, characters, openShot, setStep, mode }) {
             ) : (
               <>
                 {t.sketching > 0 && <span className="mono small busy">Sketching {plural(t.sketching, 'panel')}…</span>}
+                <button className="btn btn-small" disabled={!!animatic?.making || !all.length} title="The sketches played in order with the lines, before anything is filmed" onClick={() => playAnimatic(false)}>
+                  {animatic?.making ? 'Making the animatic…' : '▶ Play the animatic'}
+                </button>
                 {stale.length > 0 && (
                   <button className="btn btn-small btn-primary" onClick={plan}>
                     Plan the {plural(stale.length, 'changed scene')}
@@ -733,7 +780,44 @@ function Board({ v, act, characters, openShot, setStep, mode }) {
       )}
       {shotAt && <ShotDrawer v={v} sceneId={open.sceneId} sh={shotAt} act={act} characters={characters} face={face} openShot={openShot} film={film} previews={previews} fromSketch={fromSketch} onTakes={() => (setOpen(null), setTakes(shotAt.id))} onClose={() => setOpen(null)} />}
       {takesShot && <Takes v={v} sh={takesShot} act={act} onClose={() => setTakes(null)} onOpen={() => (setTakes(null), setOpen({ sceneId: v.scenes.find((s) => s.shots.some((x) => x.id === takesShot.id)).id, shotId: takesShot.id }))} />}
+      {(animatic?.open || (animatic?.making && animatic.voice)) && <Animatic v={v} a={animatic} unvoiced={unvoiced} onVoice={() => playAnimatic(true)} onClose={() => setAnimatic(null)} />}
     </section>
+  )
+}
+
+// The animatic in a player: the storyboard as a film, with the lines, before anything is filmed.
+function Animatic({ v, a, unvoiced, onVoice, onClose }) {
+  useEffect(() => {
+    const key = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [])
+  return (
+    <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal wiz-animatic" role="dialog" aria-label="Animatic">
+        <div className="modal-head">
+          <h3>The animatic · {clock(a.seconds || 0)}</h3>
+          <button className="lora-chip-x" aria-label="Close" onClick={onClose}>
+            ×
+          </button>
+        </div>
+        {a.making ? (
+          <p className="mono small busy">Saying the lines in your characters' voices, then making the animatic…</p>
+        ) : (
+          <video key={`${a.file}${a.at}`} src={`${fileUrl(a.file)}&t=${encodeURIComponent(a.at)}`} controls autoPlay style={{ aspectRatio: ratio(v.aspect) }} />
+        )}
+        <div className="modal-foot">
+          <span className="small dim">
+            {a.making ? '' : `${plural(a.shots || 0, 'shot')}, ${a.sketched} with sketches, ${a.voiced} with spoken lines. Too slow or too long? Change shot lengths on the board, then play it again.`}
+          </span>
+          {!a.making && unvoiced > 0 && (
+            <button className="btn btn-small" onClick={onVoice}>
+              Say the {plural(unvoiced, 'line')} in their voices
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -753,6 +837,11 @@ function Panel({ v, sh, n, film, ch, face, onClick }) {
         )}
         <span className="wiz-panel-n">{n}</span>
         <span className="wiz-panel-secs mono">{sh.seconds}s</span>
+        {sh.continues && (
+          <span className="wiz-panel-cont mono" title="Carries straight on from the shot before, as one unbroken take">
+            ↳ one take
+          </span>
+        )}
         {ch && face(ch) && <img className="wiz-panel-face" src={fileUrl(face(ch))} alt={ch.name} title={ch.name} />}
         {film && <span className={`wiz-panel-state ${tone}`}>{st.status === 'pick' ? `${label} · ${st.candidates.length}` : label}</span>}
       </span>
@@ -881,15 +970,38 @@ function ShotDrawer({ v, sceneId, sh, act, characters, face, openShot, film, pre
         </label>
         {sh.voiceLine && (
           <div className="wiz-field">
-            <span className="mono small dim">The line in {characters.find((c) => c.id === sh.character)?.name.split(' ')[0] || 'their'}'s voice</span>
+            <span className="mono small dim">{sh.voiceLine.recorded ? `The line, recorded (${sh.voiceLine.recorded})` : `The line in ${characters.find((c) => c.id === sh.character)?.name.split(' ')[0] || 'their'}'s voice`}</span>
             <audio key={sh.voiceLine.file} src={fileUrl(sh.voiceLine.file)} controls preload="none" />
             <span className="wiz-line-again">
               {sh.voiceLine.heard != null && <span className="mono small dim">Heard: “{sh.voiceLine.heard}”</span>}
-              <button className="link-btn mono small" disabled={!!working} onClick={busy('speak', () => act(() => P().speak(v.id, sh.id, { again: true }), 'A new take of the line. Film new takes to use it.'))}>
-                {working === 'speak' ? 'Saying it…' : 'Say it again'}
-              </button>
+              {characters.find((c) => c.id === sh.character)?.voiceId && (
+                <button className="link-btn mono small" disabled={!!working} onClick={busy('speak', () => act(() => P().speak(v.id, sh.id, { again: true }), 'A new take of the line. Film new takes to use it.'))}>
+                  {working === 'speak' ? 'Saying it…' : sh.voiceLine.recorded ? 'Use their voice instead' : 'Say it again'}
+                </button>
+              )}
             </span>
           </div>
+        )}
+        {(speaker || sh.line) && (
+          <span className="wiz-line-again">
+            <button
+              className="link-btn mono small"
+              disabled={!!working}
+              title="A recording of the line (your own voice, an actor, a take from elsewhere). The shot lip-syncs to it."
+              onClick={busy('record', async () => {
+                const files = await window.ivstudio.files.pick('audio')
+                const file = (Array.isArray(files) ? files : [files]).filter(Boolean)[0]
+                if (file) await act(() => P().useRecording(v.id, sh.id, file.path || file), (r) => `The recording is the line${r?.heard ? `: heard “${r.heard}”` : ''}. Film new takes to use it.`)
+              })}
+            >
+              {working === 'record' ? 'Reading the recording…' : sh.voiceLine?.recorded ? 'Use another recording' : '♪ Use a recording of the line'}
+            </button>
+          </span>
+        )}
+        {i > 0 && (
+          <label className="wiz-check small" title="This shot films on from the end of the shot before it, as one unbroken take: no cut. Film the shot before first.">
+            <input type="checkbox" checked={!!sh.continues} onChange={(e) => edit({ continues: e.target.checked }, false)} /> Carry straight on from shot {i} (one unbroken take)
+          </label>
         )}
         <details className="wiz-more">
           <summary className="mono small">The prompt H3 gets</summary>

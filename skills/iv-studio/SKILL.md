@@ -136,14 +136,19 @@ them on). The tools say "film" because `list_projects` already means shots.
    this PC). Show it to the person and change it with `set_film_script` until they're happy. Speakers who
    share a first name with a character preset join the cast, and so do presets named in the action of a first
    script; scene headings add places, described by the writer.
-3. `update_film` to cast characters, describe each place (every shot there uses it) and set the look.
+3. `update_film` to cast characters, describe each place (every shot there uses it) and set the look. Someone
+   no character preset plays gets a face drawn for the film (`draw_film_face`, or when sketching), from the
+   description on their cast entry, and keeps it in every sketch and shot. `draw_place_angles` draws a place
+   from the other side and from further back, for shots that look back into the room or go wide.
 4. `break_down_film` (background, minutes): each scene becomes 3-10 s shots with one speaker at most, sized to
    the film's length, each shot gets its H3 prompt, then a storyboard sketch (a still on this PC's picture
    models). A place without a photo gets one drawn first (it shows on Cast and places), so every sketch there
    shares its room; the faces of the cast on screen are kept. Poll `get_film` until `breakdown.state` is done
    and `totals.sketching` is 0. `sketch_film_shots` redraws sketches.
 5. Show the person the storyboard. Change shots with `edit_film_shot`, then `write_film_shot_prompt` and
-   `sketch_film_shots` for that shot. Get their OK before filming: every shot takes GPU minutes.
+   `sketch_film_shots` for that shot. `make_animatic` plays the sketches in order with the lines (seconds,
+   free): show it, so pacing and length are settled before any GPU time. Get their OK before filming: every
+   shot takes GPU minutes.
 6. `render_film_scene` (without sceneId, the whole film) or `render_film_shot` hunt takes; each shot is an
    ordinary shot, also in Shots. A shot with a sketch opens exactly on it; with its place's picture it films
    in Reference mode, so the room stays the same however the camera moves and the other cast on screen keep
@@ -151,7 +156,10 @@ them on). The tools say "film" because `list_projects` already means shots.
    whose character has a voice is said first, for lip-sync, and read back with Whisper until every word is
    there (the shots show `speaking`, then `queued`, meanwhile); a shot with no line is told nobody speaks.
    `speak_film_line` with `again` makes a new take of a line; film new takes to use it. When a shot's status
-   is pick, show the takes (`state.candidates`) and `finish_film_shot` the chosen one.
+   is pick, show the takes (`state.candidates`) and `finish_film_shot` the chosen one. A recording of a line
+   (`use_film_recording`) replaces the voice: the shot lip-syncs to it. A shot with `continues` films on
+   from the previous shot's take as one unbroken take, so film and pick that shot first; the rough cut starts
+   it where the earlier take ends.
 7. `build_rough_cut` lays every shot in script order on V1 of the film's edit (finished takes, else the
    picked or first preview); `export_edit` saves it as a video. Then use the Edit tools, and
    `generate_in_edit` to extend or bridge shots.

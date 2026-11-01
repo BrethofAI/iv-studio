@@ -4,7 +4,7 @@ import { shotName } from '../src/service/studio.js'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { Productions, asFirstFrame, beatOf, heading, placePrompt, scriptText, sketchPrompt, spokenWords, withLine, withRoom, withSilence, wordMatch } from '../src/service/productions.js'
+import { Productions, animaticPlan, asFirstFrame, beatOf, facePrompt, heading, placePicture, placePrompt, scriptText, sketchPrompt, spokenWords, withLine, withRoom, withSilence, wordMatch } from '../src/service/productions.js'
 import { parseScript } from '../src/service/screenplay.js'
 
 let n = 0
@@ -131,6 +131,70 @@ ok('a sketch drawn before the shot changed is set aside until it is redrawn', ()
   assert.equal(films.find(films.get(p.id), 'a').sh.sketchStale, true, 'a new board does')
   films.editShot(p.id, 's1', 'b', { action: 'Heavy rain.' })
   assert.ok(!films.find(films.get(p.id), 'b').sh.sketchStale, 'a shot with no sketch has nothing to set aside')
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+// ---------- phase 4 ----------
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'ivs-p4-'))
+const touch = (dir, name) => (fs.writeFileSync(path.join(dir, name), 'x'), path.join(dir, name))
+ok('a made-up person gets a face of their own, kept apart from the cast who are played', () => {
+  const dir = tmp()
+  const tessFace = touch(dir, 'tess.png')
+  const keeperFace = touch(dir, 'keeper.png')
+  const films = new Productions({ dataDir: dir, studio: () => ({ characters: () => [{ id: 'tess', name: 'Tess Marlow', picture: tessFace }] }) })
+  const p = films.create({ name: 'Faces' })
+  const shots = [{ id: 'a', speaker: 'KEEPER', characters: ['KEEPER', 'Tess'], character: 'none' }, { id: 'b', speaker: '', characters: ['Tess'], character: 'tess' }]
+  films.patch(p.id, (q) => (q.cast = [{ characterId: 'tess', as: 'Tess' }]))
+  assert.deepEqual(films.madeUpRoles(films.get(p.id), shots), ['KEEPER'], 'Tess is played; the keeper is made up')
+  assert.deepEqual(films.onScreen(films.get(p.id), shots[0]).map((x) => [x.ch.name, x.made]), [['Tess Marlow', false]], 'no face drawn yet: only Tess')
+  films.update(p.id, { cast: [{ characterId: 'tess', as: 'Tess' }, { characterId: null, as: 'Keeper', description: 'a weathered man in his sixties', face: keeperFace, extra: 'dropped' }] })
+  const q = films.get(p.id)
+  assert.deepEqual(q.cast[1], { as: 'Keeper', characterId: null, description: 'a weathered man in his sixties', face: keeperFace }, 'update keeps a made-up entry and nothing else')
+  assert.deepEqual(films.onScreen(q, shots[0]).map((x) => [x.ch.name, x.made, x.face]), [['Tess Marlow', false, tessFace], ['Keeper', true, keeperFace]], 'Tess first, then the keeper (matched by first name, any case)')
+  assert.deepEqual(films.madeUpRoles(q, shots), ['KEEPER'], 'still made up, now with a face')
+  assert.match(facePrompt({ role: 'Keeper', description: 'a weathered man in his sixties.', look: '35 mm film' }), /^Cinematic film still, head-and-shoulders portrait of Keeper: a weathered man in his sixties\. .*Look: 35 mm film\. One person only\./)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+ok('a place keeps its angles, and a shot takes the view that suits its camera', () => {
+  const dir = tmp()
+  const photo = touch(dir, 'room.png')
+  const back = touch(dir, 'back.png')
+  const wide = touch(dir, 'wide.png')
+  const loc = { pictures: [photo], angles: [{ view: 'reverse', file: back, from: photo }, { view: 'wide', file: wide, from: photo }] }
+  assert.equal(placePicture(loc, { camera: 'Medium shot, static' }), photo)
+  assert.equal(placePicture(loc, { camera: 'Wide shot, slow push in' }), wide)
+  assert.equal(placePicture(loc, { camera: 'Reverse angle on Theo' }), back)
+  assert.equal(placePicture(loc, { camera: 'Close-up', stage: { camera: { facing: 180 } } }), back, 'a board camera looking back into the room')
+  assert.equal(placePicture(loc, { camera: 'Close-up', stage: { camera: { facing: -20 } } }), photo)
+  assert.equal(placePicture({ ...loc, pictures: [touch(dir, 'new.png')] }, { camera: 'Wide shot' }), path.join(dir, 'new.png'), 'angles drawn from an older photo are left out')
+  const films = new Productions({ dataDir: dir, studio: () => ({ characters: () => [] }) })
+  const p = films.create({ name: 'Angles' })
+  films.patch(p.id, (q) => (q.locations = [{ id: 'l1', name: 'Room', description: '', pictures: [photo], angles: loc.angles }]))
+  films.update(p.id, { locations: [{ id: 'l1', name: 'Room', description: 'A small room', pictures: [photo] }] })
+  assert.equal(films.get(p.id).locations[0].angles.length, 2, 'an update without angles keeps them')
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+ok('the animatic holds each shot for its length, longer for a long line, and only uses fresh sketches', () => {
+  const plan = animaticPlan([
+    { heading: 'INT. ROOM', shots: [{ id: 'a', seconds: 5, sketch: 'a.png', speaker: 'Tess', line: 'Hi.', voiceLine: { file: 'a.wav', duration: 6.2 } }, { id: 'b', seconds: 4, sketch: 'b.png', sketchStale: true, action: 'She sits.' }] },
+    { heading: 'EXT. ROAD', shots: [{ id: 'c', seconds: 3, action: 'A car passes.' }] }
+  ])
+  assert.deepEqual(plan.map((s) => [s.shot, s.n, s.at, s.seconds, s.sketch, s.line, s.voice]), [
+    ['a', 1, 0, 6.6, 'a.png', 'Tess: Hi.', 'a.wav'],
+    ['b', 2, 6.6, 4, null, '', null],
+    ['c', 1, 10.6, 3, null, '', null]
+  ])
+})
+ok('a continuous shot needs a shot before it in its scene', () => {
+  const dir = tmp()
+  const films = new Productions({ dataDir: dir, studio: () => ({ characters: () => [] }) })
+  const p = films.create({ name: 'One take' })
+  films.patch(p.id, (q) => (q.scenes = [{ id: 's1', heading: 'INT. ROOM', shots: [{ id: 'a', action: 'In.', seconds: 5 }, { id: 'b', action: 'On.', seconds: 5 }] }]))
+  films.editShot(p.id, 's1', 'a', { continues: true })
+  films.editShot(p.id, 's1', 'b', { continues: true })
+  const [a, b] = films.get(p.id).scenes[0].shots
+  assert.equal(a.continues, false, 'the first shot of a scene has nothing to carry on from')
+  assert.equal(b.continues, true)
   fs.rmSync(dir, { recursive: true, force: true })
 })
 console.log(`${n} checks passed`)

@@ -14,6 +14,7 @@ import { needsPrevis, previsWords, stageFields } from './staging.js'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import { probe } from './media.js'
 import { ASPECTS } from './plan.js'
 import { DEFAULT_LOCAL_MODEL, ollamaJson, writeHarness, writeLocal } from './prompter.js'
 import { parseScript, sceneText } from './screenplay.js'
@@ -21,6 +22,7 @@ import { applyOps } from './timeline.js'
 
 const now = () => new Date().toISOString()
 const id6 = () => randomUUID().slice(0, 6)
+const first = (x) => String(x || '').split(/\s+/)[0].toLowerCase() // people match by first name
 const readJson = (file, fallback) => {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'))
@@ -275,6 +277,52 @@ export function placePrompt({ place, time, description, look }) {
     .join(' ')
 }
 
+// A made-up person's face, drawn once so they look the same in every sketch and shot.
+export function facePrompt({ role, description, look }) {
+  return [
+    `Cinematic film still, head-and-shoulders portrait of ${role || 'a person'}${description ? `: ${String(description).replace(/[.\s]+$/, '')}` : ''}.`,
+    'Facing the camera, a calm everyday expression, the whole face clear and evenly lit, a plain soft background.',
+    look ? `Look: ${look}.` : 'Natural light, realistic skin.',
+    'One person only. One single frame: no split screen, no collage, no text, no captions, no borders.'
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
+// More views of a place from its photo, so a shot that looks the other way still finds the same room.
+export const ANGLES = {
+  reverse: 'The same place seen from the opposite side: the camera stands where the far wall was and looks back toward where this picture was taken. Keep the same room, materials, light and colours.',
+  wide: 'A wider view of the same place from further back, showing more of it around what this picture shows. Keep the same room, materials, light and colours.'
+}
+export function anglePrompt(view, { place, description, look }) {
+  return [ANGLES[view], `It is ${place || 'the place'}${description ? `: ${description}` : ''}.`, 'Nobody in it.', look ? `Look: ${look}.` : '', 'One single frame: no split screen, no collage, no text, no captions, no borders.'].filter(Boolean).join(' ')
+}
+// Which picture of a place suits a shot: the reverse view when the camera on its board looks back into the room
+// (or the words say reverse), the wide view for a wide or establishing shot, else the place's own photo.
+export function placePicture(loc, sh = {}) {
+  const has = (f) => f && fs.existsSync(f)
+  const main = (loc?.pictures || []).find(has) || null
+  // (an angle drawn from an older photo no longer matches the place)
+  const view = (v) => (loc?.angles || []).find((a) => a.view === v && has(a.file) && (!a.from || a.from === main))?.file || null
+  const facing = sh.stage?.camera ? ((((Number(sh.stage.camera.facing) || 0) % 360) + 360) % 360) : null
+  if ((facing != null && facing > 100 && facing < 260) || /\breverse\b/i.test(sh.camera || '')) return view('reverse') || main
+  if (/\b(wide|establishing|extreme long|long shot)\b/i.test(sh.camera || '')) return view('wide') || main
+  return main
+}
+
+// An animatic's timing: each shot holds for its length (longer when its line runs longer), in script order.
+export function animaticPlan(scenes) {
+  let at = 0
+  return scenes.flatMap((sc) =>
+    sc.shots.map((sh, i) => {
+      const seconds = +Math.max(sh.seconds || 5, sh.voiceLine?.duration ? sh.voiceLine.duration + 0.4 : 0).toFixed(2)
+      const row = { shot: sh.id, scene: sc.heading, n: i + 1, at: +at.toFixed(2), seconds, sketch: sh.sketch && !sh.sketchStale ? sh.sketch : null, line: sh.line ? `${sh.speaker ? `${sh.speaker}: ` : ''}${sh.line}` : '', action: sh.action || '', voice: sh.voiceLine?.file || null }
+      at += seconds
+      return row
+    })
+  )
+}
+
 export class Productions {
   // studio: () => the current Studio. voices: () => the voice engine (or null). images: () => Images (sketches).
   // edits: Edits. localCopy(file): an output as a file on this PC. onChange(id): a production changed
@@ -336,10 +384,13 @@ export class Productions {
   // The brief and the assets: any of name, logline, aspect, targetSeconds, look, cast, locations, props, step.
   update(id, patch) {
     const p = this.get(id)
+    const oldAngles = new Map((p.locations || []).map((l) => [l.id, l.angles || []]))
     for (const k of ['name', 'logline', 'aspect', 'targetSeconds', 'look', 'cast', 'locations', 'props', 'step']) if (patch[k] !== undefined) p[k] = patch[k]
     if (!ASPECTS[p.aspect]) throw new Error(`aspect must be ${Object.keys(ASPECTS).join(', ')}.`)
     if (!STEPS.includes(p.step || 'idea')) throw new Error(`step must be ${STEPS.join(', ')}.`)
-    p.locations = (p.locations || []).map((l) => ({ id: l.id || id6(), name: l.name || 'Location', description: l.description || '', pictures: l.pictures || [] }))
+    // a place keeps its drawn angles when the new list doesn't give them
+    p.locations = (p.locations || []).map((l) => ({ id: l.id || id6(), name: l.name || 'Location', description: l.description || '', pictures: l.pictures || [], angles: l.angles || oldAngles.get(l.id) || [] }))
+    p.cast = (p.cast || []).map((c) => (c.characterId ? { characterId: c.characterId, as: c.as } : { as: c.as, characterId: null, description: c.description || '', face: c.face || null }))
     p.props = (p.props || []).map((l) => ({ id: l.id || id6(), name: l.name || 'Prop', description: l.description || '', pictures: l.pictures || [] }))
     return this.write(p)
   }
@@ -489,15 +540,28 @@ export class Productions {
   character(cid) {
     return this.studio().characters().find((c) => c.id === cid) || null
   }
-  // The cast characters on screen in a shot that have a face picture: the shot's own character first, then anyone
-  // else it names who is in the cast (two at most), as [{ ch, face }].
+  // The people on screen in a shot who have a face picture: the shot's own character first, then anyone else it
+  // names who is in the cast, then made-up people with a drawn face (two at most), as [{ ch, face, made }].
   onScreen(p, sh) {
-    const first = (n) => String(n || '').split(/\s+/)[0].toLowerCase()
-    const ids = [sh.character, ...(sh.characters || []).map((n) => p.cast.find((c) => first(c.as) === first(n) || first(this.character(c.characterId)?.name) === first(n))?.characterId)]
-    return [...new Set(ids.filter(Boolean))]
-      .map((cid) => ({ ch: this.character(cid), face: this.facePicture(this.character(cid)) }))
-      .filter((x) => x.ch && x.face)
-      .slice(0, 2)
+    const names = [...(sh.speaker ? [sh.speaker] : []), ...(sh.characters || [])]
+    const ids = [sh.character, ...names.map((n) => p.cast.find((c) => c.characterId && (first(c.as) === first(n) || first(this.character(c.characterId)?.name) === first(n)))?.characterId)]
+    const presets = [...new Set(ids.filter((x) => x && x !== 'none'))].map((cid) => ({ ch: this.character(cid), face: this.facePicture(this.character(cid)), made: false })).filter((x) => x.ch && x.face)
+    const made = [...new Map(names.map((n) => this.madeUp(p, n)).filter((c) => c?.face && fs.existsSync(c.face)).map((c) => [first(c.as), c])).values()]
+      .filter((c) => !presets.some((x) => first(x.ch.name) === first(c.as)))
+      .map((c) => ({ ch: { id: `made:${first(c.as)}`, name: c.as }, face: c.face, made: true }))
+    return [...presets, ...made].slice(0, 2)
+  }
+  // A made-up person's cast entry (someone no character preset plays), or null.
+  madeUp(p, name) {
+    return (p.cast || []).find((c) => !c.characterId && first(c.as) === first(name)) || null
+  }
+  // Everyone a set of shots shows or hears who no character preset plays: the people to draw faces for.
+  madeUpRoles(p, shots) {
+    const presets = this.studio().characters()
+    const played = (n) => p.cast.some((c) => c.characterId && (first(c.as) === first(n) || first(this.character(c.characterId)?.name) === first(n))) || presets.some((c) => first(c.name) === first(n))
+    const roles = new Map()
+    for (const sh of shots) for (const n of [sh.speaker, ...(sh.characters || [])]) if (n && first(n).length > 1 && !played(n) && !roles.has(first(n))) roles.set(first(n), n)
+    return [...roles.values()]
   }
   // A character's face picture: its own, else the ready-made catalogue's.
   facePicture(ch) {
@@ -528,9 +592,13 @@ export class Productions {
     const others = sh.characters.filter((n) => n.split(/\s+/)[0].toLowerCase() !== (this.character(sh.character)?.name || '').split(/\s+/)[0].toLowerCase())
     const before = sc.shots[sc.shots.findIndex((s) => s.id === shotId) - 1]
     const dot = (t) => String(t).trim().replace(/[.\s]+$/, '') + '.'
+    // a made-up person's looks go in every shot of them, so the words agree with their drawn face
+    const looks = [...new Set([sh.speaker, ...sh.characters].filter(Boolean))].map((n) => this.madeUp(p, n)).filter((c) => c?.description)
     const idea = [
       loc ? `${loc.name}${sc.time ? `, ${sc.time.toLowerCase()}` : ''}${loc.description ? `: ${loc.description}` : ''}.` : sc.heading,
+      sh.continues && before ? 'This carries straight on from the previous shot as one unbroken take: no cut, the same camera.' : '',
       before?.ends ? `It opens as the previous shot ended: ${dot(before.ends)}` : '',
+      looks.length ? looks.map((c) => `${c.as}: ${dot(c.description)}`).join(' ') : '',
       sh.action,
       sh.staging ? `Staging: ${dot(sh.staging)}` : '',
       sh.camera ? `Camera: ${sh.camera}.` : '',
@@ -547,7 +615,6 @@ export class Productions {
       w.engine === 'claude' || w.engine === 'codex'
         ? await writeHarness({ engine: w.engine, model: w.model, idea, mode: 'text', seconds: sh.seconds, character: ch })
         : await writeLocal({ idea, mode: 'text', seconds: sh.seconds, character: ch, model: this.model(), cpu: cpu ?? (await this.studio().gpuBusy().catch(() => false)) })
-    const first = (x) => String(x || '').split(/\s+/)[0].toLowerCase()
     const prompt = withLine(written, ch && first(ch.name) === first(sh.speaker) ? '{char}' : sh.speaker, sh.line)
     this.patch(id, (q) => {
       const t = q.scenes.find((s) => s.id === sceneId)?.shots.find((s) => s.id === shotId)
@@ -585,7 +652,8 @@ export class Productions {
       // (a seated pair stood up mid-take when the board had them standing), so it's set aside until redrawn
       const looks = ['action', 'staging', 'camera', 'stage'].some((k) => patch[k] !== undefined && JSON.stringify(patch[k]) !== JSON.stringify(sh[k] ?? null))
       if (looks && (sh.sketch || sh.sketchSet)) sh.sketchStale = true
-      for (const k of ['action', 'staging', 'camera', 'ends', 'characters', 'speaker', 'line', 'seconds', 'prompt', 'character', 'stage']) if (patch[k] !== undefined) sh[k] = patch[k]
+      for (const k of ['action', 'staging', 'camera', 'ends', 'characters', 'speaker', 'line', 'seconds', 'prompt', 'character', 'stage', 'continues']) if (patch[k] !== undefined) sh[k] = patch[k]
+      if (sh.continues && i === 0) sh.continues = false // the first shot of a scene has nothing to carry on from
       // a staging board's plan becomes the shot's words, unless the words were given too
       if (patch.stage) {
         const f = stageFields(patch.stage)
@@ -629,21 +697,41 @@ export class Productions {
     this.patch(id, (q) => (this.find(q, shotId).sh.voiceLine = { file: line.file, text: line.text, duration: line.duration, heard: best.heard }))
     return line
   }
+  // A recording of the line (the person's own voice, an actor, a take from elsewhere) becomes the shot's voice
+  // line, so the shot lip-syncs to it. Whisper reads it back when the voice engine is set up; a shot with no line
+  // yet takes the words it heard.
+  async useRecording(id, shotId, file) {
+    if (!file || !fs.existsSync(file)) throw new Error('Pick a sound file.')
+    const ffmpeg = this.edits?.ffmpeg
+    if (!ffmpeg) throw new Error('Recordings need IV Studio on this PC.')
+    const dir = path.join(this.dir, 'lines')
+    fs.mkdirSync(dir, { recursive: true })
+    const out = path.join(dir, `${id}_${shotId}_${Date.now()}.wav`)
+    await this.edits.run(['-y', '-i', file, '-vn', '-ac', '1', '-ar', '48000', '-c:a', 'pcm_s16le', out])
+    const { duration } = await probe(this.edits.ffprobe, out)
+    if (!duration || duration > 14.5) {
+      fs.rmSync(out, { force: true })
+      throw new Error(duration ? `The recording is ${duration.toFixed(1)} s; a shot holds 14 s at most. Trim it in the media editor first.` : 'That file has no sound.')
+    }
+    const heard = this.voices() ? await this.voices().transcribe(out).catch(() => null) : null
+    const { sh } = this.find(this.get(id), shotId)
+    const line = sh.line || String(heard || '').trim()
+    const ch = this.character(sh.character)
+    this.patch(id, (q) => {
+      const t = this.find(q, shotId).sh
+      t.voiceLine = { file: out, text: line, duration, heard, recorded: path.basename(file) }
+      // a new line goes into the prompt's <d> too, so H3 mouths these words
+      if (!sh.line && line) Object.assign(t, { line, prompt: t.prompt ? withLine(t.prompt, ch && (!t.speaker || first(ch.name) === first(t.speaker)) ? '{char}' : t.speaker || 'Someone', line) : t.prompt })
+    })
+    return { file: out, duration, heard, line }
+  }
 
   // ---------- storyboard sketches ----------
   // A still per shot (all shots without one, or shotIds, or every shot with redo), so the board shows the film
   // before any video renders. With a face for the shot's character or a picture of the place, an editing model
   // (Flux.2 Klein, else Flux 3 Klein) keeps them in the film's frame; otherwise a generating model draws it.
   async sketch(id, { shotIds = null, redo = false } = {}) {
-    const images = this.images()
-    if (!images) throw new Error('Sketches need IV Studio on this PC.')
-    const st = await images.status()
-    if (st.remote) throw new Error('Sketches render on this PC’s ComfyUI. Switch to "This PC" on the Cloud page to make them.')
-    if (st.error) throw new Error(st.error)
-    const ready = (ids, edit) => ids.map((f) => st.families.find((x) => x.id === f && x.ready && x.models.length && (!edit || x.edit))).find(Boolean)
-    const editor = ready(['flux2', 'flux3'], true) // they can keep the film's frame
-    const drawer = ready(['flux2', 'zimage', 'flux3', 'krea2', 'qwen21', 'moss'], false)
-    if (!drawer) throw new Error('Sketches need a picture model. Set one up in Settings → Setup (Flux.2 Klein or Z-Image Turbo).')
+    const { images, editor, drawer } = await this.pictureModels('Sketches')
     let p = this.get(id)
     const todo = (sc) => sc.shots.filter((sh) => (shotIds ? shotIds.includes(sh.id) : redo || !(sh.sketch || sh.sketchSet)))
     // a place with no photo gets one drawn first (it shows on Cast and places), or each sketch makes up its own room
@@ -654,13 +742,21 @@ export class Productions {
         const file = await this.drawPlace(images, drawer, p, loc, sc).catch(() => null)
         if (file) p = this.patch(id, (q) => (q.locations.find((l) => l.id === loc.id).pictures = [file]))
       }
+    // so does everyone no character preset plays: one drawn face, kept in every sketch and shot of them
+    // (a made-up keeper had a different face in each shot of "Last Watch")
+    if (editor)
+      for (const role of this.madeUpRoles(p, p.scenes.flatMap(todo))) {
+        if (this.madeUp(p, role)?.face && fs.existsSync(this.madeUp(p, role).face)) continue
+        await this.drawFace(id, role).catch(() => null)
+        p = this.get(id)
+      }
     const made = []
     for (const sc of p.scenes)
       for (const [i, sh] of sc.shots.entries()) {
         if (!todo(sc).includes(sh)) continue
         const loc = p.locations.find((l) => l.name.toLowerCase() === (sc.location || '').toLowerCase())
         const people = editor ? this.onScreen(p, sh) : []
-        const place = loc?.pictures?.find((f) => fs.existsSync(f)) || null
+        const place = placePicture(loc, sh)
         const refs = editor ? [...people.map((x) => x.face), place].filter(Boolean) : []
         const prompt =
           sketchPrompt({ action: sh.action, camera: sh.camera, place: loc?.name || sc.location, time: sc.time, description: loc?.description, look: p.look?.notes, faces: people.map((x) => x.ch.name), staging: sh.staging }) +
@@ -672,15 +768,73 @@ export class Productions {
       }
     return made
   }
-  // Draws the empty place in the film's frame and waits for it (about 20 s). Returns the picture file.
-  async drawPlace(images, fam, p, loc, sc) {
-    const rec = await images.create({ mode: 'generate', model: fam.models[0], prompt: placePrompt({ place: loc.name, time: sc.time, description: loc.description, look: p.look?.notes }), aspect: p.aspect, megapixels: 0.5, count: 1, name: `${p.name} · ${loc.name}`, tag: `film:${p.id}` })
+  // This PC's picture models: editor (Flux.2 or Flux 3 Klein, which keep a face, a place and the film's frame) and
+  // drawer (any model that draws from words).
+  async pictureModels(what) {
+    const images = this.images()
+    if (!images) throw new Error(`${what} need IV Studio on this PC.`)
+    const st = await images.status()
+    if (st.remote) throw new Error(`${what} render on this PC’s ComfyUI. Switch to "This PC" on the Cloud page to make them.`)
+    if (st.error) throw new Error(st.error)
+    const ready = (ids, edit) => ids.map((f) => st.families.find((x) => x.id === f && x.ready && x.models.length && (!edit || x.edit))).find(Boolean)
+    const editor = ready(['flux2', 'flux3'], true)
+    const drawer = ready(['flux2', 'zimage', 'flux3', 'krea2', 'qwen21', 'moss'], false)
+    if (!drawer) throw new Error(`${what} need a picture model. Set one up in Settings → Setup (Flux.2 Klein or Z-Image Turbo).`)
+    return { images, editor, drawer }
+  }
+  // Waits for a picture set (about 20 s) and returns its first file.
+  async picture(images, rec, what) {
     for (const end = Date.now() + 600e3; Date.now() < end; await new Promise((r) => setTimeout(r, 2000))) {
       const r = await images.get(rec.id)
       if (r.files?.length) return r.files[0]
-      if (['error', 'cancelled'].includes(r.status)) throw new Error(r.error || 'The place picture failed.')
+      if (['error', 'cancelled'].includes(r.status)) throw new Error(r.error || `The ${what} failed.`)
     }
-    throw new Error('The place picture took too long.')
+    throw new Error(`The ${what} took too long.`)
+  }
+  // Draws the empty place in the film's frame and waits for it. Returns the picture file.
+  async drawPlace(images, fam, p, loc, sc) {
+    const rec = await images.create({ mode: 'generate', model: fam.models[0], prompt: placePrompt({ place: loc.name, time: sc.time, description: loc.description, look: p.look?.notes }), aspect: p.aspect, megapixels: 0.5, count: 1, name: `${p.name} · ${loc.name}`, tag: `film:${p.id}` })
+    return this.picture(images, rec, 'place picture')
+  }
+  // Draws a face for someone no character preset plays (from their description, if the person gave one) and keeps
+  // it on their cast entry ({ as, characterId: null, description, face }). again: a new face.
+  async drawFace(id, role, { again = false } = {}) {
+    const { images, drawer } = await this.pictureModels('Faces')
+    const p = this.get(id)
+    const entry = this.madeUp(p, role) || { as: role, characterId: null, description: '', face: null }
+    if (entry.face && fs.existsSync(entry.face) && !again) return entry
+    const rec = await images.create({ mode: 'generate', model: drawer.models[0], prompt: facePrompt({ role: entry.as, description: entry.description, look: p.look?.notes }), aspect: '3:4', megapixels: 0.5, count: 1, seed: again ? Math.floor(Math.random() * 1e9) : null, name: `${p.name} · ${entry.as}`, tag: `film:${p.id}` })
+    const face = await this.picture(images, rec, 'face')
+    const q = this.patch(id, (x) => {
+      const old = this.madeUp(x, role)
+      if (old) old.face = face
+      else x.cast.push({ ...entry, face })
+      // their shots' sketches were drawn with the old face (or none)
+      for (const sc of x.scenes) for (const sh of sc.shots) if ((sh.sketch || sh.sketchSet) && [sh.speaker, ...(sh.characters || [])].some((n) => first(n) === first(role))) sh.sketchStale = true
+    })
+    return this.madeUp(q, role)
+  }
+  // More views of a place, drawn from its photo by an editing model: reverse (looking back into the room) and wide.
+  // Sketches and shots then take the view that suits their camera (placePicture).
+  async drawAngles(id, locationId, { views = Object.keys(ANGLES) } = {}) {
+    const { images, editor } = await this.pictureModels('Angles')
+    if (!editor) throw new Error('Angles need Flux.2 Klein or Flux 3 Klein (they draw from the place’s photo). Set one up in Settings → Setup.')
+    const p = this.get(id)
+    const loc = p.locations.find((l) => l.id === locationId)
+    if (!loc) throw new Error('No such place.')
+    const photo = loc.pictures.find((f) => fs.existsSync(f))
+    if (!photo) throw new Error('Add or draw a photo of the place first; the angles are drawn from it.')
+    const sc = p.scenes.find((s) => (s.location || '').toLowerCase() === loc.name.toLowerCase())
+    const angles = []
+    for (const view of views.filter((v) => ANGLES[v])) {
+      const rec = await images.create({ mode: 'edit', model: editor.models[0], prompt: anglePrompt(view, { place: `${loc.name}${sc?.time ? `, ${sc.time.toLowerCase()}` : ''}`, description: loc.description, look: p.look?.notes }), refs: [photo], aspect: p.aspect, keepAspect: true, megapixels: 0.5, count: 1, name: `${p.name} · ${loc.name} · ${view}`, tag: `film:${p.id}` })
+      angles.push({ view, file: await this.picture(images, rec, `${view} view`), from: photo })
+    }
+    const q = this.patch(id, (x) => {
+      const l = x.locations.find((y) => y.id === locationId)
+      l.angles = [...(l.angles || []).filter((a) => !angles.some((b) => b.view === a.view)), ...angles]
+    })
+    return q.locations.find((l) => l.id === locationId)
   }
   // A shot's finished sketch becomes its picture (shot.sketch); a failed one is dropped so it can be redone.
   async refreshSketches(p) {
@@ -757,19 +911,22 @@ export class Productions {
       projectId = shot.id
       this.patch(id, (q) => (this.find(q, shotId).sh.projectId = projectId))
     }
+    const said = sh.line ? sh.prompt : withSilence(sh.prompt)
+    if (sh.continues) return this.queueContinued(p, sc, sh, { projectId, said, previews, seed })
     const seconds = sh.voiceLine ? Math.min(15, Math.max(sh.seconds, Math.ceil(sh.voiceLine.duration + 0.5))) : sh.seconds
     const sketch = fromSketch && sh.sketch && !sh.sketchStale && fs.existsSync(sh.sketch) ? sh.sketch : null
     // with a picture of the place too, reference to video keeps the room the same however the camera moves
     const loc = p.locations.find((l) => l.name.toLowerCase() === (sc.location || '').toLowerCase())
-    const room = sketch && useRoom ? loc?.pictures?.find((f) => fs.existsSync(f)) : null
-    const said = sh.line ? sh.prompt : withSilence(sh.prompt)
+    const room = sketch && useRoom ? placePicture(loc, sh) : null
     // a staged shot whose camera arcs films from its previs: H3 follows a previs's arc and barely arcs from words
     // (other moves and walks do as well from the staging words, and faster)
     const moving = usePrevis && needsPrevis(sh.stage)
     const clip = moving && this.previs() ? await this.previs().make({ stage: sh.stage, seconds, aspect: p.aspect, name: `${p.name} ${sc.shots.indexOf(sh) + 1}` }).catch(() => null) : null
-    const reference = room || clip
-    // the shot's character comes from its LoRA; anyone else in the cast on screen comes from their face picture
-    const others = reference ? this.onScreen(p, sh).filter((x) => x.ch.id !== sh.character) : []
+    // the shot's character comes from its LoRA; anyone else in the cast on screen comes from their face picture, and
+    // a made-up person's drawn face always comes along (References mode), or H3 makes up a new face each shot
+    const faces = this.onScreen(p, sh).filter((x) => x.ch.id !== sh.character)
+    const reference = room || clip || faces.some((x) => x.made)
+    const others = reference ? faces : []
     const job = await studio.generatePreviews({
       projectId,
       mode: reference ? 'reference' : sketch ? 'frames' : 'text',
@@ -788,7 +945,43 @@ export class Productions {
       voiceLine: sh.voiceLine?.file || null,
       seed: seed ?? Math.floor(Math.random() * 1e9)
     })
-    this.patch(id, (q) => Object.assign(this.find(q, shotId).sh, { filmedFrom: sketch ? 'sketch' : 'prompt', previs: clip?.file || null }))
+    this.patch(id, (q) => Object.assign(this.find(q, shotId).sh, { filmedFrom: sketch ? 'sketch' : 'prompt', previs: clip?.file || null, continueTrim: null }))
+    return job
+  }
+  // A continuous shot carries straight on from the previous shot's take (its finished take, else the picked or first
+  // preview) as one unbroken take: Continue mode from that take's last 4 seconds. Continue replays those seconds
+  // before the new part, so the cut starts it continueTrim seconds in.
+  async queueContinued(p, sc, sh, { projectId, said, previews, seed }) {
+    const n = sc.shots.indexOf(sh)
+    const prev = sc.shots[n - 1]
+    if (!prev) throw new Error('The first shot of a scene has nothing to carry on from.')
+    const st = this.shotState(prev)
+    const take = st.final || st.candidates?.find((c) => c.n === (st.picked || 1)) || st.candidates?.[0]
+    if (!take) throw new Error(`Film shot ${n} first: shot ${n + 1} carries straight on from its take.`)
+    const file = await this.localCopy(take)
+    const info = await probe(this.edits.ffprobe, file)
+    const dir = path.join(this.dir, 'continue')
+    fs.mkdirSync(dir, { recursive: true })
+    const src = path.join(dir, `${p.id}_${sh.id}_${Date.now()}.mp4`)
+    const silent = info.hasAudio ? [] : ['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo']
+    await this.edits.run(['-y', '-ss', String(Math.max(0, info.duration - 4)), '-i', file, ...silent, '-map', '0:v:0', '-map', info.hasAudio ? '0:a:0' : '1:a:0', '-r', '24', '-c:v', 'libx264', '-crf', '14', '-preset', 'fast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ar', '48000', '-shortest', src])
+    const cut = await probe(this.edits.ffprobe, src)
+    const job = await this.studio().generatePreviews({
+      projectId,
+      mode: 'continue',
+      prompt: said,
+      character: sh.character || 'none',
+      // Continue counts its 22-frame overlap inside the length (H3 stops at 15 s)
+      seconds: Math.min(15, +(sh.seconds + 23 / 24).toFixed(2)),
+      overlapFrames: 22,
+      aspect: p.aspect,
+      megapixels: 0.4,
+      previews,
+      extraLoras: p.look?.loras || [],
+      seed: seed ?? Math.floor(Math.random() * 1e9),
+      media: [{ kind: 'video', file: src, duration: cut.duration, width: cut.width, height: cut.height, hasAudio: true }]
+    })
+    this.patch(p.id, (q) => Object.assign(this.find(q, sh.id).sh, { filmedFrom: 'continue', previs: null, continueTrim: +cut.duration.toFixed(3) }))
     return job
   }
   // Previews for every shot in a scene (or, with no sceneId, the whole film) that has a prompt and nothing
@@ -798,7 +991,9 @@ export class Productions {
     const scenes = sceneId ? p.scenes.filter((s) => s.id === sceneId) : p.scenes
     if (!scenes.length) throw new Error('No such scene.')
     if (this.filming.has(id)) throw new Error('This film is already being filmed. Wait for its lines to be said.')
-    const ids = scenes.flatMap((sc) => sc.shots.filter((sh) => sh.prompt.trim() && !sh.projectId).map((sh) => sh.id))
+    // a continuous shot waits until the shot before it has a take to carry on from
+    const hasTake = (sh) => !!sh?.projectId && ['pick', 'finished', 'finishing'].includes(this.shotState(sh).status)
+    const ids = scenes.flatMap((sc) => sc.shots.filter((sh, i) => sh.prompt.trim() && !sh.projectId && (!sh.continues || hasTake(sc.shots[i - 1]))).map((sh) => sh.id))
     return ids.length ? this.filmShots(id, ids, opts) : []
   }
   // Finishes preview n of the shot's latest hunt (2 MP; with the voice line as its sound when it has one).
@@ -890,8 +1085,10 @@ export class Productions {
           m = await this.edits.addMedia(file, { type: 'iv', label: `${sc.location || sc.heading} · ${sh.action.slice(0, 40)}`, production: v.id })
           media[m.id] = m
         }
-        ops.push({ op: 'add_clip', media: m.id, track: 'V1', start: at, in: 0, out: m.duration })
-        at += m.duration
+        // a continuous shot opens with a replay of the previous take's last seconds: it starts where they end
+        const from = sh.continueTrim && sh.continueTrim < m.duration - 0.5 ? sh.continueTrim : 0
+        ops.push({ op: 'add_clip', media: m.id, track: 'V1', start: at, in: from, out: m.duration })
+        at += m.duration - from
         placed++
       }
     const r = applyOps({ ...e, media }, ops)
@@ -900,4 +1097,62 @@ export class Productions {
     this.patch(id, (q) => (q.editId = e.id))
     return { editId: e.id, placed, missing, seconds: +at.toFixed(2) }
   }
+
+  // ---------- the animatic ----------
+  // The storyboard played as a film before anything is filmed: each sketch held for its shot's length with a slow
+  // push-in, the shot's line in its voice where it has one (said first with voice, when the voice engine is set up),
+  // and the words on screen. A shot with no sketch shows its action on a dark card. Saved in the app data's
+  // productions\animatics and kept on the production as animatic { file, seconds, shots, at }.
+  async animatic(id, { voice = false } = {}) {
+    if (!this.edits?.ffmpeg) throw new Error('The animatic needs IV Studio on this PC.')
+    if (voice) for (const sc of this.get(id).scenes) for (const sh of sc.shots) if (this.needsLine(sh)) await this.speak(id, sh.id).catch(() => {})
+    const p = this.get(id)
+    const plan = animaticPlan(p.scenes)
+    if (!plan.length) throw new Error('Plan the storyboard first.')
+    const [w, h] = { '16:9': [1280, 720], '9:16': [720, 1280], '1:1': [960, 960] }[p.aspect] || [1280, 720]
+    const dir = path.join(this.dir, 'animatics', p.id)
+    fs.rmSync(dir, { recursive: true, force: true })
+    fs.mkdirSync(dir, { recursive: true })
+    const font = String(this.edits.fontFile || '').replace(/\\/g, '/').replace(/:/g, '\\:')
+    const parts = []
+    for (const [k, s] of plan.entries()) {
+      const out = path.join(dir, `${String(k).padStart(3, '0')}.mp4`)
+      const frames = Math.round(s.seconds * 24)
+      // words on screen go through text files, so quotes and colons need no escaping
+      const words = path.join(dir, `${k}.txt`)
+      fs.writeFileSync(words, wrap(s.line || (s.sketch ? '' : s.action), Math.round(w / 26)))
+      const label = path.join(dir, `${k}l.txt`)
+      fs.writeFileSync(label, `${s.n}`)
+      const text = (file, size, y, box) => `drawtext=fontfile='${font}':textfile='${file.replace(/\\/g, '/').replace(/:/g, '\\:')}':fontsize=${size}:fontcolor=white:x=(w-text_w)/2:y=${y}:line_spacing=6${box ? ':box=1:boxcolor=black@0.55:boxborderw=14' : ''}`
+      const picture = s.sketch && fs.existsSync(s.sketch) ? ['-loop', '1', '-i', s.sketch] : ['-f', 'lavfi', '-i', `color=c=0x15171c:s=${w}x${h}:r=24`]
+      const sound = s.voice && fs.existsSync(s.voice) ? ['-i', s.voice] : ['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo']
+      const push = s.sketch ? `scale=${w * 2}:${h * 2}:force_original_aspect_ratio=increase,crop=${w * 2}:${h * 2},zoompan=z='min(1+0.06*on/${frames},1.06)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${w}x${h}:fps=24,` : ''
+      const vf = `${push}${text(label, Math.round(h / 24), 'h/30', true).replace(':x=(w-text_w)/2', ':x=w/40')},${text(words, Math.round(h / (s.sketch ? 22 : 16)), s.sketch ? 'h-text_h-h/14' : '(h-text_h)/2', !!s.sketch)},format=yuv420p`
+      await this.edits.run(['-y', ...picture, ...sound, '-filter_complex', `[0:v]${vf}[v];[1:a]aresample=48000,apad[a]`, '-map', '[v]', '-map', '[a]', '-t', String(s.seconds), '-r', '24', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-ac', '2', '-ar', '48000', out])
+      parts.push(out)
+    }
+    const list = path.join(dir, 'parts.txt')
+    fs.writeFileSync(list, parts.map((f) => `file '${f.replace(/\\/g, '/')}'`).join('\n'))
+    const file = path.join(this.dir, 'animatics', `${p.id}.mp4`)
+    await this.edits.run(['-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', file])
+    fs.rmSync(dir, { recursive: true, force: true })
+    const seconds = +plan.reduce((n, s) => n + s.seconds, 0).toFixed(2)
+    const animatic = { file, seconds, shots: plan.length, sketched: plan.filter((s) => s.sketch).length, voiced: plan.filter((s) => s.voice).length, at: now() }
+    this.patch(id, (q) => (q.animatic = animatic))
+    return { ...animatic, plan }
+  }
+}
+
+// Words broken into lines of about n characters, for text drawn on the animatic.
+function wrap(text, n) {
+  const lines = []
+  let line = ''
+  for (const word of String(text || '').split(/\s+/).filter(Boolean)) {
+    if (line && (line + ' ' + word).length > n) {
+      lines.push(line)
+      line = word
+    } else line = line ? `${line} ${word}` : word
+  }
+  if (line) lines.push(line)
+  return lines.join('\n')
 }
