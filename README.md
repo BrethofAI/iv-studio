@@ -30,10 +30,17 @@ account, billed by the second (see [Cloud](#cloud)).
 
 - **Dashboard.** IV Studio opens on one-click starts for everything it makes, your latest renders and
   your cast. Every page has its own banner art.
+- **Projects.** A short film as a six-step wizard for anyone: an idea, a script (written for you or your
+  own), the cast and places, a storyboard of drawn sketches you can play as an animatic, filming every
+  panel, and the finished film. Faces and rooms stay the same from shot to shot.
 - **Shots.** Write a shot (or type the idea in plain words and let **Write it for me** write the H3
   prompt; it looks at your reference pictures and videos first), hunt one to three quick previews, pick
-  one and finish it at 1 to 2 MP with DLSS, an RTX 2× upscale and frame generation. Four modes: text,
-  reference pictures, video and audio, first and last frame, and continuing a video.
+  one and finish it at 1 to 2 MP with DLSS, an RTX 2× upscale and frame generation, or with SeedVR2. Four
+  modes: text, reference pictures, video and audio, first and last frame, and continuing a video.
+- **Directing.** A prompt checker that catches H3 mistakes before you spend a render, @ mentions for your
+  cast and places, live step pictures while takes render, takes ranked by words heard, likeness and
+  sharpness, side-by-side Compare, a **Review** that names each problem with its seconds and one fix, and a
+  top-down staging board that becomes exact screen directions or a moving grey previs.
 - **Images.** Create switches between **Video** and **Image**: make or edit pictures with six image
   model families (Flux.2 Klein, Flux 3 Klein, Krea 2, Moss, Qwen Image 2.1 and Z-Image Turbo), then use
   one as a shot's first frame.
@@ -52,21 +59,34 @@ account, billed by the second (see [Cloud](#cloud)).
   with retakes of any stretch.
 - **Edit.** A Premiere-style editor with a full-screen workspace: project bin, source and program
   monitors, as many video and audio tracks as you need, filmstrips and waveforms, markers, J/K/L,
-  insert and overwrite, razor, ripple and rolling trims, and MP4 export at 1080p, 4K, vertical or square.
+  insert and overwrite, razor, ripple and rolling trims, and MP4 export at 1080p, 4K, vertical or square
+  at a set loudness. Right-click to make new footage on the timeline (extend, bridge, fill a gap, retake a
+  stretch), cut out a person or thing with see-through edges, or reframe a shot to a new shape with H3
+  drawing what lies beyond its edges.
 - **Workflows.** **Sizzle** turns a website into a promo film: your agent storyboards it from the real
-  site, then H3 shots, pictures, music and the site's own screens are cut together on the beat. **Replace** swaps a
-  person or an object in a video while the camera, motion and sound stay. **Shinobi** lets an agent cut a
-  whole edit in code.
+  site, then H3 shots, pictures, music and the site's own screens are cut together on the beat. **Reel**
+  cuts pictures or clips to a song's beat. **Replace** swaps a person or an object in a video while the
+  camera, motion and sound stay. **Shinobi** lets an agent cut a whole edit in code.
+- **Learn.** Every feature on one searchable page, a **?** with the easy-to-miss tips on every page, and
+  short tutorial videos inside the app.
 - **Library and Queue.** Every shot, sequence, picture, export, song and spoken line in one place, with
   each shot's versions grouped together. Above it, the render queue shows what's rendering and what waits.
 - **Cloud.** Render shots and sequences on your own Modal account instead of your PC, with a running time
   and cost meter in the title bar and a **Shut down GPU** button.
 - **Incognito.** A private space whose work never shows in the normal app.
-- **Agents.** A local MCP server with 112 tools and a start menu gives Claude Code or any MCP client nearly
+- **Agents.** A local MCP server with 142 tools and a start menu gives Claude Code or any MCP client nearly
   everything a person can do in the window.
 - **Updates.** IV Studio updates itself: one click installs a new version and reopens.
 
 <table>
+  <tr>
+    <td width="50%"><img src="docs/images/projects.png" alt="Projects: short films as cards, The Seed, The Last Piece and Last Watch, each at its wizard step"></td>
+    <td width="50%"><img src="docs/images/staging-board.png" alt="The staging board: Tess on a top-down floor with the camera's view, lens, height and move, and the words it becomes"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>A short film, step by step</sub></td>
+    <td align="center"><sub>Stage the shot on a board; it becomes exact directions or a previs clip</sub></td>
+  </tr>
   <tr>
     <td width="50%"><img src="docs/images/dashboard.png" alt="Dashboard: quick-start cards, recent shots grouped by version, and the cast"></td>
     <td width="50%"><img src="docs/images/create.png" alt="Create: Tess picked, two LoRAs in the tray, a Write it for me idea and the H3 prompt"></td>
@@ -179,10 +199,42 @@ scissors for Edit, a storm cloud for Cloud, a record player for Music, and so on
    Set the aspect, length, preview size and how many previews to hunt (1 to 3). Optional extras: a voice
    line to lip-sync, RefMods, extra LoRAs and the step count.
 2. **Hunt.** IV Studio queues the previews on ComfyUI and shows them as they finish.
-3. **Pick and finish.** Choose a preview and set the final size (1, 1.5 or 2 MP), RTX 2× upscale, frame
-   generation (30/50/60/120 fps) and the sound source. The finish starts from the preview's own latent,
-   so the motion stays the same.
+3. **Pick and finish.** Choose a preview and set the final size (1, 1.5 or 2 MP), the enhancer and the
+   sound source. The finish starts from the preview's own latent, so the motion stays the same.
+   - **DLSS 5** (the default): RTX 2× upscale and frame generation (30/50/60/120 fps), seconds per shot.
+   - **SeedVR2** (3B): restores face, eye and hair detail and upscales to 1080p, 1440p or 2160p, on any
+     NVIDIA card. **Enhance** runs either one again on a finished shot.
 4. **Shots.** Every shot keeps its runs, previews and finals. **Show in folder** opens the file.
+
+### Before and after a render
+
+- **Prompt checker.** Before a hunt, IV Studio checks the prompt the way H3 reads it: the real length on
+  H3's frame grid, blank fields, the opening line a mode needs, cut times, too many words for the seconds,
+  quotes and speaker names around spoken lines, references named but not attached, a LoRA character's face
+  described in words, filler words and unknown @ names. Most findings have a **Fix**; errors hold the hunt
+  until you fix them or choose **Render anyway**.
+- **@ mentions.** Type @ for your cast and places. The picked character becomes `{char}`; anyone else with a
+  picture is attached as a reference, and a text shot switches to References mode by itself.
+- **Draft or Standard.** Draft previews take 4 steps instead of 8, roughly 40% faster, for hunting ideas.
+- **Live previews.** Each take's step pictures stream to the page while it renders (H3's tiny decoder
+  through KJNodes), so a bad take shows itself in about 20 seconds.
+- **Ranked takes.** When a run finishes, the takes are scored: the spoken words Whisper hears back, likeness
+  to the character (InsightFace), no frozen stretches and sharpness. The best is marked only when it clearly
+  leads, with the reasons in words, and every pick you make tunes the weights.
+- **Runs as versions, and Compare.** Each run shows what changed since the last, the prompt as written and as
+  rendered, and a word diff. **Compare** plays two takes side by side or as a wipe, in step. **Edit and run
+  again** renders into the same shot.
+- **Review a take.** Your prompt writer watches six frames of a take (and reads what Whisper heard), names
+  each problem with its seconds, says what works and picks one fix: revise the prompt, change a reference,
+  split the action, use a clean stretch, or fix it in the edit. It remembers the shot's earlier reviews, so
+  a problem that came back after a rewrite gets a different kind of fix.
+- **Staging board.** A top-down floor with up to four people (where they face, who they look at, where they
+  walk) and the camera (lens, height, ten moves). It becomes exact screen-side directions in the prompt, and
+  warns when a cut crosses the 180-degree line. For arcing moves, **Make a previs clip** renders the board in
+  motion as a grey clip that H3 follows as `<Video 1>`.
+
+The directing rules the writers and the review follow (purpose first, staging by screen side, no padding,
+frame the action) are Matthew Hollis's own method, built into `src/service/directing.js`.
 
 ### Write it for me
 
@@ -201,8 +253,35 @@ writer under **Settings → Prompt writer**:
   two frames of each reference video, your first and last frames, and the last frame of a video you're
   continuing (up to six images, labelled `<Picture 1>`, `<Video 1>` and so on), and writes what it sees.
   It tells you what it will look at, or that the model you chose can't see pictures.
+- **Claude Code or Codex:** if you have either installed and signed in, it writes with your own login,
+  headless and with no tools but reading your reference pictures. It gets MiniMax's own H3 prompt guide
+  (downloaded from MiniMax on first use, not shipped) and the full directing method.
 - **MiniMax Context IR:** MiniMax's own prompt rewriter through ComfyUI, paid through your Comfy.org
   account (about $0.02 to $0.11 a prompt). Your API key is stored encrypted on your PC.
+
+## Projects: a short film in six steps
+
+**Projects** turns an idea into a finished short film, one step at a time, with a storyboard you can see.
+
+1. **Idea.** What it's about, the format (16:9, vertical or square) and the length.
+2. **Story.** **Write it for me** drafts a script from the idea, cast and length with the local writer, or
+   write it in plain words, or bring a `.txt` or `.fountain` screenplay.
+3. **Cast and places.** Speakers are played by your characters. Someone you made up gets a face drawn from
+   their description, or from your own picture, and keeps it in every shot. Places get a description and a
+   picture (drawn for you if you have none), plus **More angles** (a quarter turn, the side and a wide view,
+   drawn with the QMA camera-angles LoRA for Qwen Image 2.1). Pick the film's look from six styles or your
+   own words and LoRAs.
+4. **Storyboard.** The writer plans each scene into 3 to 10 second shots with staging and where each one
+   ends, writes each H3 prompt, and every panel gets a sketch that keeps your characters' faces and the
+   room. Open a panel to change the action, camera, speaker, line or length, draw it on the staging board,
+   use a recording of the line, or carry straight on from the shot before in one take. **Play the
+   animatic** shows the whole film as sketches with the lines spoken.
+5. **Film it.** Every panel is filmed from its sketch (2 or 3 takes), in References mode with the place's
+   picture and the faces on screen, so the room and the people hold. Lines are spoken first in each
+   character's own voice and read back with Whisper until the words match. Pick a take, and it finishes at
+   2 MP.
+6. **Watch.** The takes play in order; **Save the film as a video** exports the rough cut, and **Fine-tune in
+   the editor** opens it in Edit.
 
 ## Images
 
@@ -352,6 +431,17 @@ Each one starts from the clip's own shot when IV Studio made it (its character, 
 land and how far it has got. Bridges and fills offer three takes to pick from; the result lands as a
 normal clip you can undo.
 
+**More on the right-click menu:**
+
+- **Cut out…** keeps only who or what you name ("the bluebird", "the man in the hat"). SAM 3.1 tracks it,
+  and the clip comes back with see-through edges on the track above, sound kept.
+- **Reframe to 9:16 / 1:1 / 4:5 / 16:9…** fits a shot or picture into the edit's shape and draws what lies
+  beyond its edges: H3's masked video edit for clips (the original picture and sound are kept), Qwen Image
+  2.1 with an outpaint LoRA for pictures.
+
+**Loudness.** Exports come out at Online loudness (about -14 LUFS, the default), TV (-23) or as mixed, under
+a -2 dBFS peak limit.
+
 **With an agent.** Your agent edits the same timeline through IV Studio's MCP server. Its changes appear
 at once with a strip saying what it did and a one-click Undo, and tracks you lock are off limits to it.
 It can make new footage on the timeline too.
@@ -407,6 +497,13 @@ Put in a web address and get a short promo film for it.
 The Sizzle page shows the capture, the storyboard with each scene's piece, and the finished film, with a
 message to paste into your agent. Agents use the `sizzle_*` tools.
 
+### Reel
+
+Pictures or clips plus a song become a new edit cut to the beat: a whole number of beats per picture (calm,
+normal or fast), cuts counted in bars from the first beat, a slow push, drift or pull on each picture, in
+16:9, 9:16 or square. The beat is found with the bundled FFmpeg alone, within a few milliseconds on click
+tracks.
+
 ### Replace
 
 Swaps who or what is in a video while the camera, cuts, motion and soundtrack stay:
@@ -427,6 +524,40 @@ from 12 styles) author the whole edit in code: cuts on the beat, speed ramps, pu
 captions from speech and sound cues. It renders on your PC with the Edge or Chrome you already have.
 Shinobi's engine is [OpenKatana](https://github.com/rk0neki/OpenKatana) (Apache-2.0), installed unmodified;
 Shinobi isn't affiliated with OpenKatana or with Higgsfield, whose Katana inspired it.
+
+## Learn
+
+<p align="center">
+  <img src="docs/images/learn.png" alt="Learn: every feature as a card, with search, Try it and the tutorial videos" width="100%">
+</p>
+
+**Learn** in the sidebar lists everything IV Studio can do as cards in seven groups, with a search that
+understands everyday words ("make it vertical", "same face every shot"). **Try it** opens the right page in
+the right mode, and **What's new** shows each version's additions. Every page banner (and the editor) has a
+**?** with the easy-to-miss tips for that page. Short tutorial videos play inside the app: your first shot, a
+short film in six steps, and the editor with new footage made inside it.
+
+## How IV Studio uses ComfyUI
+
+IV Studio is a front end for your own ComfyUI; every picture, video and song is a ComfyUI job.
+
+- **The API.** It queues graphs with ComfyUI's HTTP API (`/prompt`, `/upload/image`, `/history`, `/view`,
+  `/object_info`, `/free`) and follows progress on its websocket, including KJNodes' live step previews.
+  Before a render it checks `/object_info` for every node and model the graph needs.
+- **Graphs built in code.** Each workflow is assembled per job from the user's choices in `src/service/`
+  (`studio.js` for shots, `images.js`, `music.js`, `reframe.js`, `editgen.js`, `productions.js` and more),
+  following ComfyUI's official templates for each model. The H3 hunting graph is checked against its
+  ComfyUI GUI export in 32 switch states (`test/graph-parity.mjs`).
+- **Workflow files.** `resources/workflows/iv_studio_api.json` is the full IV Studio H3 workflow in API
+  form (with `iv_studio_api.groups.json`, its switch groups), and `resources/workflows/replace/` holds the
+  Replace workflows from OpenJutsu. Load them in ComfyUI to see the graphs IV Studio drives.
+- **Node packs.** Setup checks for the core packs (MiniMaxH3Mod, the PromptBuilder media loader, the H3
+  latent upscaler, VideoHelperSuite, KJNodes, the DLSS 5 enhancer, rgthree, Impact, Pixaroma, Easy-Use,
+  essentials and IV Studio's own small pack in `resources/comfy-nodes`) and links each one
+  (`resources/models.json`). Sequences use H3 Multishot, SeedVR2 finishes use the SeedVR2 pack, and Replace
+  and Cut out use SAM 3. `resources/cloud/cloud.json` pins the versions the cloud image uses.
+- **Memory.** One model family at a time (below): IV Studio calls `/free` when the next job needs a
+  different family.
 
 ## Models and the GPU
 
@@ -466,7 +597,7 @@ cloud renders don't see them yet. Training a character always runs on Modal, whi
 
 ## Agents (MCP)
 
-IV Studio includes a local MCP server (stdio) with 112 tools. It uses the same projects, characters, voices
+IV Studio includes a local MCP server (stdio) with 142 tools. It uses the same projects, characters, voices
 and songs as the window, so Claude Code or any MCP client can render shots and sequences, make pictures,
 speak lines, make music, cut them together and export. **Settings → Agents (MCP)** has the command for your
 install, a message to paste into any agent, and a button that adds the IV Studio skill to Claude Code.
@@ -490,8 +621,13 @@ Agents learn how to use it from `resources/agent-guide.md`: the server's instruc
 
 - **Guide and start menu:** `get_guide`, `get_menu`.
 - **Images:** `list_image_models`, `make_image`, `list_images`, `get_image`, `cancel_image`, `delete_image`.
-- **Shots:** `check_setup`, `list_characters`, `list_projects`, `plan_render`, `generate_previews`,
-  `finish_candidate`.
+- **Shots:** `check_setup`, `list_characters`, `list_projects`, `plan_render`, `check_prompt`,
+  `generate_previews`, `finish_candidate`, `enhance_final`, `rank_takes`, `review_take`, `make_previs`.
+- **Cast and places:** `list_cast`, `save_place`.
+- **Projects (short films):** `list_films`, `create_film`, `get_film`, `update_film`, `set_film_script`,
+  `write_film_script`, `break_down_film`, `sketch_film_shots`, `edit_film_shot`, `write_film_shot_prompt`,
+  `speak_film_line`, `use_film_recording`, `draw_film_face`, `use_film_face`, `draw_place_angles`,
+  `make_animatic`, `render_film_shot`, `render_film_scene`, `finish_film_shot`, `build_rough_cut`.
 - **Sequences:** `list_sequences`, `get_sequence`, `save_sequence`, `render_take`, `hunt_shot`,
   `finish_shot`, `retake`, `render_out`.
 - **Prompt writing:** `write_prompt`, `write_shots_from_story`.
@@ -503,7 +639,7 @@ Agents learn how to use it from `resources/agent-guide.md`: the server's instruc
   and their hide/lock/mute/solo, markers, all checked before anything changes), `grab_frame`, `export_edit`,
   `get_edit_export`, `cancel_edit_export`.
 - **New footage on the timeline:** `generate_in_edit` (extend, bridge, fill or retake), `list_generations`,
-  `pick_generation`, `cancel_generation`.
+  `pick_generation`, `cancel_generation`, `cut_out`, `reframe`, `make_reel`.
 - **Voices:** `voice_status`, `setup_voices`, `list_voices`, `design_voice`, `create_voice`, `update_voice`,
   `delete_voice`, `speak_line`, `list_lines`, `delete_line`, `release_voice_engine`.
 - **Music:** `music_status`, `make_music`, `list_music`, `get_music`, `cancel_music`, `rename_music`,
