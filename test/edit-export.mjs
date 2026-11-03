@@ -10,8 +10,9 @@ import { Edits, editLength } from '../src/service/edits.js'
 
 const [a, b] = process.argv.slice(2)
 const bin = path.resolve('node_modules/ffmpeg-ffprobe-static')
+const EXE = (name) => (process.platform === 'win32' ? `${name}.exe` : name)
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ivs-edit-'))
-const edits = new Edits({ dataDir, ffmpeg: path.join(bin, 'ffmpeg.exe'), ffprobe: path.join(bin, 'ffprobe.exe'), fontFile: path.resolve('resources/fonts/BarlowCondensed-SemiBold.ttf') })
+const edits = new Edits({ dataDir, ffmpeg: path.join(bin, EXE('ffmpeg')), ffprobe: path.join(bin, EXE('ffprobe')), fontFile: path.resolve('resources/fonts/BarlowCondensed-SemiBold.ttf') })
 
 const e = edits.create('Export test')
 const ma = await edits.addMedia(a)
@@ -32,7 +33,7 @@ const out = await edits.export(e.id, dataDir, (p) => {
   if (p - last > 0.25) console.log('progress', Math.round(p * 100) + '%'), (last = p)
 })
 console.log('exported in', Math.round((Date.now() - t0) / 1000), 's', out)
-const probe = spawnSync(path.join(bin, 'ffprobe.exe'), ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width,height,r_frame_rate', '-of', 'csv=p=0', out]).stdout.toString()
+const probe = spawnSync(path.join(bin, EXE('ffprobe')), ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width,height,r_frame_rate', '-of', 'csv=p=0', out]).stdout.toString()
 console.log(probe.trim().replace(/\n/g, ' | '))
-for (const t of [0.6, 2.5, 5.5, 8.5]) spawnSync(path.join(bin, 'ffmpeg.exe'), ['-v', 'error', '-y', '-ss', String(t), '-i', out, '-frames:v', '1', '-vf', 'scale=480:-1', path.join(dataDir, `frame_${t}.png`)])
+for (const t of [0.6, 2.5, 5.5, 8.5]) spawnSync(path.join(bin, EXE('ffmpeg')), ['-v', 'error', '-y', '-ss', String(t), '-i', out, '-frames:v', '1', '-vf', 'scale=480:-1', path.join(dataDir, `frame_${t}.png`)])
 console.log('frames in', dataDir)

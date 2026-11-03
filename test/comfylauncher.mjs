@@ -4,7 +4,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { findLaunchers, isComfyFolder, isLocalUrl, launch, launchersIn } from '../src/service/comfylauncher.js'
+import { findLaunchers, isComfyFolder, isLocalUrl, launch, launchersIn, linuxCommand } from '../src/service/comfylauncher.js'
 
 let pass = 0
 let fail = 0
@@ -17,14 +17,14 @@ ok(!isLocalUrl('http://192.168.1.20:8188') && !isLocalUrl('https://pod-8189.prox
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'iv-launcher-'))
 const env = { USERPROFILE: home, APPDATA: path.join(home, 'AppData', 'Roaming'), LOCALAPPDATA: path.join(home, 'AppData', 'Local'), PUBLIC: path.join(home, 'Public') }
 try {
-  ok(findLaunchers({ env, drives: [] }).length === 0, 'nothing installed: nothing found')
+  ok(findLaunchers({ env, drives: [], platform: 'win32' }).length === 0, 'nothing installed: nothing found')
   touch(path.join(home, 'ComfyUI_windows_portable', 'run_nvidia_gpu.bat'))
   touch(path.join(home, 'ComfyUI_windows_portable', 'run_cpu.bat'))
   touch(path.join(env.LOCALAPPDATA, 'Programs', '@comfyorgcomfyui-electron', 'ComfyUI.exe'))
   touch(path.join(home, 'Desktop', 'ComfyUI.lnk'))
   touch(path.join(home, 'Desktop', 'notes.txt'))
   touch(path.join(env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'ComfyUI', 'ComfyUI.lnk'))
-  const found = findLaunchers({ env, drives: [] })
+  const found = findLaunchers({ env, drives: [], platform: 'win32' })
   const names = found.map((f) => path.relative(home, f.path))
   console.log('    found:', names.join(' | '))
   ok(found[0].path.endsWith(path.join('Desktop', 'ComfyUI.lnk')), 'a desktop shortcut comes first (it carries the person’s own flags)')
@@ -34,7 +34,7 @@ try {
   let refused = 0
   for (const bad of [path.join(home, 'missing.bat'), path.join(home, 'Desktop', 'notes.txt')]) {
     try {
-      launch(bad)
+      launch(bad, { platform: 'win32' })
     } catch {
       refused++
     }
@@ -48,9 +48,47 @@ try {
   touch(path.join(portable, 'README_VERY_IMPORTANT.txt'))
   const app = path.join(env.LOCALAPPDATA, 'Programs', '@comfyorgcomfyui-electron')
   ok(isComfyFolder(portable) && isComfyFolder(app) && !isComfyFolder(path.join(home, 'Desktop')), 'a portable install and the Desktop app’s folder count as ComfyUI; the desktop doesn’t')
-  const inFolder = launchersIn(portable).map((f) => f.label)
+  const inFolder = launchersIn(portable, 'win32').map((f) => f.label)
   console.log('    in the folder:', inFolder.join(' | '))
   ok(inFolder[0] === 'run_nvidia_gpu.bat' && inFolder[1] === 'run_nvidia_gpu_seedhunter.bat' && inFolder.at(-1) === 'run_cpu.bat' && !inFolder.some((n) => n.endsWith('.txt')), 'its start files: run_nvidia_gpu.bat, then GPU variants, CPU last, nothing else')
+
+  // Linux: ComfyUI folders in the home folder, their .sh scripts first, then main.py with the folder's own venv
+  const lhome = path.join(home, 'linux-home')
+  ok(findLaunchers({ platform: 'linux', home: lhome }).length === 0, 'Linux, nothing installed: nothing found')
+  const comfy = path.join(lhome, 'ComfyUI')
+  touch(path.join(comfy, 'main.py'))
+  touch(path.join(comfy, 'venv', 'bin', 'python'))
+  const lfound = findLaunchers({ platform: 'linux', home: lhome })
+  ok(lfound.length === 1 && lfound[0].path === path.join(comfy, 'main.py'), 'Linux: a ComfyUI checkout in the home folder is found by its main.py')
+  touch(path.join(comfy, 'run_cpu.sh'))
+  touch(path.join(comfy, 'start_gpu.sh'))
+  const lin = launchersIn(comfy, 'linux').map((f) => f.label)
+  console.log('    Linux folder:', lin.join(' | '))
+  ok(lin[0] === 'start_gpu.sh' && lin[1] === 'run_cpu.sh' && lin[2] === 'main.py', 'Linux: GPU script, then CPU script, then main.py')
+  const [cmd, args] = linuxCommand(path.join(comfy, 'main.py'))
+  ok(cmd === path.join(comfy, 'venv', 'bin', 'python') && args[0] === path.join(comfy, 'main.py'), 'Linux: main.py runs with the folder’s venv Python')
+  ok(linuxCommand(path.join(lhome, 'x', 'main.py'))[0] === 'python3' && linuxCommand(path.join(comfy, 'start_gpu.sh'))[0] === 'bash', 'Linux: python3 without a venv, bash for a script')
+  let lrefused = 0
+  try {
+    launch(path.join(comfy, 'venv', 'bin', 'python'), { platform: 'linux' })
+  } catch {
+    lrefused++
+  }
+  ok(lrefused === 1, 'Linux: something that isn’t a script or main.py is refused')
+  if (process.platform === 'linux') {
+    // a real start: a stand-in "ComfyUI" that writes a file, started in its own session with its output logged
+    const fake = path.join(lhome, 'FakeComfy')
+    const marker = path.join(fake, 'started.txt')
+    fs.mkdirSync(fake, { recursive: true })
+    fs.writeFileSync(path.join(fake, 'run_gpu.sh'), `echo started > "${marker}"
+echo hello from comfy
+`)
+    const log = path.join(lhome, 'comfy.log')
+    launch(path.join(fake, 'run_gpu.sh'), { platform: 'linux', logFile: log })
+    for (let i = 0; i < 50 && !fs.existsSync(marker); i++) await new Promise((r) => setTimeout(r, 100))
+    await new Promise((r) => setTimeout(r, 200))
+    ok(fs.existsSync(marker) && /hello from comfy/.test(fs.readFileSync(log, 'utf8')), 'Linux: a script really starts, in its own folder, with its output in the log')
+  }
 } finally {
   fs.rmSync(home, { recursive: true, force: true })
 }

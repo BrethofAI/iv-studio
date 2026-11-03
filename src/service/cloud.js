@@ -9,11 +9,15 @@ import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { Readable } from 'node:stream'
 
-export const UV = {
-  version: '0.13.0',
-  url: 'https://github.com/astral-sh/uv/releases/download/0.13.0/uv-x86_64-pc-windows-msvc.zip',
-  sha256: '088962f9e7b7bd9ea740c04c650b2a21c8928c345bd99ac24350dc924dba656c'
+const WIN = process.platform === 'win32'
+// uv's own release builds, checked against the SHA-256 uv publishes next to each. The Linux one unpacks into a folder.
+export const UV_BUILDS = {
+  win32: { url: 'https://github.com/astral-sh/uv/releases/download/0.13.0/uv-x86_64-pc-windows-msvc.zip', sha256: '088962f9e7b7bd9ea740c04c650b2a21c8928c345bd99ac24350dc924dba656c', file: 'uv.zip' },
+  linux: { url: 'https://github.com/astral-sh/uv/releases/download/0.13.0/uv-x86_64-unknown-linux-gnu.tar.gz', sha256: '1468ebd5a5541121837c5a2817b9972ba6090fa6caa3d142620850a47fb75154', file: 'uv.tar.gz', strip: 1 }
 }
+export const UV = { version: '0.13.0', ...(UV_BUILDS[process.platform] || UV_BUILDS.linux) }
+// A venv keeps its programs in Scripts\ (Windows) or bin/.
+export const venvBin = (venv, name) => path.join(venv, WIN ? 'Scripts' : 'bin', WIN ? `${name}.exe` : name)
 export const MODAL_VERSION = '1.6.2'
 export const APP_NAME = 'iv-studio'
 // Modal's list prices (modal.com/pricing, 2026-10-28), per hour, billed by the second.
@@ -31,10 +35,10 @@ export class Cloud {
   }
 
   get uvExe() {
-    return path.join(this.dir, 'uv', 'uv.exe')
+    return path.join(this.dir, 'uv', WIN ? 'uv.exe' : 'uv')
   }
   get modalExe() {
-    return path.join(this.dir, 'venv', 'Scripts', 'modal.exe')
+    return venvBin(path.join(this.dir, 'venv'), 'modal')
   }
   get deployDir() {
     return path.join(this.dir, 'deploy')
@@ -59,7 +63,7 @@ export class Cloud {
     fs.mkdirSync(path.join(this.dir, 'uv'), { recursive: true })
     if (!fs.existsSync(this.uvExe)) {
       this.onLog('Downloading uv (Python manager)…')
-      const zip = path.join(this.dir, 'uv.zip')
+      const zip = path.join(this.dir, UV.file)
       const res = await fetch(UV.url)
       if (!res.ok) throw new Error(`Could not download uv (${res.status}).`)
       await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(zip))
@@ -70,7 +74,8 @@ export class Cloud {
       }
       // Windows' own tar (bsdtar) unpacks zips; a GNU tar earlier on PATH (Git's) can't, and reads C: as a host
       const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar'
-      await this.exec(tar, ['-xf', zip, '-C', path.join(this.dir, 'uv')])
+      await this.exec(tar, ['-xf', zip, '-C', path.join(this.dir, 'uv'), ...(UV.strip ? [`--strip-components=${UV.strip}`] : [])])
+      if (!WIN) fs.chmodSync(this.uvExe, 0o755)
       fs.rmSync(zip, { force: true })
     }
     return this.uvExe

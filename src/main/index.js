@@ -191,8 +191,38 @@ function createWindow() {
   win.once('ready-to-show', () => win.show())
   if (TEST_COPY) win.on('page-title-updated', (e) => e.preventDefault())
   win.on('close', () => writeSettings({ window: win.getBounds() }, BASE))
+  if (process.env.IV_STUDIO_SMOKE) smokeTest(win, process.env.IV_STUDIO_SMOKE)
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL)
   else win.loadFile(path.join(__dirname, '../renderer/index.html'))
+}
+
+// IV_STUDIO_SMOKE=<folder> (the Linux build check): once the window has loaded, opens each sidebar page, saves a
+// picture of it and what the page said into the folder (smoke.json), then quits.
+function smokeTest(w, dir) {
+  fs.mkdirSync(dir, { recursive: true })
+  const errors = []
+  w.webContents.on('console-message', (e) => e.level === 'error' && errors.push(e.message))
+  w.webContents.on('render-process-gone', (_e, d) => errors.push(`renderer gone: ${d.reason}`))
+  w.webContents.once('did-finish-load', async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+    const pages = []
+    try {
+      await wait(4000)
+      const names = await w.webContents.executeJavaScript(`[...document.querySelectorAll('.nav .nav-item')].map((b) => b.textContent.trim())`)
+      for (let i = 0; i <= names.length; i++) {
+        if (i > 0) await w.webContents.executeJavaScript(`document.querySelectorAll('.nav .nav-item')[${i - 1}].click()`)
+        await wait(1500)
+        const name = i === 0 ? 'start' : names[i - 1]
+        const text = await w.webContents.executeJavaScript(`document.querySelector('#root')?.innerText.length || 0`)
+        fs.writeFileSync(path.join(dir, `${String(i).padStart(2, '0')}-${name.replace(/[^\w]+/g, '-')}.png`), (await w.webContents.capturePage()).toPNG())
+        pages.push({ name, text })
+      }
+    } catch (err) {
+      errors.push(`smoke: ${err.message}`)
+    }
+    fs.writeFileSync(path.join(dir, 'smoke.json'), JSON.stringify({ platform: process.platform, version: app.getVersion(), mcp: mcpCommand(), pages, errors }, null, 2))
+    app.exit(0)
+  })
 }
 
 const localCopy = (file) => studio.localCopy(file, videosDir())
@@ -208,7 +238,28 @@ function handle(channel, fn) {
   })
 }
 
+const KEY_STORE_MISSING = process.platform === 'win32' ? 'Windows encryption is not available, so the key cannot be stored safely.' : 'No system keyring (GNOME Keyring or KWallet) is available, so the key cannot be stored safely.'
+
+// On Linux without a keyring Electron falls back to a fixed built-in password ('basic_text'), which isn't safe.
+const keysSafe = () => safeStorage.isEncryptionAvailable() && !(process.platform === 'linux' && safeStorage.getSelectedStorageBackend?.() === 'basic_text')
+
+// How an agent starts the MCP server: this app's own binary in Node mode, on its bundled mcp.js. An AppImage runs
+// from a new temporary folder each time, so its command is the .AppImage file itself on a small starter script kept
+// in the data folder, which finds mcp.js next to whichever copy is running. The AppImage passes Node mode through.
 function mcpCommand() {
+  if (process.env.APPIMAGE) {
+    const starter = path.join(BASE, 'mcp-start.cjs')
+    const text = [
+      '// Written by IV Studio: starts its MCP server from the running AppImage.',
+      "const path = require('node:path')",
+      "require(path.join(path.dirname(process.execPath), 'resources', 'app.asar', 'out', 'main', 'mcp.js'))",
+      ''
+    ].join('\n')
+    try {
+      if (!fs.existsSync(starter) || fs.readFileSync(starter, 'utf8') !== text) fs.writeFileSync(starter, text)
+    } catch {}
+    return { command: process.env.APPIMAGE, args: [starter], env: { ELECTRON_RUN_AS_NODE: '1' } }
+  }
   const exe = process.execPath
   const script = app.isPackaged ? path.join(process.resourcesPath, 'app.asar', 'out', 'main', 'mcp.js') : path.join(app.getAppPath(), 'out', 'main', 'mcp.js')
   return { command: exe, args: [script], env: { ELECTRON_RUN_AS_NODE: '1' } }
@@ -232,7 +283,7 @@ app.whenReady().then(() => {
       return { website: 'https://infinitevariance.ai', modalSignup: null }
     }
   })()
-  handle('app:info', () => ({ version: app.getVersion(), dataDir: DATA, mcp: mcpCommand(), testCopy: TEST_COPY, incognito: INCOGNITO, links }))
+  handle('app:info', () => ({ version: app.getVersion(), platform: process.platform, dataDir: DATA, mcp: mcpCommand(), testCopy: TEST_COPY, incognito: INCOGNITO, links }))
   // The window never sees the Comfy.org or Civitai key, only whether one is saved.
   const publicSettings = (s) => {
     const { comfyApiKey, cloudToken, civitaiKey, runpodKey, runpodToken, ...rest } = s
@@ -242,12 +293,12 @@ app.whenReady().then(() => {
   handle('settings:get', () => publicSettings(readSettings(BASE)))
   handle('settings:setComfyKey', (key) => {
     const k = String(key || '').trim()
-    if (k && !safeStorage.isEncryptionAvailable()) throw new Error('Windows encryption is not available, so the key cannot be stored safely.')
+    if (k && !keysSafe()) throw new Error(KEY_STORE_MISSING)
     return publicSettings(writeSettings({ comfyApiKey: seal(k) }, BASE))
   })
   handle('settings:setCivitaiKey', (key) => {
     const k = String(key || '').trim()
-    if (k && !safeStorage.isEncryptionAvailable()) throw new Error('Windows encryption is not available, so the key cannot be stored safely.')
+    if (k && !keysSafe()) throw new Error(KEY_STORE_MISSING)
     return publicSettings(writeSettings({ civitaiKey: seal(k) }, BASE))
   })
   // ---------- edits (the timeline editor) ----------
@@ -675,7 +726,7 @@ app.whenReady().then(() => {
   handle('cloud:runpodKey', async (key) => {
     const k = String(key || '').trim()
     if (!k) return (writeSettings({ runpodKey: null }, BASE), { hasKey: false })
-    if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows encryption is not available, so the key cannot be stored safely.')
+    if (!keysSafe()) throw new Error(KEY_STORE_MISSING)
     await new RunPod({ resourcesDir: runpod.resourcesDir, key: () => k }).check() // a wrong key is refused before it's kept
     writeSettings({ runpodKey: seal(k) }, BASE)
     return { hasKey: true }
@@ -833,7 +884,7 @@ app.whenReady().then(() => {
       if (!file) throw new Error('No ComfyUI launcher found. Pick one in Settings → ComfyUI.')
       send('comfy:state', { state: 'starting', detail: path.basename(file) })
       try {
-        launchComfy(file)
+        launchComfy(file, { logFile: path.join(DATA, 'comfyui.log') })
         const up = await waitUp(s.comfyUrl)
         send('comfy:state', { state: 'up', detail: `ComfyUI started in ${up.seconds} s.` })
         return up
@@ -848,7 +899,8 @@ app.whenReady().then(() => {
     return { chosen: s.comfyLauncher || null, using: launcherOf(s), folder, inFolder: folder ? launchersIn(folder) : [], found: findLaunchers(), autoStart: s.comfyAutoStart !== false, local: isLocalUrl(s.comfyUrl) && s.target !== 'cloud', starting: !!comfyStarting }
   })
   handle('comfy:chooseLauncher', async () => {
-    const r = await dialog.showOpenDialog(win, { title: 'Start ComfyUI with', properties: ['openFile'], filters: [{ name: 'Shortcut, .bat or ComfyUI.exe', extensions: ['lnk', 'bat', 'cmd', 'exe'] }] })
+    const filters = process.platform === 'win32' ? [{ name: 'Shortcut, .bat or ComfyUI.exe', extensions: ['lnk', 'bat', 'cmd', 'exe'] }] : [{ name: 'Shell script or main.py', extensions: ['sh', 'py', 'AppImage'] }]
+    const r = await dialog.showOpenDialog(win, { title: 'Start ComfyUI with', properties: ['openFile'], filters })
     if (r.canceled || !r.filePaths[0]) return null
     writeSettings({ comfyLauncher: r.filePaths[0] }, BASE)
     return r.filePaths[0]
@@ -858,7 +910,7 @@ app.whenReady().then(() => {
     const r = await dialog.showOpenDialog(win, { title: 'Your ComfyUI folder', properties: ['openDirectory'] })
     if (r.canceled || !r.filePaths[0]) return null
     const dir = r.filePaths[0]
-    if (!isComfyFolder(dir)) throw new Error('That folder doesn’t look like ComfyUI. Pick the folder that holds ComfyUI (its main.py, or run_nvidia_gpu.bat and the ComfyUI folder), or ComfyUI.exe’s folder.')
+    if (!isComfyFolder(dir)) throw new Error(process.platform === 'win32' ? 'That folder doesn’t look like ComfyUI. Pick the folder that holds ComfyUI (its main.py, or run_nvidia_gpu.bat and the ComfyUI folder), or ComfyUI.exe’s folder.' : 'That folder doesn’t look like ComfyUI. Pick the folder that holds its main.py.')
     writeSettings({ comfyFolder: dir, comfyLauncher: '' }, BASE)
     return dir
   })

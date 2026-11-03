@@ -566,7 +566,11 @@ function ComfyLauncher({ settings, setSettings, notify, recheck, comfyUp }) {
         <input type="checkbox" checked={settings.comfyAutoStart !== false} onChange={(e) => autoStart(e.target.checked)} />
         Start ComfyUI when IV Studio opens, if it isn’t running already
       </label>
-      <p className="small dim">The same shortcut or .bat you’d double-click, so ComfyUI starts with your own settings in its own window, and keeps running after IV Studio closes.</p>
+      <p className="small dim">
+        {navigator.userAgent.includes('Linux')
+          ? 'A .sh script beside ComfyUI, or its main.py run with its own venv’s Python, so ComfyUI starts with your own settings and keeps running after IV Studio closes. Its output goes to comfyui.log in IV Studio’s data folder.'
+          : 'The same shortcut or .bat you’d double-click, so ComfyUI starts with your own settings in its own window, and keeps running after IV Studio closes.'}
+      </p>
     </div>
   )
 }

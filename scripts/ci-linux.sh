@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# The Linux checks GitHub runs after building the AppImage (.github/workflows/linux.yml). Each check's output goes to
+# ci-out/<name>.log; a summary prints at the end and the script fails if any check failed.
+set -u
+OUT="$PWD/ci-out"
+mkdir -p "$OUT"
+FFMPEG="$(node -p "require('ffmpeg-ffprobe-static').ffmpegPath")"
+results=()
+run() {
+  local name="$1"; shift
+  echo "::group::$name"
+  if "$@" >"$OUT/$name.log" 2>&1; then results+=("ok   $name"); else results+=("FAIL $name"); fi
+  tail -n 25 "$OUT/$name.log"
+  echo "::endgroup::"
+}
+
+# the parts that need no GPU and no ComfyUI
+for t in cast cutout directing editgen learn lint productions reel screenplay sizzle-cut staging timeline-tracks private-outputs comfylauncher ranking prompt-guide; do
+  run "test-$t" node "test/$t.mjs"
+done
+run test-runpod node test/runpod.mjs python3
+
+# test media made with the bundled ffmpeg (Linux build), then an edit export and a Shinobi render with Chrome
+M="$OUT/media"; mkdir -p "$M"
+"$FFMPEG" -v error -y -f lavfi -i testsrc2=size=1280x720:rate=24 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 4 -c:v libx264 -pix_fmt yuv420p -c:a aac "$M/a.mp4"
+"$FFMPEG" -v error -y -f lavfi -i smptebars=size=1280x720:rate=24 -f lavfi -i sine=frequency=660:sample_rate=48000 -t 4 -c:v libx264 -pix_fmt yuv420p -c:a aac "$M/b.mp4"
+"$FFMPEG" -v error -y -f lavfi -i "sine=frequency=220:sample_rate=48000:beep_factor=4" -t 12 -c:a libmp3lame "$M/music.mp3"
+run test-edit-export node test/edit-export.mjs "$M/a.mp4" "$M/b.mp4"
+run test-site-capture node test/site-capture.mjs https://infinitevariance.ai
+run test-shinobi node test/shinobi.mjs "$M/a.mp4" "$M/b.mp4" "$M/music.mp3"
+
+# the MCP server: from the built code, then from the AppImage itself through the starter script the app writes
+npx electron-vite build >/dev/null 2>&1
+run mcp-dev node test/mcp-smoke.mjs
+APPIMAGE_FILE="$PWD/dist/IV-Studio.AppImage"
+chmod +x "$APPIMAGE_FILE"
+STARTER="$OUT/mcp-start.cjs"
+printf '%s\n' "const path = require('node:path')" "require(path.join(path.dirname(process.execPath), 'resources', 'app.asar', 'out', 'main', 'mcp.js'))" >"$STARTER"
+run mcp-appimage env MCP_COMMAND="$APPIMAGE_FILE" MCP_ARGS="[\"$STARTER\"]" node test/mcp-smoke.mjs
+
+# the window: every sidebar page under a virtual display, from the AppImage, with a picture of each
+export IV_STUDIO_USER_DATA="$OUT/userdata" IV_STUDIO_DATA="$OUT/data"
+run window env IV_STUDIO_SMOKE="$OUT/window" timeout 180 xvfb-run -a -s "-screen 0 1600x1000x24" "$APPIMAGE_FILE"
+if [ -f "$OUT/window/smoke.json" ]; then cat "$OUT/window/smoke.json"; else results+=("FAIL window-smoke-json"); fi
+node -e "const s=require('$OUT/window/smoke.json');if(s.pages.length<8||s.pages.some(p=>p.text<20))process.exit(1)" 2>/dev/null && results+=("ok   window-pages") || results+=("FAIL window-pages")
+
+echo
+printf '%s\n' "${results[@]}" | tee "$OUT/summary.txt"
+! grep -q '^FAIL' "$OUT/summary.txt"

@@ -14,7 +14,8 @@
     "start": "electron-vite preview",
     "test": "node test/graph-parity.mjs",
     "dist": "electron-vite build && electron-builder --win --x64 --publish never",
-    "release": "electron-vite build && electron-builder --win --x64 --publish always"
+    "release": "electron-vite build && electron-builder --win --x64 --publish always",
+    "dist:linux": "electron-vite build && electron-builder --linux --x64 --publish never"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
@@ -85,6 +86,26 @@
     ],
     "asarUnpack": [
       "node_modules/ffmpeg-ffprobe-static/**"
-    ]
+    ],
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "AudioVideo",
+      "executableName": "iv-studio",
+      "artifactName": "IV-Studio.AppImage",
+      "synopsis": "Make films with MiniMax H3 in your own ComfyUI",
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "IV Studio"
+        }
+      }
+    }
   }
 }

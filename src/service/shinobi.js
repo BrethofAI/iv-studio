@@ -41,6 +41,19 @@ const readJson = (file, fallback) => {
   }
 }
 
+export function findBrowser(platform = process.platform, env = process.env) {
+  if (platform === 'win32') {
+    const pf = [env['ProgramFiles(x86)'], env.ProgramFiles, env.LOCALAPPDATA].filter(Boolean)
+    const rel = ['Microsoft/Edge/Application/msedge.exe', 'Google/Chrome/Application/chrome.exe']
+    for (const r of rel) for (const base of pf) if (fs.existsSync(path.join(base, r))) return path.join(base, r)
+    return null
+  }
+  const names = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge', 'microsoft-edge-stable']
+  const dirs = [...String(env.PATH || '').split(':'), '/usr/bin', '/usr/local/bin', '/snap/bin', '/opt/google/chrome']
+  for (const n of names) for (const d of dirs) if (d && fs.existsSync(path.join(d, n))) return path.join(d, n)
+  return null
+}
+
 export class Shinobi {
   constructor({ dataDir, resourcesDir, ffmpegDir, onLog }) {
     this.dir = path.join(dataDir, 'shinobi')
@@ -68,12 +81,10 @@ export class Shinobi {
   installed = () => fs.existsSync(this.python) && readJson(this.marker(), {}).commit === ENGINE.commit
   faceModelsReady = () => FACE_MODELS.files.every((f) => fs.existsSync(path.join(this.faceDir, f)))
 
-  // Edge ships with Windows; Chrome works too. OpenKatana drives it headless to draw each frame.
+  // Edge ships with Windows; Chrome works too. On Linux, Chrome, Chromium or Edge. The engine drives it headless to
+  // draw each frame (previs and website capture use the same one).
   browser() {
-    const pf = [process.env['ProgramFiles(x86)'], process.env.ProgramFiles, process.env.LOCALAPPDATA].filter(Boolean)
-    const rel = ['Microsoft/Edge/Application/msedge.exe', 'Google/Chrome/Application/chrome.exe']
-    for (const r of rel) for (const base of pf) if (fs.existsSync(path.join(base, r))) return path.join(base, r)
-    return null
+    return findBrowser()
   }
 
   status() {

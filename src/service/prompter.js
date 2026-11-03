@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { DIRECTING, DIRECTING_SOURCE } from './directing.js'
 import { loadGuide } from './h3guide.js'
-import { harnessJson } from './harness.js'
+import { harnessJson, onPath } from './harness.js'
 import { FIRST_FRAME_LINE, firstLastLine, lintPrompt, withLine } from './lint.js'
 import { isPrevis } from './staging.js'
 
@@ -258,6 +258,7 @@ export async function ollamaStatus() {
 }
 
 function ollamaExe() {
+  if (process.platform !== 'win32') return onPath('ollama')
   const local = process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Programs', 'Ollama', 'ollama.exe')
   return local && fs.existsSync(local) ? local : null
 }

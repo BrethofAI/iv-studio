@@ -55,7 +55,7 @@ export function ShinobiList({ openShinobi, notify }) {
         <section className="group">
           <div className="group-head">
             <h2>Set up Shinobi</h2>
-            <p className="dim small">Once, about 440 MB and under a minute. It renders with {st.browser ? base(st.browser).replace('.exe', '') : 'Edge or Chrome'} and IV Studio's own ffmpeg; nothing else to install.</p>
+            <p className="dim small">Once, about 440 MB and under a minute. It renders with {st.browser ? base(st.browser).replace('.exe', '') : 'Edge, Chrome or Chromium'} and IV Studio's own ffmpeg; nothing else to install.</p>
           </div>
           <div className="group-body">
             {!st.browser && <p className="small pink">Shinobi needs Microsoft Edge or Google Chrome to draw frames.</p>}

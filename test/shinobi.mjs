@@ -44,7 +44,7 @@ for (;;) {
   await new Promise((res) => setTimeout(res, 2000))
 }
 const video = sh.renders(id)[0]?.video
-const probe = video ? spawnSync(path.join(ffmpegDir, 'ffprobe.exe'), ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width,height', '-of', 'csv=p=0', video]).stdout.toString().trim().replace(/\r?\n/g, ' | ') : ''
+const probe = video ? spawnSync(path.join(ffmpegDir, process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe'), ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width,height', '-of', 'csv=p=0', video]).stdout.toString().trim().replace(/\r?\n/g, ' | ') : ''
 expect('render', r.state === 'succeeded' && !!video, `${r.state} in ${Math.round((Date.now() - t0) / 1000)} s: ${probe}`)
 
 if (faces) {
