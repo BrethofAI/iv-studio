@@ -139,6 +139,13 @@ export const TIPS_FOR_ART = { create: 'create', shots: 'shots', projects: 'proje
 // Learn page (and a dot on its sidebar item) shows the current version's once, until it's been seen.
 export const NEWS = [
   {
+    version: '0.2.6',
+    items: [
+      { card: 'reference', text: 'References mode makes a new scene: the person from your picture, the place from your idea, instead of the picture’s own background.' },
+      { card: 'cloud', text: 'The Cloud page lists RunPod first.' }
+    ]
+  },
+  {
     version: '0.2.5',
     items: [{ card: 'startcomfy', text: 'IV Studio starts your ComfyUI: when it opens, or with Start ComfyUI in the title bar. Pick your ComfyUI folder and start file in Settings.' }]
   },
