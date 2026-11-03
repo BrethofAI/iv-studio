@@ -551,14 +551,14 @@ Shinobi isn't affiliated with OpenKatana or with Higgsfield, whose Katana inspir
 ## Learn
 
 <p align="center">
-  <img src="docs/images/learn.png" alt="Learn: every feature as a card, with search, Try it and the tutorial videos" width="100%">
+  <img src="docs/images/learn.png" alt="Learn: every feature as a card, with search, Try it and the guide" width="100%">
 </p>
 
 **Learn** in the sidebar lists everything IV Studio can do as cards in seven groups, with a search that
 understands everyday words ("make it vertical", "same face every shot"). **Try it** opens the right page in
 the right mode, and **What's new** shows each version's additions. Every page banner (and the editor) has a
-**?** with the easy-to-miss tips for that page. Short tutorial videos play inside the app: your first shot, a
-short film in six steps, and the editor with new footage made inside it.
+**?** with the easy-to-miss tips for that page. **Open the guide (PDF)**, at the top of Learn and in every **?**,
+opens the IV Studio guide: step by step, with every button pointed out. Tutorial videos are coming soon.
 
 ## How IV Studio uses ComfyUI
 
