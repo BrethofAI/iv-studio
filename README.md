@@ -19,8 +19,8 @@ A free Infinite Variance desktop app for making short films with
 and a voice, write a shot, hunt a few quick previews and finish the best one at full size. Make
 pictures, songs and spoken lines, cut it all together and export. IV Studio drives your own
 [ComfyUI](https://github.com/comfyanonymous/ComfyUI); nothing leaves your machine unless you choose the
-cloud. No strong graphics card? Shots can also render on a GPU in your own [Modal](https://modal.com) or
-[RunPod](https://www.runpod.io) account, billed by the second (see [Cloud](#cloud)).
+cloud. No strong graphics card? Shots can also render on a GPU in your own [RunPod](https://www.runpod.io) or
+[Modal](https://modal.com) account, billed by the second (see [Cloud](#cloud)).
 
 <p align="center">
   <img src="docs/images/hunt.png" alt="The shot Toast is done: three preview takes of Tess walking out of smoke, and the picked one finished at 3904×2176" width="100%">
@@ -71,7 +71,7 @@ cloud. No strong graphics card? Shots can also render on a GPU in your own [Moda
   short tutorial videos inside the app.
 - **Library and Queue.** Every shot, sequence, picture, export, song and spoken line in one place, with
   each shot's versions grouped together. Above it, the render queue shows what's rendering and what waits.
-- **Cloud.** Render shots and sequences on your own Modal or RunPod account instead of your PC, with a running time
+- **Cloud.** Render shots and sequences on your own RunPod or Modal account instead of your PC, with a running time
   and cost meter in the title bar and a **Shut down GPU** button.
 - **Incognito.** A private space whose work never shows in the normal app.
 - **Agents.** A local MCP server with 142 tools and a start menu gives Claude Code or any MCP client nearly
@@ -142,7 +142,7 @@ cloud. No strong graphics card? Shots can also render on a GPU in your own [Moda
 - **Windows 10 or 11** (64-bit).
 - **An NVIDIA GPU, or the cloud.** 24 GB of VRAM is what IV Studio is tested on (an RTX 4090); 16 GB works
   with smaller previews and finals. 64 GB of system RAM is recommended. Without a suitable card, shots and
-  sequences can render on a cloud GPU in your own Modal or RunPod account; pictures, music and voices still need a
+  sequences can render on a cloud GPU in your own RunPod or Modal account; pictures, music and voices still need a
   local NVIDIA GPU (see [Cloud](#cloud)).
 - **[ComfyUI](https://github.com/comfyanonymous/ComfyUI)**, version 0.33 or newer, running on the same PC.
   IV Studio talks to it at `http://127.0.0.1:8188` (change it in Settings). It can start ComfyUI for you: it
@@ -574,19 +574,8 @@ IV Studio is a front end for your own ComfyUI; every picture, video and song is 
 ## Cloud
 
 No strong graphics card, or want your PC back while it renders? The **Cloud** page renders on a GPU in your
-own [Modal](https://modal.com) or [RunPod](https://www.runpod.io) account instead: your account, billed to
+own [RunPod](https://www.runpod.io) or [Modal](https://modal.com) account instead: your account, billed to
 you by them. Pick one at the top of the page.
-
-### On Modal
-
-1. **Cloud tools.** IV Studio installs a private copy of Modal's client in its own folder (about 100 MB).
-2. **Modal account.** Sign in on Modal's own page; signing up is free. At the time of writing Modal gives
-   accounts $30 of free compute a month.
-3. **GPU and shut-off.** Pick an L40S (48 GB, recommended), A100 or H100 (80 GB), and how long it waits
-   with nothing to do before it switches off (3, 5, 10 or 20 minutes). The Cloud page shows each GPU's
-   hourly price; billing is by the second, only while the GPU is on.
-4. **Set up.** IV Studio deploys its ComfyUI app to your account and copies the H3 models into a Modal
-   volume (about 60 GB) once.
 
 ### On RunPod
 
@@ -605,6 +594,16 @@ Studio's token on every request) deletes the pod after your idle time with an em
 ComfyUI, the models and every render. The next render starts a new pod; if your GPU is taken in that data
 center, IV Studio starts the next H3-ready one that's free. The volume is billed by RunPod while it exists
 (about $7 a month for 100 GB); delete it on RunPod's Storage page when you're done with the cloud.
+
+### On Modal
+
+1. **Cloud tools.** IV Studio installs a private copy of Modal's client in its own folder (about 100 MB).
+2. **Modal account.** Sign in on Modal's own page; signing up is free.
+3. **GPU and shut-off.** Pick an L40S (48 GB, recommended), A100 or H100 (80 GB), and how long it waits
+   with nothing to do before it switches off (3, 5, 10 or 20 minutes). The Cloud page shows each GPU's
+   hourly price; billing is by the second, only while the GPU is on.
+4. **Set up.** IV Studio deploys its ComfyUI app to your account and copies the H3 models into a Modal
+   volume (about 60 GB) once.
 
 ### Either way
 

@@ -201,7 +201,7 @@ export function CharacterList({ openCharacter, notify, characters, setCharacters
       <section className="group">
         <div className="group-head">
           <h2>Train your own</h2>
-          <p className="dim small">Design an invented person, give them talking clips and a voice, and train their LoRA on your Modal account (about 30 minutes and $3–4; new accounts get $30 a month free). Only invented people, or real people who agreed to it.</p>
+          <p className="dim small">Design an invented person, give them talking clips and a voice, and train their LoRA on your Modal account (about 30 minutes and $3–4). Only invented people, or real people who agreed to it.</p>
         </div>
         <div className="group-body">
           <div className="row">
@@ -630,7 +630,7 @@ function Train({ t, act, meta, log, go, trainingId, next }) {
     const yes = await ask({
       kicker: 'Uses your Modal account',
       title: `Train ${t.name}?`,
-      message: 'Modal bills by the second and stops the GPU when training ends. New accounts get $30 of free compute a month.',
+      message: 'Modal bills by the second and stops the GPU when training ends.',
       details: [
         ['GPU', gpu],
         ['Workspace', cloud.workspace],

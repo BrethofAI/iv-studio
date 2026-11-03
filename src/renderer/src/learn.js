@@ -100,7 +100,7 @@ export const GROUPS = [
       { id: 'library', title: 'Everything you’ve made', line: 'Every version, song and line in one place.', to: { page: 'media' }, words: 'history files library renders', video: 't1' },
       { id: 'incognito', title: 'Private work', line: 'Incognito keeps it apart: the switch in the title bar.', to: { page: 'settings' }, words: 'private incognito hidden' },
       { id: 'startcomfy', title: 'Start ComfyUI for you', line: 'Opens your ComfyUI when IV Studio opens, or with one click.', to: { page: 'settings' }, words: 'comfyui start launch run open not running folder bat shortcut' },
-      { id: 'cloud', title: 'Render in the cloud', line: 'Your own Modal or RunPod account, with a cost meter.', to: { page: 'cloud' }, words: 'gpu no graphics card modal runpod cloud' },
+      { id: 'cloud', title: 'Render in the cloud', line: 'Your own RunPod or Modal account, with a cost meter.', to: { page: 'cloud' }, words: 'gpu no graphics card modal runpod cloud' },
       { id: 'agents', title: 'Let your agent drive', line: 'Claude Code or Codex can do all of this.', to: { page: 'settings' }, words: 'mcp automation agent claude codex' }
     ]
   }

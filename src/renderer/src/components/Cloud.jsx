@@ -262,18 +262,16 @@ export default function Cloud({ notify, recheck, setup, info }) {
     <div className="cloud">
       <Hero art="cloud" title="Cloud" kicker="Your own GPU · by the second" />
       <p className="lede">
-        No strong graphics card? Render on a cloud GPU in your own Modal or RunPod account.
-        <span className="lede-small dim">
-          Both bill by the second only while a GPU is up, and shut it down by themselves when you stop. Modal gives accounts $30 of free compute a month; RunPod has more GPU choices at lower hourly prices, paid from credit you add. IV Studio sets everything up.
-        </span>
+        No strong graphics card? Render on a cloud GPU in your own RunPod or Modal account.
+        <span className="lede-small dim">Pick one. Either way the GPU bills by the second only while it’s up, and shuts itself off when you stop. IV Studio sets everything up.</span>
       </p>
 
       <div className="cloud-switch">
         <span className="row-label">Cloud</span>
         <div className="segmented">
           {[
-            ['modal', 'Modal'],
-            ['runpod', 'RunPod']
+            ['runpod', 'RunPod'],
+            ['modal', 'Modal']
           ].map(([id, label]) => (
             <button
               key={id}
