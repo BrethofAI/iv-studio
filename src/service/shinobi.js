@@ -130,6 +130,7 @@ export class Shinobi {
 
   // One of the engine's tools (the same set an agent gets), with JSON arguments; resolves with its JSON result.
   async call(tool, args = {}) {
+    if (tool === 'build_recipe') args = this.fitToMusic(args)
     const file = path.join(os.tmpdir(), `shinobi-${randomUUID()}.json`)
     fs.writeFileSync(file, JSON.stringify(args))
     try {
@@ -137,6 +138,18 @@ export class Shinobi {
     } finally {
       fs.rmSync(file, { force: true })
     }
+  }
+  // A cut longer than its song ends with the song, but the engine rounds the song up to a whole frame and then refuses
+  // its own edit ("trim 0+5.167 s extends beyond the 5.152 s recording"): ask for no more than the song's last whole frame.
+  fitToMusic(args) {
+    if (!args?.music_asset_id || !args.project_id) return args
+    try {
+      const song = (readJson(path.join(this.projectDir(args.project_id), 'project.json'), {}).assets || []).find((a) => a.id === args.music_asset_id)
+      const fps = Number(args.fps) || 30
+      const most = song?.duration ? Math.floor(song.duration * fps) / fps : 0
+      if (most && args.seconds > most) return { ...args, seconds: most }
+    } catch {}
+    return args
   }
   async tools() {
     if (!this.toolList) this.toolList = JSON.parse(await this.run(['tools']))

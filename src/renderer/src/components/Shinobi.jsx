@@ -157,7 +157,9 @@ export function ShinobiProject({ projectId, notify, go }) {
       const r = await S.call('build_recipe', { project_id: projectId, family: chosen.family, asset_ids: visual.map((a) => a.id), music_asset_id: music?.id ?? null, text: text || null, seconds, width: W, height: H, fps: 30 })
       const cur = await S.call('get_project', { project_id: projectId })
       await S.call('save_timeline', { project_id: projectId, timeline: r.timeline || r, revision: cur.revision ?? null })
-      const frames = [0.1, 0.35, 0.6, 0.85].map((f) => Math.round(f * seconds * 30))
+      // the cut's own length: a song shorter than the asked seconds ends it sooner
+      const total = (r.timeline || r)?.canvas?.frames || seconds * 30
+      const frames = [0.1, 0.35, 0.6, 0.85].map((f) => Math.round(f * total))
       setPreviews((await S.call('preview_timeline', { project_id: projectId, frames })).preview_images || [])
       await load()
     })
