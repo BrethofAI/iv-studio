@@ -5,6 +5,8 @@
 <p align="center">
   <a href="https://github.com/hollisorg/iv-studio/releases/latest/download/IV-Studio-Setup.exe"><b>Download for Windows</b></a>
   &nbsp;·&nbsp;
+  <a href="https://github.com/hollisorg/iv-studio/releases/latest/download/IV-Studio.AppImage"><b>Linux (AppImage)</b></a>
+  &nbsp;·&nbsp;
   <a href="#what-you-need">What you need</a>
   &nbsp;·&nbsp;
   <a href="https://github.com/hollisorg/iv-studio/releases/latest">Release notes</a>
@@ -139,7 +141,7 @@ cloud. No strong graphics card? Shots can also render on a GPU in your own [RunP
 
 ## What you need
 
-- **Windows 10 or 11** (64-bit).
+- **Windows 10 or 11** (64-bit), or **64-bit Linux** (the AppImage, from 0.2.8; see [Linux](#linux)).
 - **An NVIDIA GPU, or the cloud.** 24 GB of VRAM is what IV Studio is tested on (an RTX 4090); 16 GB works
   with smaller previews and finals. 64 GB of system RAM is recommended. Without a suitable card, shots and
   sequences can render on a cloud GPU in your own RunPod or Modal account; pictures, music and voices still need a
@@ -169,6 +171,23 @@ cloud. No strong graphics card? Shots can also render on a GPU in your own [RunP
 
 Your projects, voices and songs are kept in `%APPDATA%\IV Studio`; renders are saved in ComfyUI's
 output folder under `H3\`.
+
+### Linux
+
+1. [Download `IV-Studio.AppImage`](https://github.com/hollisorg/iv-studio/releases/latest/download/IV-Studio.AppImage)
+   (about 240 MB), make it executable (`chmod +x IV-Studio.AppImage`) and run it. AppImages need FUSE
+   (`libfuse2`, called `libfuse2t64` on Ubuntu 24.04).
+2. IV Studio finds a ComfyUI folder in your home folder (or pick it in Settings → ComfyUI) and starts it with
+   a `.sh` script beside it, or with its `main.py` and the folder's own `venv` Python. ComfyUI's output goes to
+   `comfyui.log` in IV Studio's data folder, `~/.config/IV Studio`.
+3. Saving API keys (Civitai, RunPod, Comfy.org) needs a keyring (GNOME Keyring or KWallet).
+4. Shinobi, previs and website capture use Google Chrome, Chromium or Microsoft Edge.
+
+What's different: DLSS 5 is Windows-only, so finals use a 2× AI upscale (Real-ESRGAN) and RIFE frame
+interpolation when those are installed in your ComfyUI, as in the cloud. The Linux build is built and checked on
+GitHub's Ubuntu machines (every page, the agent server, Shinobi and website capture); renders on a Linux GPU
+haven't been tried yet. In Settings → Agents, the command for Claude Code or Codex runs a small script that opens
+the AppImage, so it keeps working after updates.
 
 **Updates.** From 0.2.1 on, IV Studio checks for a new version when it starts and every six hours, and
 downloads it in the background. Click **↻ Update to …** at the bottom of the sidebar (or **Restart to

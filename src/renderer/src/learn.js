@@ -99,7 +99,7 @@ export const GROUPS = [
     cards: [
       { id: 'library', title: 'Everything you’ve made', line: 'Every version, song and line in one place.', to: { page: 'media' }, words: 'history files library renders', video: 't1' },
       { id: 'incognito', title: 'Private work', line: 'Incognito keeps it apart: the switch in the title bar.', to: { page: 'settings' }, words: 'private incognito hidden' },
-      { id: 'startcomfy', title: 'Start ComfyUI for you', line: 'Opens your ComfyUI when IV Studio opens, or with one click.', to: { page: 'settings' }, words: 'comfyui start launch run open not running folder bat shortcut' },
+      { id: 'startcomfy', title: 'Start ComfyUI for you', line: 'Opens your ComfyUI when IV Studio opens, or with one click.', to: { page: 'settings' }, words: 'comfyui start launch run open not running folder bat shortcut linux sh' },
       { id: 'cloud', title: 'Render in the cloud', line: 'Your own RunPod or Modal account, with a cost meter.', to: { page: 'cloud' }, words: 'gpu no graphics card modal runpod cloud' },
       { id: 'agents', title: 'Let your agent drive', line: 'Claude Code or Codex can do all of this.', to: { page: 'settings' }, words: 'mcp automation agent claude codex' }
     ]
@@ -146,6 +146,13 @@ export const TIPS_FOR_ART = { create: 'create', shots: 'shots', projects: 'proje
 // What's new: the highlights of each version, newest first, each pointing at a Learn card. After an update the
 // Learn page (and a dot on its sidebar item) shows the current version's once, until it's been seen.
 export const NEWS = [
+  {
+    version: '0.2.8',
+    items: [
+      { card: 'startcomfy', text: 'IV Studio runs on Linux too: an AppImage that updates itself, and it starts your ComfyUI from its .sh script or main.py.' },
+      { card: 'agents', text: 'On Linux, Settings → Agents gives Claude Code or Codex a command that works from the AppImage.' }
+    ]
+  },
   {
     version: '0.2.7',
     items: [
