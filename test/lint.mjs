@@ -107,4 +107,14 @@ ok('the medium the idea asks for replaces a written Live-action', () => {
   assert.match(keepIdeaMedium(CLEAN, 'claymation: a fox steals a pie'), /Stop-motion clay animation/)
   assert.equal(keepIdeaMedium(CLEAN, 'Tess waits at a bus stop in the rain'), CLEAN)
 })
+ok('references: keeping a person-picture’s setting is caught; a new scene is not', () => {
+  // the prompt behind Matt's 2026-11-03 "it's just doing first frame": the queen photographed at Giza
+  const ref = (summary, kept) => `subject_definitions:\n<Subject 1> is the young woman in <Picture 1>, with dark bobbed hair and a tan dress with a turquoise collar.\n\nsummary:\n[reference generation] ${summary}\n\nretention_analysis:\n<Subject 1> (appears in [Shot 1]): fully_preserved - ${kept}\n\ndetailed_description:\nLive-action, cinematic.\n[Shot 1] <Subject 1> dances.\n\noverall_soundscape:\nWind.`
+  const opts = { mode: 'reference', seconds: 5, media: [{ kind: 'picture', file: 'queen.png' }] }
+  const kept = lintPrompt(ref('The queen from <Picture 1> dances. Her appearance, costume, and setting are fully preserved as she spins.', 'dark bobbed hair, tan dress, turquoise collar'), opts).find((x) => x.code === 'reference-keeps-place')
+  assert.ok(kept && /appearance and costume are fully preserved/.test(kept.fix))
+  const inRetention = lintPrompt(ref('The queen from <Picture 1> walks at night.', 'dark bobbed hair, tan dress, desert setting, golden sunlight'), opts).find((x) => x.code === 'reference-keeps-place')
+  assert.ok(inRetention && /fully_preserved - dark bobbed hair, tan dress\n/.test(inRetention.fix))
+  assert.ok(!codes(ref('The queen walks through a neon street at night. The setting is new.', 'face, hair, wardrobe; she moves through the new scene'), opts).includes('reference-keeps-place'))
+})
 console.log(`${n} checks passed`)

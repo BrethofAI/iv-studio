@@ -166,6 +166,29 @@ export function lintPrompt(prompt, { mode = 'text', seconds = 5, media = [], cha
     if (/mannequin|grey (?:figure|stage|box)|gray (?:figure|stage|box)/i.test(outside))
       add('error', 'previs-look', `<Video ${previsAt}> is a previs: only its camera move and where people stand count. The prompt describes its mannequins or grey stage, so H3 may draw them; describe the real people and place instead.`)
   }
+  // References mode makes a new scene from the person: keeping a person-picture's setting rebuilds its place
+  if (mode === 'reference' && s.retention_analysis) {
+    const PLACE = /\b(?:setting|background|backdrop|surroundings|scene|location|environment|lighting|sunlight|light)\b/i
+    const PERSON = /\b(?:hair|face|skin|eyes|build|wear|wearing|dress|outfit|shirt|top|jacket|headdress|necklace|wardrobe|costume)\b/i
+    let fixed = text
+    let found = false
+    for (const line of s.retention_analysis.split('\n')) {
+      const m = line.match(/^(.*?<(?:Subject|Picture) \d+>[^:]*:\s*\w+\s*-\s*)(.*)$/)
+      // "through the new scene" says the place changes; only a place that is kept counts
+      if (!m || !PERSON.test(m[2]) || !PLACE.test(m[2].replace(/\b(?:the |a )?(?:new|different|another)\s+(?:\w+\s+)?(?:setting|background|backdrop|scene|location|environment|lighting|light)\b/gi, ''))) continue
+      found = true
+      const kept = m[2].split(/,\s*(?:and\s+)?|\s+and\s+(?=[a-z])/i).filter((part) => part && !PLACE.test(part))
+      fixed = fixed.replace(line, m[1] + kept.join(', '))
+    }
+    const summary = s.summary || ''
+    if (/\b(?:setting|background|surroundings)\b[^.]*\bpreserved\b|\bpreserved\b[^.]*\b(?:setting|background|surroundings)\b/i.test(summary)) {
+      found = true
+      const trimmed = summary.replace(/,?\s*(?:and\s+)?(?:the\s+)?(?:setting|background|surroundings)\b/gi, '').replace(/\b(\w+), (\w+)(?= (?:are|is) (?:fully |partially )?preserved)/, '$1 and $2')
+      fixed = fixed.replace(summary, trimmed)
+    }
+    if (found)
+      add('warning', 'reference-keeps-place', 'The prompt keeps the reference picture’s setting as well as the person, so H3 rebuilds the picture’s place instead of making a new scene. Keep the person (face, hair, outfit) and describe the place from your idea.', fixed)
+  }
   if (mode === 'reference' && s.subject_definitions) {
     const defined = new Set([...s.subject_definitions.matchAll(/<Subject (\d+)>/g)].map((m) => m[1]))
     const used = new Set([...(s.detailed_description || '').matchAll(/<Subject (\d+)>/g)].map((m) => m[1]))

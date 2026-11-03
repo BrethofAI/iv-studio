@@ -60,6 +60,7 @@ const MODE_RULES = {
 - In "direction", "priorities" gives each reference its role (identity, wardrobe, logo, place, light, prop, movement) and which one wins where two disagree (a dedicated shoe picture beats the shoes in a character sheet), and names the few details recognition depends on. A reference's pose doesn't fix the performance or the camera.
 - "summary": one short paragraph on what the target video is and what each reference supplies, using only the labels defined.
 - "retention": one entry per subject: the shots it appears in, how it is kept ("fully_preserved" when it appears as defined, "partially_preserved" when some defined features change, "attribute_transfer" only when its features pass to a different target subject, "weak_reference" for broad similarity of style or mood) and what is kept.
+- A picture of a person gives the PERSON, not the scene: keep their face, hair, age, build, wardrobe and what they wear or carry, and nothing of the picture's background, place, light, framing or pose. The place, light, camera and action come from the idea and are new: describe them fresh in the shots, as if the picture had been taken somewhere else. If the idea names no place, choose one that fits the idea instead of the picture's background. A person's "retention" lists only identity and wardrobe, never setting, background, scene or lighting, and the summary never says the setting is kept. Only a picture of a place (no person in it), or an idea that asks for the same place ("here", "in this room", "same place"), sets the place.
 - In the shots, refer to those people and things as <Subject 1>, <Subject 2>, describing them in full at their first appearance. A subject who speaks is written "<Subject 2> (S1)".
 - Put one or two sentences of overall style in "style". The shots together run 350-500 words: each shot gives its composition, who is where and what they wear, the place and light, the action, the camera, and the sound.`
 }
@@ -330,6 +331,11 @@ async function imagesFor(media, mode) {
 }
 
 const LOOK_RULE = `The images attached to this message are the references, listed below. Look at them closely and write what you actually see into the shots: who is in them (face, hair, age, build, wardrobe), the objects, the place, the light and the colours. Refer to each reference by its label, and don't invent details that contradict them. "Image 1", "Image 2" are only how they're listed here: never write "Image N" in the prompt.`
+// References mode makes a NEW scene: a person's picture gives the person, and the idea gives the place. Without
+// this the writer described the picture's background and marked the "setting" as kept, and H3 rebuilt the
+// reference's place (a queen photographed at Giza danced in front of the same pyramids).
+const LOOK_RULE_REFERENCE = `The images attached to this message are the references, listed below. Look at them closely. Write each person exactly as you see them (face, hair, age, build, wardrobe, what they wear or carry), but NOT their picture's background, place, light or framing: the target video is a new scene, and its place, light and camera come from the idea. Only a picture of a place with no person in it, or an idea that asks for the same place, sets the place. Refer to each reference by its label, and don't invent details that contradict them. "Image 1", "Image 2" are only how they're listed here: never write "Image N" in the prompt.`
+const lookRule = (mode) => (mode === 'reference' ? LOOK_RULE_REFERENCE : LOOK_RULE)
 
 // What any writer is given for one prompt: the system text, the idea, the reference pictures and the JSON shape.
 async function promptRequest({ idea, mode, seconds, character, sequence, previous, media, guide, look = true, full = false }) {
@@ -345,7 +351,7 @@ async function promptRequest({ idea, mode, seconds, character, sequence, previou
 // The writer's draft through the prompt checker (lint.js). What the checker can mend itself is mended; anything else
 // that matters goes back to the writer once (again: findings text, the draft's JSON -> a corrected JSON, or null to
 // skip), and the better of the two drafts is kept.
-const REDO = new Set(['missing-field', 'no-shot-1', 'cut-order', 'cut-late', 'speech-too-long', 'speech-long', 'name-in-line', 'no-speaker', 'untagged-speech', 'reference-missing', 'reference-unused', 'subject-undefined', 'char-face', 'char-missing', 'frames-cut', 'too-many-shots'])
+const REDO = new Set(['missing-field', 'no-shot-1', 'cut-order', 'cut-late', 'speech-too-long', 'speech-long', 'name-in-line', 'no-speaker', 'untagged-speech', 'reference-missing', 'reference-unused', 'subject-undefined', 'reference-keeps-place', 'char-face', 'char-missing', 'frames-cut', 'too-many-shots'])
 const MEND = new Set(['frames-line', 'quoted-line', 'filler', 'no-speaker'])
 const checkerContext = ({ mode, seconds, media, character }) => ({ mode, seconds, media, character: character ? { name: character.name, trigger: character.trigger } : null })
 function mended(prompt, ctx) {
@@ -411,7 +417,7 @@ export async function writeLocal({ idea, mode = 'text', seconds = 5, character, 
   const message = { role: 'user', content: req.user }
   if (req.shown.length) {
     message.images = req.shown.map((s) => s.data)
-    message.content += `\n\n${LOOK_RULE}\n${req.shown.map((s, i) => `Image ${i + 1}: ${s.label}`).join('\n')}`
+    message.content += `\n\n${lookRule(mode)}\n${req.shown.map((s, i) => `Image ${i + 1}: ${s.label}`).join('\n')}`
   }
   const chat = async (messages) => {
     const r = await fetch(`${OLLAMA_URL}/api/chat`, {
@@ -435,7 +441,7 @@ export async function writeHarness({ engine, model, idea, mode = 'text', seconds
   const images = req.shown.map((s, i) => ({ ...s, name: `reference-${i + 1}.jpg` }))
   let user = req.user
   if (images.length)
-    user += `\n\n${engine === 'claude' ? LOOK_RULE.replace('The images attached to this message are', 'The image files in your working folder are') : LOOK_RULE}\n${images.map((s, i) => `Image ${i + 1} (${s.name}): ${s.label}`).join('\n')}${engine === 'claude' ? '\nOpen each one with the Read tool before you write.' : ''}`
+    user += `\n\n${engine === 'claude' ? lookRule(mode).replace('The images attached to this message are', 'The image files in your working folder are') : lookRule(mode)}\n${images.map((s, i) => `Image ${i + 1} (${s.name}): ${s.label}`).join('\n')}${engine === 'claude' ? '\nOpen each one with the Read tool before you write.' : ''}`
   user += '\n\nAnswer with the JSON object only.'
   const data = await harnessJson({ engine, model, system: req.system, user, schema: req.schema, images })
   const again = (note, previous) => harnessJson({ engine, model, system: req.system, user: `${user}\n\nYour previous answer:\n${previous}\n\n${note}`, schema: req.schema, images })
