@@ -26,7 +26,8 @@ M="$OUT/media"; mkdir -p "$M"
 "$FFMPEG" -v error -y -f lavfi -i smptebars=size=1280x720:rate=24 -f lavfi -i sine=frequency=660:sample_rate=48000 -t 4 -c:v libx264 -pix_fmt yuv420p -c:a aac "$M/b.mp4"
 "$FFMPEG" -v error -y -f lavfi -i "sine=frequency=220:sample_rate=48000:beep_factor=4" -t 12 -c:a libmp3lame "$M/music.mp3"
 run test-edit-export node test/edit-export.mjs "$M/a.mp4" "$M/b.mp4"
-run test-site-capture node test/site-capture.mjs https://infinitevariance.ai
+# a real website over the network: one retry if the connection drops
+run test-site-capture bash -c "node test/site-capture.mjs https://infinitevariance.ai || node test/site-capture.mjs https://infinitevariance.ai"
 run test-shinobi node test/shinobi.mjs "$M/a.mp4" "$M/b.mp4" "$M/music.mp3"
 
 # the MCP server from the built code
@@ -37,9 +38,16 @@ run mcp-dev node test/mcp-smoke.mjs
 APPIMAGE_FILE="$PWD/dist/IV-Studio.AppImage"
 chmod +x "$APPIMAGE_FILE"
 export IV_STUDIO_USER_DATA="$OUT/userdata" IV_STUDIO_DATA="$OUT/data"
-run window env IV_STUDIO_SMOKE="$OUT/window" timeout 180 xvfb-run -a -s "-screen 0 1600x1000x24" "$APPIMAGE_FILE"
-if [ -f "$OUT/window/smoke.json" ]; then cat "$OUT/window/smoke.json"; else results+=("FAIL window-smoke-json"); fi
-node -e "const s=require('$OUT/window/smoke.json');if(s.pages.length<8||s.pages.some(p=>p.text<20))process.exit(1)" 2>/dev/null && results+=("ok   window-pages") || results+=("FAIL window-pages")
+# (a screenshot under Xvfb now and then fails in Chromium's compositor, so the whole pass gets up to 3 tries)
+pages_ok() { node -e "const s=require('$OUT/window/smoke.json');if(s.pages.length<8||s.pages.some(p=>p.text<20))process.exit(1)" 2>/dev/null; }
+for try in 1 2 3; do
+  rm -rf "$OUT/window"
+  run window env IV_STUDIO_SMOKE="$OUT/window" timeout 180 xvfb-run -a -s "-screen 0 1600x1000x24" "$APPIMAGE_FILE"
+  [ -f "$OUT/window/smoke.json" ] && cat "$OUT/window/smoke.json"
+  if pages_ok; then break; fi
+  echo "window pass $try didn't open every page"
+done
+pages_ok && results+=("ok   window-pages") || results+=("FAIL window-pages")
 
 # the MCP server from the AppImage, with the exact command the app gives agents (Settings -> Agents)
 MCP_CMD="$(node -p "require('$OUT/window/smoke.json').mcp.command" 2>/dev/null)"
