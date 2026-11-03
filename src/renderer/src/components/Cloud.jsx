@@ -55,7 +55,7 @@ export function ShutDownGpu({ notify, className = 'btn btn-small' }) {
   async function stop() {
     const ok = await ask({
       title: 'Shut down the cloud GPU?',
-      message: 'Modal stops it now, so billing stops now too. A render running in the cloud is lost. The next render wakes the GPU again (about 1–3 minutes).',
+      message: 'The cloud stops it now, so billing stops now too. A render running in the cloud is lost. The next render wakes the GPU again (about 1–3 minutes on Modal, 2–5 on RunPod).',
       confirm: 'Shut down GPU'
     })
     if (!ok) return
@@ -97,7 +97,105 @@ function Step({ n, title, done, children }) {
   )
 }
 
-// Cloud mode on the user's own Modal account: install the tools, sign in, set up, then switch.
+// RunPod: the person's API key, a GPU and shut-off time, then Set up (volume, install, models, characters).
+function RunPodSteps({ st, busy, run, notify, refresh, links }) {
+  const rp = st.runpod || {}
+  const [key, setKey] = useState('')
+  const [gpus, setGpus] = useState(st.runpodGpus.map((g) => ({ ...g, inStock: null })))
+  const [gpu, setGpu] = useState(rp.gpu || st.runpodGpus[0].id)
+  const [idle, setIdle] = useState(rp.idleSeconds || 300)
+  useEffect(() => {
+    if (rp.hasKey) window.ivstudio.cloud.runpodCatalog().then(setGpus).catch(() => {})
+  }, [rp.hasKey])
+  const chosen = gpus.find((g) => g.id === gpu)
+  async function saveKey(k) {
+    await run(k ? 'Checking the key' : 'Removing the key', async () => {
+      await window.ivstudio.cloud.runpodKey(k)
+      setKey('')
+      if (k) notify('RunPod key saved (encrypted on this PC).')
+    })
+    refresh()
+  }
+  return (
+    <>
+      <Step n={1} title="RunPod account" done={!!rp.hasKey}>
+        {rp.hasKey ? (
+          <p className="small">
+            A RunPod API key is saved (encrypted on this PC).{' '}
+            <button className="link-btn" disabled={!!busy} onClick={() => saveKey('')}>
+              Remove it
+            </button>
+          </p>
+        ) : (
+          <>
+            <div className="key-form">
+              <input type="password" value={key} placeholder="RunPod API key (rpa_…)" onChange={(e) => setKey(e.target.value)} autoComplete="off" />
+              <button className="btn btn-small" disabled={!!busy || !key.trim()} onClick={() => saveKey(key.trim())}>
+                Save
+              </button>
+            </div>
+            <p className="small dim">
+              New to RunPod?{' '}
+              <button className="link-btn" onClick={() => window.ivstudio.links.open(links?.runpodSignup || 'https://www.runpod.io')}>
+                Create an account
+              </button>{' '}
+              and add some credit, then make a key on{' '}
+              <button className="link-btn" onClick={() => window.ivstudio.links.open('https://console.runpod.io/user/settings')}>
+                Settings → API Keys
+              </button>{' '}
+              (read/write). IV Studio uses it only to make your storage volume and to start and stop your own pods.
+            </p>
+          </>
+        )}
+      </Step>
+
+      <Step n={2} title="GPU and shut-off" done={!!rp.ready}>
+        <div className="cloud-gpus">
+          {gpus.map((g) => (
+            <button key={g.id} className={`mode-card ${gpu === g.id ? 'on' : ''}`} onClick={() => setGpu(g.id)}>
+              <span className="mode-name">{g.label}</span>
+              <span className="mono">${g.perHour.toFixed(2)} an hour, by the second</span>
+              <span className="dim small">
+                {g.note}
+                {g.inStock === false ? ' · busy right now' : g.inStock ? ' · free now' : ''}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="row">
+          <span className="row-label">Shut down after</span>
+          <div className="segmented">
+            {IDLE.map(([s, label]) => (
+              <button key={s} className={idle === s ? 'on' : ''} onClick={() => setIdle(s)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="small dim">
+          With nothing to do for {IDLE.find(([s]) => s === idle)?.[1]}, the pod deletes itself and GPU billing stops; your volume keeps ComfyUI, the models and every render. If your GPU is taken when a render needs one, IV Studio starts the next H3-ready GPU free in your volume's data center. The next render wakes it again (about 2–5 minutes).
+          {chosen && ` A 10-second 2 MP shot takes roughly 3–5 minutes of GPU, about $${((chosen.perHour * 4) / 60).toFixed(2)}.`}
+        </p>
+      </Step>
+
+      <Step n={3} title="Set up" done={!!rp.ready}>
+        <p className="small dim">
+          Makes a 100 GB network volume in a RunPod data center that has your GPU, starts a pod that installs ComfyUI and every node pack (matched to this version) and downloads the H3 models onto the volume (about 60 GB, once), then uploads your characters. The first time takes 20–40 minutes of GPU time, under about $1 on an L40S. RunPod bills the volume while it exists (about $7 a month for 100 GB); delete it on RunPod's Storage page when you're done with the cloud.
+        </p>
+        <button className="btn btn-primary" disabled={!!busy || !rp.hasKey || st.target === 'cloud'} onClick={() => run('Setting up RunPod', () => window.ivstudio.cloud.runpodSetUp({ gpu, idleSeconds: idle }))}>
+          {rp.ready ? 'Set up again' : 'Set up RunPod'}
+        </button>
+        {rp.volumeId && (
+          <p className="mono small dim">
+            {gpus.find((g) => g.id === rp.gpu)?.label || rp.gpu} · shuts down after {Math.round((rp.idleSeconds || 300) / 60)} min · volume {rp.volumeId} in {rp.dataCenter}
+          </p>
+        )}
+      </Step>
+    </>
+  )
+}
+
+// Cloud mode on the user's own Modal or RunPod account: pick one, set it up, then switch.
 export default function Cloud({ notify, recheck, setup, info }) {
   const [st, setSt] = useState(null)
   const [gpu, setGpu] = useState('L40S')
@@ -156,18 +254,39 @@ export default function Cloud({ notify, recheck, setup, info }) {
 
   if (!st) return null
   const chosen = st.gpus.find((g) => g.id === gpu)
-  const setUpDone = !!(st.cloud?.url && st.cloud?.modelsAt)
+  const runpod = st.provider === 'runpod'
+  const setUpDone = runpod ? !!st.runpod?.ready : !!(st.cloud?.url && st.cloud?.modelsAt)
   const onCloud = st.target === 'cloud'
 
   return (
     <div className="cloud">
       <Hero art="cloud" title="Cloud" kicker="Your own GPU · by the second" />
       <p className="lede">
-        No strong graphics card? Render on a cloud GPU in your own Modal account.
+        No strong graphics card? Render on a cloud GPU in your own Modal or RunPod account.
         <span className="lede-small dim">
-          Modal bills by the second only while a render runs, shuts the GPU down by itself when you stop, and gives new accounts $30 of free compute a month. IV Studio sets everything up; you just sign in.
+          Both bill by the second only while a GPU is up, and shut it down by themselves when you stop. Modal gives accounts $30 of free compute a month; RunPod has more GPU choices at lower hourly prices, paid from credit you add. IV Studio sets everything up.
         </span>
       </p>
+
+      <div className="cloud-switch">
+        <span className="row-label">Cloud</span>
+        <div className="segmented">
+          {[
+            ['modal', 'Modal'],
+            ['runpod', 'RunPod']
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              className={st.provider === id ? 'on' : ''}
+              disabled={!!busy || onCloud}
+              title={onCloud ? 'Switch rendering to My PC first' : undefined}
+              onClick={() => run('Switching', () => window.ivstudio.cloud.provider(id))}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="cloud-switch">
         <div className="segmented">
@@ -182,80 +301,85 @@ export default function Cloud({ notify, recheck, setup, info }) {
         {setUpDone && <ShutDownGpu notify={notify} className="btn btn-small cloud-stop" />}
       </div>
 
-      <Step n={1} title="Cloud tools" done={st.toolkit}>
-        <p className="small dim">A private copy of Modal's client in IV Studio's own folder (about 100 MB). Nothing else on your PC changes.</p>
-        {!st.toolkit && (
-          <button className="btn btn-small" disabled={!!busy} onClick={() => run('Installing', () => window.ivstudio.cloud.install())}>
-            Install the cloud tools
-          </button>
-        )}
-      </Step>
+      {runpod && <RunPodSteps st={st} busy={busy} run={run} notify={notify} refresh={refresh} links={info?.links} />}
+      {!runpod && (
+        <>
+          <Step n={1} title="Cloud tools" done={st.toolkit}>
+            <p className="small dim">A private copy of Modal's client in IV Studio's own folder (about 100 MB). Nothing else on your PC changes.</p>
+            {!st.toolkit && (
+              <button className="btn btn-small" disabled={!!busy} onClick={() => run('Installing', () => window.ivstudio.cloud.install())}>
+                Install the cloud tools
+              </button>
+            )}
+          </Step>
 
-      <Step n={2} title="Modal account" done={!!st.workspace}>
-        {st.workspace ? (
-          <p className="small">
-            Signed in to the Modal workspace <span className="mono">{st.workspace}</span>.
-          </p>
-        ) : (
-          <>
+          <Step n={2} title="Modal account" done={!!st.workspace}>
+            {st.workspace ? (
+              <p className="small">
+                Signed in to the Modal workspace <span className="mono">{st.workspace}</span>.
+              </p>
+            ) : (
+              <>
+                <p className="small dim">
+                  Opens Modal's sign-in page in your browser. New to Modal? Signing up is free.{' '}
+                  <button className="link-btn" onClick={() => window.ivstudio.links.open(info?.links?.modalSignup || 'https://modal.com/signup')}>
+                    Create an account
+                  </button>
+                  {info?.links?.modalSignup && (
+                    <span className="cloud-support">
+                      {' '}
+                      This is IV Studio's referral link: signing up through it supports the app, and costs you nothing extra.
+                    </span>
+                  )}
+                </p>
+                <button className="btn btn-small" disabled={!!busy || !st.toolkit} onClick={() => run('Waiting for Modal sign-in', () => window.ivstudio.cloud.signIn())}>
+                  Sign in with Modal
+                </button>
+              </>
+            )}
+          </Step>
+
+          <Step n={3} title="GPU and shut-off" done={!!st.cloud?.url}>
+            <div className="cloud-gpus">
+              {st.gpus.map((g) => (
+                <button key={g.id} className={`mode-card ${gpu === g.id ? 'on' : ''}`} onClick={() => setGpu(g.id)}>
+                  <span className="mode-name">{g.label}</span>
+                  <span className="mono">${g.perHour.toFixed(2)} an hour, by the second</span>
+                  <span className="dim small">{g.note}</span>
+                </button>
+              ))}
+            </div>
+            <div className="row">
+              <span className="row-label">Shut down after</span>
+              <div className="segmented">
+                {IDLE.map(([s, label]) => (
+                  <button key={s} className={idle === s ? 'on' : ''} onClick={() => setIdle(s)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <p className="small dim">
-              Opens Modal's sign-in page in your browser. New to Modal? Signing up is free.{' '}
-              <button className="link-btn" onClick={() => window.ivstudio.links.open(info?.links?.modalSignup || 'https://modal.com/signup')}>
-                Create an account
-              </button>
-              {info?.links?.modalSignup && (
-                <span className="cloud-support">
-                  {' '}
-                  This is IV Studio's referral link: signing up through it supports the app, and costs you nothing extra.
-                </span>
-              )}
+              With nothing to do for {IDLE.find(([s]) => s === idle)?.[1]}, the GPU switches off and billing stops. Shut down GPU (above) switches it off at once; the top bar's meter shows its time and cost. The next render wakes it again (about 1–3 minutes). Storage for the models is free on Modal (first 1 TiB).
+              {chosen && ` A 10-second 2 MP shot takes roughly 3–5 minutes of GPU, about $${((chosen.perHour * 4) / 60).toFixed(2)}.`}
             </p>
-            <button className="btn btn-small" disabled={!!busy || !st.toolkit} onClick={() => run('Waiting for Modal sign-in', () => window.ivstudio.cloud.signIn())}>
-              Sign in with Modal
-            </button>
-          </>
-        )}
-      </Step>
+          </Step>
 
-      <Step n={3} title="GPU and shut-off" done={!!st.cloud?.url}>
-        <div className="cloud-gpus">
-          {st.gpus.map((g) => (
-            <button key={g.id} className={`mode-card ${gpu === g.id ? 'on' : ''}`} onClick={() => setGpu(g.id)}>
-              <span className="mode-name">{g.label}</span>
-              <span className="mono">${g.perHour.toFixed(2)} an hour, by the second</span>
-              <span className="dim small">{g.note}</span>
+          <Step n={4} title="Set up" done={setUpDone}>
+            <p className="small dim">
+              Builds IV Studio's cloud image (ComfyUI and every node pack, matched to this version), downloads the H3 models into your Modal storage (about 60 GB, once), and uploads your characters. The first time takes 20–40 minutes and costs a few cents of CPU time. Run it again after changing GPU or adding characters.
+            </p>
+            <button className="btn btn-primary" disabled={!!busy || !st.workspace} onClick={setUp}>
+              {setUpDone ? 'Set up again' : 'Set up the cloud'}
             </button>
-          ))}
-        </div>
-        <div className="row">
-          <span className="row-label">Shut down after</span>
-          <div className="segmented">
-            {IDLE.map(([s, label]) => (
-              <button key={s} className={idle === s ? 'on' : ''} onClick={() => setIdle(s)}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <p className="small dim">
-          With nothing to do for {IDLE.find(([s]) => s === idle)?.[1]}, the GPU switches off and billing stops. Shut down GPU (above) switches it off at once; the top bar's meter shows its time and cost. The next render wakes it again (about 1–3 minutes). Storage for the models is free on Modal (first 1 TiB).
-          {chosen && ` A 10-second 2 MP shot takes roughly 3–5 minutes of GPU, about $${((chosen.perHour * 4) / 60).toFixed(2)}.`}
-        </p>
-      </Step>
-
-      <Step n={4} title="Set up" done={setUpDone}>
-        <p className="small dim">
-          Builds IV Studio's cloud image (ComfyUI and every node pack, matched to this version), downloads the H3 models into your Modal storage (about 60 GB, once), and uploads your characters. The first time takes 20–40 minutes and costs a few cents of CPU time. Run it again after changing GPU or adding characters.
-        </p>
-        <button className="btn btn-primary" disabled={!!busy || !st.workspace} onClick={setUp}>
-          {setUpDone ? 'Set up again' : 'Set up the cloud'}
-        </button>
-        {st.cloud?.url && (
-          <p className="mono small dim">
-            {st.cloud.gpu} · shuts down after {Math.round(st.cloud.idleSeconds / 60)} min · {st.cloud.workspace}
-          </p>
-        )}
-      </Step>
+            {st.cloud?.url && (
+              <p className="mono small dim">
+                {st.cloud.gpu} · shuts down after {Math.round(st.cloud.idleSeconds / 60)} min · {st.cloud.workspace}
+              </p>
+            )}
+          </Step>
+        </>
+      )}
 
       {(log.length > 0 || busy) && (
         <pre className="code cloud-log" ref={logEl}>
@@ -269,7 +393,7 @@ export default function Cloud({ notify, recheck, setup, info }) {
         </div>
         <div className="group-body">
           <p className="small dim">
-            Everything in Create, Sequences and the prompt writer works the same. The final DLSS clean-up only runs on Windows, so cloud finals use a 2× AI upscale (Real-ESRGAN) and frame interpolation (RIFE, 48/72/120 fps) instead. Finished videos download to Videos\IV Studio when you open them.
+            Everything in Create, Sequences and the prompt writer works the same on Modal and RunPod. The final DLSS clean-up only runs on Windows, so cloud finals use a 2× AI upscale (Real-ESRGAN) and frame interpolation (RIFE, 48/72/120 fps) instead. Finished videos download to Videos\IV Studio when you open them.
           </p>
         </div>
       </section>

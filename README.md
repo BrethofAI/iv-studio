@@ -19,8 +19,8 @@ A free Infinite Variance desktop app for making short films with
 and a voice, write a shot, hunt a few quick previews and finish the best one at full size. Make
 pictures, songs and spoken lines, cut it all together and export. IV Studio drives your own
 [ComfyUI](https://github.com/comfyanonymous/ComfyUI); nothing leaves your machine unless you choose the
-cloud. No strong graphics card? Shots can also render on a GPU in your own [Modal](https://modal.com)
-account, billed by the second (see [Cloud](#cloud)).
+cloud. No strong graphics card? Shots can also render on a GPU in your own [Modal](https://modal.com) or
+[RunPod](https://www.runpod.io) account, billed by the second (see [Cloud](#cloud)).
 
 <p align="center">
   <img src="docs/images/hunt.png" alt="The shot Toast is done: three preview takes of Tess walking out of smoke, and the picked one finished at 3904×2176" width="100%">
@@ -71,7 +71,7 @@ account, billed by the second (see [Cloud](#cloud)).
   short tutorial videos inside the app.
 - **Library and Queue.** Every shot, sequence, picture, export, song and spoken line in one place, with
   each shot's versions grouped together. Above it, the render queue shows what's rendering and what waits.
-- **Cloud.** Render shots and sequences on your own Modal account instead of your PC, with a running time
+- **Cloud.** Render shots and sequences on your own Modal or RunPod account instead of your PC, with a running time
   and cost meter in the title bar and a **Shut down GPU** button.
 - **Incognito.** A private space whose work never shows in the normal app.
 - **Agents.** A local MCP server with 142 tools and a start menu gives Claude Code or any MCP client nearly
@@ -142,14 +142,15 @@ account, billed by the second (see [Cloud](#cloud)).
 - **Windows 10 or 11** (64-bit).
 - **An NVIDIA GPU, or the cloud.** 24 GB of VRAM is what IV Studio is tested on (an RTX 4090); 16 GB works
   with smaller previews and finals. 64 GB of system RAM is recommended. Without a suitable card, shots and
-  sequences can render on a cloud GPU in your own Modal account; pictures, music and voices still need a
+  sequences can render on a cloud GPU in your own Modal or RunPod account; pictures, music and voices still need a
   local NVIDIA GPU (see [Cloud](#cloud)).
 - **[ComfyUI](https://github.com/comfyanonymous/ComfyUI)**, version 0.33 or newer, running on the same PC.
   IV Studio talks to it at `http://127.0.0.1:8188` (change it in Settings).
 - **Disk space.** About 60 GB for the H3 models. Music adds about 14 GB (MiniMax Music 3) or 10 GB
   (ACE-Step); voices add about 12 GB. Each is a one-click download inside the app.
 - **Optional:** [Ollama](https://ollama.com) for the free local prompt writer, and a
-  [Modal](https://modal.com) account for cloud rendering and character training.
+  [Modal](https://modal.com) account (cloud rendering and character training) or a
+  [RunPod](https://www.runpod.io) account (cloud rendering).
 
 ## Install
 
@@ -570,7 +571,10 @@ IV Studio is a front end for your own ComfyUI; every picture, video and song is 
 ## Cloud
 
 No strong graphics card, or want your PC back while it renders? The **Cloud** page renders on a GPU in your
-own [Modal](https://modal.com) account instead: your account, billed to you by Modal.
+own [Modal](https://modal.com) or [RunPod](https://www.runpod.io) account instead: your account, billed to
+you by them. Pick one at the top of the page.
+
+### On Modal
 
 1. **Cloud tools.** IV Studio installs a private copy of Modal's client in its own folder (about 100 MB).
 2. **Modal account.** Sign in on Modal's own page; signing up is free. At the time of writing Modal gives
@@ -581,10 +585,30 @@ own [Modal](https://modal.com) account instead: your account, billed to you by M
 4. **Set up.** IV Studio deploys its ComfyUI app to your account and copies the H3 models into a Modal
    volume (about 60 GB) once.
 
+### On RunPod
+
+1. **RunPod account.** Paste an API key from RunPod's Settings → API Keys page (read/write). It is checked
+   with RunPod, then stored encrypted on your PC, and used only to make your storage volume and to start and
+   stop your own pods.
+2. **GPU and shut-off.** Pick an L40S or RTX 6000 Ada (48 GB), A100 or H100 (80 GB) or RTX 4090 (24 GB). The
+   page shows RunPod's live hourly price and whether each is free right now; billing is by the second.
+3. **Set up.** IV Studio makes a 100 GB network volume in a RunPod data center that has your GPU and starts a
+   pod from RunPod's official PyTorch image with this version's `resources/cloud` folder. The first pod installs
+   ComfyUI and the same pinned node packs as Modal onto the volume, downloads the H3 models (each checked
+   against its published SHA-256) and receives your character LoRAs, so later pods start in a few minutes.
+
+RunPod pods don't sleep by themselves, so the pod's gate (`resources/cloud/gate.py`, which also asks for IV
+Studio's token on every request) deletes the pod after your idle time with an empty queue. The volume keeps
+ComfyUI, the models and every render. The next render starts a new pod; if your GPU is taken in that data
+center, IV Studio starts the next H3-ready one that's free. The volume is billed by RunPod while it exists
+(about $7 a month for 100 GB); delete it on RunPod's Storage page when you're done with the cloud.
+
+### Either way
+
 Then switch **This PC / Cloud**. While you're on the cloud, the title bar shows **GPU on/off · time · $**:
 the GPU time and estimated cost since IV Studio opened, at the chosen GPU's list price. Click it for the
 Cloud page, where **Shut down GPU** stops it at once instead of waiting for the idle shut-off. The next
-render wakes it again (about 1 to 3 minutes). The Cloud page estimates a 10-second 2 MP shot at roughly 3 to
+render wakes it again (about 1 to 3 minutes on Modal, 2 to 5 on RunPod). The Cloud page estimates a 10-second 2 MP shot at roughly 3 to
 5 minutes of GPU, about $0.13 on an L40S.
 
 **What runs in the cloud:** Create's video shots (hunting previews and finishing), Sequences, and the
@@ -593,7 +617,7 @@ or 120 fps) in place of DLSS, which needs an NVIDIA card on Windows.
 
 **What still needs a local NVIDIA GPU:** Images, Music, Voices (and **Speak it**), designing a new
 character's stills and clips, and Replace. LoRAs you download from Civitai go into your local ComfyUI, so
-cloud renders don't see them yet. Training a character always runs on Modal, whichever you pick.
+cloud renders don't see them yet. Training a character always runs on Modal, whichever cloud renders.
 
 ## Agents (MCP)
 

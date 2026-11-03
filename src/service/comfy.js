@@ -13,6 +13,9 @@ export class Comfy {
     this.clientId = clientId
     this.token = token
     this.folders = { output: '', input: '' }
+    // RunPod (runpod.js): async () => the address of a pod started because the last one shut itself off,
+    // or null when the current one is fine. Called once when a request can't reach the cloud.
+    this.waker = null
   }
 
   get remote() {
@@ -23,7 +26,22 @@ export class Comfy {
     return { ...extra, ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) }
   }
 
-  async req(route, { method = 'GET', body, json, timeout = 15000 } = {}) {
+  async req(route, opts = {}) {
+    try {
+      return await this.once(route, opts)
+    } catch (err) {
+      // a pod that idled off: RunPod's proxy answers 404/502/52x, or the name no longer resolves
+      const gone = err.status === 404 || err.status === 502 || (err.status >= 520 && err.status < 530) || /fetch failed|ENOTFOUND|ECONNRESET/.test(`${err.message} ${err.cause?.code || ''}`)
+      if (!this.waker || !gone) throw err
+      this.waking ||= this.waker().finally(() => (this.waking = null))
+      const url = await this.waking
+      if (!url) throw err
+      this.url = url.replace(/\/$/, '')
+      return this.once(route, opts)
+    }
+  }
+
+  async once(route, { method = 'GET', body, json, timeout = 15000 } = {}) {
     const ctl = new AbortController()
     const t = setTimeout(() => ctl.abort(), timeout)
     try {

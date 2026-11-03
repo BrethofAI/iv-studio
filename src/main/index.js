@@ -7,6 +7,8 @@ import { comfyFolders, dataDir, incognitoDir, readSettings, resourcesDir, writer
 import { harnessStatus } from '../service/harness'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
+import { RunPod, GPUS as RUNPOD_GPUS } from '../service/runpod'
+import { randomBytes } from 'node:crypto'
 import { Edits, FORMATS, LOUDNESS } from '../service/edits'
 import { EditGen } from '../service/editgen'
 import { Productions } from '../service/productions'
@@ -83,6 +85,7 @@ let voices = null
 let music = null
 let images = null
 let civitai = null
+let runpodWake = null // starts a RunPod pod when the last one idled off (set up with the cloud handlers)
 const pending = new Set() // job ids the window is waiting on
 let ranker = null // ranks finished previews (ranking.js), set up with the services it reads
 let reviewer = null // reviews a take against its brief (review.js)
@@ -105,8 +108,15 @@ const unseal = (enc) => {
 function makeStudio() {
   stopWatch?.()
   const s = readSettings(BASE)
-  const cloud = s.target === 'cloud' && s.cloud?.url ? { comfyUrl: s.cloud.url, comfyToken: unseal(s.cloudToken) } : { comfyUrl: s.comfyUrl }
+  const onRunPod = s.target === 'cloud' && s.cloudProvider === 'runpod'
+  // a RunPod pod's address changes with every pod; until one is up the waker (below) starts one on first use
+  const cloud = onRunPod
+    ? { comfyUrl: s.runpod?.url || 'https://iv-studio-pod-asleep.proxy.runpod.net', comfyToken: unseal(s.runpodToken) }
+    : s.target === 'cloud' && s.cloud?.url
+      ? { comfyUrl: s.cloud.url, comfyToken: unseal(s.cloudToken) }
+      : { comfyUrl: s.comfyUrl }
   studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), models: s.models, ...cloud })
+  if (onRunPod) studio.comfy.waker = () => runpodWake?.()
   studio.comfy.folders = comfyFolders(s, INCOGNITO)
   if (trainings) trainings.studio = studio
   if (replace) replace.studio = studio
@@ -224,8 +234,8 @@ app.whenReady().then(() => {
   handle('app:info', () => ({ version: app.getVersion(), dataDir: DATA, mcp: mcpCommand(), testCopy: TEST_COPY, incognito: INCOGNITO, links }))
   // The window never sees the Comfy.org or Civitai key, only whether one is saved.
   const publicSettings = (s) => {
-    const { comfyApiKey, cloudToken, civitaiKey, ...rest } = s
-    return { ...rest, hasComfyKey: !!comfyApiKey, hasCloudToken: !!cloudToken, hasCivitaiKey: !!civitaiKey }
+    const { comfyApiKey, cloudToken, civitaiKey, runpodKey, runpodToken, ...rest } = s
+    return { ...rest, hasComfyKey: !!comfyApiKey, hasCloudToken: !!cloudToken, hasCivitaiKey: !!civitaiKey, hasRunpodKey: !!runpodKey }
   }
   const comfyKey = () => unseal(readSettings(BASE).comfyApiKey)
   handle('settings:get', () => publicSettings(readSettings(BASE)))
@@ -600,9 +610,27 @@ app.whenReady().then(() => {
     }
   }
   const saveCloud = (patch) => writeSettings({ cloud: { ...(readSettings(BASE).cloud || {}), ...patch } }, BASE)
+  const provider = () => readSettings(BASE).cloudProvider || 'modal'
   handle('cloud:status', async () => {
     const s = readSettings(BASE)
-    return { toolkit: cloud.toolkitReady(), workspace: await cloud.workspace(), cloud: s.cloud, target: s.target, gpus: GPUS, busy: cloudBusy, hasToken: !!s.cloudToken }
+    const { url, podId, ...rp } = s.runpod || {}
+    return {
+      provider: s.cloudProvider || 'modal',
+      toolkit: cloud.toolkitReady(),
+      workspace: s.cloudProvider === 'runpod' ? null : await cloud.workspace(),
+      cloud: s.cloud,
+      runpod: { ...rp, hasKey: !!s.runpodKey, ready: !!(rp.modelsAt && s.runpodToken) },
+      target: s.target,
+      gpus: GPUS,
+      runpodGpus: RUNPOD_GPUS,
+      busy: cloudBusy,
+      hasToken: !!s.cloudToken
+    }
+  })
+  handle('cloud:provider', (p) => {
+    if (readSettings(BASE).target === 'cloud') throw new Error('Switch rendering to My PC first.')
+    writeSettings({ cloudProvider: p === 'runpod' ? 'runpod' : 'modal' }, BASE)
+    return p
   })
   handle('cloud:install', () => cloudTask('installing the cloud tools', () => cloud.installToolkit()))
   handle('cloud:signIn', () => cloudTask('signing in to Modal', async () => (await cloud.signIn(), cloud.workspace())))
@@ -639,9 +667,89 @@ app.whenReady().then(() => {
       return done
     })
   )
+  // ---------- cloud on RunPod (the user's own account; runpod.js) ----------
+  const runpod = new RunPod({ resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), key: () => unseal(readSettings(BASE).runpodKey), onLog: (line) => send('cloud:log', line) })
+  const saveRunpod = (patch) => writeSettings({ runpod: { ...(readSettings(BASE).runpod || {}), ...patch } }, BASE)
+  const runpodToken = () => unseal(readSettings(BASE).runpodToken)
+  handle('cloud:runpodKey', async (key) => {
+    const k = String(key || '').trim()
+    if (!k) return (writeSettings({ runpodKey: null }, BASE), { hasKey: false })
+    if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows encryption is not available, so the key cannot be stored safely.')
+    await new RunPod({ resourcesDir: runpod.resourcesDir, key: () => k }).check() // a wrong key is refused before it's kept
+    writeSettings({ runpodKey: seal(k) }, BASE)
+    return { hasKey: true }
+  })
+  handle('cloud:runpodCatalog', () => runpod.catalog())
+  // A running pod's address: the current one when its ComfyUI answers, else a booting one of ours, else a new
+  // pod in the volume's data center. Single flight: the window and a render asking at once start one pod.
+  let waking = null
+  const wakeRunpod = () =>
+    (waking ||= (async () => {
+      const r = readSettings(BASE).runpod || {}
+      if (!r.volumeId) throw new Error('Set up RunPod on the Cloud page first.')
+      const current = r.url && (await runpod.health(r.url))
+      if (current?.stage === 'ready') return r.url
+      let url = current ? r.url : (await runpod.pods())[0]?.url
+      if (!url) {
+        send('cloud:log', 'Starting a cloud GPU on RunPod…')
+        const pod = await runpod.createPod({ gpu: r.gpu || RUNPOD_GPUS[0].id, volume: { id: r.volumeId, dataCenter: r.dataCenter }, token: runpodToken(), idleSeconds: r.idleSeconds || 300 })
+        url = pod.url
+        saveRunpod({ url, podId: pod.id, podGpu: pod.gpu })
+      } else saveRunpod({ url })
+      await runpod.waitReady(url)
+      return url
+    })().finally(() => (waking = null)))
+  // For the ComfyUI client: null when the pod it talks to still answers, else the address of one that does.
+  runpodWake = async () => {
+    const url = studio?.comfy.url
+    if (url && (await runpod.health(url))?.stage === 'ready') return null
+    return wakeRunpod()
+  }
+  // Each character's LoRA and the RefMods it uses, found through this PC's ComfyUI model folders.
+  async function characterFiles() {
+    const local = await fetch(`${readSettings(BASE).comfyUrl}/experiment/models`).then((r) => r.json())
+    const roots = (name) => local.find((f) => f.name === name)?.folders || []
+    const find = (kind, rel) => roots(kind).map((d) => path.join(d, rel)).find((p) => fs.existsSync(p))
+    const files = []
+    for (const c of studio.characters()) {
+      const lora = find('loras', c.lora)
+      if (lora) files.push({ file: lora, remote: `loras/${c.lora.replace(/\\/g, '/')}`, name: c.lora })
+      for (const r of [c.voiceRefmod, c.visualRefmod].filter(Boolean)) {
+        const file = find('refmods', `${r}.safetensors`)
+        if (file) files.push({ file, remote: `refmods/${r}.safetensors`, name: r })
+      }
+    }
+    return files
+  }
+  // Set up (and Set up again): the volume, a pod that installs ComfyUI and downloads the models onto it, then
+  // the characters. A new gate token each time, so pods started with the old one are shut down first.
+  handle('cloud:runpodSetUp', ({ gpu, idleSeconds }) =>
+    cloudTask('setting up RunPod', async () => {
+      const s = readSettings(BASE)
+      if (s.target === 'cloud') throw new Error('Switch rendering to My PC first.')
+      await runpod.stopAll()
+      const known = s.runpod?.volumeId ? { id: s.runpod.volumeId, dataCenter: s.runpod.dataCenter } : null
+      if (!known) send('cloud:log', 'Finding a data center with network storage and a free GPU…')
+      const volume = known || (await runpod.ensureVolume(await runpod.pickDataCenter(gpu)))
+      writeSettings({ runpodToken: seal(randomBytes(24).toString('base64url')) }, BASE)
+      saveRunpod({ gpu, idleSeconds, volumeId: volume.id, dataCenter: volume.dataCenter, url: null, podId: null })
+      send('cloud:log', `Starting a pod in ${volume.dataCenter}. The first time, it installs ComfyUI and downloads the H3 models onto your volume (20–40 minutes).`)
+      const url = await wakeRunpod()
+      saveRunpod({ modelsAt: new Date().toISOString(), setUpAt: new Date().toISOString() })
+      const done = []
+      for (const f of await characterFiles().catch(() => [])) {
+        await runpod.uploadModel(url, runpodToken(), f.file, f.remote)
+        done.push(f.name)
+      }
+      saveRunpod({ charactersAt: new Date().toISOString() })
+      send('cloud:log', `Ready. ${done.length} character file${done.length === 1 ? '' : 's'} uploaded. The GPU shuts itself off after ${Math.round(idleSeconds / 60)} idle minutes.`)
+      return readSettings(BASE).runpod
+    })
+  )
   handle('cloud:use', (target) => {
     const s = readSettings(BASE)
-    if (target === 'cloud' && !(s.cloud?.url && s.cloudToken)) throw new Error('Set up the cloud first.')
+    if (target === 'cloud' && s.cloudProvider === 'runpod' && !(s.runpod?.modelsAt && s.runpodToken)) throw new Error('Set up RunPod first.')
+    if (target === 'cloud' && s.cloudProvider !== 'runpod' && !(s.cloud?.url && s.cloudToken)) throw new Error('Set up the cloud first.')
     writeSettings({ target: target === 'cloud' ? 'cloud' : 'local' }, BASE)
     makeStudio()
     return target
@@ -649,19 +757,30 @@ app.whenReady().then(() => {
   // What the cloud GPU is doing, for the title-bar meter: the running containers and the chosen GPU's rate.
   handle('cloud:usage', async () => {
     const s = readSettings(BASE)
+    if (provider() === 'runpod') {
+      const running = s.runpodKey ? await runpod.pods() : []
+      const gpu = RUNPOD_GPUS.find((g) => g.id === (running[0]?.gpu || s.runpod?.gpu)) || RUNPOD_GPUS[0]
+      return { gpu: gpu.label.split(' · ')[0], perHour: running[0]?.perHour || gpu.perHour, running: running.map((p) => ({ id: p.id, startedAt: Date.parse(p.startedAt) })) }
+    }
     const gpu = GPUS.find((g) => g.id === s.cloud?.gpu) || GPUS[0]
     const running = cloud.toolkitReady() ? await cloud.containers() : []
     return { gpu: gpu.id, perHour: gpu.perHour, running: running.map((c) => ({ id: c.id, startedAt: Date.parse(String(c.startedAt).replace(' ', 'T')) })) }
   })
   // Stops the cloud GPU now (the "Shut down GPU" button). A render running there is lost.
   handle('cloud:stop', () => {
-    if (!cloud.toolkitReady()) throw new Error('The cloud tools are not installed.')
     if (cloudBusy) throw new Error(`Still busy: ${cloudBusy}.`)
+    if (provider() === 'runpod') return runpod.stopAll()
+    if (!cloud.toolkitReady()) throw new Error('The cloud tools are not installed.')
     return cloud.stopGpu()
   })
   // Wakes the cloud GPU (a cold start loads ComfyUI; Modal holds the request until it is up).
   handle('cloud:wake', async () => {
     const t0 = Date.now()
+    if (provider() === 'runpod') {
+      studio.comfy.url = await wakeRunpod()
+      const stats = await studio.comfy.req('/system_stats', { timeout: 60000 })
+      return { seconds: Math.round((Date.now() - t0) / 1000), gpu: stats.devices?.[0]?.name }
+    }
     for (;;) {
       try {
         const stats = await studio.comfy.req('/system_stats', { timeout: 600000 })
@@ -684,7 +803,7 @@ app.whenReady().then(() => {
   })
   handle('prompts:pull', (model) => pullModel(model, (ev) => send('prompts:pull', { model, ...ev })))
   handle('settings:set', (patch) => {
-    const { comfyApiKey, cloudToken, civitaiKey, cloud, target, ...safe } = patch || {}
+    const { comfyApiKey, cloudToken, civitaiKey, cloud, target, cloudProvider, runpod, runpodKey, runpodToken, ...safe } = patch || {}
     const s = publicSettings(writeSettings(safe, BASE))
     if ('comfyUrl' in (patch || {})) makeStudio()
     if ('models' in (patch || {})) studio.models = s.models || {}

@@ -99,7 +99,7 @@ export const GROUPS = [
     cards: [
       { id: 'library', title: 'Everything you’ve made', line: 'Every version, song and line in one place.', to: { page: 'media' }, words: 'history files library renders', video: 't1' },
       { id: 'incognito', title: 'Private work', line: 'Incognito keeps it apart: the switch in the title bar.', to: { page: 'settings' }, words: 'private incognito hidden' },
-      { id: 'cloud', title: 'Render in the cloud', line: 'Your own Modal account, with a cost meter.', to: { page: 'cloud' }, words: 'gpu no graphics card modal cloud' },
+      { id: 'cloud', title: 'Render in the cloud', line: 'Your own Modal or RunPod account, with a cost meter.', to: { page: 'cloud' }, words: 'gpu no graphics card modal runpod cloud' },
       { id: 'agents', title: 'Let your agent drive', line: 'Claude Code or Codex can do all of this.', to: { page: 'settings' }, words: 'mcp automation agent claude codex' }
     ]
   }
@@ -137,6 +137,10 @@ export const TIPS_FOR_ART = { create: 'create', shots: 'shots', projects: 'proje
 // What's new: the highlights of each version, newest first, each pointing at a Learn card. After an update the
 // Learn page (and a dot on its sidebar item) shows the current version's once, until it's been seen.
 export const NEWS = [
+  {
+    version: '0.2.4',
+    items: [{ card: 'cloud', text: 'Render in the cloud on your own RunPod account too: pick a GPU at RunPod’s live price, and it shuts itself off when idle.' }]
+  },
   {
     version: '0.2.3',
     items: [
