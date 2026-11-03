@@ -344,7 +344,7 @@ export default function App() {
       </nav>
       <main className={`page ${page === 'edit' ? 'page-editor' : ''}`}>
         {page === 'home' && <Dashboard {...ctx} start={startTool} startShotWith={startShotWith} />}
-        {page === 'learn' && <Learn learnGo={learnGo} version={info?.version} seenNews={seenNews} markNewsSeen={markNewsSeen} />}
+        {page === 'learn' && <Learn learnGo={learnGo} version={info?.version} seenNews={seenNews} markNewsSeen={markNewsSeen} notify={notify} />}
         {page === 'create' &&
           (createKind === 'image' ? (
             <Images {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} />

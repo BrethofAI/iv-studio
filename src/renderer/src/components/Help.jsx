@@ -36,9 +36,13 @@ export default function Help({ page, art }) {
               </li>
             ))}
           </ul>
-          {VIDEOS[help.video] && (
+          {VIDEOS[help.video] ? (
             <button className="btn btn-small" onClick={() => setWatching(true)}>
               ▶ Watch: {VIDEO_TITLES[help.video]}
+            </button>
+          ) : (
+            <button className="btn btn-small" onClick={() => window.ivstudio.learn.openGuide().catch(() => {})} title="Videos are coming soon">
+              Open the guide (PDF)
             </button>
           )}
           <button

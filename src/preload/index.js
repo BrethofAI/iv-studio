@@ -16,6 +16,7 @@ const on = (channel) => (cb) => {
 
 contextBridge.exposeInMainWorld('ivstudio', {
   app: { info: call('app:info') },
+  learn: { openGuide: call('learn:openGuide') },
   update: { state: call('update:state'), check: call('update:check'), install: call('update:install'), onChange: on('update:changed') },
   incognito: { set: call('incognito:set') },
   queue: { list: call('queue:list'), cancel: call('queue:cancel') },

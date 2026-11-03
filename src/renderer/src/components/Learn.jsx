@@ -5,11 +5,13 @@ import { GROUPS, NEWS, VIDEO_TITLES, searchCards, unseenNews } from '../learn'
 import { VIDEOS } from '../learnVideos'
 
 // Learn: everything IV Studio can do, findable by what you want to make (src/renderer/src/learn.js). Each card has
-// a line, a tutorial clip when one is made, and Try it, which opens the place it lives.
-export default function Learn({ learnGo, version, seenNews, markNewsSeen }) {
+// a line, a tutorial clip when one is made, and Try it, which opens the place it lives. Until the videos are back,
+// the top of the page opens the PDF guide.
+export default function Learn({ learnGo, version, seenNews, markNewsSeen, notify }) {
   const [query, setQuery] = useState('')
   const [watching, setWatching] = useState(null) // a video id in the player
   const found = searchCards(query)
+  const openGuide = () => window.ivstudio.learn.openGuide().catch((err) => notify(err.message))
   const news = unseenNews(version, seenNews)
   useEffect(() => {
     // the news counts as seen once the page has been open a moment
@@ -32,6 +34,15 @@ export default function Learn({ learnGo, version, seenNews, markNewsSeen }) {
   return (
     <div className="learn">
       <Hero art="create" title="Learn" kicker="What do you want to make?" help={false} />
+      <section className="learn-guide">
+        <div>
+          <span className="learn-title">The IV Studio guide</span>
+          <span className="small dim">Step by step, with every button pointed out. A PDF that opens in your PDF viewer. Videos are coming soon.</span>
+        </div>
+        <button className="btn" onClick={openGuide}>
+          Open the guide (PDF)
+        </button>
+      </section>
       {news && (
         <section className="learn-news">
           <span className="mono pink">New in {news.version}</span>

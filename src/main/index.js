@@ -1052,6 +1052,19 @@ app.whenReady().then(() => {
     shell.showItemInFolder(p)
     return p
   })
+  // Learn's guide: the bundled PDF (resources/guide), copied to the data folder first so it opens from a normal
+  // path (an AppImage's resources live in a temporary mount), then opened in the PC's PDF viewer.
+  handle('learn:openGuide', async () => {
+    const src = path.join(resourcesDir(path.join(app.getAppPath(), 'resources')), 'guide', 'IV Studio Guide.pdf')
+    const dest = path.join(BASE, 'guide', `IV Studio Guide ${app.getVersion()}.pdf`)
+    if (!fs.existsSync(dest)) {
+      fs.mkdirSync(path.dirname(dest), { recursive: true })
+      fs.copyFileSync(src, dest)
+    }
+    const err = await shell.openPath(dest)
+    if (err) throw new Error(`Couldn’t open the guide: ${err}`)
+    return dest
+  })
   handle('links:open', (url) => {
     if (/^https:\/\//.test(url)) shell.openExternal(url)
     return true
