@@ -29,20 +29,25 @@ run test-edit-export node test/edit-export.mjs "$M/a.mp4" "$M/b.mp4"
 run test-site-capture node test/site-capture.mjs https://infinitevariance.ai
 run test-shinobi node test/shinobi.mjs "$M/a.mp4" "$M/b.mp4" "$M/music.mp3"
 
-# the MCP server: from the built code, then from the AppImage itself through the starter script the app writes
+# the MCP server from the built code
 npx electron-vite build >/dev/null 2>&1
 run mcp-dev node test/mcp-smoke.mjs
-APPIMAGE_FILE="$PWD/dist/IV-Studio.AppImage"
-chmod +x "$APPIMAGE_FILE"
-STARTER="$OUT/mcp-start.cjs"
-printf '%s\n' "const path = require('node:path')" "require(path.join(path.dirname(process.execPath), 'resources', 'app.asar', 'out', 'main', 'mcp.js'))" >"$STARTER"
-run mcp-appimage env MCP_COMMAND="$APPIMAGE_FILE" MCP_ARGS="[\"$STARTER\"]" node test/mcp-smoke.mjs
 
 # the window: every sidebar page under a virtual display, from the AppImage, with a picture of each
+APPIMAGE_FILE="$PWD/dist/IV-Studio.AppImage"
+chmod +x "$APPIMAGE_FILE"
 export IV_STUDIO_USER_DATA="$OUT/userdata" IV_STUDIO_DATA="$OUT/data"
 run window env IV_STUDIO_SMOKE="$OUT/window" timeout 180 xvfb-run -a -s "-screen 0 1600x1000x24" "$APPIMAGE_FILE"
 if [ -f "$OUT/window/smoke.json" ]; then cat "$OUT/window/smoke.json"; else results+=("FAIL window-smoke-json"); fi
 node -e "const s=require('$OUT/window/smoke.json');if(s.pages.length<8||s.pages.some(p=>p.text<20))process.exit(1)" 2>/dev/null && results+=("ok   window-pages") || results+=("FAIL window-pages")
+
+# the MCP server from the AppImage, with the exact command the app gives agents (Settings -> Agents)
+MCP_CMD="$(node -p "require('$OUT/window/smoke.json').mcp.command" 2>/dev/null)"
+MCP_ARGS_JSON="$(node -p "JSON.stringify(require('$OUT/window/smoke.json').mcp.args)" 2>/dev/null)"
+cat "$OUT/data/mcp-start.sh" 2>/dev/null
+run mcp-appimage env MCP_COMMAND="$MCP_CMD" MCP_ARGS="$MCP_ARGS_JSON" timeout 120 node test/mcp-smoke.mjs
+sleep 2
+if mount | grep -q "IV-Stu"; then results+=("FAIL mcp-appimage-unmounted"); else results+=("ok   mcp-appimage-unmounted"); fi
 
 echo
 printf '%s\n' "${results[@]}" | tee "$OUT/summary.txt"

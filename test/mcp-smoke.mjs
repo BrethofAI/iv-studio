@@ -2,10 +2,11 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 
 // MCP_COMMAND and MCP_ARGS (a JSON list) start a packaged copy instead, e.g. an AppImage on its starter script.
 const transport = new StdioClientTransport({
-  command: process.env.MCP_COMMAND || path.resolve(`node_modules/electron/dist/electron${process.platform === 'win32' ? '.exe' : ''}`),
+  command: process.env.MCP_COMMAND || createRequire(import.meta.url)('electron'), // the electron package's binary (downloaded on first use)
   args: process.env.MCP_ARGS ? JSON.parse(process.env.MCP_ARGS) : [path.resolve('out/main/mcp.js')],
   env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
 })

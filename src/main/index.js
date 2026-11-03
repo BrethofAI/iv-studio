@@ -244,21 +244,32 @@ const KEY_STORE_MISSING = process.platform === 'win32' ? 'Windows encryption is 
 const keysSafe = () => safeStorage.isEncryptionAvailable() && !(process.platform === 'linux' && safeStorage.getSelectedStorageBackend?.() === 'basic_text')
 
 // How an agent starts the MCP server: this app's own binary in Node mode, on its bundled mcp.js. An AppImage runs
-// from a new temporary folder each time, so its command is the .AppImage file itself on a small starter script kept
-// in the data folder, which finds mcp.js next to whichever copy is running. The AppImage passes Node mode through.
+// from a new temporary folder each time, and its launcher may add --no-sandbox, which Node mode refuses, so its
+// command is a small shell script in the data folder: it mounts the .AppImage, runs the binary inside in Node mode,
+// and unmounts when the server ends. The app rewrites it on each start, so a moved AppImage is followed.
 function mcpCommand() {
   if (process.env.APPIMAGE) {
-    const starter = path.join(BASE, 'mcp-start.cjs')
+    const starter = path.join(BASE, 'mcp-start.sh')
+    const q = (s) => `'${s.replace(/'/g, `'\\''`)}'`
     const text = [
-      '// Written by IV Studio: starts its MCP server from the running AppImage.',
-      "const path = require('node:path')",
-      "require(path.join(path.dirname(process.execPath), 'resources', 'app.asar', 'out', 'main', 'mcp.js'))",
+      '#!/bin/sh',
+      '# Written by IV Studio: starts its MCP server from the AppImage.',
+      `APP=${q(process.env.APPIMAGE)}`,
+      'out=$(mktemp)',
+      '"$APP" --appimage-mount >"$out" </dev/null &',
+      'mounter=$!',
+      'trap \'kill $mounter 2>/dev/null; rm -f "$out"\' EXIT INT TERM',
+      'i=0',
+      'while [ ! -s "$out" ] && [ $i -lt 150 ]; do sleep 0.1; i=$((i + 1)); done',
+      'dir=$(head -n 1 "$out")',
+      '[ -n "$dir" ] || { echo "IV Studio: could not open $APP" >&2; exit 1; }',
+      `ELECTRON_RUN_AS_NODE=1 "$dir/iv-studio" "$dir/resources/app.asar/out/main/mcp.js"`,
       ''
     ].join('\n')
     try {
-      if (!fs.existsSync(starter) || fs.readFileSync(starter, 'utf8') !== text) fs.writeFileSync(starter, text)
+      if (!fs.existsSync(starter) || fs.readFileSync(starter, 'utf8') !== text) fs.writeFileSync(starter, text, { mode: 0o755 })
     } catch {}
-    return { command: process.env.APPIMAGE, args: [starter], env: { ELECTRON_RUN_AS_NODE: '1' } }
+    return { command: '/bin/sh', args: [starter], env: {} }
   }
   const exe = process.execPath
   const script = app.isPackaged ? path.join(process.resourcesPath, 'app.asar', 'out', 'main', 'mcp.js') : path.join(app.getAppPath(), 'out', 'main', 'mcp.js')
