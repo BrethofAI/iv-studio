@@ -553,7 +553,7 @@ async function picturesOf(result, max = 4) {
   }
   return out
 }
-tool('shinobi_status', "Is Shinobi (IV Studio's agent-driven editor, built on OpenKatana) set up on this PC, which browser it renders with, and its projects folder.", {}, () => ({ ...shinobi.status(), projects: shinobi.status().installed ? shinobi.projects() : [] }))
+tool('shinobi_status', "Is Shinobi (IV Studio's agent-driven editor) set up on this PC, which browser it renders with, and its projects folder.", {}, () => ({ ...shinobi.status(), projects: shinobi.status().installed ? shinobi.projects() : [] }))
 tool('shinobi_setup', "Install Shinobi's engine into IV Studio's folder (about 440 MB, under a minute; nothing else on the PC changes). Ask the person first.", {}, () => shinobi.install())
 tool('shinobi_tools', 'Every Shinobi tool with its parameters: media inspection, timeline authoring, beat analysis, captions, effects, 3D, rendering and review. Call them with the shinobi tool. Start with read_guide (agent, timeline, effects).', {}, () => shinobi.tools())
 server.registerTool('shinobi', {

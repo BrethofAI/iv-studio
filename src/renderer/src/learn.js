@@ -23,7 +23,7 @@ export const GROUPS = [
     cards: [
       { id: 'text', title: 'A shot from words', line: 'Describe it, and H3 films it with sound.', to: shot('text'), words: 'video clip prompt text' },
       { id: 'frames', title: 'From a first and last picture', line: 'Two stills; H3 fills the motion between.', to: shot('frames'), words: 'animate a picture start frame end frame image to video' },
-      { id: 'reference', title: 'From references', line: 'Show it the people, places and sounds to use.', to: shot('reference'), words: 'consistent lookalike reference pictures' },
+      { id: 'reference', title: 'From references', line: 'Show it the people, places and sounds to use.', to: shot('reference'), words: 'consistent lookalike reference pictures photo person new scene place' },
       { id: 'continue', title: 'Carry on a video', line: 'Continue a clip you already have.', to: shot('continue'), words: 'extend longer continue' },
       { id: 'writer', title: 'Write it for me', line: 'A rough idea becomes a full prompt.', to: shot('text'), words: 'prompt help ideas writer claude codex' },
       { id: 'board', title: 'Stage it on a board', line: 'Drag people and the camera; get exact staging.', to: shot('text'), words: 'blocking camera move previs staging arc' },
@@ -107,14 +107,22 @@ export const GROUPS = [
 ]
 export const CARDS = GROUPS.flatMap((g) => g.cards.map((c) => ({ ...c, group: g.name, art: g.art, video: c.video || g.video })))
 
-// A search: every word typed must appear in a card's title, line or extra words (a word may start one).
+// A search: every word typed must appear in a card's title, line or extra words (a word may start one). Everyday
+// questions work too ("how do I make music"): small words are dropped and a plural matches its singular, and when no
+// card has every word, the cards with the most of them are shown.
+const FILLER = new Set('a an the of to in on for from with and or my me i it is be can do does how what want make made making use using get put into some'.split(' '))
 export function searchCards(query) {
-  const words = String(query || '').toLowerCase().split(/\s+/).filter(Boolean)
-  if (!words.length) return CARDS
-  return CARDS.filter((c) => {
+  const typed = String(query || '').toLowerCase().split(/\s+/).filter(Boolean)
+  if (!typed.length) return CARDS
+  const kept = typed.filter((w) => !FILLER.has(w))
+  const words = (kept.length ? kept : typed).map((w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w))
+  const scored = CARDS.map((c) => {
     const text = `${c.title} ${c.line} ${c.words} ${c.group}`.toLowerCase()
-    return words.every((w) => text.includes(w))
+    return { c, hits: words.filter((w) => text.includes(w)).length }
   })
+  const every = scored.filter((s) => s.hits === words.length)
+  if (every.length) return every.map((s) => s.c)
+  return scored.filter((s) => s.hits > 0).sort((a, b) => b.hits - a.hits).map((s) => s.c)
 }
 
 // The "?" beside each page's title: its video and the tips that are easy to miss.
@@ -138,6 +146,15 @@ export const TIPS_FOR_ART = { create: 'create', shots: 'shots', projects: 'proje
 // What's new: the highlights of each version, newest first, each pointing at a Learn card. After an update the
 // Learn page (and a dot on its sidebar item) shows the current version's once, until it's been seen.
 export const NEWS = [
+  {
+    version: '0.2.7',
+    items: [
+      { card: 'reference', text: 'References mode keeps the place from your idea from the very first shot: Write it for me no longer opens on the background of your picture.' },
+      { card: 'film', text: 'Short films: the people and places in a script you type show up on Cast and places straight away.' },
+      { card: 'library', text: 'The Library names every version of a shot apart: each run, each final and each enhanced copy.' },
+      { card: 'writer', text: 'The writer on this PC no longer stalls on a runaway answer, and the prompt checker raises fewer false alarms.' }
+    ]
+  },
   {
     version: '0.2.6',
     items: [

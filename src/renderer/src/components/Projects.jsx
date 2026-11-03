@@ -184,7 +184,7 @@ export function ProjectPage({ productionId, notify, go, openShot, openEdit, char
     }
   }
   const setStep = (step) => {
-    setV({ ...v, step })
+    setV((cur) => ({ ...cur, step })) // from the newest film: a save just before (Story's Next) has reloaded it
     P().update(v.id, { step }).catch(() => {})
     top.current?.scrollIntoView({ block: 'start' })
   }

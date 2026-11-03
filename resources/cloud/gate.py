@@ -28,7 +28,7 @@ import aiohttp
 from aiohttp import WSMsgType, web
 
 TOKEN = os.environ["IV_TOKEN"]
-UPSTREAM = "http://127.0.0.1:8188"
+UPSTREAM = os.environ.get("IV_UPSTREAM", "http://127.0.0.1:8188")  # settable for tests
 HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers", "transfer-encoding", "upgrade", "host", "content-length", "content-encoding"}
 RUNPOD = os.environ.get("IV_PLATFORM") == "runpod"
 STATUS = Path(os.environ.get("IV_STATUS_FILE", "/tmp/iv-status.json"))

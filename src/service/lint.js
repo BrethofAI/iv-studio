@@ -27,6 +27,10 @@ const CAMERA_MOVES = [
   ['track', /\btracking shot\b|\btracks? (?:her|him|them|the)\b/i]
 ]
 const FACE_WORDS = /\b(hair|eyes?|eyebrows?|face|freckles?|skin|beard|moustache|mustache|nose|lips|cheeks?|jaw|ethnic\w*|voice)\b/i
+// Framing and actions name the face without describing it: "a close-up of {char}'s face", "her eyes widen".
+const FACE_FRAMING = /\b(?:close[- ]?ups?|shot|frames?|framing|focus(?:es)?|holds?|lingers?|pushes in|push-in|zooms? in|cuts?|tilts? up|pans?)\s+(?:on|of|to|onto|into|across)\s+(?:\{char\}'s|her|his|their|the)\s+(?:face|eyes)\b/gi
+const FACE_ACTION = /\b(?:\{char\}'s|her|his|their)\s+(?:eyes?|face|eyebrows?|lips)\s+(?:widens?|narrows?|closes?|close|opens?|lights? up|softens?|falls?|drops?|darts?|flicks?|follows?|turns?|tightens?|crinkles?|parts?|twitches|twitch|lifts?|raises?|goes|go|fills?|fill|meets?|meet|stays?|scans?|drifts?)\b/gi
+const unframed = (x) => x.replace(/<d>[\s\S]*?<\/d>/g, '').replace(FACE_FRAMING, '').replace(FACE_ACTION, '')
 
 // Every line said by the one speaker, the picked character: "then says: <d>" → "then {char} (S1) says: <d>"
 // (a pronoun just before the verb gives way to the name); a line with no verb before it gets "{char} (S1) says:".
@@ -181,7 +185,9 @@ export function lintPrompt(prompt, { mode = 'text', seconds = 5, media = [], cha
       fixed = fixed.replace(line, m[1] + kept.join(', '))
     }
     const summary = s.summary || ''
-    if (/\b(?:setting|background|surroundings)\b[^.]*\bpreserved\b|\bpreserved\b[^.]*\b(?:setting|background|surroundings)\b/i.test(summary)) {
+    // clause by clause: "identity is preserved; the setting is new" keeps only the person
+    const keepsPlace = (c) => /\b(?:setting|background|surroundings)\b/i.test(c) && /\bpreserved\b/i.test(c) && !/\b(?:new|different|changes?|changed)\b/i.test(c)
+    if (summary.split(/[.;]/).some(keepsPlace)) {
       found = true
       const trimmed = summary.replace(/,?\s*(?:and\s+)?(?:the\s+)?(?:setting|background|surroundings)\b/gi, '').replace(/\b(\w+), (\w+)(?= (?:are|is) (?:fully |partially )?preserved)/, '$1 and $2')
       fixed = fixed.replace(summary, trimmed)
@@ -199,8 +205,8 @@ export function lintPrompt(prompt, { mode = 'text', seconds = 5, media = [], cha
   // ---- the main character
   if (character) {
     if (!/\{char\}/.test(text) && !(character.trigger && text.includes(character.trigger))) add('warning', 'char-missing', `${character.name?.split(' ')[0] || 'The character'} is picked but the prompt never writes {char}, so the LoRA may not show them.`)
-    const faceSentence = sentences(text).find((x) => /\{char\}/.test(x) && FACE_WORDS.test(x.replace(/<d>[\s\S]*?<\/d>/g, '')))
-    if (faceSentence) add('warning', 'char-face', `"${faceSentence.slice(0, 70)}…" describes {char}'s ${FACE_WORDS.exec(faceSentence)[1]}. The character's LoRA carries the face, hair and voice; describing them fights it.`)
+    const faceSentence = sentences(text).find((x) => /\{char\}/.test(x) && FACE_WORDS.test(unframed(x)))
+    if (faceSentence) add('warning', 'char-face', `"${faceSentence.slice(0, 70)}…" describes {char}'s ${FACE_WORDS.exec(unframed(faceSentence))[1]}. The character's LoRA carries the face, hair and voice; describing them fights it.`)
   }
 
   // ---- wording

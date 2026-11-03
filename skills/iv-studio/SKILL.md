@@ -300,7 +300,7 @@ IV Studio makes songs and instrumentals on this PC's ComfyUI, free. Two engines:
 
 ## Shinobi: edits you cut as an agent
 
-Shinobi is IV Studio's agent-driven editor (its engine is OpenKatana). Where Edit is a hand-made timeline,
+Shinobi is IV Studio's agent-driven editor. Where Edit is a hand-made timeline,
 Shinobi lets you author a whole edit in code: cuts on the beat, speed ramps, punch-ins and camera moves,
 typography, masks and effects, captions from speech, sound cues, even 3D scenes, rendered on this PC.
 
@@ -352,7 +352,7 @@ site's screens are real captures; keep them sharp and unstretched.
 
 ## Replace: swap who or what is in a video
 
-Replace (OpenJutsu's workflows) redraws only the person or thing you choose, clip by clip with H3, and keeps
+Replace redraws only the person or thing you choose, clip by clip with H3, and keeps
 the camera, cuts, motion and soundtrack. `replace_check` says what the ComfyUI still needs.
 1. Trim the source first if needed (`prepare_media`); it needs a soundtrack.
 2. Run `replace_video` mode mask with the same target to see what will be redrawn (about a minute).

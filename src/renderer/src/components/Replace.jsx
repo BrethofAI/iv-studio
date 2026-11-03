@@ -373,13 +373,7 @@ export default function Replace({ notify, characters }) {
         </section>
       )}
 
-      <p className="small dim">
-        Replace runs{' '}
-        <button className="link-btn" onClick={() => window.ivstudio.links.open(meta.openjutsu.repo)}>
-          OpenJutsu
-        </button>
-        's workflows ({meta.openjutsu.licence}). Only replace people with characters you made, or with someone's consent.
-      </p>
+      <p className="small dim">Only replace people with characters you made, or with someone's consent.</p>
 
       {editing && video && <MediaEditor item={video} hint="Keep the part to swap. Each H3 clip is up to 15 s; longer parts run as several clips." onApply={(v) => (setVideo(v), setEditing(false))} onClose={() => setEditing(false)} notify={notify} />}
     </div>

@@ -126,7 +126,7 @@ async function gateTests() {
   const port = 18000 + Math.floor(Math.random() * 1000)
   const url = `http://127.0.0.1:${port}`
   fs.writeFileSync(status, JSON.stringify({ stage: 'models', detail: 'H3 int8 (1 of 9), 40%', percent: 40 }))
-  const gate = spawn(PY, [path.join(RES, 'cloud', 'gate.py')], { env: { ...process.env, IV_TOKEN: 'secret-token', IV_PLATFORM: 'runpod', IV_STATUS_FILE: status, IV_MODELS_DIR: models, IV_GATE_PORT: String(port), IV_IDLE_SECONDS: '300' }, windowsHide: true })
+  const gate = spawn(PY, [path.join(RES, 'cloud', 'gate.py')], { env: { ...process.env, IV_TOKEN: 'secret-token', IV_PLATFORM: 'runpod', IV_STATUS_FILE: status, IV_MODELS_DIR: models, IV_GATE_PORT: String(port), IV_IDLE_SECONDS: '300', IV_UPSTREAM: 'http://127.0.0.1:9' }, windowsHide: true })
   let err = ''
   gate.stderr.on('data', (d) => (err += d))
   try {

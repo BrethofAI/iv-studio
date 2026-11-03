@@ -2,7 +2,7 @@
 //   node test/lint.mjs
 import assert from 'node:assert/strict'
 import { blocking, firstLastLine, FIRST_FRAME_LINE, lintPrompt, sections } from '../src/service/lint.js'
-import { keepIdeaLine, keepIdeaMedium } from '../src/service/prompter.js'
+import { backdropInShots, keepIdeaLine, keepIdeaMedium } from '../src/service/prompter.js'
 
 let n = 0
 const ok = (name, fn) => {
@@ -79,6 +79,7 @@ ok('the character: missing {char}, and describing the face the LoRA carries', ()
   assert.ok(codes(CLEAN.replaceAll('{char}', 'a woman'), { seconds: 8, character: tess }).includes('char-missing'))
   assert.ok(codes(CLEAN.replace('{char} in a green raincoat', '{char} with long red hair in a green raincoat'), { seconds: 8, character: tess }).includes('char-face'))
   assert.ok(!codes(CLEAN, { seconds: 8 }).includes('char-missing'), 'no character, no check')
+  assert.ok(!codes(CLEAN.replace('{char} in a green raincoat', 'A close-up of {char}\'s face as her eyes widen, {char} in a green raincoat'), { seconds: 8, character: tess }).includes('char-face'), 'framing and actions are not descriptions')
 })
 ok('wording: filler words (with a fix), too many camera moves', () => {
   const f = lintPrompt(CLEAN.replace('Live-action, cinematic,', 'Live-action, masterpiece, 8k, cinematic,'), { seconds: 8 }).find((x) => x.code === 'filler')
@@ -116,5 +117,15 @@ ok('references: keeping a person-picture’s setting is caught; a new scene is n
   const inRetention = lintPrompt(ref('The queen from <Picture 1> walks at night.', 'dark bobbed hair, tan dress, desert setting, golden sunlight'), opts).find((x) => x.code === 'reference-keeps-place')
   assert.ok(inRetention && /fully_preserved - dark bobbed hair, tan dress\n/.test(inRetention.fix))
   assert.ok(!codes(ref('The queen walks through a neon street at night. The setting is new.', 'face, hair, wardrobe; she moves through the new scene'), opts).includes('reference-keeps-place'))
+  // the 0.2.7 writer's own summary: kept and new in one sentence, split by a semicolon
+  assert.ok(!codes(ref('The queen walks through a neon street. Her identity, wardrobe, and accessories are fully preserved as defined by the picture; the scene’s setting, lighting, and camera motion are new per idea.', 'identity, dark hair, linen dress'), opts).includes('reference-keeps-place'))
+})
+ok('references: shots set in the picture’s own backdrop are sent back, unless the idea asks for it', () => {
+  // the 8B writer's draft on Matt's queen picture: "No place is preserved", then [Shot 1] between two pyramids
+  const draft = (shot1) => ({ subjects: [{ definition: 'the queen in <Picture 1>', backdrop: 'Pyramids, the Sphinx, desert sand, tourists, clear blue sky' }], style: 'Live-action, cinematic.', shots: [{ start_seconds: 0, description: shot1 }, { start_seconds: 3, description: 'She walks under neon signs in the rain.' }] })
+  assert.deepEqual(backdropInShots(draft('The queen stands between two pyramids under a clear sky.'), 'The queen walks through a rainy neon-lit city street at night.'), ['pyramid'])
+  assert.deepEqual(backdropInShots(draft('The queen steps out of a taxi into the rain.'), 'The queen walks through a rainy neon-lit city street at night.'), [])
+  assert.deepEqual(backdropInShots(draft('The queen dances on the top of a pyramid above the desert.'), 'The queen dances on top of a pyramid.'), [])
+  assert.deepEqual(backdropInShots({ subjects: [{ definition: 'the throne room in <Picture 2>', backdrop: '' }], shots: [{ description: 'A throne room.' }] }, 'She sits on the throne.'), [])
 })
 console.log(`${n} checks passed`)

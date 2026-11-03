@@ -60,7 +60,8 @@ const MODE_RULES = {
 - In "direction", "priorities" gives each reference its role (identity, wardrobe, logo, place, light, prop, movement) and which one wins where two disagree (a dedicated shoe picture beats the shoes in a character sheet), and names the few details recognition depends on. A reference's pose doesn't fix the performance or the camera.
 - "summary": one short paragraph on what the target video is and what each reference supplies, using only the labels defined.
 - "retention": one entry per subject: the shots it appears in, how it is kept ("fully_preserved" when it appears as defined, "partially_preserved" when some defined features change, "attribute_transfer" only when its features pass to a different target subject, "weak_reference" for broad similarity of style or mood) and what is kept.
-- A picture of a person gives the PERSON, not the scene: keep their face, hair, age, build, wardrobe and what they wear or carry, and nothing of the picture's background, place, light, framing or pose. The place, light, camera and action come from the idea and are new: describe them fresh in the shots, as if the picture had been taken somewhere else. If the idea names no place, choose one that fits the idea instead of the picture's background. A person's "retention" lists only identity and wardrobe, never setting, background, scene or lighting, and the summary never says the setting is kept. Only a picture of a place (no person in it), or an idea that asks for the same place ("here", "in this room", "same place"), sets the place.
+- A picture of a person gives the PERSON, not the scene: keep their face, hair, age, build, wardrobe and what they wear or carry, and nothing of the picture's background, place, light, framing or pose. The place, light, camera and action come from the idea and are new: describe them fresh in the shots, as if the picture had been taken somewhere else. If the idea names no place, choose one that fits the idea instead of the picture's background. A person's "retention" lists only identity and wardrobe, never setting, background, scene or lighting, and the summary never says the setting is kept. Only a picture of a place (no person in it), or an idea that asks for the same place ("here", "in this room", "same place"), sets the place. Every shot happens in the idea's place, [Shot 1] included: never open on the picture's place and cut away from it.
+- Each subject also has "backdrop": for a person or thing seen in a picture, what is behind them in that picture, in a few plain words (like "pyramids, sphinx, desert, tourists"); "" for a place. It isn't part of the prompt: IV Studio uses it to keep that backdrop out of the shots unless the idea asks for it.
 - In the shots, refer to those people and things as <Subject 1>, <Subject 2>, describing them in full at their first appearance. A subject who speaks is written "<Subject 2> (S1)".
 - Put one or two sentences of overall style in "style". The shots together run 350-500 words: each shot gives its composition, who is where and what they wear, the place and light, the action, the camera, and the sound.`
 }
@@ -181,12 +182,14 @@ export function outputSchema({ mode = 'text', sequence = false, lastFrame = fals
   const text = { type: 'string' }
   // the direction (directing.js): what the shot is for and who stands where, decided before any shot is written. In
   // reference mode it also says which reference wins where two disagree. It isn't part of the H3 prompt.
-  const direction = { type: 'object', properties: { purpose: text, staging: text, ...(mode === 'reference' && { priorities: text }) }, required: ['purpose', 'staging', ...(mode === 'reference' ? ['priorities'] : [])] }
+  // notes, not prompt text: capped, because the 8B writer can run one on until its context fills
+  const note = { type: 'string', maxLength: 700 }
+  const direction = { type: 'object', properties: { purpose: note, staging: note, ...(mode === 'reference' && { priorities: note }) }, required: ['purpose', 'staging', ...(mode === 'reference' ? ['priorities'] : [])] }
   if (mode === 'frames') return { type: 'object', properties: { direction, style: text, opening: text, motion: text, ending: text, soundscape: text, music: text }, required: ['direction', 'style', 'opening', 'motion', 'ending', 'soundscape', 'music'] }
   const props = { direction, style: text, shots: { type: 'array', items: SHOT_SCHEMA, minItems: 1, maxItems: sequence || lastFrame ? 1 : 3 }, soundscape: text, music: text }
   const required = ['direction', 'style', 'shots', 'soundscape', 'music']
   if (mode === 'reference') {
-    props.subjects = { type: 'array', items: { type: 'object', properties: { definition: { type: 'string' } }, required: ['definition'] }, ...(refs && { minItems: refs }) }
+    props.subjects = { type: 'array', items: { type: 'object', properties: { definition: { type: 'string' }, backdrop: { type: 'string' } }, required: ['definition', 'backdrop'] }, ...(refs && { minItems: refs }) }
     props.summary = { type: 'string' }
     props.retention = { type: 'array', items: { type: 'object', properties: { subject: { type: 'integer' }, shots: { type: 'array', items: { type: 'integer' } }, relation: { type: 'string', enum: RELATIONS }, carries: { type: 'string' } }, required: ['subject', 'shots', 'relation', 'carries'] } }
     required.push('subjects', 'summary', 'retention')
@@ -364,16 +367,67 @@ function mended(prompt, ctx) {
   return text
 }
 const score = (findings) => findings.reduce((n, f) => n + (f.level === 'error' ? 10 : f.level === 'warning' && REDO.has(f.code) ? 1 : 0), 0)
-async function checked(data, { assembleOpts, character, ctx, again }) {
+
+// References mode: the writer names what is behind each person in their picture ("backdrop"). When the idea asks for
+// none of it but the shots describe it, the shots are set in the picture's place: the 8B local writer wrote "No place
+// is preserved" in the summary and then opened [Shot 1] "between two pyramids", and H3 opened every take on the
+// photo's pyramids before cutting to the idea's neon street. Returns the backdrop words found in the shots.
+const BACKDROP_SKIP = new Set(['with', 'behind', 'background', 'backdrop', 'light', 'lighting', 'bright', 'clear', 'blue', 'white', 'dark', 'sunny', 'daylight', 'outdoor', 'outdoors', 'indoor', 'some', 'many', 'other', 'distant', 'large', 'small', 'tall', 'wall', 'walls', 'none', 'plain', 'soft'])
+export function backdropInShots(data, idea = '') {
+  const stems = new Set()
+  for (const s of data?.subjects || [])
+    for (const w of String(s?.backdrop || '').toLowerCase().match(/[a-z]{4,}/g) || []) if (!BACKDROP_SKIP.has(w)) stems.add(w.replace(/(?:es|s)$/, ''))
+  if (!stems.size) return []
+  const has = (text, stem) => new RegExp(`\\b${stem}(?:s|es)?\\b`, 'i').test(text)
+  const ask = String(idea || '')
+  if ([...stems].some((st) => has(ask, st))) return [] // the idea asks for that place (a pyramid idea may show the desert)
+  const shots = (data?.shots || []).map((s) => [s?.description, s?.action, s?.camera].filter(Boolean).join(' ')).join(' ') + ' ' + (data?.style || '')
+  return [...stems].filter((st) => has(shots, st))
+}
+
+// Last resort for a draft whose opening shots are still in the picture's backdrop while a later shot is in the idea's
+// place: those opening shots go, and the video starts at the first shot in the idea's place (re-timed to start at 0).
+export function dropBackdropShots(data, idea = '') {
+  const words = backdropInShots(data, idea)
+  const shots = data?.shots || []
+  if (!words.length || shots.length < 2) return data
+  const inBackdrop = (s) => words.some((w) => new RegExp(`\\b${w}(?:s|es)?\\b`, 'i').test(String(s?.description || '')))
+  const first = shots.findIndex((s) => !inBackdrop(s))
+  if (first <= 0 || shots.slice(first).some(inBackdrop)) return data
+  const offset = Number(shots[first].start_seconds) || 0
+  return { ...data, shots: shots.slice(first).map((s) => ({ ...s, start_seconds: Math.max(0, (Number(s.start_seconds) || 0) - offset) })) }
+}
+
+// limited: only send the draft back for the backdrop problem (the local writer on the CPU, where a full second pass
+// is slow, still fixes the one mistake that ruins the shot). retry: a fresh request with a note (the local writer,
+// asked to correct its own answer, hands back the same shots; asked afresh with the words to avoid, it complies).
+async function checked(data, { assembleOpts, character, ctx, again, retry, idea, limited = false }) {
+  const reference = assembleOpts.mode === 'reference'
+  const backdrop = reference ? backdropInShots(data, idea) : []
+  if (backdrop.length && retry) {
+    let best = null
+    for (let k = 0; k < 2 && !(best && !backdropInShots(best, idea).length); k++) {
+      try {
+        const fresh = await retry(`Keep the reference pictures' own backdrops out of the shots: don't write ${backdrop.join(', ')} or anything else from behind the people in them anywhere in the shots or the style. Every shot, [Shot 1] included, happens in the idea's place; someone who arrives somewhere starts at its doorway or already inside it.`)
+        if (fresh && backdropInShots(fresh, idea).length < (best ? backdropInShots(best, idea).length : backdrop.length)) best = fresh
+      } catch {}
+    }
+    if (best) return checked(best, { assembleOpts, character, ctx, again, idea, limited })
+  }
+  if (reference) data = dropBackdropShots(data, idea)
   const draft = mended(cleanPrompt(assemble(data, assembleOpts), character), ctx)
-  const issues = lintPrompt(draft, ctx).filter((f) => f.level === 'error' || REDO.has(f.code))
+  const left = reference ? backdropInShots(data, idea) : []
+  const issues = limited ? [] : lintPrompt(draft, ctx).filter((f) => f.level === 'error' || REDO.has(f.code))
+  if (left.length && !limited) issues.unshift({ message: `The shots set the scene in the reference picture's own backdrop (${left.join(', ')}), which the idea doesn't ask for. Every shot, [Shot 1] included, happens in the idea's place: rewrite the shots without the picture's backdrop.` })
   if (!issues.length || !again) return draft
   const note = `IV Studio's prompt checker found these problems in your answer:\n${issues.map((f) => `- ${f.message}`).join('\n')}\nAnswer again with the whole JSON object, in the same shape, changing only what fixes these problems.`
   try {
-    const fixed = await again(note, JSON.stringify(data))
+    let fixed = await again(note, JSON.stringify(data))
     if (!fixed) return draft
+    if (reference) fixed = dropBackdropShots(fixed, idea)
     const second = mended(cleanPrompt(assemble(fixed, assembleOpts), character), ctx)
-    return score(lintPrompt(second, ctx)) < score(lintPrompt(draft, ctx)) ? second : draft
+    const worse = (d, text) => score(lintPrompt(text, ctx)) + 10 * (reference ? backdropInShots(d, idea).length : 0)
+    return worse(fixed, second) < worse(data, draft) ? second : draft
   } catch {
     return draft
   }
@@ -419,19 +473,26 @@ export async function writeLocal({ idea, mode = 'text', seconds = 5, character, 
     message.images = req.shown.map((s) => s.data)
     message.content += `\n\n${lookRule(mode)}\n${req.shown.map((s, i) => `Image ${i + 1}: ${s.label}`).join('\n')}`
   }
-  const chat = async (messages) => {
+  const chat = async (messages, tries = 2) => {
     const r = await fetch(`${OLLAMA_URL}/api/chat`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: name, stream: false, format: req.schema, keep_alive: 0, options: { temperature: 0.6, num_ctx: guide ? (guide.ref ? 24576 : 16384) : 8192, ...(cpu ? { num_gpu: 0 } : {}) }, messages: [{ role: 'system', content: req.system }, ...messages] }),
+      body: JSON.stringify({ model: name, stream: false, format: req.schema, keep_alive: 0, options: { temperature: 0.6, num_ctx: guide ? (guide.ref ? 24576 : 16384) : 8192, num_predict: 6000, ...(cpu ? { num_gpu: 0 } : {}) }, messages: [{ role: 'system', content: req.system }, ...messages] }),
       signal: AbortSignal.timeout(600000)
     })
     if (!r.ok) throw new Error(`Ollama: ${(await r.text()).slice(0, 300)}`)
-    return parseJson((await r.json()).message?.content)
+    const content = (await r.json()).message?.content
+    try {
+      return parseJson(content)
+    } catch (err) {
+      if (tries > 1) return chat(messages, tries - 1)
+      throw err
+    }
   }
   const data = await chat([message])
-  const again = cpu ? null : (note, previous) => chat([message, { role: 'assistant', content: previous }, { role: 'user', content: note }])
-  return keepIdeaMedium(keepIdeaLine(await checked(data, { assembleOpts: { mode, seconds, lastFrame: req.lastFrame }, character, ctx: checkerContext({ mode, seconds, media, character }), again }), idea, character), idea)
+  const again = (note, previous) => chat([message, { role: 'assistant', content: previous }, { role: 'user', content: note }])
+  const retry = (note) => chat([{ ...message, content: `${message.content}\n\n${note}` }])
+  return keepIdeaMedium(keepIdeaLine(await checked(data, { assembleOpts: { mode, seconds, lastFrame: req.lastFrame }, character, ctx: checkerContext({ mode, seconds, media, character }), again, retry, idea, limited: cpu }), idea, character), idea)
 }
 
 // The same prompt from the person's Claude Code or Codex (harness.js), with the whole guide: it runs off this PC's GPU.
@@ -445,7 +506,8 @@ export async function writeHarness({ engine, model, idea, mode = 'text', seconds
   user += '\n\nAnswer with the JSON object only.'
   const data = await harnessJson({ engine, model, system: req.system, user, schema: req.schema, images })
   const again = (note, previous) => harnessJson({ engine, model, system: req.system, user: `${user}\n\nYour previous answer:\n${previous}\n\n${note}`, schema: req.schema, images })
-  return keepIdeaMedium(keepIdeaLine(await checked(data, { assembleOpts: { mode, seconds, lastFrame: req.lastFrame }, character, ctx: checkerContext({ mode, seconds, media, character }), again }), idea, character), idea)
+  const retry = (note) => harnessJson({ engine, model, system: req.system, user: `${user}\n\n${note}`, schema: req.schema, images })
+  return keepIdeaMedium(keepIdeaLine(await checked(data, { assembleOpts: { mode, seconds, lastFrame: req.lastFrame }, character, ctx: checkerContext({ mode, seconds, media, character }), again, retry, idea }), idea, character), idea)
 }
 
 function parseJson(text) {

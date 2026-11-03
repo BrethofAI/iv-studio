@@ -357,12 +357,29 @@ export class Studio {
     const items = []
     for (const p of this.listProjects()) {
       if (p.trainingId) continue // a character training's test renders
-      for (const j of this.listJobs(p.id)) {
+      const jobs = this.listJobs(p.id)
+      // a shot hunted more than once numbers its runs, so two takes never share the label "Preview 1"
+      const byAge = (a, b) => String(a.createdAt).localeCompare(String(b.createdAt))
+      const runs = new Map(jobs.filter((j) => j.kind === 'previews').sort(byAge).map((j, i) => [j.id, i + 1]))
+      // several finishes of one run read Final, Final 2...; an enhanced final keeps its finish's name plus how
+      const finishes = new Map()
+      for (const j of jobs.filter((x) => x.kind === 'finish').sort(byAge)) {
+        const n = jobs.filter((x) => x.kind === 'finish' && x.parent === j.parent && byAge(x, j) < 0).length + 1
+        finishes.set(j.id, { run: j.parent, name: n > 1 ? `Final ${n}` : 'Final' })
+      }
+      const enhanced = (e) => (e?.engine === 'dlss' ? `DLSS 5 ${e.scale}×` : `SeedVR2 ${e?.resolution || ''}p`)
+      for (const j of jobs) {
         for (const o of j.outputs || []) {
           if (!['final', 'preview'].includes(o.kind)) continue
+          // a finish whose cached latent was dropped renders its preview again: the run already shows that take
+          if (o.kind === 'preview' && j.kind !== 'previews' && runs.has(j.parent)) continue
           // set: the shot (or the sequence a shot render belongs to), so its takes show as one tile
-          const variant = o.kind === 'final' ? 'Final' : `Preview ${o.candidate}`
-          items.push({ key: `${j.id}:${o.kind}:${o.candidate || ''}`, label: `${p.name} · ${variant.toLowerCase()}`, group: p.tool === 'replace' ? 'Replace' : p.sequenceId ? 'Sequence shots' : 'Shots', at: j.finishedAt || j.createdAt, file: { path: o.path, url: o.url, filename: o.filename }, set: p.sequenceId ? `sequence:${p.sequenceId}` : `project:${p.id}`, setName: p.name.replace(/ \(sequence\)$/, ''), variant: p.sequenceId ? `Shot ${variant.toLowerCase()}` : variant, rank: o.kind === 'final' ? 0 : 10 + (o.candidate || 0), projectId: p.sequenceId ? null : p.id, sequenceId: p.sequenceId || null })
+          const fin = finishes.get(j.kind === 'enhance' ? j.parent : j.id)
+          const runRaw = runs.size > 1 && runs.get(j.kind === 'previews' ? j.id : fin?.run ?? j.parent)
+          const run = runRaw || 0
+          const name = o.kind !== 'final' ? `Preview ${o.candidate}` : j.kind === 'enhance' ? `${fin?.name || 'Final'} · ${enhanced(j.plan?.enhance)}` : fin?.name || 'Final'
+          const variant = `${run ? `Run ${run} · ` : ''}${name}`
+          items.push({ key: `${j.id}:${o.kind}:${o.candidate || ''}`, label: `${p.name} · ${variant.toLowerCase()}`, group: p.tool === 'replace' ? 'Replace' : p.sequenceId ? 'Sequence shots' : 'Shots', at: j.finishedAt || j.createdAt, file: { path: o.path, url: o.url, filename: o.filename }, set: p.sequenceId ? `sequence:${p.sequenceId}` : `project:${p.id}`, setName: p.name.replace(/ \(sequence\)$/, ''), variant: p.sequenceId ? `Shot ${variant.toLowerCase()}` : variant, rank: (o.kind === 'final' ? 0 : 10 + (o.candidate || 0)) + (run ? (runs.size - run) * 100 : 0), projectId: p.sequenceId ? null : p.id, sequenceId: p.sequenceId || null })
         }
       }
     }
@@ -373,7 +390,15 @@ export class Studio {
       for (const r of v.renders) if (r.file) items.push({ key: `${sq.id}:r:${r.id}`, label: `${sq.name} · final`, group: 'Sequences', at: r.createdAt, file: r.file, ...set, variant: 'Final', rank: 0 })
     }
     const seen = new Set() // a finish job lists its picked preview again
-    return items.filter((i) => !seen.has(i.file.path || i.file.url) && seen.add(i.file.path || i.file.url)).sort((a, b) => String(b.at).localeCompare(String(a.at)))
+    const out = items.filter((i) => !seen.has(i.file.path || i.file.url) && seen.add(i.file.path || i.file.url)).sort((a, b) => String(b.at).localeCompare(String(a.at)))
+    const named = new Map() // the same version made twice (a SeedVR2 run repeated) reads "… (2)" for the newer one
+    for (const i of [...out].reverse()) {
+      const k = `${i.set}|${i.variant}`
+      const n = (named.get(k) || 0) + 1
+      named.set(k, n)
+      if (n > 1) Object.assign(i, { variant: `${i.variant} (${n})`, label: `${i.label} (${n})` })
+    }
+    return out
   }
 
   // H3 models the ComfyUI can load, and each workflow's default (Settings -> Models).

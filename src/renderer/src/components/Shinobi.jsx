@@ -63,13 +63,7 @@ export function ShinobiList({ openShinobi, notify }) {
               {busy ? 'Setting up…' : 'Set up Shinobi'}
             </button>
             {busy && log.length > 0 && <pre className="code cloud-log">{log.join('\n')}</pre>}
-            <p className="small dim">
-              Shinobi's engine is{' '}
-              <button className="link-btn" onClick={() => window.ivstudio.links.open(st.engine.repo)}>
-                OpenKatana
-              </button>{' '}
-              ({st.engine.licence}), at a fixed version, installed into IV Studio's own folder.
-            </p>
+            <p className="small dim">Installs Shinobi's renderer (about 440 MB) at a fixed version into IV Studio's own folder. Nothing else on your PC changes.</p>
           </div>
         </section>
       ) : (
