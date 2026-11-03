@@ -8,6 +8,7 @@ import { harnessStatus } from '../service/harness'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
 import { RunPod, GPUS as RUNPOD_GPUS } from '../service/runpod'
+import { comfyUp, findLaunchers, isLocalUrl, launch as launchComfy, waitUp } from '../service/comfylauncher'
 import { randomBytes } from 'node:crypto'
 import { Edits, FORMATS, LOUDNESS } from '../service/edits'
 import { EditGen } from '../service/editgen'
@@ -812,6 +813,41 @@ app.whenReady().then(() => {
     return s
   })
   handle('setup:check', () => studio.checkSetup())
+
+  // ---------- starting ComfyUI (comfylauncher.js) ----------
+  // The launcher is the one picked in Settings, else the best one found on this PC. The window hears
+  // comfy:state ({state: 'starting' | 'up' | 'failed', detail}) and rechecks when ComfyUI is up.
+  let comfyStarting = null
+  const launcherOf = (s) => (s.comfyLauncher && fs.existsSync(s.comfyLauncher) ? s.comfyLauncher : findLaunchers()[0]?.path || null)
+  const startComfy = () =>
+    (comfyStarting ||= (async () => {
+      const s = readSettings(BASE)
+      if (!isLocalUrl(s.comfyUrl)) throw new Error('ComfyUI isn’t on this PC (Settings → ComfyUI), so IV Studio can’t start it.')
+      if (await comfyUp(s.comfyUrl)) return { seconds: 0, already: true }
+      const file = launcherOf(s)
+      if (!file) throw new Error('No ComfyUI launcher found. Pick one in Settings → ComfyUI.')
+      send('comfy:state', { state: 'starting', detail: path.basename(file) })
+      try {
+        launchComfy(file)
+        const up = await waitUp(s.comfyUrl)
+        send('comfy:state', { state: 'up', detail: `ComfyUI started in ${up.seconds} s.` })
+        return up
+      } catch (err) {
+        send('comfy:state', { state: 'failed', detail: err.message })
+        throw err
+      }
+    })().finally(() => (comfyStarting = null)))
+  handle('comfy:launcher', () => {
+    const s = readSettings(BASE)
+    return { chosen: s.comfyLauncher || null, using: launcherOf(s), found: findLaunchers(), autoStart: s.comfyAutoStart !== false, local: isLocalUrl(s.comfyUrl) && s.target !== 'cloud', starting: !!comfyStarting }
+  })
+  handle('comfy:chooseLauncher', async () => {
+    const r = await dialog.showOpenDialog(win, { title: 'Start ComfyUI with', properties: ['openFile'], filters: [{ name: 'Shortcut, .bat or ComfyUI.exe', extensions: ['lnk', 'bat', 'cmd', 'exe'] }] })
+    if (r.canceled || !r.filePaths[0]) return null
+    writeSettings({ comfyLauncher: r.filePaths[0] }, BASE)
+    return r.filePaths[0]
+  })
+  handle('comfy:start', () => startComfy())
   // Settings -> Agents: what to paste into an agent, and the Claude Code skill (with this install's command).
   const skillFile = path.join(app.getPath('home'), '.claude', 'skills', 'iv-studio', 'SKILL.md')
   const skillText = () => skillMarkdown(readGuide(resourcesDir(path.join(app.getAppPath(), 'resources'))), mcpCommand())
@@ -984,6 +1020,10 @@ app.whenReady().then(() => {
     return { on: !!on, restarting: true }
   })
   createWindow()
+  // Start ComfyUI when IV Studio opens (Settings → ComfyUI), only for a ComfyUI on this PC that isn't up yet.
+  const boot = readSettings(BASE)
+  if (boot.comfyAutoStart !== false && boot.target !== 'cloud' && isLocalUrl(boot.comfyUrl) && (!TEST_COPY || process.env.IV_STUDIO_COMFY_AUTOSTART === '1'))
+    comfyUp(boot.comfyUrl).then((up) => up || startComfy().catch(() => {}))
 })
 
 app.on('second-instance', () => {

@@ -6,6 +6,7 @@ import ivMarkClosed from './assets/iv-mark-closed.png'
 import { ConfirmHost, ask } from './components/Confirm'
 import Library from './components/Library'
 import Cloud, { CloudMeter } from './components/Cloud'
+import StartComfy from './components/StartComfy'
 import SystemMeter from './components/SystemMeter'
 import { EditEditor, EditList } from './components/Edit'
 import { SequenceEditor, SequenceList } from './components/Sequences'
@@ -270,6 +271,8 @@ export default function App() {
   const ready = setup?.ready
   const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, editRun, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
+  // ComfyUI on this PC isn't answering: the title bar offers to start it
+  const comfyDown = !setup?.remote && setup?.items?.some((i) => i.id === 'comfyui' && i.status !== 'ok')
 
   // Incognito: a private set of everything made, switched by restarting (see main's BASE / DATA). The eye
   // art closes while it's on.
@@ -307,6 +310,7 @@ export default function App() {
           <span className="dot" />
           {setup?.remote && <span className="mono cloud-badge">Cloud</span>}
           <span className="mono">{!setup ? 'Checking ComfyUI' : ready ? 'ComfyUI ready' : `${missing} to fix`}</span>
+          {comfyDown && <StartComfy notify={notify} recheck={recheck} className="btn btn-small engine-start" />}
           {setup?.items?.find((i) => i.id === 'gpu') && <span className="mono dim">{setup.items.find((i) => i.id === 'gpu').detail}</span>}
           {setup?.remote ? <CloudMeter onOpen={() => setPage('cloud')} /> : setup && <SystemMeter />}
         </div>

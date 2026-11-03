@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import StartComfy from './StartComfy'
 import { UpdateSettings } from './Update'
 import Hero from './Hero'
 import { ask } from './Confirm'
@@ -492,6 +493,57 @@ export function SettingsTabs({ tab, go, setup }) {
   )
 }
 
+// How IV Studio starts ComfyUI: the person's own launcher (found or picked) and whether to start it on open.
+function ComfyLauncher({ settings, setSettings, notify, recheck, comfyUp }) {
+  const [l, setL] = useState(null)
+  const load = () => window.ivstudio.comfy.launcher().then(setL).catch(() => {})
+  useEffect(() => {
+    load()
+  }, [settings.comfyUrl, settings.comfyLauncher])
+  async function choose() {
+    const file = await window.ivstudio.comfy.chooseLauncher()
+    if (file) setSettings(await window.ivstudio.settings.get())
+  }
+  async function useFound(file) {
+    setSettings(await window.ivstudio.settings.set({ comfyLauncher: file }))
+  }
+  async function autoStart(on) {
+    setSettings(await window.ivstudio.settings.set({ comfyAutoStart: on }))
+  }
+  if (!l) return null
+  if (!l.local) return <p className="small dim">IV Studio can start ComfyUI only when it runs on this PC.</p>
+  return (
+    <div className="comfy-launcher">
+      <div className="row">
+        <span className="row-label">Start it with</span>
+        <span className="launcher-path small" title={l.using || ''}>{l.using || 'No launcher found'}</span>
+        <button className="btn btn-small" onClick={choose}>
+          Choose…
+        </button>
+        {!comfyUp && <StartComfy notify={notify} recheck={recheck} />}
+      </div>
+      {!l.chosen && l.found.length > 1 && (
+        <p className="small dim">
+          Found on this PC:{' '}
+          {l.found.slice(1, 5).map((f, i) => (
+            <span key={f.path}>
+              {i > 0 && ' · '}
+              <button className="link-btn mono" title={f.path} onClick={() => useFound(f.path)}>
+                {f.path}
+              </button>
+            </span>
+          ))}
+        </p>
+      )}
+      <label className="consent">
+        <input type="checkbox" checked={settings.comfyAutoStart !== false} onChange={(e) => autoStart(e.target.checked)} />
+        Start ComfyUI when IV Studio opens, if it isn’t running already
+      </label>
+      <p className="small dim">The same shortcut or .bat you’d double-click, so ComfyUI starts with your own settings in its own window, and keeps running after IV Studio closes.</p>
+    </div>
+  )
+}
+
 export default function Settings({ info, recheck, notify, go, setup }) {
   const [settings, setSettings] = useState(null)
   const [url, setUrl] = useState('')
@@ -530,6 +582,7 @@ export default function Settings({ info, recheck, notify, go, setup }) {
               Save
             </button>
           </div>
+          <ComfyLauncher settings={settings} setSettings={setSettings} notify={notify} recheck={recheck} comfyUp={setup?.items?.some((i) => i.id === 'comfyui' && i.status === 'ok')} />
         </div>
       </section>
 

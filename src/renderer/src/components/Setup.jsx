@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Hero from './Hero'
 import { SettingsTabs } from './Settings'
+import StartComfy from './StartComfy'
 
 const ICON = { ok: '●', warn: '▲', missing: '✕' }
 const GROUPS = [
@@ -40,7 +41,7 @@ function ModelAction({ item, dl }) {
   )
 }
 
-export default function Setup({ setup, recheck, checking, remote, go }) {
+export default function Setup({ setup, recheck, checking, remote, go, notify }) {
   const [dl, setDl] = useState({})
   const items = setup?.items || []
 
@@ -99,6 +100,7 @@ export default function Setup({ setup, recheck, checking, remote, go }) {
                     <div>{i.label}</div>
                     <div className="dim small">{i.detail}</div>
                     {i.fix && <div className="small pink">{i.fix}</div>}
+                    {i.id === 'comfyui' && i.status !== 'ok' && !remote && <StartComfy notify={notify} recheck={recheck} />}
                     {i.status !== 'ok' && (i.url || i.page) && (
                       <button className="link-btn mono" onClick={() => window.ivstudio.links.open(i.url || i.page)}>
                         {i.url ? 'Open its GitHub page' : 'Model page and licence'}
