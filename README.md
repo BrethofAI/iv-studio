@@ -147,7 +147,8 @@ cloud. No strong graphics card? Shots can also render on a GPU in your own [Moda
 - **[ComfyUI](https://github.com/comfyanonymous/ComfyUI)**, version 0.33 or newer, running on the same PC.
   IV Studio talks to it at `http://127.0.0.1:8188` (change it in Settings). It can start ComfyUI for you: it
   finds your ComfyUI shortcut, the ComfyUI Desktop app or a portable install's `run_nvidia_gpu.bat` (or you pick one
-  in Settings → ComfyUI), starts it when IV Studio opens, and offers **Start ComfyUI** whenever it isn't running.
+  in Settings → ComfyUI, or pick your ComfyUI folder and the start file in it), starts it when IV Studio opens, and
+  offers **Start ComfyUI** whenever it isn't running.
 - **Disk space.** About 60 GB for the H3 models. Music adds about 14 GB (MiniMax Music 3) or 10 GB
   (ACE-Step); voices add about 12 GB. Each is a one-click download inside the app.
 - **Optional:** [Ollama](https://ollama.com) for the free local prompt writer, and a

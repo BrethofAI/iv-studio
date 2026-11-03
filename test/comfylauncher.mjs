@@ -4,7 +4,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { findLaunchers, isLocalUrl, launch } from '../src/service/comfylauncher.js'
+import { findLaunchers, isComfyFolder, isLocalUrl, launch, launchersIn } from '../src/service/comfylauncher.js'
 
 let pass = 0
 let fail = 0
@@ -40,6 +40,17 @@ try {
     }
   }
   ok(refused === 2, 'a missing file or a non-launcher is refused, not run')
+
+  // a picked ComfyUI folder (Settings → ComfyUI → ComfyUI folder)
+  const portable = path.join(home, 'ComfyUI_windows_portable')
+  touch(path.join(portable, 'ComfyUI', 'main.py'))
+  touch(path.join(portable, 'run_nvidia_gpu_seedhunter.bat'))
+  touch(path.join(portable, 'README_VERY_IMPORTANT.txt'))
+  const app = path.join(env.LOCALAPPDATA, 'Programs', '@comfyorgcomfyui-electron')
+  ok(isComfyFolder(portable) && isComfyFolder(app) && !isComfyFolder(path.join(home, 'Desktop')), 'a portable install and the Desktop app’s folder count as ComfyUI; the desktop doesn’t')
+  const inFolder = launchersIn(portable).map((f) => f.label)
+  console.log('    in the folder:', inFolder.join(' | '))
+  ok(inFolder[0] === 'run_nvidia_gpu.bat' && inFolder[1] === 'run_nvidia_gpu_seedhunter.bat' && inFolder.at(-1) === 'run_cpu.bat' && !inFolder.some((n) => n.endsWith('.txt')), 'its start files: run_nvidia_gpu.bat, then GPU variants, CPU last, nothing else')
 } finally {
   fs.rmSync(home, { recursive: true, force: true })
 }

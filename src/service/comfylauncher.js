@@ -56,6 +56,23 @@ export function findLaunchers({ env = process.env, drives = ['C', 'D', 'E', 'F',
   return found
 }
 
+// A ComfyUI folder the person picked (Settings → ComfyUI): a portable install (ComfyUI\main.py beside its
+// run_*.bat files), a plain ComfyUI checkout (main.py), or the Desktop app's folder (ComfyUI.exe).
+export function isComfyFolder(dir) {
+  return ['ComfyUI/main.py', 'main.py', 'ComfyUI.exe'].some((f) => fs.existsSync(path.join(dir, f)))
+}
+
+// The things in that folder that start ComfyUI, best first: GPU .bat files (run_nvidia_gpu.bat before its
+// variants), then other .bat/.cmd files, ComfyUI.exe, and CPU-only last.
+export function launchersIn(dir) {
+  const rank = (name) => (/^run_nvidia_gpu\.bat$/i.test(name) ? 0 : /gpu/i.test(name) ? 1 : /cpu/i.test(name) ? 4 : /\.exe$/i.test(name) ? 2 : 3)
+  return list(dir)
+    .filter((e) => e.isFile() && (/\.(bat|cmd)$/i.test(e.name) || /^ComfyUI\.exe$/i.test(e.name)))
+    .map((e) => e.name)
+    .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+    .map((name) => ({ path: path.join(dir, name), kind: 'folder', label: name }))
+}
+
 // Starts a launcher as a double-click would, in its own window, so ComfyUI keeps running when IV Studio
 // closes. Through PowerShell's Start-Process (the Windows shell), not as IV Studio's child: a child process
 // inherits IV Studio's open sockets and keeps them after IV Studio quits. A .bat or .exe starts in its own

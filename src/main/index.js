@@ -8,7 +8,7 @@ import { harnessStatus } from '../service/harness'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
 import { RunPod, GPUS as RUNPOD_GPUS } from '../service/runpod'
-import { comfyUp, findLaunchers, isLocalUrl, launch as launchComfy, waitUp } from '../service/comfylauncher'
+import { comfyUp, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launchersIn, waitUp } from '../service/comfylauncher'
 import { randomBytes } from 'node:crypto'
 import { Edits, FORMATS, LOUDNESS } from '../service/edits'
 import { EditGen } from '../service/editgen'
@@ -815,10 +815,15 @@ app.whenReady().then(() => {
   handle('setup:check', () => studio.checkSetup())
 
   // ---------- starting ComfyUI (comfylauncher.js) ----------
-  // The launcher is the one picked in Settings, else the best one found on this PC. The window hears
+  // The launcher is the one picked in Settings, else the best one in the ComfyUI folder picked there, else
+  // the best one found on this PC. The window hears
   // comfy:state ({state: 'starting' | 'up' | 'failed', detail}) and rechecks when ComfyUI is up.
   let comfyStarting = null
-  const launcherOf = (s) => (s.comfyLauncher && fs.existsSync(s.comfyLauncher) ? s.comfyLauncher : findLaunchers()[0]?.path || null)
+  const launcherOf = (s) => {
+    if (s.comfyLauncher && fs.existsSync(s.comfyLauncher)) return s.comfyLauncher
+    if (s.comfyFolder && fs.existsSync(s.comfyFolder)) return launchersIn(s.comfyFolder)[0]?.path || null
+    return findLaunchers()[0]?.path || null
+  }
   const startComfy = () =>
     (comfyStarting ||= (async () => {
       const s = readSettings(BASE)
@@ -839,13 +844,23 @@ app.whenReady().then(() => {
     })().finally(() => (comfyStarting = null)))
   handle('comfy:launcher', () => {
     const s = readSettings(BASE)
-    return { chosen: s.comfyLauncher || null, using: launcherOf(s), found: findLaunchers(), autoStart: s.comfyAutoStart !== false, local: isLocalUrl(s.comfyUrl) && s.target !== 'cloud', starting: !!comfyStarting }
+    const folder = s.comfyFolder && fs.existsSync(s.comfyFolder) ? s.comfyFolder : null
+    return { chosen: s.comfyLauncher || null, using: launcherOf(s), folder, inFolder: folder ? launchersIn(folder) : [], found: findLaunchers(), autoStart: s.comfyAutoStart !== false, local: isLocalUrl(s.comfyUrl) && s.target !== 'cloud', starting: !!comfyStarting }
   })
   handle('comfy:chooseLauncher', async () => {
     const r = await dialog.showOpenDialog(win, { title: 'Start ComfyUI with', properties: ['openFile'], filters: [{ name: 'Shortcut, .bat or ComfyUI.exe', extensions: ['lnk', 'bat', 'cmd', 'exe'] }] })
     if (r.canceled || !r.filePaths[0]) return null
     writeSettings({ comfyLauncher: r.filePaths[0] }, BASE)
     return r.filePaths[0]
+  })
+  // The main ComfyUI folder: IV Studio starts it with the best launcher in it (or the one picked from it).
+  handle('comfy:chooseFolder', async () => {
+    const r = await dialog.showOpenDialog(win, { title: 'Your ComfyUI folder', properties: ['openDirectory'] })
+    if (r.canceled || !r.filePaths[0]) return null
+    const dir = r.filePaths[0]
+    if (!isComfyFolder(dir)) throw new Error('That folder doesn’t look like ComfyUI. Pick the folder that holds ComfyUI (its main.py, or run_nvidia_gpu.bat and the ComfyUI folder), or ComfyUI.exe’s folder.')
+    writeSettings({ comfyFolder: dir, comfyLauncher: '' }, BASE)
+    return dir
   })
   handle('comfy:start', () => startComfy())
   // Settings -> Agents: what to paste into an agent, and the Claude Code skill (with this install's command).

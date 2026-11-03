@@ -507,6 +507,13 @@ function ComfyLauncher({ settings, setSettings, notify, recheck, comfyUp }) {
   async function useFound(file) {
     setSettings(await window.ivstudio.settings.set({ comfyLauncher: file }))
   }
+  async function chooseFolder() {
+    try {
+      if (await window.ivstudio.comfy.chooseFolder()) setSettings(await window.ivstudio.settings.get())
+    } catch (err) {
+      notify(err.message)
+    }
+  }
   async function autoStart(on) {
     setSettings(await window.ivstudio.settings.set({ comfyAutoStart: on }))
   }
@@ -515,6 +522,26 @@ function ComfyLauncher({ settings, setSettings, notify, recheck, comfyUp }) {
   return (
     <div className="comfy-launcher">
       <div className="row">
+        <span className="row-label">ComfyUI folder</span>
+        <span className="launcher-path small" title={l.folder || ''}>{l.folder || 'Not set'}</span>
+        <button className="btn btn-small" onClick={chooseFolder}>
+          Choose folder…
+        </button>
+      </div>
+      {l.folder && l.inFolder.length > 0 && (
+        <div className="row">
+          <span className="row-label">Start file</span>
+          <select value={l.inFolder.some((f) => f.path === l.using) ? l.using : ''} onChange={(e) => useFound(e.target.value)}>
+            {!l.inFolder.some((f) => f.path === l.using) && <option value="">(another launcher, below)</option>}
+            {l.inFolder.map((f) => (
+              <option key={f.path} value={f.path}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div className="row">
         <span className="row-label">Start it with</span>
         <span className="launcher-path small" title={l.using || ''}>{l.using || 'No launcher found'}</span>
         <button className="btn btn-small" onClick={choose}>
@@ -522,7 +549,7 @@ function ComfyLauncher({ settings, setSettings, notify, recheck, comfyUp }) {
         </button>
         {!comfyUp && <StartComfy notify={notify} recheck={recheck} />}
       </div>
-      {!l.chosen && l.found.length > 1 && (
+      {!l.chosen && !l.folder && l.found.length > 1 && (
         <p className="small dim">
           Found on this PC:{' '}
           {l.found.slice(1, 5).map((f, i) => (
