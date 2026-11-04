@@ -147,6 +147,13 @@ export const TIPS_FOR_ART = { create: 'create', shots: 'shots', projects: 'proje
 // Learn page (and a dot on its sidebar item) shows the current version's once, until it's been seen.
 export const NEWS = [
   {
+    version: '0.2.11',
+    items: [
+      { card: 'startcomfy', text: 'Settings → Setup installs every node pack IV Studio uses into your ComfyUI with one click, at the versions it’s tested with. Restart ComfyUI afterwards.' },
+      { card: 'startcomfy', text: 'Setup and renders accept other versions of the H3 models, like the ones ComfyUI’s own H3 templates download, so you don’t download them twice.' }
+    ]
+  },
+  {
     version: '0.2.10',
     items: [{ card: 'writer', text: 'Use Ollama from another container or PC: Settings → Prompt writer → Ollama address (or OLLAMA_HOST).' }]
   },
