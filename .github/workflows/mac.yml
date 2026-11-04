@@ -58,7 +58,8 @@ jobs:
             ci-out/
           if-no-files-found: warn
 
-  # One latest-mac.yml listing both architectures, so each Mac finds its own version.
+  # One latest-mac.yml listing both architectures, so each Mac finds its own version. (Each artifact keeps its
+  # dist/ folder, so the files land in mac/dist.)
   release:
     needs: app
     if: inputs.release != ''
@@ -70,13 +71,13 @@ jobs:
           pattern: iv-studio-mac-*
           merge-multiple: true
       - name: Merge update files
-        working-directory: mac
+        working-directory: mac/dist
         run: |
           awk '/^files:/{f=1;next} /^path:/{f=0} f' latest-mac-x64.yml > x64-files.txt
           awk -v extra="$(cat x64-files.txt)" '/^path:/{print extra} {print}' latest-mac-arm64.yml > latest-mac.yml
           cat latest-mac.yml
       - name: Add to the release
-        working-directory: mac
+        working-directory: mac/dist
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
