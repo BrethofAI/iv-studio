@@ -21,6 +21,39 @@ const FFMPEG = unpacked(ffmpegStatic.ffmpegPath)
 const FFPROBE = unpacked(ffmpegStatic.ffprobePath)
 
 export const OLLAMA_URL = 'http://127.0.0.1:11434'
+
+// Where Ollama is: Settings → Prompt writer → Ollama address, else OLLAMA_HOST (Ollama's own variable), else this PC.
+// Main and the MCP server point ollamaSource at their settings. An Ollama elsewhere (another container or PC) isn't
+// started by IV Studio, and isn't sent to the CPU while ComfyUI renders, since it doesn't share this GPU.
+let ollamaSource = () => ''
+export const setOllamaSource = (fn) => (ollamaSource = fn)
+export function normalizeOllamaUrl(value) {
+  let v = String(value || '').trim()
+  if (!v) return ''
+  if (!/^https?:\/\//i.test(v)) v = `http://${v}`
+  const u = new URL(v)
+  if (u.hostname === '0.0.0.0') u.hostname = '127.0.0.1'
+  if (!u.port && !/^https:/i.test(v)) u.port = '11434'
+  return `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, '')}`
+}
+export function ollamaUrl(env = process.env) {
+  for (const v of [ollamaSource(), env.OLLAMA_HOST]) {
+    try {
+      const u = normalizeOllamaUrl(v)
+      if (u) return u
+    } catch {}
+  }
+  return OLLAMA_URL
+}
+export function ollamaIsLocal(url = ollamaUrl()) {
+  try {
+    return ['localhost', '127.0.0.1', '[::1]', '::1'].includes(new URL(url).hostname)
+  } catch {
+    return false
+  }
+}
+// Ollama options that keep the writer off the GPU while ComfyUI renders on this PC.
+export const cpuOptions = (cpu) => (cpu && ollamaIsLocal() ? { num_gpu: 0 } : {})
 export const DEFAULT_LOCAL_MODEL = 'huihui_ai/qwen3-vl-abliterated:8b-instruct'
 export const CONTEXT_IR_PRICE = 'about $0.02 a prompt ($0.05 with first/last frames, $0.06–0.11 with reference media)'
 
@@ -248,12 +281,15 @@ export function systemPrompt({ mode = 'text', seconds = 5, character, sequence =
 
 // ---------- local (Ollama) ----------
 export async function ollamaStatus() {
+  const url = ollamaUrl()
+  const local = ollamaIsLocal(url)
   try {
-    const r = await fetch(`${OLLAMA_URL}/api/tags`, { signal: AbortSignal.timeout(2500) })
+    const r = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(2500) })
     const { models = [] } = await r.json()
-    return { running: true, installed: ollamaExe() != null, models: models.map((m) => ({ name: m.name, size: m.size, vision: /vl|vision|llava|gemma3/i.test(m.name) })) }
+    return { url, local, running: true, installed: true, models: models.map((m) => ({ name: m.name, size: m.size, vision: /vl|vision|llava|gemma3/i.test(m.name) })) }
   } catch {
-    return { running: false, installed: ollamaExe() != null, models: [] }
+    // An Ollama elsewhere counts as installed: IV Studio can't see or start it, only reach it.
+    return { url, local, running: false, installed: !local || ollamaExe() != null, models: [] }
   }
 }
 
@@ -266,6 +302,7 @@ function ollamaExe() {
 // Starts Ollama's server if it is installed but not running, and waits for it.
 export async function ensureOllama() {
   if ((await ollamaStatus()).running) return true
+  if (!ollamaIsLocal()) throw new Error(`Ollama isn't answering at ${ollamaUrl()}. Check the address in Settings → Prompt writer, and that Ollama listens there (OLLAMA_HOST=0.0.0.0).`)
   const exe = ollamaExe()
   if (!exe) throw new Error('Ollama is not installed. Install it from ollama.com, or use MiniMax Context IR.')
   spawn(exe, ['serve'], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
@@ -475,10 +512,10 @@ export async function writeLocal({ idea, mode = 'text', seconds = 5, character, 
     message.content += `\n\n${lookRule(mode)}\n${req.shown.map((s, i) => `Image ${i + 1}: ${s.label}`).join('\n')}`
   }
   const chat = async (messages, tries = 2) => {
-    const r = await fetch(`${OLLAMA_URL}/api/chat`, {
+    const r = await fetch(`${ollamaUrl()}/api/chat`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: name, stream: false, format: req.schema, keep_alive: 0, options: { temperature: 0.6, num_ctx: guide ? (guide.ref ? 24576 : 16384) : 8192, num_predict: 6000, ...(cpu ? { num_gpu: 0 } : {}) }, messages: [{ role: 'system', content: req.system }, ...messages] }),
+      body: JSON.stringify({ model: name, stream: false, format: req.schema, keep_alive: 0, options: { temperature: 0.6, num_ctx: guide ? (guide.ref ? 24576 : 16384) : 8192, num_predict: 6000, ...cpuOptions(cpu) }, messages: [{ role: 'system', content: req.system }, ...messages] }),
       signal: AbortSignal.timeout(600000)
     })
     if (!r.ok) throw new Error(`Ollama: ${(await r.text()).slice(0, 300)}`)
@@ -526,10 +563,10 @@ export async function ollamaJson({ system, user, schema, model, cpu = false, ctx
   const name = model || DEFAULT_LOCAL_MODEL
   const status = await ollamaStatus()
   if (!status.models.some((m) => m.name === name)) throw new Error(`The writer model ${name} isn't in Ollama yet. Install it in Settings → Prompt writer.`)
-  const r = await fetch(`${OLLAMA_URL}/api/chat`, {
+  const r = await fetch(`${ollamaUrl()}/api/chat`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ model: name, stream: false, format: schema, keep_alive: 0, options: { temperature, num_ctx: ctx, ...(cpu ? { num_gpu: 0 } : {}) }, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }),
+    body: JSON.stringify({ model: name, stream: false, format: schema, keep_alive: 0, options: { temperature, num_ctx: ctx, ...cpuOptions(cpu) }, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }),
     signal: AbortSignal.timeout(900000)
   })
   if (!r.ok) throw new Error(`Ollama: ${(await r.text()).slice(0, 300)}`)
@@ -546,10 +583,10 @@ TASK: Split the story into exactly ${shots} consecutive shots of ${seconds} seco
   if (engine !== 'local') list = (await harnessJson({ engine, model, system: sys, user: `Story: ${withName(story, character)}\n\nAnswer with the JSON object only.`, schema, timeoutMs: 600000 })).prompts
   else {
     await ensureOllama()
-    const r = await fetch(`${OLLAMA_URL}/api/chat`, {
+    const r = await fetch(`${ollamaUrl()}/api/chat`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: model || DEFAULT_LOCAL_MODEL, stream: false, format: schema, keep_alive: 0, options: { temperature: 0.6, num_ctx: 16384, ...(cpu ? { num_gpu: 0 } : {}) }, messages: [{ role: 'system', content: sys }, { role: 'user', content: `Story: ${withName(story, character)}` }] }),
+      body: JSON.stringify({ model: model || DEFAULT_LOCAL_MODEL, stream: false, format: schema, keep_alive: 0, options: { temperature: 0.6, num_ctx: 16384, ...cpuOptions(cpu) }, messages: [{ role: 'system', content: sys }, { role: 'user', content: `Story: ${withName(story, character)}` }] }),
       signal: AbortSignal.timeout(600000)
     })
     if (!r.ok) throw new Error(`Ollama: ${(await r.text()).slice(0, 300)}`)
@@ -561,7 +598,7 @@ TASK: Split the story into exactly ${shots} consecutive shots of ${seconds} seco
 
 export async function pullModel(name, onProgress) {
   await ensureOllama()
-  const r = await fetch(`${OLLAMA_URL}/api/pull`, { method: 'POST', body: JSON.stringify({ model: name, stream: true }) })
+  const r = await fetch(`${ollamaUrl()}/api/pull`, { method: 'POST', body: JSON.stringify({ model: name, stream: true }) })
   if (!r.ok) throw new Error(`Ollama: ${(await r.text()).slice(0, 300)}`)
   const decoder = new TextDecoder()
   let buf = ''

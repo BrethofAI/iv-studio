@@ -15,6 +15,7 @@ import { blocking, lintPrompt } from '../service/lint'
 import { Ranker } from '../service/ranking'
 import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
+import { setOllamaSource } from '../service/prompter'
 import { CAMERA_MOVES, lineCheck } from '../service/staging'
 import { DIRECTING, DIRECTING_SOURCE } from '../service/directing'
 import { menuMessage, START_MENU } from '../service/startmenu'
@@ -45,6 +46,8 @@ import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
 const BASE = dataDir()
 const INCOGNITO = !!readSettings(BASE).incognito
 const DATA = contentDir(BASE)
+// the writer's Ollama: the address in Settings → Prompt writer, else OLLAMA_HOST, else this PC (prompter.js)
+setOllamaSource(() => readSettings(BASE).ollamaUrl)
 const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(BASE).comfyUrl, models: readSettings(BASE).models })
 const server = new McpServer({ name: 'iv-studio', version: '0.1.0' }, { instructions: INSTRUCTIONS })
 // Where the app puts downloads and exports (Electron's videos folder; this process has no Electron app).

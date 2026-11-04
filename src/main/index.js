@@ -22,7 +22,7 @@ import { initUpdater, updateState } from './updater'
 import { MediaTools } from '../service/media'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { ModelInstaller } from '../service/models'
-import { CONTEXT_IR_PRICE, ollamaStatus, pullModel } from '../service/prompter'
+import { CONTEXT_IR_PRICE, normalizeOllamaUrl, ollamaStatus, pullModel, setOllamaSource } from '../service/prompter'
 import { Studio } from '../service/studio'
 import { Ranker } from '../service/ranking'
 import { Reviewer } from '../service/review'
@@ -71,6 +71,8 @@ const TEST_COPY = !!process.env.IV_STUDIO_USER_DATA
 // Settings and keys live in BASE. Everything made lives in DATA: BASE itself, or BASE\incognito while
 // Incognito is on (see incognitoDir). The switch takes a restart, so one run never mixes the two.
 const BASE = process.env.IV_STUDIO_DATA || dataDir()
+// the writer's Ollama: Settings → Prompt writer → Ollama address (prompter.js)
+setOllamaSource(() => readSettings(BASE).ollamaUrl)
 const INCOGNITO = !!readSettings(BASE).incognito
 const DATA = INCOGNITO ? incognitoDir(BASE) : BASE
 // Downloads and exports: Videos\IV Studio, or a folder inside the Incognito data
@@ -867,6 +869,13 @@ app.whenReady().then(() => {
   handle('prompts:pull', (model) => pullModel(model, (ev) => send('prompts:pull', { model, ...ev })))
   handle('settings:set', (patch) => {
     const { comfyApiKey, cloudToken, civitaiKey, cloud, target, cloudProvider, runpod, runpodKey, runpodToken, ...safe } = patch || {}
+    if ('ollamaUrl' in safe) {
+      try {
+        safe.ollamaUrl = normalizeOllamaUrl(safe.ollamaUrl)
+      } catch {
+        throw new Error('That isn’t an address. Use host:port, like 192.168.1.20:11434 or http://ollama:11434.')
+      }
+    }
     const s = publicSettings(writeSettings(safe, BASE))
     if ('comfyUrl' in (patch || {})) makeStudio()
     if ('models' in (patch || {})) studio.models = s.models || {}

@@ -109,6 +109,31 @@ function HarnessWriter({ engine, settings, harness, save }) {
   )
 }
 
+// Where Ollama is: empty means OLLAMA_HOST or this PC (prompter.js). An Ollama in another container or on another
+// PC is only reached, never started.
+function OllamaAddress({ settings, status, save }) {
+  const [addr, setAddr] = useState(settings.ollamaUrl || '')
+  useEffect(() => setAddr(settings.ollamaUrl || ''), [settings.ollamaUrl])
+  const changed = addr.trim() !== (settings.ollamaUrl || '')
+  return (
+    <>
+      <div className="row">
+        <span className="row-label">Ollama address</span>
+        <div className="key-form">
+          <input value={addr} placeholder={status?.url || 'http://127.0.0.1:11434'} onChange={(e) => setAddr(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && changed && save({ ollamaUrl: addr })} />
+          <button className="btn btn-small" disabled={!changed} onClick={() => save({ ollamaUrl: addr })}>
+            Save
+          </button>
+        </div>
+      </div>
+      <p className="small dim">
+        Leave it empty for Ollama on this PC (or OLLAMA_HOST). For Ollama in another container or on another PC, enter its address, like 192.168.1.20:11434.
+        {status && !status.local && (status.running ? ' Connected.' : ` Not answering at ${status.url}.`)}
+      </p>
+    </>
+  )
+}
+
 // Prompt writer: which engine writes prompts, the free local model, and the Comfy.org key for Context IR.
 // Civitai: the person's own API key (for downloading LoRAs) and the opt-in for mature LoRAs.
 function CivitaiSettings({ settings, setSettings, notify }) {
@@ -306,8 +331,9 @@ function WriterSettings({ settings, setSettings, notify }) {
         ) : engine === 'local' ? (
           <>
             <p className="small dim">
-              A model in Ollama on this PC, with IV Studio's H3 rules. Private and free. It loads only while writing, then frees the GPU for rendering.
+              A model in your own Ollama, with IV Studio's H3 rules. Private and free. It loads only while writing, then frees the GPU for rendering.
             </p>
+            <OllamaAddress settings={settings} status={status} save={save} />
             {!status ? null : !status.installed ? (
               <p className="small pink">
                 Ollama isn't installed.{' '}

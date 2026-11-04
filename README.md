@@ -270,7 +270,8 @@ writer under **Settings → Prompt writer**:
   `huihui_ai/qwen3-vl-abliterated:8b-instruct` (about 6 GB, one click to install), huihui-ai's uncensored
   copy of Qwen3-VL 8B Instruct (Apache-2.0), so it doesn't refuse mature ideas. Any other Ollama model works
   too, including the original `qwen3-vl:8b-instruct`. While ComfyUI is rendering it runs on the CPU, so it
-  never takes H3's VRAM.
+  never takes H3's VRAM. Ollama somewhere else (another container or PC) works too: set **Ollama address**
+  in Settings → Prompt writer (or `OLLAMA_HOST`), like `192.168.1.20:11434` or `http://ollama:11434`.
 
   **It looks before it writes.** Add your references first: the writer is shown your reference pictures,
   two frames of each reference video, your first and last frames, and the last frame of a video you're

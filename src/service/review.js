@@ -13,7 +13,7 @@ import { spawn } from 'node:child_process'
 import { DIRECTING, DIRECTING_SOURCE } from './directing.js'
 import { harnessJson } from './harness.js'
 import { lintPrompt } from './lint.js'
-import { cleanPrompt, DEFAULT_LOCAL_MODEL, ensureOllama, normalizeDialogue, OLLAMA_URL, ollamaStatus } from './prompter.js'
+import { cleanPrompt, cpuOptions, DEFAULT_LOCAL_MODEL, ensureOllama, normalizeDialogue, ollamaStatus, ollamaUrl } from './prompter.js'
 import { spokenLines } from './ranking.js'
 
 export const ISSUE_KINDS = ['identity', 'wardrobe', 'logo', 'anatomy', 'contact', 'space', 'order', 'emotion', 'words', 'sound', 'other']
@@ -212,7 +212,7 @@ export class Reviewer {
     const info = (await ollamaStatus()).models.find((m) => m.name === name)
     if (!info) throw new Error(`The writer model ${name} isn't in Ollama yet. Install it in Settings → Prompt writer.`)
     if (!info.vision) throw new Error(`${name} can't see pictures, so it can't review a take. Choose a vision model, Claude Code or Codex in Settings → Prompt writer.`)
-    const r = await fetch(`${OLLAMA_URL}/api/chat`, {
+    const r = await fetch(`${ollamaUrl()}/api/chat`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -220,7 +220,7 @@ export class Reviewer {
         stream: false,
         format: reviewSchema(),
         keep_alive: 0,
-        options: { temperature: 0.3, num_ctx: 16384, ...((await this.studio().gpuBusy().catch(() => false)) ? { num_gpu: 0 } : {}) },
+        options: { temperature: 0.3, num_ctx: 16384, ...cpuOptions(await this.studio().gpuBusy().catch(() => false)) },
         messages: [
           { role: 'system', content: reviewSystem() },
           { role: 'user', content: `${brief}\n\nThe images attached are frames from the take, in order:\n${list}`, images: images.map((im) => im.data) }
