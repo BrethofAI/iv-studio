@@ -4,6 +4,8 @@ import path from 'node:path'
 
 export function dataDir() {
   if (process.env.IV_STUDIO_DATA) return process.env.IV_STUDIO_DATA
+  // a Mac keeps app data in ~/Library/Application Support (where Electron keeps the window's own)
+  if (process.platform === 'darwin') return path.join(process.env.HOME || '.', 'Library', 'Application Support', 'IV Studio')
   const base = process.env.APPDATA || path.join(process.env.HOME || '.', '.config')
   return path.join(base, 'IV Studio')
 }

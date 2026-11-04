@@ -219,6 +219,7 @@ What's different on a Mac:
 - **Updates:** an unsigned Mac app can't install its own updates, so IV Studio tells you when a new version is out
   (**↓ Get …** at the bottom of the sidebar) and opens its download page; drag the new version over the old one.
 - **Keys** (RunPod, Civitai, Comfy.org) are kept in the macOS Keychain.
+- **Your data** is kept in `~/Library/Application Support/IV Studio`; exported edits go to `Movies/IV Studio`.
 - **ffmpeg** in the Mac app is Martin Riedl's GPL static build of FFmpeg 9.0.2 (the npm package's Mac builds are
   made with `--enable-nonfree` and can't be shared).
 
