@@ -147,6 +147,13 @@ export const TIPS_FOR_ART = { create: 'create', shots: 'shots', projects: 'proje
 // Learn page (and a dot on its sidebar item) shows the current version's once, until it's been seen.
 export const NEWS = [
   {
+    version: '0.3.0',
+    items: [
+      { card: 'replace', text: 'Replace runs on Viggle Remake: swap people into any video, or change the scene in plain words (snow, night, something removed). IV Studio paints a frame of each shot for you to check, writes the prompt and keeps the motion and sound.' },
+      { card: 'replace', text: 'In the editor, right-click a clip → Remake this clip.' }
+    ]
+  },
+  {
     version: '0.2.11',
     items: [
       { card: 'startcomfy', text: 'Settings → Setup installs every node pack IV Studio uses into your ComfyUI with one click, at the versions it’s tested with. Restart ComfyUI afterwards.' },
