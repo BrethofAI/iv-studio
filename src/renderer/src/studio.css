@@ -20,6 +20,9 @@
 .app.mac .engine-badge {
   margin-right: 14px;
 }
+.engine-badge > .mono {
+  white-space: nowrap;
+}
 .engine-badge .dot {
   width: 7px;
   height: 7px;
