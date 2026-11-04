@@ -147,6 +147,10 @@ export const TIPS_FOR_ART = { create: 'create', shots: 'shots', projects: 'proje
 // Learn page (and a dot on its sidebar item) shows the current version's once, until it's been seen.
 export const NEWS = [
   {
+    version: '0.2.10',
+    items: [{ card: 'writer', text: 'Use Ollama from another container or PC: Settings → Prompt writer → Ollama address (or OLLAMA_HOST).' }]
+  },
+  {
     version: '0.2.9',
     items: [{ card: 'text', text: 'Learn opens the IV Studio guide, a step-by-step PDF with every button pointed out. Each page’s ? has it too. Videos are coming soon.' }]
   },
