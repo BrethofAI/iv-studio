@@ -5,8 +5,9 @@ import { useEffect, useState } from 'react'
 const GB = (b) => (b / 1024 ** 3).toFixed(1)
 const EVERY = 4000
 
-export default function SystemMeter() {
+export default function SystemMeter({ notify }) {
   const [st, setSt] = useState(null)
+  const [freeing, setFreeing] = useState(false)
   useEffect(() => {
     let live = true
     const read = () => document.visibilityState === 'visible' && window.ivstudio.system.stats().then((s) => live && setSt(s), () => {})
@@ -17,6 +18,22 @@ export default function SystemMeter() {
       clearInterval(t)
     }
   }, [])
+  // Free memory: what IV Studio and ComfyUI hold, let go of now (ComfyUI waits for a running render to finish)
+  async function free() {
+    setFreeing(true)
+    try {
+      const r = await window.ivstudio.system.free()
+      const gb = (a, b) => (a != null && b != null ? Math.max(0, (a - b) / 1024 ** 3) : null)
+      const v = gb(r.before.vram, r.after.vram)
+      const m = gb(r.before.ram, r.after.ram)
+      notify?.(r.busy ? 'A render is running: ComfyUI frees its memory when it finishes.' : `Freed ${v != null ? `${v.toFixed(1)} GB of GPU memory` : 'GPU memory'}${m != null && m >= 0.1 ? ` and ${m.toFixed(1)} GB of RAM` : ''}.`, 'info')
+      window.ivstudio.system.stats().then(setSt, () => {})
+    } catch (err) {
+      notify?.(err.message)
+    } finally {
+      setFreeing(false)
+    }
+  }
   if (!st) return null
   const parts = []
   if (st.gpu) parts.push({ label: 'GPU', used: st.gpu.total - st.gpu.free, total: st.gpu.total })
@@ -35,6 +52,9 @@ export default function SystemMeter() {
           </span>
         )
       })}
+      <button className="system-free" disabled={freeing} onClick={free} title="Free memory: ComfyUI unloads its models (after a running render finishes), IV Studio's voice engine stops and Ollama lets go of the writer. The next render loads what it needs again.">
+        {freeing ? 'Freeing…' : 'Free'}
+      </button>
     </span>
   )
 }

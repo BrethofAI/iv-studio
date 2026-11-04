@@ -6206,3 +6206,47 @@ button.nav-update:hover {
   border: 1px dashed var(--line);
   border-radius: 6px;
 }
+
+.system-free {
+  margin-left: 6px;
+  padding: 1px 8px;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cream);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.system-free:hover:not(:disabled) {
+  border-color: var(--pink);
+}
+.system-free:disabled {
+  opacity: 0.6;
+}
+
+/* Comfy Cloud: what works there */
+.cc-survey {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.cc-row {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+.cc-mark {
+  font-weight: 700;
+  text-align: center;
+}
+.cc-mark.ok {
+  color: #6fd08c;
+}
+.cc-mark.no {
+  opacity: 0.5;
+}

@@ -55,7 +55,9 @@ export async function checkSetup({ comfy, template, manifest, characters, chosen
 
   const gpu = stats.devices?.find((d) => d.type === 'cuda') || stats.devices?.[0]
   const vramGb = gpu ? gpu.vram_total / 1024 ** 3 : 0
-  items.push({
+  // Comfy Cloud reports no devices: it runs each job on one of Comfy's own GPUs
+  if (comfy.hosted) items.push({ id: 'gpu', label: 'GPU', status: 'ok', detail: `Comfy Cloud's GPUs${stats.system?.cloud_version ? ` · cloud ${stats.system.cloud_version}` : ''}` })
+  else items.push({
     id: 'gpu',
     label: 'GPU',
     status: !gpu || gpu.type !== 'cuda' ? 'missing' : vramGb < 15 ? 'warn' : 'ok',

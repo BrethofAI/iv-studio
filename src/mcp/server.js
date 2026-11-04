@@ -15,7 +15,7 @@ import { blocking, lintPrompt } from '../service/lint'
 import { Ranker } from '../service/ranking'
 import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
-import { setOllamaSource } from '../service/prompter'
+import { setOllamaSource, unloadOllama } from '../service/prompter'
 import { CAMERA_MOVES, lineCheck } from '../service/staging'
 import { DIRECTING, DIRECTING_SOURCE } from '../service/directing'
 import { menuMessage, START_MENU } from '../service/startmenu'
@@ -897,6 +897,13 @@ tool('delete_music', "Delete a song and its file in IV Studio's music folder (Co
 const images = new Images({ studio, dataDir: DATA })
 remake.images = images
 remake.faces = shinobi
+tool('free_memory', "Clear the GPU and RAM now: ComfyUI unloads its models (between prompts; a running render keeps its memory until it finishes), this server's voice engine stops and the prompt writer's Ollama models unload. The next job loads what it needs. Use it when the person asks, or before a big job on a crowded GPU.", {}, async () => {
+  await studio.comfy.freeMemory()
+  await voices.release()
+  const ollama = await unloadOllama().catch(() => [])
+  const q = await studio.comfy.queue().catch(() => null)
+  return { comfyui: 'asked to unload', voiceEngine: 'stopped', ollama, renderRunning: !!q?.queue_running?.length }
+})
 tool('list_image_models', `The image models on this PC's ComfyUI, by family: ${IMAGE_FAMILIES.map((f) => f.label).join(', ')}. Each family lists its checkpoints (pass one as make_image model), whether it is ready (and what's missing), whether it can edit, and its licence.`, {}, () => images.status())
 tool('make_image', "Make pictures on this PC (free, local). mode generate: from the prompt. mode edit: change refs (local picture paths) with the prompt as the instruction; only families with edit true can. loras: the family's LoRAs (list_loras, model-only). Returns the set at once; follow with get_image until status is success, then use its files (use one as a shot's first frame: generate_previews mode frames with a media picture).", {
   mode: z.enum(['generate', 'edit']).default('generate'),

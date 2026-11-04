@@ -6,12 +6,15 @@ import { cleanFolder, outputsUnder } from './paths.js'
 export class Comfy {
   // token: a cloud ComfyUI sits behind IV Studio's gate (resources/cloud/gate.py), which wants it as a
   // Bearer header. A local ComfyUI has none.
+  // apiKey: Comfy Cloud (cloud.comfy.org), Comfy's own hosted ComfyUI: the person's API key from
+  // platform.comfy.org, sent as X-API-Key, with url COMFY_CLOUD (its routes are ComfyUI's under /api).
   // folders: where in ComfyUI's output what it saves goes, and where in input what it uploads goes
   // (Settings -> Folders; see comfyFolders). '' = as the graph says.
-  constructor(url = 'http://127.0.0.1:8188', clientId = 'iv-studio', token = null) {
+  constructor(url = 'http://127.0.0.1:8188', clientId = 'iv-studio', token = null, apiKey = null) {
     this.url = url.replace(/\/$/, '')
     this.clientId = clientId
     this.token = token
+    this.apiKey = apiKey
     this.folders = { output: '', input: '' }
     // RunPod (runpod.js): async () => the address of a pod started because the last one shut itself off,
     // or null when the current one is fine. Called once when a request can't reach the cloud.
@@ -24,17 +27,22 @@ export class Comfy {
 
   // The model names to swap into a graph, asked for again after a minute (the person may add files meanwhile).
   async filesFor() {
-    if (this.remote || !this.fileMapper) return {}
+    if ((this.remote && !this.hosted) || !this.fileMapper) return {}
     if (!this.fileMap || Date.now() - this.fileMap.at > 60000) this.fileMap = { at: Date.now(), map: await this.fileMapper().catch(() => ({})) }
     return this.fileMap.map
   }
 
   get remote() {
-    return !!this.token
+    return !!(this.token || this.apiKey)
+  }
+
+  // Comfy Cloud: always on and billed per run, so asking it what it has costs nothing (unlike waking a GPU of our own)
+  get hosted() {
+    return !!this.apiKey
   }
 
   headers(extra = {}) {
-    return { ...extra, ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) }
+    return { ...extra, ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}), ...(this.apiKey ? { 'X-API-Key': this.apiKey } : {}) }
   }
 
   async req(route, opts = {}) {
@@ -75,6 +83,7 @@ export class Comfy {
     } catch (err) {
       if (err.name === 'AbortError') throw new Error(`ComfyUI did not answer ${route} within ${timeout / 1000} s`)
       if (err.cause?.code === 'ECONNREFUSED') throw new Error(`ComfyUI is not running at ${this.url}`)
+      if (this.hosted && COMFY_CLOUD_ERRORS[err.status]) throw Object.assign(new Error(COMFY_CLOUD_ERRORS[err.status]), { status: err.status })
       if (err.status === 503 && this.remote) throw Object.assign(new Error('The cloud GPU is still starting up.'), { status: 503, starting: true })
       throw err
     } finally {
@@ -84,7 +93,8 @@ export class Comfy {
 
   systemStats = () => this.req('/system_stats', { timeout: 5000 })
   queue = () => this.req('/queue')
-  history = (id) => this.req(`/history/${id}`)
+  // Comfy Cloud keeps ComfyUI's history shape under history_v2 (its /jobs is the newer form)
+  history = (id) => this.req(this.hosted ? `/history_v2/${id}` : `/history/${id}`)
   objectInfo = (cls) => this.req(cls ? `/object_info/${encodeURIComponent(cls)}` : '/object_info', { timeout: 60000 })
 
   // front: put it ahead of waiting renders (used for quick jobs such as writing a prompt).
@@ -117,6 +127,7 @@ export class Comfy {
   // Asks ComfyUI to unload its models and free memory. ComfyUI does it between prompts, never inside one,
   // so nothing running is disturbed; the next prompt just loads what it needs.
   async freeMemory() {
+    if (this.hosted) return // Comfy Cloud manages its own GPUs
     await this.req('/free', { method: 'POST', json: { unload_models: true, free_memory: true } })
   }
 
@@ -138,6 +149,14 @@ export class Comfy {
     const q = new URLSearchParams({ filename: file.filename, subfolder: file.subfolder || '', type: file.type || 'output' })
     return `${this.url}/view?${q}`
   }
+}
+
+export const COMFY_CLOUD = 'https://cloud.comfy.org/api'
+// What Comfy Cloud's own error codes mean, in words
+export const COMFY_CLOUD_ERRORS = {
+  401: 'Comfy Cloud refused the API key. Make a new one at platform.comfy.org and paste it on the Cloud page.',
+  402: 'Your Comfy Cloud credits have run out. Add credits at comfy.org.',
+  429: 'Comfy Cloud’s API needs an active paid subscription (comfy.org/cloud/pricing).'
 }
 
 function summariseNodeErrors(errs) {

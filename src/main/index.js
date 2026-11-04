@@ -22,7 +22,7 @@ import { initUpdater, updateState } from './updater'
 import { MediaTools } from '../service/media'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { ModelInstaller } from '../service/models'
-import { CONTEXT_IR_PRICE, normalizeOllamaUrl, ollamaStatus, pullModel, setOllamaSource } from '../service/prompter'
+import { CONTEXT_IR_PRICE, normalizeOllamaUrl, ollamaStatus, pullModel, setOllamaSource, unloadOllama } from '../service/prompter'
 import { Studio } from '../service/studio'
 import { Ranker } from '../service/ranking'
 import { Reviewer } from '../service/review'
@@ -37,6 +37,7 @@ import { ACE_KEYS, Music, MUSIC_DEFAULTS, MUSIC_ENGINES } from '../service/music
 import { Images } from '../service/images'
 import { Civitai, CIVITAI_SITES, LORA_SORTS, LORA_TAGS } from '../service/civitai'
 import { Comfy } from '../service/comfy'
+import { checkKey as checkComfyCloudKey, COMFY_CLOUD, summarise as summariseComfyCloud } from '../service/comfycloud'
 
 if (process.env.IV_STUDIO_USER_DATA) app.setPath('userData', process.env.IV_STUDIO_USER_DATA)
 if (!app.requestSingleInstanceLock()) app.quit()
@@ -110,12 +111,19 @@ const unseal = (enc) => {
   }
 }
 
+// Comfy Cloud takes the person's Comfy API key: its own, else the Comfy.org key saved for the paid prompt writer
+// (both come from platform.comfy.org).
+const comfyCloudKey = (s = readSettings(BASE)) => unseal(s.comfyCloudKey) || unseal(s.comfyApiKey)
+
 function makeStudio() {
   stopWatch?.()
   const s = readSettings(BASE)
   const onRunPod = s.target === 'cloud' && s.cloudProvider === 'runpod'
+  const onComfyCloud = s.target === 'cloud' && s.cloudProvider === 'comfycloud'
   // a RunPod pod's address changes with every pod; until one is up the waker (below) starts one on first use
-  const cloud = onRunPod
+  const cloud = onComfyCloud
+    ? { comfyUrl: COMFY_CLOUD, comfyApiKey: comfyCloudKey(s) }
+    : onRunPod
     ? { comfyUrl: s.runpod?.url || 'https://iv-studio-pod-asleep.proxy.runpod.net', comfyToken: unseal(s.runpodToken) }
     : s.target === 'cloud' && s.cloud?.url
       ? { comfyUrl: s.cloud.url, comfyToken: unseal(s.cloudToken) }
@@ -302,7 +310,7 @@ app.whenReady().then(() => {
   handle('app:info', () => ({ version: app.getVersion(), platform: process.platform, dataDir: DATA, mcp: mcpCommand(), testCopy: TEST_COPY, incognito: INCOGNITO, links }))
   // The window never sees the Comfy.org or Civitai key, only whether one is saved.
   const publicSettings = (s) => {
-    const { comfyApiKey, cloudToken, civitaiKey, runpodKey, runpodToken, ...rest } = s
+    const { comfyApiKey, cloudToken, civitaiKey, runpodKey, runpodToken, comfyCloudKey: _ck, ...rest } = s
     return { ...rest, hasComfyKey: !!comfyApiKey, hasCloudToken: !!cloudToken, hasCivitaiKey: !!civitaiKey, hasRunpodKey: !!runpodKey }
   }
   const comfyKey = () => unseal(readSettings(BASE).comfyApiKey)
@@ -706,9 +714,10 @@ app.whenReady().then(() => {
     return {
       provider: s.cloudProvider || 'modal',
       toolkit: cloud.toolkitReady(),
-      workspace: s.cloudProvider === 'runpod' ? null : await cloud.workspace(),
+      workspace: s.cloudProvider === 'runpod' || s.cloudProvider === 'comfycloud' ? null : await cloud.workspace(),
       cloud: s.cloud,
       runpod: { ...rp, hasKey: !!s.runpodKey, ready: !!(rp.modelsAt && s.runpodToken) },
+      comfycloud: { ...(s.comfycloud || {}), hasKey: !!(s.comfyCloudKey || s.comfyApiKey), ownKey: !!s.comfyCloudKey },
       target: s.target,
       gpus: GPUS,
       runpodGpus: RUNPOD_GPUS,
@@ -718,8 +727,31 @@ app.whenReady().then(() => {
   })
   handle('cloud:provider', (p) => {
     if (readSettings(BASE).target === 'cloud') throw new Error('Switch rendering to My PC first.')
-    writeSettings({ cloudProvider: p === 'runpod' ? 'runpod' : 'modal' }, BASE)
+    writeSettings({ cloudProvider: ['runpod', 'comfycloud'].includes(p) ? p : 'modal' }, BASE)
     return p
+  })
+  // ---------- Comfy Cloud (comfycloud.js): Comfy's hosted ComfyUI, on the person's Comfy account ----------
+  handle('cloud:comfyCloudKey', async (key) => {
+    const k = String(key || '').trim()
+    if (!k) return (writeSettings({ comfyCloudKey: null, comfycloud: null }, BASE), { hasKey: false })
+    if (!keysSafe()) throw new Error(KEY_STORE_MISSING)
+    await checkComfyCloudKey(k) // a wrong key, or one without an active plan, is refused before it's kept
+    writeSettings({ comfyCloudKey: seal(k) }, BASE)
+    return { hasKey: true }
+  })
+  // What IV Studio can do on Comfy Cloud today: asks it (free: no render runs) and keeps the answer for the page.
+  handle('cloud:comfyCloudCheck', async () => {
+    const key = comfyCloudKey()
+    if (!key) throw new Error('Save your Comfy API key first.')
+    const s = readSettings(BASE)
+    const there = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), models: s.models, comfyUrl: COMFY_CLOUD, comfyApiKey: key })
+    const setup = await there.checkSetup()
+    const reached = setup.items?.[0]?.status === 'ok'
+    const [img, mus] = reached ? await Promise.all([new Images({ studio: there, dataDir: DATA }).status(), new Music({ studio: there, dataDir: DATA }).status()]) : [null, null]
+    const survey = summariseComfyCloud({ setup, images: img, music: mus })
+    if (!survey.reached) throw new Error(survey.error)
+    writeSettings({ comfycloud: { survey, checkedAt: new Date().toISOString() } }, BASE)
+    return survey
   })
   handle('cloud:install', () => cloudTask('installing the cloud tools', () => cloud.installToolkit()))
   handle('cloud:signIn', () => cloudTask('signing in to Modal', async () => (await cloud.signIn(), cloud.workspace())))
@@ -837,8 +869,9 @@ app.whenReady().then(() => {
   )
   handle('cloud:use', (target) => {
     const s = readSettings(BASE)
+    if (target === 'cloud' && s.cloudProvider === 'comfycloud' && !comfyCloudKey(s)) throw new Error('Save your Comfy API key first.')
     if (target === 'cloud' && s.cloudProvider === 'runpod' && !(s.runpod?.modelsAt && s.runpodToken)) throw new Error('Set up RunPod first.')
-    if (target === 'cloud' && s.cloudProvider !== 'runpod' && !(s.cloud?.url && s.cloudToken)) throw new Error('Set up the cloud first.')
+    if (target === 'cloud' && (s.cloudProvider || 'modal') === 'modal' && !(s.cloud?.url && s.cloudToken)) throw new Error('Set up the cloud first.')
     writeSettings({ target: target === 'cloud' ? 'cloud' : 'local' }, BASE)
     makeStudio()
     return target
@@ -846,6 +879,8 @@ app.whenReady().then(() => {
   // What the cloud GPU is doing, for the title-bar meter: the running containers and the chosen GPU's rate.
   handle('cloud:usage', async () => {
     const s = readSettings(BASE)
+    // Comfy Cloud bills per run on the person's Comfy account: no GPU of theirs runs between renders
+    if (provider() === 'comfycloud') return { gpu: 'Comfy Cloud', perHour: 0, running: [], hosted: true }
     if (provider() === 'runpod') {
       const running = s.runpodKey ? await runpod.pods() : []
       const gpu = RUNPOD_GPUS.find((g) => g.id === (running[0]?.gpu || s.runpod?.gpu)) || RUNPOD_GPUS[0]
@@ -858,6 +893,7 @@ app.whenReady().then(() => {
   // Stops the cloud GPU now (the "Shut down GPU" button). A render running there is lost.
   handle('cloud:stop', () => {
     if (cloudBusy) throw new Error(`Still busy: ${cloudBusy}.`)
+    if (provider() === 'comfycloud') throw new Error('Comfy Cloud runs no GPU of yours between renders, so there is nothing to shut down.')
     if (provider() === 'runpod') return runpod.stopAll()
     if (!cloud.toolkitReady()) throw new Error('The cloud tools are not installed.')
     return cloud.stopGpu()
@@ -892,7 +928,7 @@ app.whenReady().then(() => {
   })
   handle('prompts:pull', (model) => pullModel(model, (ev) => send('prompts:pull', { model, ...ev })))
   handle('settings:set', (patch) => {
-    const { comfyApiKey, cloudToken, civitaiKey, cloud, target, cloudProvider, runpod, runpodKey, runpodToken, ...safe } = patch || {}
+    const { comfyApiKey, cloudToken, civitaiKey, cloud, target, cloudProvider, runpod, runpodKey, runpodToken, comfyCloudKey: _ck, comfycloud, ...safe } = patch || {}
     if ('ollamaUrl' in safe) {
       try {
         safe.ollamaUrl = normalizeOllamaUrl(safe.ollamaUrl)
@@ -1037,6 +1073,22 @@ app.whenReady().then(() => {
       ram: { total: os.totalmem(), free: os.freemem() },
       gpu: d ? { name: String(d.name).replace(/^cuda:\d+\s*/, '').replace(/\s*:.*$/, ''), total: d.vram_total, free: d.vram_free, comfyHeld: d.torch_vram_total } : null
     }
+  })
+  // The title bar's Free memory: ComfyUI unloads its models and frees memory (between prompts, so a running render
+  // carries on), IV Studio's voice engine stops, and Ollama lets go of a writer model. Returns what changed.
+  handle('system:free', async () => {
+    const vram = async () => {
+      const d = (await studio.comfy.systemStats().catch(() => null))?.devices?.[0]
+      return d ? d.vram_total - d.vram_free : null
+    }
+    const before = { vram: await vram(), ram: os.totalmem() - os.freemem() }
+    await studio.comfy.freeMemory().catch(() => {})
+    if (readSettings(BASE).target !== 'cloud') await voices.release().catch(() => {})
+    const ollama = await unloadOllama()
+    const busy = !!(await studio.comfy.queue().catch(() => null))?.queue_running?.length
+    await new Promise((r) => setTimeout(r, 1500))
+    const after = { vram: await vram(), ram: os.totalmem() - os.freemem() }
+    return { before, after, ollama, busy }
   })
   // @ mentions: the cast (characters) and places a prompt can name, and the places themselves
   handle('cast:list', () => studio.cast.members())

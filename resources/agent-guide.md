@@ -268,7 +268,9 @@ Real-person LoRAs are never shown. Mature LoRAs appear only if the person turned
 ## Images (Create -> Image)
 
 1. `list_image_models`: the image families on this PC (Flux.2 Klein 9B, Flux 3 Klein, Krea 2, Moss, Qwen Image
-   2.1, Z-Image Turbo), each with its checkpoints, whether it's ready, whether it can edit, and its licence.
+   2.1, Z-Image Turbo, SDXL and its fine-tunes, and MiniMax H3 stills), each with its checkpoints, whether it's
+   ready, whether it can edit, and its licence. An H3 still is one frame of a very short H3 render: the look of
+   the person's H3 shots, with their H3 character LoRAs (put the trigger word in the prompt).
 2. `make_image` with a checkpoint as `model`. mode `generate` makes pictures from the prompt; mode `edit` changes
    `refs` (local picture paths) with the prompt as the instruction, only on families with `edit: true`. Add
    LoRAs of the same family (`loras`), `aspect`, `megapixels`, `count` (1-4) and `seed`. Steps and CFG default

@@ -37,7 +37,7 @@ export const GROUPS = [
     art: 'create',
     video: 't6',
     cards: [
-      { id: 'image', title: 'A picture from words', line: 'Six models, each with its own LoRAs.', to: { page: 'create', create: 'image', mode: 'generate' }, words: 'image still photo flux krea qwen z-image' },
+      { id: 'image', title: 'A picture from words', line: 'Eight model families, each with its own LoRAs.', to: { page: 'create', create: 'image', mode: 'generate' }, words: 'image still photo flux krea qwen z-image sdxl pony illustrious h3 still character' },
       { id: 'image-edit', title: 'Change a picture', line: 'Edit a picture with words.', to: { page: 'create', create: 'image', mode: 'edit' }, words: 'edit photo restyle change' }
     ]
   },
@@ -100,7 +100,7 @@ export const GROUPS = [
       { id: 'library', title: 'Everything you’ve made', line: 'Every version, song and line in one place.', to: { page: 'media' }, words: 'history files library renders', video: 't1' },
       { id: 'incognito', title: 'Private work', line: 'Incognito keeps it apart: the switch in the title bar.', to: { page: 'settings' }, words: 'private incognito hidden' },
       { id: 'startcomfy', title: 'Start ComfyUI for you', line: 'Opens your ComfyUI when IV Studio opens, or with one click. Setup installs the node packs it needs.', to: { page: 'settings' }, words: 'comfyui start launch run open not running folder bat shortcut linux sh custom nodes node packs missing nodes install' },
-      { id: 'cloud', title: 'Render in the cloud', line: 'Your own RunPod or Modal account, with a cost meter.', to: { page: 'cloud' }, words: 'gpu no graphics card modal runpod cloud' },
+      { id: 'cloud', title: 'Render in the cloud', line: 'Your own RunPod or Modal account, or Comfy Cloud.', to: { page: 'cloud' }, words: 'gpu no graphics card modal runpod cloud comfy cloud comfy.org' },
       { id: 'agents', title: 'Let your agent drive', line: 'Claude Code or Codex can do all of this.', to: { page: 'settings' }, words: 'mcp automation agent claude codex' }
     ]
   }
@@ -138,7 +138,7 @@ export const TIPS = {
   loras: { video: 't6', tips: ['Clips play when you hover a card.', 'Downloads need your Civitai key (Settings → Civitai).', 'A LoRA’s card shows its licence and trigger words.'] },
   library: { video: 't1', tips: ['Each shot’s versions sit in one tile; open it to step through them.', 'Use in a shot sends a picture or a sound straight to Create.'] },
   settings: { video: 't8', tips: ['Incognito keeps private work apart from everything else.', 'Settings → Agents connects Claude Code, Codex or any MCP agent.', 'Setup downloads missing models and checks each one.'] },
-  cloud: { video: 't8', tips: ['The meter in the title bar shows the GPU time and cost while you’re on the cloud.', 'Shut down GPU stops it at once; it also stops by itself when idle.'] }
+  cloud: { video: 't8', tips: ['Comfy Cloud needs only a Comfy API key; the Cloud page checks what works there first.', 'The meter in the title bar shows the GPU time and cost while you’re on the cloud.', 'Shut down GPU stops it at once; it also stops by itself when idle.'] }
 }
 // which page's tips a banner shows, by its art
 export const TIPS_FOR_ART = { create: 'create', shots: 'shots', projects: 'projects', edit: 'edit', characters: 'characters', voices: 'audio', lines: 'audio', music: 'audio', workflows: 'workflows', sequences: 'workflows', shinobi: 'workflows', replace: 'workflows', sizzle: 'workflows', loras: 'loras', library: 'library', settings: 'settings', cloud: 'cloud' }
@@ -146,6 +146,14 @@ export const TIPS_FOR_ART = { create: 'create', shots: 'shots', projects: 'proje
 // What's new: the highlights of each version, newest first, each pointing at a Learn card. After an update the
 // Learn page (and a dot on its sidebar item) shows the current version's once, until it's been seen.
 export const NEWS = [
+  {
+    version: '0.3.1',
+    items: [
+      { card: 'image', text: 'Create → Image makes pictures with SDXL (and any SDXL fine-tune) and with MiniMax H3: a still in the look of your shots, starring your H3 characters.' },
+      { card: 'cloud', text: 'Comfy Cloud is a third cloud choice: paste a Comfy API key, and the Cloud page checks what IV Studio can do there.' },
+      { card: 'image', text: 'Free in the title bar clears the GPU and RAM now: ComfyUI’s models, the voice engine and the writer’s model.' }
+    ]
+  },
   {
     version: '0.3.0',
     items: [

@@ -69,14 +69,14 @@ export const seedvr2Batch = (resolution) =>
 
 export class Studio {
   // models: { text, frames, reference, continue, take, retake } -> a UNET name per workflow (Settings).
-  constructor({ dataDir, resourcesDir, comfyUrl, comfyToken = null, outputDir, models = null }) {
+  constructor({ dataDir, resourcesDir, comfyUrl, comfyToken = null, comfyApiKey = null, outputDir, models = null }) {
     this.models = models || {}
     this.dataDir = dataDir
     this.resourcesDir = resourcesDir
     this.template = JSON.parse(fs.readFileSync(path.join(resourcesDir, 'workflows', 'iv_studio_api.json'), 'utf8'))
     this.meta = JSON.parse(fs.readFileSync(path.join(resourcesDir, 'workflows', 'iv_studio_api.groups.json'), 'utf8'))
     this.manifest = JSON.parse(fs.readFileSync(path.join(resourcesDir, 'models.json'), 'utf8'))
-    this.comfy = new Comfy(comfyUrl, `iv-studio-${randomUUID().slice(0, 8)}`, comfyToken)
+    this.comfy = new Comfy(comfyUrl, `iv-studio-${randomUUID().slice(0, 8)}`, comfyToken, comfyApiKey)
     this.comfy.fileMapper = () => this.modelFiles()
     this.outputDir = outputDir || null
     this.progress = new Map() // promptId -> {value, max, node}
@@ -168,10 +168,10 @@ export class Studio {
       result = await checkSetup({ comfy: this.comfy, template: this.template, manifest: this.manifest, characters: this.characters(), chosen: this.models })
       this.comfy.fileMap = null
     } catch (err) {
-      return { ready: false, items: [{ id: 'comfyui', label: 'ComfyUI', status: 'missing', detail: err.message }], remote: this.comfy.remote }
+      return { ready: false, items: [{ id: 'comfyui', label: 'ComfyUI', status: 'missing', detail: err.message }], remote: this.comfy.remote, hosted: this.comfy.hosted }
     }
     if (result.items[0]?.status === 'ok') result.caps = await this.capabilities(true).catch(() => null)
-    return { ...result, remote: this.comfy.remote }
+    return { ...result, remote: this.comfy.remote, hosted: this.comfy.hosted }
   }
 
   // Adds the node packs this ComfyUI is missing (nodepacks.js), at the versions IV Studio is tested with. folder: the

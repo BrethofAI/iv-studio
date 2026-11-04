@@ -183,6 +183,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
     runpodKey: call('cloud:runpodKey'),
     runpodCatalog: call('cloud:runpodCatalog'),
     runpodSetUp: call('cloud:runpodSetUp'),
+    comfyCloudKey: call('cloud:comfyCloudKey'),
+    comfyCloudCheck: call('cloud:comfyCloudCheck'),
     use: call('cloud:use'),
     wake: call('cloud:wake'),
     stop: call('cloud:stop'),
@@ -254,7 +256,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     huntShot: call('sequences:huntShot'),
     finishShot: call('sequences:finishShot')
   },
-  system: { stats: call('system:stats') },
+  system: { stats: call('system:stats'), free: call('system:free') },
   rank: { job: call('rank:job'), learn: call('rank:learn') },
   review: { take: call('review:take') },
   previs: { make: call('previs:make') },

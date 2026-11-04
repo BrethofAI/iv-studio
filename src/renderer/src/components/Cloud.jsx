@@ -37,6 +37,13 @@ export function CloudMeter({ onOpen }) {
     }
   }, [])
   if (!usage) return null
+  if (usage.hosted)
+    return (
+      <button className="mono cloud-meter" onClick={onOpen} title="Rendering on Comfy Cloud: each run is billed to your Comfy account, and nothing runs between renders. Click for the Cloud page.">
+        <span className="cloud-meter-dot" />
+        Comfy Cloud · billed per run
+      </button>
+    )
   const on = usage.running.length > 0
   const ids = new Set(usage.running.map((c) => c.id))
   const seconds = [...seen].reduce((sum, [id, c]) => sum + Math.max(0, ((ids.has(id) ? now : c.last) - c.start) / 1000), 0)
@@ -195,7 +202,94 @@ function RunPodSteps({ st, busy, run, notify, refresh, links }) {
   )
 }
 
-// Cloud mode on the user's own Modal or RunPod account: pick one, set it up, then switch.
+// Comfy Cloud: Comfy's hosted ComfyUI. A key, then a check of what IV Studio can do there (it can't take node packs).
+function ComfyCloudSteps({ st, busy, run, notify, refresh }) {
+  const cc = st.comfycloud || {}
+  const [key, setKey] = useState('')
+  const survey = cc.survey
+  async function saveKey(k) {
+    await run(k ? 'Checking the key' : 'Removing the key', async () => {
+      await window.ivstudio.cloud.comfyCloudKey(k)
+      setKey('')
+      if (k) {
+        notify('Comfy API key saved (encrypted on this PC). Checking what works there…')
+        await window.ivstudio.cloud.comfyCloudCheck()
+      }
+    })
+    refresh()
+  }
+  const mark = (ok) => <span className={`cc-mark ${ok ? 'ok' : 'no'}`}>{ok ? '✓' : '–'}</span>
+  return (
+    <>
+      <Step n={1} title="Comfy account" done={!!cc.hasKey}>
+        {cc.hasKey ? (
+          <p className="small">
+            {cc.ownKey ? 'A Comfy API key is saved (encrypted on this PC).' : 'Using the Comfy.org key you saved for the prompt writer.'}{' '}
+            {cc.ownKey && (
+              <button className="link-btn" disabled={!!busy} onClick={() => saveKey('')}>
+                Remove it
+              </button>
+            )}
+          </p>
+        ) : null}
+        {(!cc.hasKey || !cc.ownKey) && (
+          <>
+            <div className="key-form">
+              <input type="password" value={key} placeholder="Comfy API key (comfyui-…)" onChange={(e) => setKey(e.target.value)} autoComplete="off" />
+              <button className="btn btn-small" disabled={!!busy || !key.trim()} onClick={() => saveKey(key.trim())}>
+                Save
+              </button>
+            </div>
+            <p className="small dim">
+              Comfy Cloud's API needs a paid Comfy Cloud plan.{' '}
+              <button className="link-btn" onClick={() => window.ivstudio.links.open('https://platform.comfy.org/profile/api-keys')}>
+                Make an API key
+              </button>{' '}
+              ·{' '}
+              <button className="link-btn" onClick={() => window.ivstudio.links.open('https://www.comfy.org/cloud/pricing')}>
+                Plans and pricing
+              </button>
+            </p>
+          </>
+        )}
+      </Step>
+      <Step n={2} title="What works there" done={!!survey}>
+        <p className="small dim">Comfy Cloud runs ComfyUI's own nodes and the node packs Comfy chooses, with its own model library. You can't add node packs there, so IV Studio asks it what it has. Asking is free.</p>
+        <button className="btn btn-small" disabled={!!busy || !cc.hasKey} onClick={() => run('Asking Comfy Cloud', () => window.ivstudio.cloud.comfyCloudCheck())}>
+          {survey ? 'Check again' : 'Check what works'}
+        </button>
+        {survey && (
+          <div className="cc-survey">
+            <div className="cc-row">
+              {mark(survey.shots.ready)}
+              <span>
+                <b>Shots</b> <span className="small dim">{survey.shots.note}</span>
+              </span>
+            </div>
+            <div className="cc-row">
+              {mark(survey.pictures.some((p) => p.ready))}
+              <span>
+                <b>Pictures</b>{' '}
+                <span className="small dim">
+                  {survey.pictures.map((p) => `${p.label}: ${p.note}`).join(' · ')}
+                </span>
+              </span>
+            </div>
+            <div className="cc-row">
+              {mark(survey.music.some((m) => m.ready))}
+              <span>
+                <b>Music</b> <span className="small dim">{survey.music.map((m) => `${m.label}: ${m.note}`).join(' · ')}</span>
+              </span>
+            </div>
+            <p className="mono small dim">Checked {new Date(cc.checkedAt).toLocaleString()}</p>
+          </div>
+        )}
+      </Step>
+    </>
+  )
+}
+
+// Cloud mode on the user's own Modal or RunPod account, or on Comfy Cloud: pick one, set it up, then switch.
 export default function Cloud({ notify, recheck, setup, info }) {
   const [st, setSt] = useState(null)
   const [gpu, setGpu] = useState('L40S')
@@ -246,7 +340,7 @@ export default function Cloud({ notify, recheck, setup, info }) {
       if (target === 'cloud') {
         setWake('waking')
         const w = await window.ivstudio.cloud.wake()
-        setWake(`Cloud GPU ready${w.gpu ? ` (${w.gpu.replace(/^cuda:\d+ /, '').replace(/ : \w+$/, '')})` : ''} in ${w.seconds} s.`)
+        setWake(`${st.provider === 'comfycloud' ? 'Comfy Cloud' : 'Cloud GPU'} ready${w.gpu ? ` (${w.gpu.replace(/^cuda:\d+ /, '').replace(/ : \w+$/, '')})` : ''} in ${w.seconds} s.`)
       } else setWake(null)
       await recheck()
     })
@@ -255,15 +349,16 @@ export default function Cloud({ notify, recheck, setup, info }) {
   if (!st) return null
   const chosen = st.gpus.find((g) => g.id === gpu)
   const runpod = st.provider === 'runpod'
-  const setUpDone = runpod ? !!st.runpod?.ready : !!(st.cloud?.url && st.cloud?.modelsAt)
+  const comfyCloud = st.provider === 'comfycloud'
+  const setUpDone = comfyCloud ? !!st.comfycloud?.hasKey : runpod ? !!st.runpod?.ready : !!(st.cloud?.url && st.cloud?.modelsAt)
   const onCloud = st.target === 'cloud'
 
   return (
     <div className="cloud">
       <Hero art="cloud" title="Cloud" kicker="Your own GPU · by the second" />
       <p className="lede">
-        No strong graphics card? Render on a cloud GPU in your own RunPod or Modal account.
-        <span className="lede-small dim">Pick one. Either way the GPU bills by the second only while it’s up, and shuts itself off when you stop. IV Studio sets everything up.</span>
+        No strong graphics card? Render on a cloud GPU in your own RunPod or Modal account, or on Comfy Cloud.
+        <span className="lede-small dim">Pick one. RunPod and Modal bill by the second only while the GPU is up, and it shuts itself off when you stop; IV Studio sets everything up. Comfy Cloud is Comfy’s own ComfyUI, billed per run on your Comfy plan, with only the nodes and models Comfy provides.</span>
       </p>
 
       <div className="cloud-switch">
@@ -271,7 +366,8 @@ export default function Cloud({ notify, recheck, setup, info }) {
         <div className="segmented">
           {[
             ['runpod', 'RunPod'],
-            ['modal', 'Modal']
+            ['modal', 'Modal'],
+            ['comfycloud', 'Comfy Cloud']
           ].map(([id, label]) => (
             <button
               key={id}
@@ -296,11 +392,12 @@ export default function Cloud({ notify, recheck, setup, info }) {
           </button>
         </div>
         <span className="mono small dim">{busy ? `${busy}…` : onCloud ? wake || 'Rendering in the cloud.' : 'Rendering on this PC.'}</span>
-        {setUpDone && <ShutDownGpu notify={notify} className="btn btn-small cloud-stop" />}
+        {setUpDone && !comfyCloud && <ShutDownGpu notify={notify} className="btn btn-small cloud-stop" />}
       </div>
 
+      {comfyCloud && <ComfyCloudSteps st={st} busy={busy} run={run} notify={notify} refresh={refresh} />}
       {runpod && <RunPodSteps st={st} busy={busy} run={run} notify={notify} refresh={refresh} links={info?.links} />}
-      {!runpod && (
+      {!runpod && !comfyCloud && (
         <>
           <Step n={1} title="Cloud tools" done={st.toolkit}>
             <p className="small dim">A private copy of Modal's client in IV Studio's own folder (about 100 MB). Nothing else on your PC changes.</p>
@@ -391,7 +488,7 @@ export default function Cloud({ notify, recheck, setup, info }) {
         </div>
         <div className="group-body">
           <p className="small dim">
-            Everything in Create, Sequences and the prompt writer works the same on Modal and RunPod. The final DLSS clean-up only runs on Windows, so cloud finals use a 2× AI upscale (Real-ESRGAN) and frame interpolation (RIFE, 48/72/120 fps) instead. Finished videos download to Videos\IV Studio when you open them.
+            On Comfy Cloud, what works depends on the nodes and models Comfy offers there (the check above lists it); pictures and music use ComfyUI’s own nodes. Everything in Create, Sequences and the prompt writer works the same on Modal and RunPod. The final DLSS clean-up only runs on Windows, so cloud finals use a 2× AI upscale (Real-ESRGAN) and frame interpolation (RIFE, 48/72/120 fps) instead. Finished videos download to Videos\IV Studio when you open them.
           </p>
         </div>
       </section>

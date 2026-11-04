@@ -44,8 +44,8 @@ cloud. No strong graphics card? Shots can also render on a GPU in your own [RunP
   sharpness, side-by-side Compare, a **Review** that names each problem with its seconds and one fix, and a
   top-down staging board that becomes exact screen directions or a moving grey previs.
 - **Images.** Create switches between **Video** and **Image**: make or edit pictures with six image
-  model families (Flux.2 Klein, Flux 3 Klein, Krea 2, Moss, Qwen Image 2.1 and Z-Image Turbo), then use
-  one as a shot's first frame.
+  model families (Flux.2 Klein, Flux 3 Klein, Krea 2, Moss, Qwen Image 2.1, Z-Image Turbo, SDXL and H3
+  stills with your H3 characters), then use one as a shot's first frame.
 - **LoRAs.** Browse Civitai's MiniMax H3 LoRAs as tall picture cards whose clips play on hover, open one
   for a full-size gallery of its examples, and download it straight into ComfyUI. Your own LoRAs show as
   pictures too, and Create's LoRA tray adds them to a shot with a strength slider.
@@ -76,7 +76,7 @@ cloud. No strong graphics card? Shots can also render on a GPU in your own [RunP
 - **Cloud.** Render shots and sequences on your own RunPod or Modal account instead of your PC, with a running time
   and cost meter in the title bar and a **Shut down GPU** button.
 - **Incognito.** A private space whose work never shows in the normal app.
-- **Agents.** A local MCP server with 143 tools and a start menu gives Claude Code or any MCP client nearly
+- **Agents.** A local MCP server with 147 tools and a start menu gives Claude Code or any MCP client nearly
   everything a person can do in the window.
 - **Updates.** IV Studio updates itself: one click installs a new version and reopens.
 
@@ -321,6 +321,12 @@ the image models you have in ComfyUI:
 | Moss | ✓ | needs a newer ComfyUI | Apache-2.0 |
 | Qwen Image 2.1 | ✓ | ✓ up to three references | Apache-2.0 |
 | Z-Image Turbo | ✓ | ✗ | Apache-2.0 |
+| SDXL (and any SDXL fine-tune: Juggernaut, RealVis, Pony, Illustrious…) | ✓ | ✗ | CreativeML Open RAIL++-M (base); fine-tunes have their own |
+| MiniMax H3 (a still) | ✓ with your H3 character LoRAs | ✗ | MiniMax H3 Community License |
+
+SDXL checkpoints go in ComfyUI's `models/checkpoints`; Setup offers SDXL base 1.0 as an optional download. An
+H3 still is one frame from the middle of a very short H3 render (8 steps with the turbo LoRA), so it has the
+look of your shots and can star your trained characters; it uses the H3 models you already have.
 
 Pick **Generate** or **Edit**; Edit lists only the families that can. Pick a family and one of its
 checkpoints (your fine-tunes are there too), add that family's LoRAs from the same picker as Video's, then
@@ -627,6 +633,10 @@ IV Studio is a front end for your own ComfyUI; every picture, video and song is 
 
 ## Models and the GPU
 
+- **Free** (next to the GPU and RAM readout in the title bar) unloads everything from the GPU and RAM now:
+  ComfyUI's models, IV Studio's voice engine and the prompt writer's Ollama model. A render that's running
+  keeps its memory until it finishes.
+
 - **Settings → Models** picks the main H3 model for each workflow from the ones your ComfyUI has, so a
   fine-tune that suits realism or animation can be used where it fits.
 - **One model family at a time.** Before every job, IV Studio stops its own voice engine and, when the job
@@ -637,7 +647,19 @@ IV Studio is a front end for your own ComfyUI; every picture, video and song is 
 
 No strong graphics card, or want your PC back while it renders? The **Cloud** page renders on a GPU in your
 own [RunPod](https://www.runpod.io) or [Modal](https://modal.com) account instead: your account, billed to
-you by them. Pick one at the top of the page.
+you by them. Or use [Comfy Cloud](https://www.comfy.org/cloud), Comfy's own hosted ComfyUI. Pick one at the
+top of the page.
+
+### On Comfy Cloud
+
+1. **Comfy account.** Paste a Comfy API key from [platform.comfy.org](https://platform.comfy.org/profile/api-keys)
+   (the Comfy.org key you saved for the paid prompt writer works too). Comfy Cloud's API needs a paid Comfy
+   Cloud plan; runs are billed to your Comfy account, and nothing runs between renders.
+2. **What works there.** Comfy Cloud runs ComfyUI's own nodes and a fixed set of node packs that Comfy
+   maintains, with its own model library; you can't install node packs there. So IV Studio asks it (free, no
+   render) and lists what works: pictures and music use ComfyUI's own nodes, while video shots need IV
+   Studio's node packs and run only if Comfy Cloud offers them. Check again any time; Comfy adds models and
+   packs.
 
 ### On RunPod
 
@@ -679,13 +701,15 @@ render wakes it again (about 1 to 3 minutes on Modal, 2 to 5 on RunPod). The Clo
 characters you already have. Finals use a 2× AI upscale (Real-ESRGAN) and RIFE frame interpolation (48, 72
 or 120 fps) in place of DLSS, which needs an NVIDIA card on Windows.
 
-**What still needs a local NVIDIA GPU:** Images, Music, Voices (and **Speak it**), designing a new
+**On Comfy Cloud** the check above decides it: Images and Music run there when Comfy Cloud has their models.
+
+**What still needs a local NVIDIA GPU (on RunPod and Modal):** Images, Music, Voices (and **Speak it**), designing a new
 character's stills and clips, and Replace. LoRAs you download from Civitai go into your local ComfyUI, so
 cloud renders don't see them yet. Training a character always runs on Modal, whichever cloud renders.
 
 ## Agents (MCP)
 
-IV Studio includes a local MCP server (stdio) with 143 tools. It uses the same projects, characters, voices
+IV Studio includes a local MCP server (stdio) with 147 tools. It uses the same projects, characters, voices
 and songs as the window, so Claude Code or any MCP client can render shots and sequences, make pictures,
 speak lines, make music, cut them together and export. **Settings → Agents (MCP)** has the command for your
 install, a message to paste into any agent, and a button that adds the IV Studio skill to Claude Code.

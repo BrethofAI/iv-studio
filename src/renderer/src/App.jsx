@@ -318,7 +318,7 @@ export default function App() {
           <span className="mono">{!setup ? 'Checking ComfyUI' : ready ? 'ComfyUI ready' : `${missing} to fix`}</span>
           {comfyDown && <StartComfy notify={notify} recheck={recheck} className="btn btn-small engine-start" />}
           {setup?.items?.find((i) => i.id === 'gpu') && <span className="mono dim">{setup.items.find((i) => i.id === 'gpu').detail}</span>}
-          {setup?.remote ? <CloudMeter onOpen={() => setPage('cloud')} /> : setup && <SystemMeter />}
+          {setup?.remote ? <CloudMeter onOpen={() => setPage('cloud')} /> : setup && <SystemMeter notify={notify} />}
         </div>
       </header>
       <nav className="nav">

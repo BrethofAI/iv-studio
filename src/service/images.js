@@ -102,6 +102,45 @@ export const IMAGE_FAMILIES = [
     loras: /z[-_ ]?image|\bzit\b/i,
     licence: 'Apache-2.0',
     note: 'Very fast photographic pictures.'
+  },
+  {
+    // one file holds the model, text encoders and VAE (CheckpointLoaderSimple), as ComfyUI's SDXL template loads it;
+    // any SDXL fine-tune in ComfyUI's checkpoints folder counts
+    id: 'sdxl',
+    label: 'SDXL',
+    unet: /(?!)/,
+    checkpoint: /sdxl|sd_xl|[-_ ]xl[-_ .]|xl[-_]?v?\d|\bxl\b|pony|illustrious|noobai|juggernaut|realvis|dreamshaper/i,
+    steps: 30,
+    cfg: 6,
+    sampler: 'dpmpp_2m',
+    scheduler: 'karras',
+    negative: 'blurry, low quality, worst quality, watermark, text, deformed hands',
+    edit: false,
+    noEdit: 'SDXL makes pictures from a prompt. To change a picture, use Flux or Qwen Image.',
+    loras: /sdxl|\bxl\b|[-_]xl[-_.]|pony|illustrious|noob/i,
+    licence: 'CreativeML Open RAIL++-M (SDXL base); fine-tunes have their own',
+    note: 'The classic: thousands of fine-tunes and LoRAs on Civitai.'
+  },
+  {
+    // a frame from a very short MiniMax H3 render (text mode, as a shot's first pass): pictures in the look of your H3
+    // shots, with your H3 character LoRAs. Its text encoder and VAE are H3's own (Setup); the DMAD 4-step LoRA keeps
+    // it at 8 steps.
+    id: 'h3',
+    label: 'MiniMax H3 (a still)',
+    unet: /fl2va/i,
+    te: { type: 'minimax', files: ['qwen3vl_32b_minimax_h3_int4_convrot.safetensors', 'qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors', 'qwen3vl_32b_minimax_h3_int8_convrot.safetensors', 'qwen3vl_32b_minimax_h3_bf16.safetensors'] },
+    vae: ['minimax_h3_video_vae_int8_convrot.safetensors', 'minimax_h3_video_vae_fp16.safetensors'],
+    turbo: /DMAD.*4step/i,
+    steps: 8,
+    cfg: 1,
+    sampler: 'er_sde',
+    scheduler: 'beta',
+    frames: 22,
+    edit: false,
+    noEdit: 'An H3 still comes from a prompt, with your H3 character LoRAs.',
+    loras: /minimax ?h3|\bh3\b|t3ss4|tess|theo/i,
+    licence: 'MiniMax H3 Community License (excludes the EU, UK, South Korea and USA)',
+    note: 'A frame of a very short H3 render: the look and characters of your H3 shots. Slower than the picture models.'
   }
 ]
 
@@ -133,14 +172,50 @@ export function imageSize(aspect, megapixels) {
 }
 
 // The family a checkpoint belongs to, by its name.
-export const familyOfModel = (unet) => IMAGE_FAMILIES.find((f) => f.unet.test(unet)) || null
+export const familyOfModel = (unet) => IMAGE_FAMILIES.find((f) => f.unet.test(unet)) || IMAGE_FAMILIES.find((f) => f.checkpoint?.test(unet)) || null
 
 // Builds the API graph. refs: picture names already in ComfyUI's input folder (Edit).
-export function imageGraph({ family, mode = 'generate', unet, te, vae, loras = [], prompt, negative = '', width, height, count = 1, seed, steps, cfg, refs = [], megapixels = 1, editLora = null, prefix, keepAspect = false }) {
+export function imageGraph({ family, mode = 'generate', unet, te, vae, loras = [], prompt, negative = '', width, height, count = 1, seed, steps, cfg, refs = [], megapixels = 1, editLora = null, turbo = null, prefix, keepAspect = false }) {
   const f = IMAGE_FAMILIES.find((x) => x.id === family)
   const g = {}
   let n = 0
   const add = (class_type, inputs) => ((g[String(++n)] = { class_type, inputs }), String(n))
+  if (family === 'sdxl') {
+    // ComfyUI's SDXL template: the checkpoint, LoRAs on model and text encoder, KSampler, decode
+    const ckpt = add('CheckpointLoaderSimple', { ckpt_name: unet })
+    let model = [ckpt, 0]
+    let clip = [ckpt, 1]
+    for (const l of loras) {
+      const node = add('LoraLoader', { model, clip, lora_name: l.name, strength_model: Number(l.strength ?? 1), strength_clip: Number(l.strength ?? 1) })
+      model = [node, 0]
+      clip = [node, 1]
+    }
+    const pos = [add('CLIPTextEncode', { clip, text: prompt }), 0]
+    const neg = [add('CLIPTextEncode', { clip, text: negative || f.negative }), 0]
+    const latent = [add('EmptyLatentImage', { width, height, batch_size: Math.max(1, Math.min(4, Math.round(count))) }), 0]
+    const out = [add('KSampler', { model, seed, steps, cfg, sampler_name: f.sampler, scheduler: f.scheduler, denoise: 1, positive: pos, negative: neg, latent_image: latent }), 0]
+    add('SaveImage', { images: [add('VAEDecode', { samples: out, vae: [ckpt, 2] }), 0], filename_prefix: prefix })
+    return g
+  }
+  if (family === 'h3') {
+    // IV Studio's text-mode shot, cut short: H3 conditioning and its audio+video latent, the turbo LoRA and the
+    // person's LoRAs, er_sde on a beta schedule; one frame from the middle of each take is kept
+    let model = [add('UNETLoader', { unet_name: unet, weight_dtype: 'default' }), 0]
+    for (const l of [...(turbo ? [{ name: turbo, strength: 1 }] : []), ...loras]) model = [add('LoraLoaderModelOnly', { model, lora_name: l.name, strength_model: Number(l.strength ?? 1) }), 0]
+    const clip = [add('CLIPLoader', { clip_name: te, type: f.te.type, device: 'default' }), 0]
+    const vaeOut = [add('VAELoader', { vae_name: vae }), 0]
+    const cond = add('MiniMaxH3ImageToVideo', { clip, vae: vaeOut, prompt, width, height, length: f.frames })
+    const guider = [add('BasicGuider', { model, conditioning: [cond, 0] }), 0]
+    const sampler = [add('KSamplerSelect', { sampler_name: f.sampler }), 0]
+    const sigmas = [add('BasicScheduler', { model, scheduler: f.scheduler, steps, denoise: 1 }), 0]
+    for (let i = 0; i < Math.max(1, Math.min(4, Math.round(count))); i++) {
+      const out = add('SamplerCustomAdvanced', { noise: [add('RandomNoise', { noise_seed: seed + i * 1000 }), 0], guider, sampler, sigmas, latent_image: [cond, 1] })
+      const video = [add('LTXVSeparateAVLatent', { av_latent: [out, 0] }), 0]
+      const frames = [add('VAEDecode', { samples: video, vae: vaeOut }), 0]
+      add('SaveImage', { images: [add('ImageFromBatch', { image: frames, batch_index: Math.floor(f.frames / 2), length: 1 }), 0], filename_prefix: prefix })
+    }
+    return g
+  }
   const unetNode = add('UNETLoader', { unet_name: unet, weight_dtype: 'default' })
   let model = [unetNode, 0]
   // Krea 2 edits through its identity edit LoRA, first in the chain
@@ -241,7 +316,8 @@ export class Images {
   // What each family can do on this ComfyUI: its checkpoints, the text encoder and VAE found for it, what's
   // missing, and whether it can edit.
   async status() {
-    if (this.studio.comfy.remote) return { remote: true, families: IMAGE_FAMILIES.map((f) => ({ ...strip(f), ready: false, models: [], missing: [] })) }
+    // a GPU of the person's own (Modal, RunPod) has no picture models; Comfy Cloud has its own, read like this PC's
+    if (this.studio.comfy.remote && !this.studio.comfy.hosted) return { remote: true, families: IMAGE_FAMILIES.map((f) => ({ ...strip(f), ready: false, models: [], missing: [] })) }
     let info
     try {
       info = await this.studio.comfy.objectInfo()
@@ -254,7 +330,13 @@ export class Images {
     const loras = comboOptions(info, 'LoraLoaderModelOnly', 'lora_name') || []
     const types = comboOptions(info, 'CLIPLoader', 'type') || []
     const pick = (opts, names) => names.map((n) => opts.find((o) => o.split(/[\\/]/).pop() === n)).find(Boolean) || null
+    const checkpoints = comboOptions(info, 'CheckpointLoaderSimple', 'ckpt_name') || []
     const families = IMAGE_FAMILIES.map((f) => {
+      if (f.checkpoint) {
+        // SDXL-type: the checkpoint is the whole model
+        const models = checkpoints.filter((c) => f.checkpoint.test(c.split(/[\\/]/).pop()))
+        return { ...strip(f), models, te: null, vae: null, editLora: null, ready: models.length > 0, missing: [], edit: false, editNote: f.noEdit }
+      }
       const models = unets.filter((u) => f.unet.test(u) && familyOfModel(u)?.id === f.id)
       const te = pick(clips, f.te.files)
       const vae = pick(vaes, f.vae)
@@ -269,7 +351,14 @@ export class Images {
         editNote = edit ? null : !nodes ? 'Krea 2 edits need the comfyui-krea2edit nodes.' : 'Krea 2 edits need the Krea 2 Identity Edit LoRA (krea2_identity_edit) in ComfyUI’s loras folder.'
       }
       if (f.id === 'flux3' && !info.ReferenceMultiLatent) [edit, editNote] = [false, 'Flux 3 Klein edits need a newer ComfyUI.']
-      return { ...strip(f), models, te, vae, editLora, ready: models.length > 0 && !missing.length, missing, edit: edit && models.length > 0 && !missing.length, editNote }
+      // H3 stills need H3's turbo LoRA and ComfyUI's own H3 nodes
+      let turbo = null
+      if (f.turbo) {
+        turbo = loras.find((l) => f.turbo.test(l.split(/[\\/]/).pop())) || null
+        if (!turbo) missing.push('the DMAD 4-step turbo LoRA (Settings → Setup)')
+        if (!info.MiniMaxH3ImageToVideo || !info.LTXVSeparateAVLatent) missing.push('ComfyUI’s MiniMax H3 nodes (update ComfyUI)')
+      }
+      return { ...strip(f), models, te, vae, editLora, turbo, ready: models.length > 0 && !missing.length, missing, edit: edit && models.length > 0 && !missing.length, editNote }
     })
     return { families, aspects: Object.keys(IMAGE_ASPECTS), defaults: IMAGE_DEFAULTS }
   }
@@ -282,7 +371,7 @@ export class Images {
     const text = String(prompt || '').trim()
     if (!text) throw new Error(mode === 'edit' ? 'Say what to change in the picture.' : 'Describe the picture first.')
     const st = await this.status()
-    if (st.remote) throw new Error('Pictures render on this PC’s ComfyUI. Switch to "This PC" on the Cloud page to make them.')
+    if (st.remote) throw new Error('Pictures render on this PC’s ComfyUI or on Comfy Cloud. Switch on the Cloud page to make them.')
     if (st.error) throw new Error(st.error)
     const fam = st.families.find((f) => f.models.includes(model)) || st.families.find((f) => f.id === familyOfModel(String(model || ''))?.id)
     if (!fam) throw new Error(`"${model}" isn't an image model IV Studio knows. Pick one from list_image_models.`)
@@ -307,7 +396,7 @@ export class Images {
     }
     const id = randomUUID().slice(0, 8)
     const title = String(name || '').trim() || text.split(/[.,\n]/)[0].slice(0, 48)
-    const graph = imageGraph({ family: fam.id, mode, unet: model, te: fam.te, vae: fam.vae, loras: loras.filter((l) => l?.name), prompt: text, negative, width, height, count, seed: s, steps: usedSteps, cfg: usedCfg, refs: uploaded, megapixels: Number(megapixels) || 1, editLora: fam.editLora, keepAspect: keepAspect && mode === 'edit' && ['flux2', 'flux3'].includes(fam.id), prefix: `iv_studio/images/${slug(title)}_${id}` })
+    const graph = imageGraph({ family: fam.id, mode, unet: model, te: fam.te, vae: fam.vae, loras: loras.filter((l) => l?.name), prompt: text, negative, width, height, count, seed: s, steps: usedSteps, cfg: usedCfg, refs: uploaded, megapixels: Number(megapixels) || 1, editLora: fam.editLora, turbo: fam.turbo || null, keepAspect: keepAspect && mode === 'edit' && ['flux2', 'flux3'].includes(fam.id), prefix: `iv_studio/images/${slug(title)}_${id}` })
     const project = this.studio.createProject(`Image · ${title}`, null, null, 'image')
     const job = await this.studio.submitGraph({ kind: `picture:${fam.id}`, graph, projectId: project.id, name: title, plan: { images: true, request: { prompt: text } } })
     const record = { id, name: title, mode, family: fam.id, familyLabel: fam.label, model, prompt: text, negative, loras: loras.filter((l) => l?.name), aspect, megapixels: Number(megapixels) || 1, width: mode === 'edit' ? null : width, height: mode === 'edit' ? null : height, count: Math.max(1, Math.min(4, Math.round(count))), seed: s, steps: usedSteps, cfg: usedCfg, refs, ...(tag ? { tag } : {}), projectId: project.id, jobId: job.id, status: job.status, files: [], createdAt: now() }

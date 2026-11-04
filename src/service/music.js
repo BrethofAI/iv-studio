@@ -96,7 +96,7 @@ export class Music {
 
   // Each engine's models, found on this ComfyUI by file name (the manifest's name or one of its alts).
   async status() {
-    if (this.studio.comfy.remote) return { remote: true, ready: false, engines: MUSIC_ENGINES.map((e) => ({ ...e, ready: false, missing: [] })) }
+    if (this.studio.comfy.remote && !this.studio.comfy.hosted) return { remote: true, ready: false, engines: MUSIC_ENGINES.map((e) => ({ ...e, ready: false, missing: [] })) }
     let info, stats
     try {
       ;[info, stats] = await Promise.all([this.studio.comfy.objectInfo(), this.studio.comfy.systemStats()])

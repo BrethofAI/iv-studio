@@ -300,6 +300,18 @@ function ollamaExe() {
 }
 
 // Starts Ollama's server if it is installed but not running, and waits for it.
+// Unloads whatever Ollama still holds (the title bar's Free memory). Returns the names it unloaded.
+export async function unloadOllama() {
+  try {
+    const r = await fetch(`${ollamaUrl()}/api/ps`, { signal: AbortSignal.timeout(2500) })
+    const { models = [] } = await r.json()
+    for (const m of models) await fetch(`${ollamaUrl()}/api/generate`, { method: 'POST', body: JSON.stringify({ model: m.name, keep_alive: 0 }), signal: AbortSignal.timeout(10000) }).catch(() => {})
+    return models.map((m) => m.name)
+  } catch {
+    return []
+  }
+}
+
 export async function ensureOllama() {
   if ((await ollamaStatus()).running) return true
   if (!ollamaIsLocal()) throw new Error(`Ollama isn't answering at ${ollamaUrl()}. Check the address in Settings → Prompt writer, and that Ollama listens there (OLLAMA_HOST=0.0.0.0).`)
