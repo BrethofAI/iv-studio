@@ -35,6 +35,7 @@ import { TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
 import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS } from '../service/replace'
+import { Remake, REMAKE_KINDS } from '../service/remake'
 import { VOICE_ENGINES, Voices } from '../service/voices'
 import { ACE_KEYS, Music, MUSIC_DEFAULTS, MUSIC_ENGINES } from '../service/music'
 import { IMAGE_ASPECTS, IMAGE_FAMILIES, Images } from '../service/images'
@@ -710,7 +711,7 @@ tool('adopt_checkpoint', 'Save the chosen epoch as a character preset (strength 
 const replace = new Replace({ studio, resourcesDir: resourcesDir(), dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
 const REPLACE_MODES = ['person', 'people', 'people_maxq', 'object', 'mask', 'faces', 'colours']
 tool('replace_check', 'What this ComfyUI still needs for a Replace mode (node packs with links, models to download on the Setup page).', { mode: z.enum(REPLACE_MODES).default('person') }, ({ mode }) => replace.check(mode))
-tool('replace_video', `Swap people or objects in a video; the camera, cuts, motion and soundtrack stay. Modes: person (one picture replaces the main person; settings.role says who, optional), people (1-4 pictures, settings.roles one per picture), people_maxq (exactly 2, one pass per person, better likeness), object (settings.mode change|remove|background, settings.target what SAM tracks such as "hair", settings.changeTo what it becomes, or a picture), mask (a quick preview of what would be redrawn; run it first), faces (redraw small faces from one picture, settings.style photo|mouth), colours (settings.detail -1..1). The video needs a soundtrack. Only use invented characters or people who agreed. Returns a job: poll get_job; the result is the output with kind final.`, {
+tool('replace_video', `The old Replace engine (OpenJutsu masks). For swapping people and changing the scene use remake_paint and remake_render instead; use this for faces and colours. Swap people or objects in a video; the camera, cuts, motion and soundtrack stay. Modes: person (one picture replaces the main person; settings.role says who, optional), people (1-4 pictures, settings.roles one per picture), people_maxq (exactly 2, one pass per person, better likeness), object (settings.mode change|remove|background, settings.target what SAM tracks such as "hair", settings.changeTo what it becomes, or a picture), mask (a quick preview of what would be redrawn; run it first), faces (redraw small faces from one picture, settings.style photo|mouth), colours (settings.detail -1..1). The video needs a soundtrack. Only use invented characters or people who agreed. Returns a job: poll get_job; the result is the output with kind final.`, {
   mode: z.enum(REPLACE_MODES),
   video: z.string().describe('Absolute path of the source video (prepare_media can trim it first)'),
   pictures: z.array(z.string()).default([]).describe('Absolute paths of character or object pictures'),
@@ -734,6 +735,35 @@ tool('replace_video', `Swap people or objects in a video; the camera, cuts, moti
     detail: z.number().min(-1).max(1).optional()
   }).default({})
 }, ({ characterId, start, length, ...input }) => replace.run({ ...input, section: { start, length }, character: characterId ? studio.characters().find((c) => c.id === characterId) : null }))
+// Remake (remake.js): the engine for swapping people and changing the scene. The picture tools join below (images).
+const remake = new Remake({ studio, images: null, dataDir: DATA, resourcesDir: resourcesDir(), ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe, writer: () => writerOf(readSettings(BASE)) })
+replace.remake = remake
+tool('remake_paint', `Remake, step 1 of 2: swap people (kind swap) or change the scene (kind change: remove or add things, weather, light, setting, style) in up to 14 s of video; the camera, motion, timing and soundtrack stay. Prepares the source on Remake's canvas, picks a frame per shot and paints each the way the result should look (Qwen Image 2.1 edit, local and free), and returns the session with each keyframe's source frame and painted picture. LOOK at the painted pictures before remake_render: they decide the result. Repaint one with only: [frame], or set your own with remake_use_picture. swap needs picture (the face of who goes in; list_cast or a character's picture) and who (whom they replace, in words). change needs ask (the change, in plain words). Only use invented characters or people who agreed.`, {
+  kind: z.enum(REMAKE_KINDS),
+  video: z.string().optional().describe('Absolute path of the source video (a new session)'),
+  session: z.string().optional().describe('An existing session id, to repaint'),
+  start: z.number().min(0).default(0),
+  length: z.number().min(0).default(0).describe('Seconds to use; 0 = to the end (14.3 s at most)'),
+  ask: z.string().optional(),
+  who: z.string().optional(),
+  picture: z.string().optional(),
+  name: z.string().optional().describe('swap: the name of who goes in'),
+  only: z.array(z.number().int()).optional().describe('repaint only these keyframe frame numbers')
+}, async ({ kind, video, session, start, length, only, ...input }) => {
+  const s = session ? remake.get(session) : await remake.prepare({ video, kind, section: { start, length } })
+  return remake.paint(s.id, { ...input, only: only || null })
+})
+tool('remake_use_picture', "Set your own picture as a Remake keyframe (it is fitted to the canvas).", { session: z.string(), frame: z.number().int(), picture: z.string() }, ({ session, frame, picture }) => remake.usePicture(session, frame, picture))
+tool('remake_render', `Remake, step 2 of 2: writes the six-section prompt with the person's prompt writer (from the source frames and the painted ones, following Viggle's guide) unless prompt is given, then renders takes (1-3, a few minutes each on a 24 GB card). Returns jobs: poll get_job, or replace_history for the result trimmed back to the source's length and shape.`, {
+  session: z.string(),
+  takes: z.number().int().min(1).max(3).default(1),
+  seed: z.number().int().min(0).optional(),
+  prompt: z.string().optional().describe('Your own six-section prompt (subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music)'),
+  characterId: z.string().optional().describe('swap: a character preset whose LoRA joins the run')
+}, async ({ session, prompt, characterId, ...opts }) => {
+  if (prompt) remake.setPrompt(session, prompt)
+  return remake.render(session, { ...opts, character: characterId ? studio.characters().find((c) => c.id === characterId) : null })
+})
 tool('replace_history', 'Past Replace runs, newest first, with their status and result videos.', {}, async () => (await replace.history()).map((j) => ({ job: j.id, name: j.projectName, status: j.status, mode: j.plan?.replace?.mode, error: j.error, outputs: j.outputs })))
 
 // ---------- models and characters ----------
@@ -865,6 +895,8 @@ tool('delete_music', "Delete a song and its file in IV Studio's music folder (Co
 
 // ---------- Create -> Image: pictures from the person's own image models on this PC ----------
 const images = new Images({ studio, dataDir: DATA })
+remake.images = images
+remake.faces = shinobi
 tool('list_image_models', `The image models on this PC's ComfyUI, by family: ${IMAGE_FAMILIES.map((f) => f.label).join(', ')}. Each family lists its checkpoints (pass one as make_image model), whether it is ready (and what's missing), whether it can edit, and its licence.`, {}, () => images.status())
 tool('make_image', "Make pictures on this PC (free, local). mode generate: from the prompt. mode edit: change refs (local picture paths) with the prompt as the instruction; only families with edit true can. loras: the family's LoRAs (list_loras, model-only). Returns the set at once; follow with get_image until status is success, then use its files (use one as a shot's first frame: generate_previews mode frames with a media picture).", {
   mode: z.enum(['generate', 'edit']).default('generate'),

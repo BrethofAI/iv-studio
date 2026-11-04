@@ -66,7 +66,7 @@ const fitFades = (c) => {
 // The editor, laid out like Premiere: project bin, source and program monitors and effect controls on top,
 // the timeline below, every border draggable. A full-screen workspace hides IV Studio's own sidebar.
 // An agent edits the same file through the MCP server: its changes appear here with a one-click undo.
-export default function EditEditor({ editId, notify, go, focus, setFocus, characters = [] }) {
+export default function EditEditor({ editId, notify, go, focus, setFocus, characters = [], remakeClip }) {
   const [meta, setMeta] = useState(null)
   const [edit, setEdit] = useState(null)
   const [gens, setGens] = useState([]) // new footage on its way (src/service/editgen.js)
@@ -340,6 +340,7 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
         onClick: () => setGenSpec({ kind: 'retake', clip: clip.id, from: +Math.max(clip.start, at - 1).toFixed(2), to: +Math.min(clipEnd(clip), at + 1).toFixed(2) })
       })
       items.push({ label: 'Cut out…', hint: 'keep only who or what you name', disabled: !video || !!m.alpha, onClick: () => cutOut(clip) })
+      items.push({ label: 'Remake this clip…', hint: 'swap who is in it, or change the scene', disabled: !video || m.kind === 'image' || !!m.alpha || clipLength(clip) > 14.3 || !remakeClip, onClick: () => remakeClip({ path: m.path, section: { start: clip.in || 0, length: clipLength(clip) }, kind: 'swap' }) })
       items.push({ label: `Reframe to ${SHAPE_OF[edit.settings.format] || '9:16'}…`, hint: 'draw what lies beyond its edges', disabled: !video || !!m.alpha || shapeFits(m, edit.settings.format), onClick: () => reframe(clip) })
     } else if (gap?.to != null && gap.to - gap.from > FRAME) {
       items.push({ label: `Fill this gap…`, hint: `${(gap.to - gap.from).toFixed(2)} s`, disabled: gap.to - gap.from > 15, onClick: () => setGenSpec({ kind: 'bridge', gap }) })

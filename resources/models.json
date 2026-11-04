@@ -268,6 +268,36 @@
       ],
       "optional": true,
       "optionalFor": "Music"
+    },
+    {
+      "id": "remake_swap",
+      "label": "Viggle Remake swap (int8, MiniMax H3 licence)",
+      "loader": "UNETLoader.unet_name",
+      "match": "viggle_remake_swap_pruned_int8_convrot.safetensors",
+      "folder": "diffusion_models/Viggle Remake",
+      "url": "https://huggingface.co/Viggle/Viggle-Remake/resolve/21665fa7a1e038e0a5312fb15f37b18d0f06f117/int8/viggle_remake_swap_pruned_int8_convrot.safetensors",
+      "sha256": "7ba8cf79f8f09944f743f99b69d85300a70a4bc9493156cb1fff3a68a9716a47",
+      "size": 20970379616,
+      "needed_for": [
+        "remake"
+      ],
+      "optional": true,
+      "optionalFor": "Replace: swapping people"
+    },
+    {
+      "id": "remake_edit",
+      "label": "Viggle Remake edit (int8, MiniMax H3 licence)",
+      "loader": "UNETLoader.unet_name",
+      "match": "viggle_remake_edit_pruned_int8_convrot.safetensors",
+      "folder": "diffusion_models/Viggle Remake",
+      "url": "https://huggingface.co/Viggle/Viggle-Remake/resolve/21665fa7a1e038e0a5312fb15f37b18d0f06f117/int8/viggle_remake_edit_pruned_int8_convrot.safetensors",
+      "sha256": "ff13b0b61d1e0e702e21de6a2bbc284b9e0006a31f3cd047daec303dab6b3155",
+      "size": 20970379616,
+      "needed_for": [
+        "remake"
+      ],
+      "optional": true,
+      "optionalFor": "Replace: changing the scene"
     }
   ],
   "node_packs": [
@@ -533,6 +563,18 @@
       "registry": "https://cdn.comfy.org/fannovel16/comfyui-frame-interpolation/1.0.11/node.zip",
       "linuxOnly": true,
       "for": "Finals on Linux"
+    },
+    {
+      "label": "Viggle Remake nodes",
+      "classes": [
+        "RemakeConditioning",
+        "RemakeKeyframeUntil",
+        "RemakeNoise"
+      ],
+      "url": "https://huggingface.co/Viggle/Viggle-Remake/tree/main/comfyui/ComfyUI-Viggle-Remake",
+      "dir": "ComfyUI-Viggle-Remake",
+      "bundled": "comfy-nodes/ComfyUI-Viggle-Remake",
+      "for": "Replace"
     }
   ]
 }

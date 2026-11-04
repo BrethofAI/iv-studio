@@ -262,6 +262,12 @@ export default function App() {
       localStorage.setItem('iv.seenNews', version)
     } catch {}
   }
+  // the editor's "Remake this clip": Replace opens with that stretch of the clip
+  const [replaceSeed, setReplaceSeed] = useState(null)
+  const remakeClip = (seed) => {
+    setReplaceSeed({ ...seed, at: Date.now() })
+    setPage('replace')
+  }
   const sendToCreate = (line) => {
     setLineForCreate(line)
     switchSection('video')
@@ -269,7 +275,7 @@ export default function App() {
   }
 
   const ready = setup?.ready
-  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, editRun, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, editRun, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle, remakeClip, replaceSeed }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
   // ComfyUI on this PC isn't answering: the title bar offers to start it
   const comfyDown = !setup?.remote && setup?.items?.some((i) => i.id === 'comfyui' && i.status !== 'ok')

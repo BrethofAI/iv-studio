@@ -1,0 +1,12 @@
+Powered by Viggle Remake (https://huggingface.co/Viggle/Viggle-Remake)
+
+IV Studio's Remake engine uses Viggle Remake, a Model Derivative of MiniMax H3 by Viggle AI.
+
+- The model weights (viggle_remake_swap/edit_pruned_int8_convrot.safetensors) are not shipped with IV Studio.
+  Setup downloads them from Hugging Face (Viggle/Viggle-Remake, revision 21665fa7a1e038e0a5312fb15f37b18d0f06f117).
+  They are licensed under the MiniMax H3 Community License Agreement (Copyright (c) 2026 MiniMax; modifications and
+  additions Copyright (c) 2026 Viggle AI). Read it at https://huggingface.co/Viggle/Viggle-Remake/blob/main/LICENSE.
+- resources/comfy-nodes/ComfyUI-Viggle-Remake (from comfyui/ComfyUI-Viggle-Remake) and resources/remake/short_guide.md,
+  example_swap_prompt.txt and example_edit_prompt.txt (from mcp/viggle_remake_mcp/data) are copied unchanged from
+  that repository at the same revision, under the Apache License 2.0 (ViggleRemake-Apache-2.0.txt).
+- "Viggle" is a name of Viggle AI. IV Studio is not made or endorsed by Viggle.

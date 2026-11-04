@@ -531,16 +531,30 @@ tracks.
 
 ### Replace
 
-Swaps who or what is in a video while the camera, cuts, motion and soundtrack stay:
+Puts your characters into a video, or changes the scene around the people in it, while the camera, cuts,
+motion and soundtrack stay:
 
-- **Person:** a picture (or one of your trained characters, with their LoRA) replaces the main person.
-- **Several people:** one to four characters, each replacing someone you describe.
-- **Object:** change something (hair, a jacket, a car), remove it, or put a new background behind the person.
+- **Swap people:** one or two characters (your presets, Tess and Theo, or any picture) take the place of
+  whoever you describe: face, hair, body and clothes. A preset's LoRA can join the run.
+- **Change the scene:** in plain words: remove or add things, or change the weather, light, setting or style
+  ("a snowy winter evening", "remove the wind turbines").
 - **Finish:** redraw small faces at close-up size, or soften H3's look.
-- **Check the mask** first shows what will be redrawn, in about a minute.
 
-It runs [OpenJutsu](https://github.com/D3voz/openjutsu)'s ComfyUI workflows (MIT, commit `47c3724`): SAM 3.1
-tracks the people, Qwen3-VL describes the shots, and MiniMax H3 redraws the masked area.
+It runs on [Viggle Remake](https://huggingface.co/Viggle/Viggle-Remake), two LoRAs on MiniMax H3 (swap and
+edit), up to 14 s at a time. IV Studio does the parts Viggle leaves to a person:
+1. it puts the source on Remake's canvas (24 fps, its own shape, the frame count H3 needs) and finds the shots;
+2. it paints a frame of each shot the way the result should look, with Qwen Image 2.1 edit on your PC. A swap's
+   frames are checked with the face model (nobody added, and it looks like your character) and painted again
+   when they fail; then you check them (paint one again, use your own picture, or leave one out);
+3. your prompt writer (local, Claude Code or Codex) writes Remake's six-section prompt from the source and the
+   painted frames, following Viggle's own guide, and IV Studio checks it;
+4. Remake renders 1 to 3 takes (about 2.5 minutes for 5 s on an RTX 4090), trimmed back to the source.
+
+In the editor, right-click a clip → **Remake this clip…**. Setup downloads the two Remake files (21 GB each)
+and installs Viggle's nodes. Powered by Viggle Remake; the weights are under the MiniMax H3 Community License.
+
+The old engine, [OpenJutsu](https://github.com/D3voz/openjutsu)'s mask workflows (MIT, commit `47c3724`), is
+still there behind **Use the old engine** at the foot of the page for one more version; it runs Finish.
 
 ### Shinobi
 
@@ -575,7 +589,8 @@ IV Studio is a front end for your own ComfyUI; every picture, video and song is 
   ComfyUI GUI export in 32 switch states (`test/graph-parity.mjs`).
 - **Workflow files.** `resources/workflows/iv_studio_api.json` is the full IV Studio H3 workflow in API
   form (with `iv_studio_api.groups.json`, its switch groups), and `resources/workflows/replace/` holds the
-  Replace workflows from OpenJutsu. Load them in ComfyUI to see the graphs IV Studio drives.
+  Replace's old-engine workflows from OpenJutsu. Load them in ComfyUI to see the graphs IV Studio drives.
+  Remake's graph is Viggle's own workflow (`src/service/remake.js` builds it per take).
 - **Node packs.** **Settings → Setup → Install missing node packs** adds every pack IV Studio uses to your
   ComfyUI's `custom_nodes` in one go: its own small pack (`resources/comfy-nodes/ComfyUI-IV-Studio`) is
   copied, the others are downloaded at the versions below (the list lives in `resources/models.json`), and

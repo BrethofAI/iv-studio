@@ -31,6 +31,7 @@ import { SCENES, TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
 import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS, MAX_CHARACTERS, DEFAULT_TONE, OPENJUTSU } from '../service/replace'
+import { CREDIT as REMAKE_CREDIT, Remake } from '../service/remake'
 import { Voices } from '../service/voices'
 import { ACE_KEYS, Music, MUSIC_DEFAULTS, MUSIC_ENGINES } from '../service/music'
 import { Images } from '../service/images'
@@ -83,6 +84,7 @@ let stopWatch = null
 let installer = null
 let trainings = null
 let replace = null
+let remake = null
 let catalog = null
 let voices = null
 let music = null
@@ -123,6 +125,7 @@ function makeStudio() {
   studio.comfy.folders = comfyFolders(s, INCOGNITO)
   if (trainings) trainings.studio = studio
   if (replace) replace.studio = studio
+  if (remake) remake.studio = studio
   if (catalog) catalog.studio = studio
   if (music) music.studio = studio
   if (images) images.studio = studio
@@ -462,6 +465,27 @@ app.whenReady().then(() => {
   handle('replace:check', (mode) => replace.check(mode))
   handle('replace:run', (input) => replace.run({ ...input, character: input.characterId ? studio.characters().find((c) => c.id === input.characterId) : null }))
   handle('replace:history', () => replace.history())
+  // Remake (remake.js): Replace's engine for swapping people and changing the scene
+  remake = new Remake({ studio, images, faces: shinobi, dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe, writer: () => writerOf(readSettings(BASE)) })
+  replace.remake = remake
+  const presetOf = (id) => (id ? studio.characters().find((c) => c.id === id) || null : null)
+  handle('remake:meta', () => ({ credit: REMAKE_CREDIT }))
+  handle('remake:check', (kind) => remake.check(kind))
+  handle('remake:prepare', (input) => remake.prepare(input))
+  handle('remake:get', (id) => remake.get(id))
+  handle('remake:paint', (id, input) => remake.paint(id, { ...input, onProgress: (u) => send('remake:progress', { id, ...u }) }))
+  handle('remake:usePicture', (id, frame, file) => remake.usePicture(id, frame, file))
+  handle('remake:setKeyframe', (id, frame, opts) => remake.setKeyframe(id, frame, opts))
+  handle('remake:write', (id) => remake.write(id))
+  handle('remake:setPrompt', (id, prompt) => remake.setPrompt(id, prompt))
+  handle('remake:render', (id, opts = {}) => remake.render(id, { ...opts, character: presetOf(opts.characterId) }))
+  // who can go in: character presets with a face (their own or the ready-made catalogue's)
+  handle('remake:faces', () =>
+    studio
+      .characters()
+      .map((c) => ({ id: c.id, name: c.name, characterId: c.id, picture: studio.facePicture(c, resourcesDir(path.join(app.getAppPath(), 'resources'))), lora: !!c.lora }))
+      .filter((f) => f.picture)
+  )
   handle('replace:toEdit', async (file, name) => editWith(await localCopy(file), name, 'replace'))
   // Trained characters' picked faces, as pictures for Replace.
   handle('replace:characterFaces', async () => {

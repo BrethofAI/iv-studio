@@ -55,6 +55,20 @@ contextBridge.exposeInMainWorld('ivstudio', {
     characterFaces: call('replace:characterFaces'),
     toEdit: call('replace:toEdit')
   },
+  remake: {
+    meta: call('remake:meta'),
+    check: call('remake:check'),
+    prepare: call('remake:prepare'),
+    get: call('remake:get'),
+    paint: call('remake:paint'),
+    usePicture: call('remake:usePicture'),
+    setKeyframe: call('remake:setKeyframe'),
+    write: call('remake:write'),
+    setPrompt: call('remake:setPrompt'),
+    render: call('remake:render'),
+    faces: call('remake:faces'),
+    onProgress: on('remake:progress')
+  },
   sizzle: {
     meta: call('sizzle:meta'),
     list: call('sizzle:list'),

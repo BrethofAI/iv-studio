@@ -6173,3 +6173,36 @@ button.nav-update:hover {
   direction: rtl;
   text-align: left;
 }
+
+/* ---------- Replace: Remake ---------- */
+.remake-ask,
+.remake-prompt {
+  width: 100%;
+}
+.remake-frames {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+.remake-frame.skipped {
+  opacity: 0.45;
+}
+.remake-pair {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 8px;
+  align-items: center;
+}
+.remake-pair img {
+  width: 100%;
+  border-radius: 6px;
+  display: block;
+}
+.remake-wait {
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+}

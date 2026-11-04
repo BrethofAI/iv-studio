@@ -176,6 +176,14 @@ export class Replace {
       .filter((p) => p.tool === 'replace')
       .flatMap((p) => this.studio.listJobs(p.id).map((j) => ({ ...j, projectName: p.name })))
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-    return Promise.all(jobs.map(async (j) => (['success', 'error', 'cancelled'].includes(j.status) ? j : { ...(await this.studio.refreshJob(j.id).catch(() => j)), projectName: j.projectName })))
+    const fresh = await Promise.all(jobs.map(async (j) => (['success', 'error', 'cancelled'].includes(j.status) ? j : { ...(await this.studio.refreshJob(j.id).catch(() => j)), projectName: j.projectName })))
+    // a Remake take shows trimmed back to its source's length and shape (remake.js finalFile)
+    return Promise.all(
+      fresh.map(async (j) => {
+        if (j.status !== 'success' || !this.remake || !this.studio.getJob(j.id).plan?.replace?.remake) return j
+        const f = await this.remake.finalFile(this.studio.getJob(j.id)).catch(() => null)
+        return f ? { ...j, engine: 'remake', outputs: [{ kind: 'final', path: f, filename: path.basename(f) }, ...(j.outputs || []).filter((o) => o.kind !== 'final')] } : { ...j, engine: 'remake' }
+      })
+    )
   }
 }

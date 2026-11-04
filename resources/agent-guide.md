@@ -346,15 +346,19 @@ When the person gives you a website and wants a sizzle, promo or launch video fo
 Only use claims the site itself makes: no invented numbers, prices, reviews, guarantees or scarcity. The
 site's screens are real captures; keep them sharp and unstretched.
 
-## Replace: swap who or what is in a video
+## Replace: swap people or change the scene
 
-Replace redraws only the person or thing you choose, clip by clip with H3, and keeps
-the camera, cuts, motion and soundtrack. `replace_check` says what the ComfyUI still needs.
-1. Trim the source first if needed (`prepare_media`); it needs a soundtrack.
-2. Run `replace_video` mode mask with the same target to see what will be redrawn (about a minute).
-3. Then person (one picture, optional characterId so the character's LoRA joins), people (1-4 pictures with
-   a role each), or object (change, remove, background). Finish with faces (small faces redrawn from a
-   picture) or colours. Poll `get_job`; the result is the output with kind final.
+Remake (Viggle Remake on MiniMax H3) re-renders up to 14 s of video so it matches painted frames, keeping the
+camera, cuts, motion and soundtrack.
+1. Trim the source first if it's longer (`prepare_media`).
+2. `remake_paint` kind swap (people: one or two, each with picture = their face, name, and who = whom they
+   replace, in words; or picture/name/who for one) or kind change (ask = the change in plain words: weather,
+   light, setting, style, something removed or added). It paints a frame of each shot and returns them.
+3. LOOK at the painted pictures: they decide the result. Repaint one (`remake_paint` with session and only),
+   or set your own (`remake_use_picture`).
+4. `remake_render` (takes 1-3): the person's writer writes the six-section prompt, then it renders. Poll
+   `get_job`; `replace_history` gives the result trimmed back to the source.
+`replace_video` is the old engine (OpenJutsu masks): use it for faces and colours.
 Only put invented characters, or people who agreed, into a video.
 
 ## Train a new character

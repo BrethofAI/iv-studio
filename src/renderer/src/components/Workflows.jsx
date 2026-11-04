@@ -6,7 +6,7 @@ const TOOLS = [
   { page: 'sizzle', name: 'Sizzle', tag: 'A website, made into a film', about: 'Put in a web address. Your agent storyboards a promo film from the real site, then H3 shots, pictures, music and the site’s own screens are cut together with motion and typography.', credit: 'Capture, H3, Z-Image, MiniMax Music, Shinobi' },
   { page: 'reel', name: 'Reel', tag: 'Pictures and a song, cut to the beat', about: 'Add pictures in order and pick a song. IV Studio finds its beat and cuts them on its bars, with a slow move on each picture, as an edit you can finish in Edit.', credit: 'Beat finding and motion: IV Studio' },
   { page: 'shinobi', name: 'Shinobi', tag: 'Edits your agent cuts', about: 'Hand footage to an agent (or a one-click style) and get a finished edit: cuts on the beat, speed ramps, typography, effects and sound.', credit: 'Your agent, rendered on this PC' },
-  { page: 'replace', name: 'Replace', tag: 'Swap who is in the shot', about: 'Put your character in place of someone in a video, swap several people, change or remove an object, or restore small faces. The camera, motion and soundtrack stay.', credit: 'H3 masked edit, SAM 3.1, your characters' }
+  { page: 'replace', name: 'Replace', tag: 'Swap who is in the shot, or change the scene', about: 'Put your characters in place of people in a video, or change the scene in plain words: snow, night, a new setting, something removed. IV Studio paints the frames, you check them, and the camera, motion and soundtrack stay.', credit: 'Viggle Remake on MiniMax H3, Qwen Image, your characters' }
 ]
 
 export default function Workflows({ go }) {

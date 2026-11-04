@@ -88,7 +88,7 @@ export const GROUPS = [
       { id: 'reel', title: 'A reel to music', line: 'Pictures cut to a song’s beat.', to: { page: 'reel' }, words: 'slideshow music video beat photos', video: 't5' },
       { id: 'sizzle', title: 'A website film', line: 'A web address becomes a promo.', to: { page: 'sizzle' }, words: 'promo ad launch video website' },
       { id: 'shinobi', title: 'An edit your agent cuts', line: 'Footage in, a finished edit out.', to: { page: 'shinobi' }, words: 'auto edit agent shinobi' },
-      { id: 'replace', title: 'Swap who’s in it', line: 'Your character replaces someone.', to: { page: 'replace' }, words: 'face swap replace person object' },
+      { id: 'replace', title: 'Swap who’s in it, or change the scene', line: 'Your character replaces someone, or it snows, or the turbines go.', to: { page: 'replace' }, words: 'face swap replace person object remake recast change scene weather remove background viggle' },
       { id: 'loras', title: 'Styles from Civitai', line: 'Browse and add LoRAs.', to: { page: 'loras' }, words: 'style look civitai lora', video: 't6' }
     ]
   },
@@ -133,7 +133,7 @@ export const TIPS = {
   edit: { video: 't3', tips: ['Right-click a clip for Extend, Retake, Cut out and Reframe.', 'Right-click empty track space to fill a gap.', 'F11 is full screen; Esc comes back.', 'Click empty timeline for the edit’s settings, loudness included.'] },
   characters: { video: 't4', tips: ['Training shows its cost before it starts, and runs on your own Modal account.', 'Give a character a voice on Audio → Voices; their shots then speak in it.', 'In a short film, anyone without a character gets a drawn face, or your own picture with Use a picture.'] },
   audio: { video: 't4', tips: ['A line can go straight into a shot with Use in a shot.', 'MiniMax Music sings words clearly; ACE-Step is quick for backgrounds.', 'A MiniMax song’s length follows its lyrics: write full verses for a full song.', 'Pictures plus a song make a reel on Workflows → Reel.'] },
-  workflows: { video: 't7', tips: ['Reel finds a song’s beat by itself.', 'Cut out and Reframe also live in the editor’s right-click menu.', 'Sizzle and Shinobi work best with an agent connected (Settings → Agents).'] },
+  workflows: { video: 't7', tips: ['Reel finds a song’s beat by itself.', 'Cut out and Reframe also live in the editor’s right-click menu.', 'Sizzle and Shinobi work best with an agent connected (Settings → Agents).', 'Replace: check the painted frames before you render; they decide how it turns out.'] },
   reel: { video: 't5', tips: ['Each picture holds a whole number of beats, and the cuts keep to the song’s bars.', 'Calm, Normal and Fast set about 3, 2 and 1 second a picture.', 'It lands in Edit as an ordinary edit, ready to trim and export.'] },
   loras: { video: 't6', tips: ['Clips play when you hover a card.', 'Downloads need your Civitai key (Settings → Civitai).', 'A LoRA’s card shows its licence and trigger words.'] },
   library: { video: 't1', tips: ['Each shot’s versions sit in one tile; open it to step through them.', 'Use in a shot sends a picture or a sound straight to Create.'] },

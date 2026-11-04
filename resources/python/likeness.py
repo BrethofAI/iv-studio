@@ -83,6 +83,12 @@ def main():
     arcface = ort.InferenceSession(os.path.join(models, "w600k_r50.onnx"), providers=["CPUExecutionProvider"])
     img = load(ref)
     face = largest(det.detect(img)) if img is not None else None
+    if face is None and img is not None:
+        # a face that fills the picture (a tight portrait, like the ready-made Tess and Theo) is too big for the
+        # detector: try again with the picture shrunk inside a border
+        h, w = img.shape[:2]
+        img = cv2.copyMakeBorder(img, h // 2, h // 2, w // 2, w // 2, cv2.BORDER_CONSTANT, value=(128, 128, 128))
+        face = largest(det.detect(img))
     if face is None:
         print(json.dumps({"error": "No face found in the reference picture."}))
         return
@@ -94,8 +100,10 @@ def main():
             results.append({"file": f, "score": None, "faces": 0, "error": "unreadable"})
             continue
         faces = det.detect(img)
-        best = largest(faces)
-        results.append({"file": f, "score": None if best is None else round(float(np.dot(ref_v, embed(arcface, img, best[1]))), 4), "faces": len(faces)})
+        big = largest(faces)
+        # score: the largest face; best: whichever face looks most like the reference (one of several people)
+        scores = [float(np.dot(ref_v, embed(arcface, img, f[1]))) for f in faces]
+        results.append({"file": f, "score": None if big is None else round(scores[next(i for i, x in enumerate(faces) if x is big)], 4), "best": round(max(scores), 4) if scores else None, "faces": len(faces)})
     print(json.dumps({"results": results}))
 
 

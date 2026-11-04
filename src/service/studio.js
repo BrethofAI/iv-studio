@@ -762,8 +762,16 @@ export class Studio {
       const fin = job.plan.replace.finalNode
       for (const [nid, out] of Object.entries(outputs)) {
         for (const f of [...(out.gifs || []), ...(out.videos || []), ...(out.video || [])]) if (/\.(mp4|webm|mov)$/i.test(f.filename)) list.push(file(f, nid === fin ? 'final' : 'video'))
-        for (const t of out.text || []) if (typeof t === 'string' && /\.(mp4|webm|mov)$/i.test(t)) list.push(this.fileFromPath(t, nid === fin ? 'final' : 'video'))
-        for (const img of out.images || []) if (/\.(png|jpe?g|webp)$/i.test(img.filename)) list.push(file(img, 'image'))
+        // a path, or (Context Loop 0.7.x) a sentence about it: "assembled 2 generated clips with ffmpeg; hard cuts -> F:\...\x.mp4; generated audio -> ..."
+        for (const t of out.text || []) {
+          const p = typeof t === 'string' && (t.match(/->\s*([^;]+?\.(?:mp4|webm|mov))\s*(?:;|$)/i)?.[1] || (/\.(mp4|webm|mov)$/i.test(t.trim()) ? t.trim() : null))
+          if (p) list.push(this.fileFromPath(p, nid === fin ? 'final' : 'video'))
+        }
+        for (const img of out.images || []) {
+          if (/\.(png|jpe?g|webp)$/i.test(img.filename)) list.push(file(img, 'image'))
+          // core SaveVideo (Remake) lists its video under images; a LoadVideo's preview of the source is an input
+          else if (/\.(mp4|webm|mov)$/i.test(img.filename) && img.type !== 'input') list.push(file(img, nid === fin ? 'final' : 'video'))
+        }
       }
       return list
     }

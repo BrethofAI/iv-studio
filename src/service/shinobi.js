@@ -277,7 +277,8 @@ export class Shinobi {
       const byFile = Object.fromEntries(out.results.map((r) => [r.file, r]))
       return inputs.map(({ file, frames }) => {
         const scores = frames.map((f) => byFile[f]?.score).filter((s) => s != null)
-        return { file, score: scores.length ? +(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(3) : null, min: scores.length ? Math.min(...scores) : null, faces: Math.max(0, ...frames.map((f) => byFile[f]?.faces || 0)) }
+        const bests = frames.map((f) => byFile[f]?.best).filter((s) => s != null)
+        return { file, score: scores.length ? +(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(3) : null, min: scores.length ? Math.min(...scores) : null, best: bests.length ? +(bests.reduce((a, b) => a + b, 0) / bests.length).toFixed(3) : null, faces: Math.max(0, ...frames.map((f) => byFile[f]?.faces || 0)) }
       })
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true })

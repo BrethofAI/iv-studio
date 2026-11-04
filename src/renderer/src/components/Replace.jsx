@@ -3,7 +3,15 @@ import Hero from './Hero'
 import { MediaEditor, MediaTile } from './MediaEditor'
 import { fileUrl } from './edit/model'
 import { media } from '../media'
+import RemakeFlow from './RemakeFlow'
 
+// Remake (the engine since 0.3.0): swap people or change the scene
+const REMAKE_MODES = [
+  ['swap', 'Swap people', 'Your character takes someone’s place: face, hair, body and clothes.'],
+  ['change', 'Change the scene', 'Remove or add things, or change the weather, light, setting or style.'],
+  ['finish', 'Finish', 'Restore small faces, or soften H3’s look.']
+]
+// the old engine (OpenJutsu), kept for one release behind Settings at the foot of the page
 const MODES = [
   ['person', 'Person', 'Your character takes the place of the main person.'],
   ['people', 'Several people', '1–4 characters, each replacing someone you describe.'],
@@ -17,9 +25,17 @@ const OBJECT_MODES = [
 ]
 const DONE = ['success', 'error', 'cancelled']
 
-export default function Replace({ notify, characters }) {
+export default function Replace({ notify, characters, replaceSeed }) {
   const [meta, setMeta] = useState(null)
-  const [mode, setMode] = useState('person')
+  const [oldEngine, setOldEngine] = useState(() => {
+    try {
+      return localStorage.getItem('iv.replaceOldEngine') === '1'
+    } catch {
+      return false
+    }
+  })
+  const [mode, setMode] = useState(oldEngine ? 'person' : 'swap')
+  const remake = !oldEngine && (mode === 'swap' || mode === 'change')
   const [video, setVideo] = useState(null) // MediaEditor item
   const [editing, setEditing] = useState(false)
   const [pictures, setPictures] = useState([]) // [{path, role}]
@@ -36,6 +52,15 @@ export default function Replace({ notify, characters }) {
   const R = window.ivstudio.replace
   const flowMode = mode === 'finish' ? (finish === 'faces' ? 'faces' : 'colours') : mode === 'people' && run.onePass && pictures.length === 2 ? 'people_maxq' : mode
 
+  // from the editor's "Remake this clip": that stretch of the clip, in Swap people
+  useEffect(() => {
+    if (!replaceSeed?.path) return
+    window.ivstudio.media
+      .probe(replaceSeed.path)
+      .catch(() => null)
+      .then((info) => setVideo({ kind: 'video', path: replaceSeed.path, info, section: replaceSeed.section }))
+    if (!oldEngine) setMode(replaceSeed.kind || 'swap')
+  }, [replaceSeed?.at])
   const loadHistory = () => R.history().then(setHistory)
   useEffect(() => {
     R.meta().then(setMeta)
@@ -44,8 +69,17 @@ export default function Replace({ notify, characters }) {
   }, [])
   useEffect(() => {
     setCheck(null)
+    if (remake) return
     R.check(flowMode).then(setCheck, (err) => setCheck({ ready: false, error: err.message, packs: [], models: [] }))
-  }, [flowMode])
+  }, [flowMode, remake])
+  function switchEngine(old) {
+    setOldEngine(old)
+    try {
+      localStorage.setItem('iv.replaceOldEngine', old ? '1' : '0')
+    } catch {}
+    setMode(old ? 'person' : 'swap')
+    setPictures([])
+  }
   const running = history.some((j) => !DONE.includes(j.status))
   useEffect(() => {
     if (!running) return
@@ -107,12 +141,16 @@ export default function Replace({ notify, characters }) {
     <div className="replace">
       <Hero art="replace" title="Replace" kicker="Swap who's in the shot" />
       <p className="lede">
-        Put your character into any video.
-        <span className="lede-small dim">The camera, cuts, motion and soundtrack stay; only the person or thing you choose is redrawn by H3, clip by clip. SAM 3.1 tracks them and Qwen3-VL writes the prompts.</span>
+        Put your character into any video, or change the scene around them.
+        {oldEngine ? (
+          <span className="lede-small dim">The old engine: only the person or thing you choose is redrawn by H3, clip by clip. SAM 3.1 tracks them and Qwen3-VL writes the prompts.</span>
+        ) : (
+          <span className="lede-small dim">The camera, cuts, motion and soundtrack stay. IV Studio paints a frame of each shot the way it should look, you check them, and Viggle Remake on MiniMax H3 redraws the video to match.</span>
+        )}
       </p>
 
       <div className="mode-cards replace-modes">
-        {MODES.map(([id, name, about]) => (
+        {(oldEngine ? MODES : REMAKE_MODES).map(([id, name, about]) => (
           <button key={id} className={`mode-card ${mode === id ? 'on' : ''}`} onClick={() => (setMode(id), setPictures([]), setCharacterId(''))}>
             <span className="mode-name">{name}</span>
             <span className="dim small">{about}</span>
@@ -120,7 +158,7 @@ export default function Replace({ notify, characters }) {
         ))}
       </div>
 
-      {check && !check.ready && (
+      {!remake && check && !check.ready && (
         <section className="group replace-missing">
           <div className="group-head">
             <h2>Needed first</h2>
@@ -150,7 +188,7 @@ export default function Replace({ notify, characters }) {
         {video ? (
           <div className="voice-control">
             <MediaTile item={video} label="Source" onEdit={() => setEditing(true)} onRemove={() => setVideo(null)} />
-            <span className="small dim">Click it to trim or crop. It needs a soundtrack; longer videos run in several H3 clips.</span>
+            <span className="small dim">{video.section?.length ? `The clip from your edit: ${video.section.start.toFixed(2)}–${(video.section.start + video.section.length).toFixed(2)} s of it. ` : ''}{remake ? 'Click it to trim or crop. Up to 14 s at a time; the soundtrack stays.' : 'Click it to trim or crop. It needs a soundtrack; longer videos run in several H3 clips.'}</span>
           </div>
         ) : (
           <button className="btn btn-small" onClick={pickVideo}>
@@ -159,7 +197,9 @@ export default function Replace({ notify, characters }) {
         )}
       </section>
 
-      {mode === 'object' && (
+      {remake && <RemakeFlow kind={mode} video={video} notify={notify} onStarted={loadHistory} />}
+
+      {!remake && mode === 'object' && (
         <section className="block">
           <p className="mono label">02 · What changes</p>
           <div className="segmented">
@@ -224,7 +264,7 @@ export default function Replace({ notify, characters }) {
         </section>
       )}
 
-      {showPictures && (
+      {!remake && showPictures && (
         <section className="block">
           <p className="mono label">{mode === 'finish' ? '03 · The face' : mode === 'object' ? '03 · Or show it (optional)' : '02 · Who goes in'}</p>
           <div className="media-actions">
@@ -274,7 +314,7 @@ export default function Replace({ notify, characters }) {
         </section>
       )}
 
-      {mode !== 'finish' && (
+      {!remake && mode !== 'finish' && (
         <details className="block replace-settings">
           <summary className="mono label">Settings</summary>
           <div className="row">
@@ -329,6 +369,7 @@ export default function Replace({ notify, characters }) {
         </details>
       )}
 
+      {!remake && (
       <div className="replace-go">
         {mode !== 'finish' && (
           <button className="btn btn-small" disabled={!video || !check?.ready || !!busy || (mode === 'object' && !obj.target)} onClick={() => go('mask')}>
@@ -339,6 +380,7 @@ export default function Replace({ notify, characters }) {
           {busy ? `${busy}…` : mode === 'finish' ? (finish === 'faces' ? 'Fix the faces' : 'Fix the colours') : 'Replace'}
         </button>
       </div>
+      )}
 
       {history.length > 0 && (
         <section className="block">
@@ -374,8 +416,11 @@ export default function Replace({ notify, characters }) {
       )}
 
       <p className="small dim">Only replace people with characters you made, or with someone's consent.</p>
+      <label className="me-snap small dim">
+        <input type="checkbox" checked={oldEngine} onChange={(e) => switchEngine(e.target.checked)} /> Use the old engine (OpenJutsu masks, for comparison; it goes in a later version)
+      </label>
 
-      {editing && video && <MediaEditor item={video} hint="Keep the part to swap. Each H3 clip is up to 15 s; longer parts run as several clips." onApply={(v) => (setVideo(v), setEditing(false))} onClose={() => setEditing(false)} notify={notify} />}
+      {editing && video && <MediaEditor item={video} hint="Keep the part to swap. Each H3 clip is up to 15 s; longer parts run as several clips." onApply={(v) => (setVideo({ ...v, section: null }), setEditing(false))} onClose={() => setEditing(false)} notify={notify} />}
     </div>
   )
 }
