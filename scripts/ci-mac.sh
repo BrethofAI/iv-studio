@@ -50,6 +50,8 @@ export IV_STUDIO_USER_DATA="$OUT/userdata" IV_STUDIO_DATA="$OUT/data"
 pages_ok() { node -e "const s=require('$OUT/window/smoke.json');if(s.pages.length<8||s.pages.some(p=>p.text<20))process.exit(1)" 2>/dev/null; }
 for try in 1 2; do
   rm -rf "$OUT/window"
+  # the real screen a few seconds in: the native traffic lights and the title bar as macOS draws them
+  (sleep 9; screencapture -x "$OUT/screen-$try.png" 2>/dev/null) &
   run window env IV_STUDIO_SMOKE="$OUT/window" ELECTRON_ENABLE_LOGGING=1 bash -c "$(declare -f tmo); env | grep -i '^electron' ; date; tmo 180 '$APP/Contents/MacOS/IV Studio' --enable-logging; echo \"exit \$?\"; date"
   cat "$OUT/window.log"
   [ -f "$OUT/window/smoke.json" ] && cat "$OUT/window/smoke.json"

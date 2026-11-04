@@ -298,7 +298,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app ${incognito ? 'incognito' : ''} ${focus && page === 'edit' ? 'app-focus' : ''}`}>
+    <div className={`app ${incognito ? 'incognito' : ''} ${focus && page === 'edit' ? 'app-focus' : ''} ${info?.platform === 'darwin' ? 'mac' : ''}`}>
       <header className="titlebar">
         <img className="brand-logo" src={incognito ? ivMarkClosed : ivMark} alt="Infinite Variance" />
         <span className="mono">Infinite Variance</span>
@@ -321,7 +321,8 @@ export default function App() {
               Use the cloud
             </button>
           )}
-          {comfyDown && <StartComfy notify={notify} recheck={recheck} className="btn btn-small engine-start" />}
+          {/* on a Mac the cloud comes first; Start ComfyUI stays on Settings → Setup */}
+          {comfyDown && info?.platform !== 'darwin' && <StartComfy notify={notify} recheck={recheck} className="btn btn-small engine-start" />}
           {setup?.items?.find((i) => i.id === 'gpu') && <span className="mono dim">{setup.items.find((i) => i.id === 'gpu').detail}</span>}
           {setup?.remote ? <CloudMeter onOpen={() => setPage('cloud')} /> : setup && <SystemMeter notify={notify} />}
         </div>

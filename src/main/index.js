@@ -197,7 +197,9 @@ function createWindow() {
     title: TEST_COPY ? 'IV Studio (TEST COPY)' : 'IV Studio',
     icon: path.join(resourcesDir(path.join(app.getAppPath(), 'resources')), 'icon.png'),
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: BG, symbolColor: '#f1ede5', height: 40 },
+    // Windows and Linux draw their window buttons on the right over the bar; a Mac its traffic lights on the
+    // left, centred in the 40 px bar (the bar leaves room for them)
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 14, y: 13 } } : { titleBarOverlay: { color: BG, symbolColor: '#f1ede5', height: 40 } }),
     webPreferences: { preload: path.join(__dirname, '../preload/index.js'), contextIsolation: true, sandbox: true, nodeIntegration: false }
   })
   win.webContents.on('will-navigate', (e, url) => {
