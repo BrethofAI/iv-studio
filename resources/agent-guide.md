@@ -16,7 +16,8 @@ Apps that show MCP prompts also list them as slash commands (in Claude Code, `/m
 ## First steps
 
 1. `check_setup`: is ComfyUI up, which GPU, are the node packs and models there? If something is
-   missing, tell the person what the result says to do rather than working around it.
+   missing, tell the person what the result says to do rather than working around it. Missing node
+   packs: offer `install_node_packs` (it adds them to this PC's ComfyUI; ComfyUI then needs a restart).
 2. `list_characters`: the character presets (LoRA, trigger word). Prompts write `{char}` where the
    character goes; IV Studio swaps in the trigger word. `list_ready_characters` shows IV Studio's
    ready-made ones (Tess, Theo); `install_ready_character` downloads one.

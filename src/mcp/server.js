@@ -137,6 +137,7 @@ server.registerPrompt('start', { title: 'Start here', description: 'Choose what 
   messages: [{ role: 'user', content: { type: 'text', text: `I'd like to make something with IV Studio. Show me the start menu (get_menu) as one multiple-choice question, then help me with what I pick.` } }]
 }))
 tool('check_setup', 'Report ComfyUI, GPU, node packs, models and characters, with fixes for anything missing.', {}, () => studio.checkSetup())
+tool('install_node_packs', "Install the ComfyUI node packs check_setup reports missing into this PC's ComfyUI: IV Studio's own pack is copied, the others downloaded at the versions IV Studio is tested with (GitHub commit or Comfy Registry release) and given their requirements with ComfyUI's Python. Folders already in custom_nodes are left alone. ComfyUI must be running; restart it afterwards to load them.", {}, () => studio.installNodePacks({ folder: readSettings(BASE).comfyFolder || null }))
 tool('list_characters', 'Character presets (LoRA, strength, trigger word).', {}, () => studio.characters())
 tool('list_projects', 'Projects in the IV Studio library, newest first.', {}, () => studio.listProjects())
 tool('plan_render', 'Validate a request and resolve size, frames, duration, seeds and the finished size, without rendering.', { ...request, finish: z.object(finish).partial().optional() }, ({ finish: f, ...r }) => studio.planRender(r, f || {}))

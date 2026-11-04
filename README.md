@@ -76,7 +76,7 @@ cloud. No strong graphics card? Shots can also render on a GPU in your own [RunP
 - **Cloud.** Render shots and sequences on your own RunPod or Modal account instead of your PC, with a running time
   and cost meter in the title bar and a **Shut down GPU** button.
 - **Incognito.** A private space whose work never shows in the normal app.
-- **Agents.** A local MCP server with 142 tools and a start menu gives Claude Code or any MCP client nearly
+- **Agents.** A local MCP server with 143 tools and a start menu gives Claude Code or any MCP client nearly
   everything a person can do in the window.
 - **Updates.** IV Studio updates itself: one click installs a new version and reopens.
 
@@ -164,8 +164,9 @@ cloud. No strong graphics card? Shots can also render on a GPU in your own [RunP
 2. Run it. The installer isn't code-signed yet, so Windows may show **"Windows protected your PC"**.
    Click **More info → Run anyway**. It installs for your user only; no admin rights needed.
 3. Start ComfyUI, then IV Studio. **Settings → Setup** checks ComfyUI, your GPU, the node packs and every
-   model, downloads missing models straight into ComfyUI's models folder (each checked against the
-   SHA-256 its host publishes) and links any node pack you still need.
+   model, installs missing node packs into ComfyUI with one click (restart ComfyUI afterwards), and
+   downloads missing models straight into ComfyUI's models folder (each checked against the SHA-256 its
+   host publishes).
 4. For voices, open **Audio → Voices** and press **Set up voices** once. For music, open
    **Audio → Music** and download the engine you want.
 
@@ -575,11 +576,37 @@ IV Studio is a front end for your own ComfyUI; every picture, video and song is 
 - **Workflow files.** `resources/workflows/iv_studio_api.json` is the full IV Studio H3 workflow in API
   form (with `iv_studio_api.groups.json`, its switch groups), and `resources/workflows/replace/` holds the
   Replace workflows from OpenJutsu. Load them in ComfyUI to see the graphs IV Studio drives.
-- **Node packs.** Setup checks for the core packs (MiniMaxH3Mod, the PromptBuilder media loader, the H3
-  latent upscaler, VideoHelperSuite, KJNodes, the DLSS 5 enhancer, rgthree, Impact, Pixaroma, Easy-Use,
-  essentials and IV Studio's own small pack in `resources/comfy-nodes`) and links each one
-  (`resources/models.json`). Sequences use H3 Multishot, SeedVR2 finishes use the SeedVR2 pack, and Replace
-  and Cut out use SAM 3. `resources/cloud/cloud.json` pins the versions the cloud image uses.
+- **Node packs.** **Settings → Setup → Install missing node packs** adds every pack IV Studio uses to your
+  ComfyUI's `custom_nodes` in one go: its own small pack (`resources/comfy-nodes/ComfyUI-IV-Studio`) is
+  copied, the others are downloaded at the versions below (the list lives in `resources/models.json`), and
+  their requirements are installed with ComfyUI's own Python (never the torch family, which ComfyUI already
+  has). A folder that's already there is left alone. Restart ComfyUI afterwards. Agents can do the same
+  with `install_node_packs`. Replace and Cut out also use SAM 3, which recent ComfyUI has built in.
+
+  | Pack | Used for | Version |
+  | --- | --- | --- |
+  | [ComfyUI-MiniMaxH3Mod (RefMods)](https://github.com/Luisacaotica/ComfyUI-MiniMaxH3Mod) | Shots | Comfy Registry 0.2.9 |
+  | [Fantastic MiniMaxH3 PromptBuilder (media loader)](https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder) | Shots | commit `22e719f` |
+  | [MiniMax H3 latent upscaler](https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler) | Shots | commit `40316cf` |
+  | [VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) | Shots | commit `4d907be` |
+  | [DLSS5 Enhancer v15 (Strix-3D)](https://github.com/Strix-3D/ComfyUI-DLSS5-Enhancer-v15) | Shots (Windows only) | Comfy Registry 1.3.1 |
+  | [rgthree-comfy](https://github.com/rgthree/rgthree-comfy) | Shots | commit `d7297b4` |
+  | [Impact Pack](https://github.com/ltdrdata/ComfyUI-Impact-Pack) | Shots | Comfy Registry 8.28.3 |
+  | [Pixaroma (LoRA loader)](https://github.com/pixaroma/ComfyUI-Pixaroma) | Shots | commit `30d4d94` |
+  | [Easy-Use (seed)](https://github.com/yolain/ComfyUI-Easy-Use) | Shots | commit `b0b47ca` |
+  | [comfyui_essentials (math)](https://github.com/cubiq/ComfyUI_essentials) | Shots | Comfy Registry 1.1.0 |
+  | [KJNodes](https://github.com/kijai/ComfyUI-KJNodes) | Shots | commit `37ca7af` |
+  | [IV Studio nodes (latent cache, shot list)](https://github.com/hollisorg/iv-studio/tree/main/resources/comfy-nodes/ComfyUI-IV-Studio) | Shots | bundled with IV Studio |
+  | [H3 Multishot](https://github.com/jlucasmcrell/ComfyUI-H3-Multishot) | Sequences | Comfy Registry 2.7.2 |
+  | [MiniMax H3 Context Loop](https://github.com/ethanfel/ComfyUI-MiniMaxH3-Context-Loop) | Replace and Reframe | Comfy Registry 0.7.3 |
+  | [H3 One-Click Swap](https://github.com/D3voz/comfyui-h3-oneclick-swap) | Replace | commit `e44a56e` |
+  | [H3 Face Refine](https://github.com/Carasibana/ComfyUI-H3-FaceRefine) | Replace | commit `d8521d1` |
+  | [Image Detail Contrast](https://github.com/D3voz/comfyui-image-detail-contrast) | Replace | commit `485a5e2` |
+  | [Orion4D FXMax](https://github.com/orion4d/Orion4D_FXMax) | Replace | commit `7048e84` |
+  | [Spectrum for MiniMax H3](https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3) | Replace | commit `806fe49` |
+  | [SeedVR2 Video Upscaler](https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler) | SeedVR2 finishing | Comfy Registry 2.5.24 |
+  | [Frame Interpolation (RIFE)](https://github.com/Fannovel16/ComfyUI-Frame-Interpolation) | Finals on Linux (Linux only) | Comfy Registry 1.0.11 |
+
 - **Memory.** One model family at a time (below): IV Studio calls `/free` when the next job needs a
   different family.
 
@@ -643,7 +670,7 @@ cloud renders don't see them yet. Training a character always runs on Modal, whi
 
 ## Agents (MCP)
 
-IV Studio includes a local MCP server (stdio) with 142 tools. It uses the same projects, characters, voices
+IV Studio includes a local MCP server (stdio) with 143 tools. It uses the same projects, characters, voices
 and songs as the window, so Claude Code or any MCP client can render shots and sequences, make pictures,
 speak lines, make music, cut them together and export. **Settings → Agents (MCP)** has the command for your
 install, a message to paste into any agent, and a button that adds the IV Studio skill to Claude Code.
@@ -667,7 +694,7 @@ Agents learn how to use it from `resources/agent-guide.md`: the server's instruc
 
 - **Guide and start menu:** `get_guide`, `get_menu`.
 - **Images:** `list_image_models`, `make_image`, `list_images`, `get_image`, `cancel_image`, `delete_image`.
-- **Shots:** `check_setup`, `list_characters`, `list_projects`, `plan_render`, `check_prompt`,
+- **Shots:** `check_setup`, `install_node_packs`, `list_characters`, `list_projects`, `plan_render`, `check_prompt`,
   `generate_previews`, `finish_candidate`, `enhance_final`, `rank_takes`, `review_take`, `make_previs`.
 - **Cast and places:** `list_cast`, `save_place`.
 - **Projects (short films):** `list_films`, `create_film`, `get_film`, `update_film`, `set_film_script`,

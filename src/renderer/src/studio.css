@@ -753,6 +753,14 @@ input.mini {
 .checks li.missing .check-icon {
   color: var(--red);
 }
+.node-install {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+.node-install p {
+  margin: 0;
+}
 .setup-actions {
   display: flex;
   gap: 12px;

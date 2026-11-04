@@ -14,6 +14,7 @@ import { Cast, resolveMentions } from './cast.js'
 import { contextIrGraph, fromContextIr, writeHarness, writeLocal, writeStoryLocal } from './prompter.js'
 import { renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
 import { checkSetup, comboOptions } from './setup.js'
+import { comfyPlace, installPacks, missingPacks } from './nodepacks.js'
 
 // A new shot's name from its prompt: the first words of [Shot 1] (not "subject_definitions" or the frames line),
 // without the style opener, with {char} as the character's first name.
@@ -161,6 +162,23 @@ export class Studio {
     }
     if (result.items[0]?.status === 'ok') result.caps = await this.capabilities(true).catch(() => null)
     return { ...result, remote: this.comfy.remote }
+  }
+
+  // Adds the node packs this ComfyUI is missing (nodepacks.js), at the versions IV Studio is tested with. folder: the
+  // ComfyUI folder picked in Settings, used when ComfyUI doesn't say where custom_nodes is. Restart ComfyUI afterwards.
+  async installNodePacks({ folder, onProgress } = {}) {
+    if (this.comfy.remote) throw new Error('Node packs for the cloud are installed by IV Studio’s cloud setup, not here.')
+    let info, stats
+    try {
+      ;[info, stats] = await Promise.all([this.comfy.objectInfo(), this.comfy.systemStats()])
+    } catch {
+      throw new Error('Start ComfyUI first: IV Studio asks it which nodes it already has and where its custom_nodes folder is.')
+    }
+    const packs = missingPacks(this.manifest, info, { linux: !['nt', 'win32'].includes(stats.system?.os) })
+    if (!packs.length) return { results: [], restart: false }
+    const place = await comfyPlace(this.comfy, folder)
+    const results = await installPacks(packs, { ...place, resourcesDir: this.resourcesDir, onProgress })
+    return { customNodes: place.customNodes, python: place.python, results, restart: results.some((r) => r.status === 'installed') }
   }
 
   // What the connected ComfyUI can do (Linux paths, DLSS or the cloud's upscale + RIFE); cached.

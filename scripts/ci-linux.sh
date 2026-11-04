@@ -15,7 +15,7 @@ run() {
 }
 
 # the parts that need no GPU and no ComfyUI
-for t in cast cutout directing editgen learn lint productions reel screenplay sizzle-cut staging timeline-tracks private-outputs comfylauncher ranking prompt-guide ollama-address; do
+for t in cast cutout directing editgen learn lint productions reel screenplay sizzle-cut staging timeline-tracks private-outputs comfylauncher ranking prompt-guide ollama-address nodepacks; do
   run "test-$t" node "test/$t.mjs"
 done
 run test-runpod node test/runpod.mjs python3

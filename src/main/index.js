@@ -884,6 +884,7 @@ app.whenReady().then(() => {
     return s
   })
   handle('setup:check', () => studio.checkSetup())
+  handle('setup:installNodes', () => studio.installNodePacks({ folder: readSettings(BASE).comfyFolder || null, onProgress: (u) => send('setup:nodes', u) }))
 
   // ---------- starting ComfyUI (comfylauncher.js) ----------
   // The launcher is the one picked in Settings, else the best one in the ComfyUI folder picked there, else
