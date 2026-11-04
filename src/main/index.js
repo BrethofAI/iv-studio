@@ -1086,7 +1086,15 @@ app.whenReady().then(() => {
     if (readSettings(BASE).target !== 'cloud') await voices.release().catch(() => {})
     const ollama = await unloadOllama()
     const busy = !!(await studio.comfy.queue().catch(() => null))?.queue_running?.length
-    await new Promise((r) => setTimeout(r, 1500))
+    // ComfyUI unloads in its own worker loop a few seconds after /free: wait until the GPU number settles
+    // (up to 12 s; not while a render holds it), or the result undercounts (it said 7.2 GB when 17 GB went)
+    let last = before.vram
+    for (let i = 0, still = 0; i < (busy ? 2 : 12) && still < 2; i++) {
+      await new Promise((r) => setTimeout(r, 1000))
+      const v = await vram()
+      still = v != null && last != null && last - v < 100 * 1024 ** 2 && i >= 2 ? still + 1 : 0
+      last = v
+    }
     const after = { vram: await vram(), ram: os.totalmem() - os.freemem() }
     return { before, after, ollama, busy }
   })

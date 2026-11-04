@@ -13,9 +13,12 @@ export default function SystemMeter({ notify }) {
     const read = () => document.visibilityState === 'visible' && window.ivstudio.system.stats().then((s) => live && setSt(s), () => {})
     read()
     const t = setInterval(read, EVERY)
+    // back from hidden: read now, not up to 4 s later with the numbers from before it was hidden
+    document.addEventListener('visibilitychange', read)
     return () => {
       live = false
       clearInterval(t)
+      document.removeEventListener('visibilitychange', read)
     }
   }, [])
   // Free memory: what IV Studio and ComfyUI hold, let go of now (ComfyUI waits for a running render to finish)
