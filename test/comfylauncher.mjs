@@ -4,7 +4,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { findLaunchers, isComfyFolder, isLocalUrl, launch, launchersIn, linuxCommand } from '../src/service/comfylauncher.js'
+import { findLaunchers, isComfyFolder, isLocalUrl, launch, launchable, launchersIn, linuxCommand } from '../src/service/comfylauncher.js'
 
 let pass = 0
 let fail = 0
@@ -89,6 +89,26 @@ echo hello from comfy
     await new Promise((r) => setTimeout(r, 200))
     ok(fs.existsSync(marker) && /hello from comfy/.test(fs.readFileSync(log, 'utf8')), 'Linux: a script really starts, in its own folder, with its output in the log')
   }
+  // a Mac: the ComfyUI Desktop app in ~/Applications comes first, then a ComfyUI folder like Linux
+  const mhome = path.join(home, 'mac')
+  fs.mkdirSync(path.join(mhome, 'Applications', 'ComfyUI.app', 'Contents'), { recursive: true })
+  touch(path.join(mhome, 'ComfyUI', 'main.py'))
+  const mfound = findLaunchers({ platform: 'darwin', home: mhome }).filter((f) => f.path.startsWith(mhome))
+  ok(mfound[0]?.path === path.join(mhome, 'Applications', 'ComfyUI.app') && mfound[0].kind === 'desktop app' && mfound[1]?.label === 'main.py', 'Mac: ComfyUI.app first, then a ComfyUI folder’s main.py')
+  ok(launchable('darwin').test('/Applications/ComfyUI.app') && launchable('darwin').test('run.sh') && !launchable('darwin').test('ComfyUI.exe') && !launchable('linux').test('ComfyUI.app'), 'Mac: an app, a script or main.py can start ComfyUI')
+  let mrefused = 0
+  try {
+    launch(path.join(mhome, 'ComfyUI', 'notes.txt'), { platform: 'darwin' })
+  } catch {
+    mrefused++
+  }
+  touch(path.join(mhome, 'ComfyUI', 'notes.txt'))
+  try {
+    launch(path.join(mhome, 'ComfyUI', 'notes.txt'), { platform: 'darwin' })
+  } catch (err) {
+    mrefused += /ComfyUI\.app/.test(err.message) ? 1 : 0
+  }
+  ok(mrefused === 2, 'Mac: a missing file or something else is refused, naming ComfyUI.app')
 } finally {
   fs.rmSync(home, { recursive: true, force: true })
 }

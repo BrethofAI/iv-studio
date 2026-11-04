@@ -3,14 +3,18 @@
 // background, and installs it when the person clicks "Restart to update" or quits the app.
 // IV_STUDIO_UPDATE_FEED (a URL with a latest.yml) points a test copy at a local feed; such a copy never
 // installs on quit, so a test can't replace the installed app.
-import { app } from 'electron'
+import { app, shell } from 'electron'
 import electronUpdater from 'electron-updater'
 
 const { autoUpdater } = electronUpdater
 const SIX_HOURS = 6 * 60 * 60 * 1000
 const TEST_FEED = process.env.IV_STUDIO_UPDATE_FEED
+// macOS installs updates only into an app signed with an Apple Developer ID. Until the Mac build is signed, a Mac
+// copy says a new version is out and opens the release page to download it (as IV Downloader does).
+export const MANUAL = process.platform === 'darwin'
+const RELEASES = 'https://github.com/hollisorg/iv-studio/releases/latest'
 
-let state = { status: 'idle', version: app.getVersion(), available: null, percent: null, error: null, checkedAt: null }
+let state = { status: 'idle', version: app.getVersion(), available: null, percent: null, error: null, checkedAt: null, manual: MANUAL }
 export const updateState = () => state
 
 export function initUpdater(onChange) {
@@ -26,12 +30,12 @@ export function initUpdater(onChange) {
   }
 
   if (TEST_FEED) autoUpdater.setFeedURL({ provider: 'generic', url: TEST_FEED })
-  autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = !TEST_FEED
+  autoUpdater.autoDownload = !MANUAL
+  autoUpdater.autoInstallOnAppQuit = !TEST_FEED && !MANUAL
 
   autoUpdater.on('checking-for-update', () => set({ status: 'checking', error: null }))
   autoUpdater.on('update-not-available', () => set({ status: 'current', available: null, checkedAt: new Date().toISOString() }))
-  autoUpdater.on('update-available', (info) => set({ status: 'downloading', available: info.version, percent: 0, checkedAt: new Date().toISOString() }))
+  autoUpdater.on('update-available', (info) => set({ status: MANUAL ? 'available' : 'downloading', available: info.version, percent: MANUAL ? null : 0, checkedAt: new Date().toISOString() }))
   autoUpdater.on('download-progress', (p) => set({ status: 'downloading', percent: p.percent }))
   autoUpdater.on('update-downloaded', (info) => set({ status: 'ready', available: info.version, percent: 100 }))
   autoUpdater.on('error', (err) => {
@@ -57,6 +61,11 @@ export function initUpdater(onChange) {
     check,
     // Silent install, then IV Studio opens again on the new version.
     install: () => {
+      if (MANUAL) {
+        if (state.status !== 'available') return false
+        shell.openExternal(RELEASES)
+        return true
+      }
       if (state.status !== 'ready') return false
       autoUpdater.quitAndInstall(true, true)
       return true

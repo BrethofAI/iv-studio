@@ -35,9 +35,11 @@ function newestCodex(local) {
   return found.sort((a, b) => b.at - a.at)[0]?.exe || null
 }
 
-// A program on PATH or in the places Linux installers put it (an app started from the desktop often gets a short PATH).
+// A program on PATH or in the places Linux and Mac installers put it (an app started from the desktop or Finder
+// gets a short PATH; Homebrew lives in /opt/homebrew on Apple Silicon and /usr/local on Intel Macs).
+export const EXTRA_BIN = (home = os.homedir()) => [path.join(home, '.local', 'bin'), path.join(home, '.npm-global', 'bin'), path.join(home, '.bun', 'bin'), path.join(home, '.volta', 'bin'), '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin']
 export function onPath(name, env = process.env, home = os.homedir()) {
-  const dirs = [...String(env.PATH || '').split(':'), path.join(home, '.local', 'bin'), path.join(home, '.npm-global', 'bin'), path.join(home, '.bun', 'bin'), path.join(home, '.volta', 'bin'), '/usr/local/bin', '/usr/bin']
+  const dirs = [...String(env.PATH || '').split(':'), ...EXTRA_BIN(home)]
   return firstExisting(dirs.filter(Boolean).map((d) => path.join(d, name)))
 }
 

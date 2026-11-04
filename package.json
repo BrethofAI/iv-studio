@@ -15,7 +15,8 @@
     "test": "node test/graph-parity.mjs",
     "dist": "electron-vite build && electron-builder --win --x64 --publish never",
     "release": "electron-vite build && electron-builder --win --x64 --publish always",
-    "dist:linux": "electron-vite build && electron-builder --linux --x64 --publish never"
+    "dist:linux": "electron-vite build && electron-builder --linux --x64 --publish never",
+    "dist:mac": "node scripts/mac-ffmpeg.mjs && electron-vite build && electron-builder --mac --publish never"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
@@ -106,6 +107,19 @@
           "StartupWMClass": "IV Studio"
         }
       }
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.video",
+      "artifactName": "IV-Studio-mac-${arch}.${ext}",
+      "minimumSystemVersion": "12.0"
+    },
+    "dmg": {
+      "title": "IV Studio"
     }
   }
 }

@@ -1,0 +1,84 @@
+# Builds IV Studio for macOS (Apple Silicon and Intel: a .dmg and a .zip each) on GitHub's Mac machines and checks
+# it: the app bundle and its GPL ffmpeg, the unit tests, an edit export, a real website capture and a Shinobi render
+# with Chrome, every page of the window, and the MCP server from the app.
+# The app is ad-hoc signed, not with an Apple Developer ID: macOS asks people to allow it once (System Settings ->
+# Privacy & Security -> Open Anyway), and it can't install its own updates, so it opens the download page instead.
+# Run it by hand (Actions -> Mac -> Run workflow); with a release tag, the Mac files and latest-mac.yml are added to
+# that release.
+name: Mac
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Add the Mac files to this release tag (blank = build and check only)
+        required: false
+        default: ''
+  push:
+    branches: [mac]
+
+permissions:
+  contents: write
+
+jobs:
+  app:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15 # Apple Silicon
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # swaps the npm package's nonfree Mac ffmpeg for a pinned GPL build, builds, then an ad-hoc signed app
+      - name: Build the app
+        run: npm run dist:mac -- --${{ matrix.arch }} -c.mac.identity=- -c.mac.hardenedRuntime=false
+      - name: Checks
+        run: bash scripts/ci-mac.sh
+      - run: mv dist/latest-mac.yml dist/latest-mac-${{ matrix.arch }}.yml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: iv-studio-mac-${{ matrix.arch }}
+          path: |
+            dist/IV-Studio-mac-${{ matrix.arch }}.dmg
+            dist/IV-Studio-mac-${{ matrix.arch }}.dmg.blockmap
+            dist/IV-Studio-mac-${{ matrix.arch }}.zip
+            dist/IV-Studio-mac-${{ matrix.arch }}.zip.blockmap
+            dist/latest-mac-${{ matrix.arch }}.yml
+            ci-out/
+          if-no-files-found: warn
+
+  # One latest-mac.yml listing both architectures, so each Mac finds its own version.
+  release:
+    needs: app
+    if: inputs.release != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: mac
+          pattern: iv-studio-mac-*
+          merge-multiple: true
+      - name: Merge update files
+        working-directory: mac
+        run: |
+          awk '/^files:/{f=1;next} /^path:/{f=0} f' latest-mac-x64.yml > x64-files.txt
+          awk -v extra="$(cat x64-files.txt)" '/^path:/{print extra} {print}' latest-mac-arm64.yml > latest-mac.yml
+          cat latest-mac.yml
+      - name: Add to the release
+        working-directory: mac
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ inputs.release }}" --repo "$GITHUB_REPOSITORY" --clobber \
+            IV-Studio-mac-*.dmg IV-Studio-mac-*.zip IV-Studio-mac-*.blockmap latest-mac.yml

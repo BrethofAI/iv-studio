@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { Readable } from 'node:stream'
 import { comfyFolders, dataDir, incognitoDir, readSettings, resourcesDir, writerOf, writeSettings } from '../service/paths'
-import { harnessStatus } from '../service/harness'
+import { EXTRA_BIN, harnessStatus } from '../service/harness'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
 import { RunPod, GPUS as RUNPOD_GPUS } from '../service/runpod'
@@ -18,7 +18,7 @@ import { Cutouts } from '../service/cutout'
 import { Reframes } from '../service/reframe'
 import { DEFAULT_TRACKS } from '../service/timeline'
 import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
-import { initUpdater, updateState } from './updater'
+import { initUpdater, updateState, MANUAL as UPDATE_MANUAL } from './updater'
 import { MediaTools } from '../service/media'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { ModelInstaller } from '../service/models'
@@ -39,6 +39,9 @@ import { Civitai, CIVITAI_SITES, LORA_SORTS, LORA_TAGS } from '../service/civita
 import { Comfy } from '../service/comfy'
 import { checkKey as checkComfyCloudKey, COMFY_CLOUD, summarise as summariseComfyCloud } from '../service/comfycloud'
 
+// An app opened from Finder gets a short PATH (/usr/bin:/bin:/usr/sbin:/sbin), so the tools IV Studio runs (Claude
+// Code, Codex, Ollama, git) and what they need (node) would not be found; add the usual install folders.
+if (process.platform === 'darwin') process.env.PATH = [...new Set([...String(process.env.PATH || '').split(':'), ...EXTRA_BIN()].filter(Boolean))].join(':')
 if (process.env.IV_STUDIO_USER_DATA) app.setPath('userData', process.env.IV_STUDIO_USER_DATA)
 if (!app.requestSingleInstanceLock()) app.quit()
 // ComfyUI refuses cross-site browser requests, so the window loads outputs through ivmedia://view?...,
@@ -251,7 +254,7 @@ function handle(channel, fn) {
   })
 }
 
-const KEY_STORE_MISSING = process.platform === 'win32' ? 'Windows encryption is not available, so the key cannot be stored safely.' : 'No system keyring (GNOME Keyring or KWallet) is available, so the key cannot be stored safely.'
+const KEY_STORE_MISSING = process.platform === 'win32' ? 'Windows encryption is not available, so the key cannot be stored safely.' : process.platform === 'darwin' ? 'The macOS Keychain is not available to IV Studio, so the key cannot be stored safely.' : 'No system keyring (GNOME Keyring or KWallet) is available, so the key cannot be stored safely.'
 
 // On Linux without a keyring Electron falls back to a fixed built-in password ('basic_text'), which isn't safe.
 const keysSafe = () => safeStorage.isEncryptionAvailable() && !(process.platform === 'linux' && safeStorage.getSelectedStorageBackend?.() === 'basic_text')
@@ -980,7 +983,12 @@ app.whenReady().then(() => {
     return { chosen: s.comfyLauncher || null, using: launcherOf(s), folder, inFolder: folder ? launchersIn(folder) : [], found: findLaunchers(), autoStart: s.comfyAutoStart !== false, local: isLocalUrl(s.comfyUrl) && s.target !== 'cloud', starting: !!comfyStarting }
   })
   handle('comfy:chooseLauncher', async () => {
-    const filters = process.platform === 'win32' ? [{ name: 'Shortcut, .bat or ComfyUI.exe', extensions: ['lnk', 'bat', 'cmd', 'exe'] }] : [{ name: 'Shell script or main.py', extensions: ['sh', 'py', 'AppImage'] }]
+    const filters =
+      process.platform === 'win32'
+        ? [{ name: 'Shortcut, .bat or ComfyUI.exe', extensions: ['lnk', 'bat', 'cmd', 'exe'] }]
+        : process.platform === 'darwin'
+          ? [{ name: 'ComfyUI.app, a shell script or main.py', extensions: ['app', 'sh', 'py'] }]
+          : [{ name: 'Shell script or main.py', extensions: ['sh', 'py', 'AppImage'] }]
     const r = await dialog.showOpenDialog(win, { title: 'Start ComfyUI with', properties: ['openFile'], filters })
     if (r.canceled || !r.filePaths[0]) return null
     writeSettings({ comfyLauncher: r.filePaths[0] }, BASE)
@@ -1177,6 +1185,8 @@ app.whenReady().then(() => {
   handle('update:state', () => updateState())
   handle('update:check', () => updater.check())
   handle('update:install', () => {
+    // a Mac only opens the download page, which needs nothing to finish first
+    if (UPDATE_MANUAL) return updater.install()
     const waits = busy()
     if (waits.length) throw new Error(`Restart when it's done: ${waits.join(' and ')}.`)
     return updater.install()

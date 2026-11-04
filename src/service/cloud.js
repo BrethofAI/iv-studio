@@ -10,12 +10,15 @@ import { pipeline } from 'node:stream/promises'
 import { Readable } from 'node:stream'
 
 const WIN = process.platform === 'win32'
-// uv's own release builds, checked against the SHA-256 uv publishes next to each. The Linux one unpacks into a folder.
+// uv's own release builds, checked against the SHA-256 uv publishes next to each. The Linux and Mac ones unpack
+// into a folder.
 export const UV_BUILDS = {
   win32: { url: 'https://github.com/astral-sh/uv/releases/download/0.13.0/uv-x86_64-pc-windows-msvc.zip', sha256: '088962f9e7b7bd9ea740c04c650b2a21c8928c345bd99ac24350dc924dba656c', file: 'uv.zip' },
-  linux: { url: 'https://github.com/astral-sh/uv/releases/download/0.13.0/uv-x86_64-unknown-linux-gnu.tar.gz', sha256: '1468ebd5a5541121837c5a2817b9972ba6090fa6caa3d142620850a47fb75154', file: 'uv.tar.gz', strip: 1 }
+  linux: { url: 'https://github.com/astral-sh/uv/releases/download/0.13.0/uv-x86_64-unknown-linux-gnu.tar.gz', sha256: '1468ebd5a5541121837c5a2817b9972ba6090fa6caa3d142620850a47fb75154', file: 'uv.tar.gz', strip: 1 },
+  'darwin-arm64': { url: 'https://github.com/astral-sh/uv/releases/download/0.13.0/uv-aarch64-apple-darwin.tar.gz', sha256: 'a9c1b29002cf3c83f07fa9cd8a887a3be0107d90e23189721221e7257db8e3d6', file: 'uv.tar.gz', strip: 1 },
+  'darwin-x64': { url: 'https://github.com/astral-sh/uv/releases/download/0.13.0/uv-x86_64-apple-darwin.tar.gz', sha256: '5f44dcbde809b632f47c36fadb241cb4d6f9af71d0c8f172b5d2026d3dde742c', file: 'uv.tar.gz', strip: 1 }
 }
-export const UV = { version: '0.13.0', ...(UV_BUILDS[process.platform] || UV_BUILDS.linux) }
+export const UV = { version: '0.13.0', ...(UV_BUILDS[process.platform === 'darwin' ? `darwin-${process.arch}` : process.platform] || UV_BUILDS.linux) }
 // A venv keeps its programs in Scripts\ (Windows) or bin/.
 export const venvBin = (venv, name) => path.join(venv, WIN ? 'Scripts' : 'bin', WIN ? `${name}.exe` : name)
 export const MODAL_VERSION = '1.6.2'

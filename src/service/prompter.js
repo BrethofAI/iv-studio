@@ -6,6 +6,7 @@
 //   claude, codex - the person's own Claude Code or Codex (harness.js), with the same rules and guide.
 // The character is written as its first name for the writer and turned back into {char} afterwards.
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
@@ -294,6 +295,8 @@ export async function ollamaStatus() {
 }
 
 function ollamaExe() {
+  // the Mac app keeps its command line tool inside the app until "Install command line" is clicked
+  if (process.platform === 'darwin') return onPath('ollama') || ['/Applications', path.join(os.homedir(), 'Applications')].map((d) => path.join(d, 'Ollama.app', 'Contents', 'Resources', 'ollama')).find((f) => fs.existsSync(f)) || null
   if (process.platform !== 'win32') return onPath('ollama')
   const local = process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Programs', 'Ollama', 'ollama.exe')
   return local && fs.existsSync(local) ? local : null

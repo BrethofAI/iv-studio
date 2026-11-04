@@ -316,6 +316,11 @@ export default function App() {
           <span className="dot" />
           {setup?.remote && <span className="mono cloud-badge">Cloud</span>}
           <span className="mono">{!setup ? 'Checking ComfyUI' : ready ? 'ComfyUI ready' : `${missing} to fix`}</span>
+          {comfyDown && info?.platform === 'darwin' && (
+            <button className="btn btn-small engine-start" onClick={() => setPage('cloud')} title="Shots need an NVIDIA GPU: render them on your RunPod or Modal account, or on Comfy Cloud">
+              Use the cloud
+            </button>
+          )}
           {comfyDown && <StartComfy notify={notify} recheck={recheck} className="btn btn-small engine-start" />}
           {setup?.items?.find((i) => i.id === 'gpu') && <span className="mono dim">{setup.items.find((i) => i.id === 'gpu').detail}</span>}
           {setup?.remote ? <CloudMeter onOpen={() => setPage('cloud')} /> : setup && <SystemMeter notify={notify} />}

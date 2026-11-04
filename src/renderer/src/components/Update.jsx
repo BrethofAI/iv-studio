@@ -22,6 +22,12 @@ export function UpdateButton({ notify }) {
         ↻ Update to {u.available}
       </button>
     )
+  if (u?.status === 'available')
+    return (
+      <button className="nav-update ready" onClick={() => install(notify)} title={`IV Studio ${u.available} is out. Opens its download page: install it over this copy.`}>
+        ↓ Get {u.available}
+      </button>
+    )
   if (u?.status === 'downloading')
     return (
       <span className="nav-update" title="Downloading in the background">
@@ -42,6 +48,7 @@ export function UpdateSettings({ notify }) {
     idle: 'Checks GitHub for a new version on launch and every six hours.',
     checking: 'Checking for a new version…',
     current: `You have the newest version.${u.checkedAt ? ` Checked ${when(u.checkedAt)}.` : ''}`,
+    available: `IV Studio ${u.available} is out. On a Mac it doesn't install itself yet: download it and drag it into Applications over this copy.`,
     downloading: `Downloading IV Studio ${u.available}… ${Math.round(u.percent || 0)}%`,
     ready: `IV Studio ${u.available} is downloaded. Restart to install it, or it installs when you next quit.`,
     error: `Couldn't check for updates: ${u.error}`
@@ -58,7 +65,7 @@ export function UpdateSettings({ notify }) {
     <section className="group">
       <div className="group-head">
         <h2>Updates</h2>
-        <p className="dim small">IV Studio {u.version}. New versions download in the background and install with one click.</p>
+        <p className="dim small">IV Studio {u.version}. {u.manual ? 'IV Studio tells you when a new version is out.' : 'New versions download in the background and install with one click.'}</p>
       </div>
       <div className="group-body">
         <p className="small">{line}</p>
@@ -66,6 +73,10 @@ export function UpdateSettings({ notify }) {
           {u.status === 'ready' ? (
             <button className="btn btn-small btn-primary" onClick={() => install(notify)}>
               Restart to update
+            </button>
+          ) : u.status === 'available' ? (
+            <button className="btn btn-small btn-primary" onClick={() => install(notify)}>
+              Download {u.available}
             </button>
           ) : (
             <button className="btn btn-small" disabled={u.status === 'dev' || u.status === 'downloading' || checking || u.status === 'checking'} onClick={check}>

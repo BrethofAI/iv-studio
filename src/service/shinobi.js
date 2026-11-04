@@ -48,6 +48,12 @@ export function findBrowser(platform = process.platform, env = process.env) {
     for (const r of rel) for (const base of pf) if (fs.existsSync(path.join(base, r))) return path.join(base, r)
     return null
   }
+  if (platform === 'darwin') {
+    // apps live in /Applications or the person's own ~/Applications
+    const apps = ['Google Chrome.app/Contents/MacOS/Google Chrome', 'Microsoft Edge.app/Contents/MacOS/Microsoft Edge', 'Chromium.app/Contents/MacOS/Chromium', 'Brave Browser.app/Contents/MacOS/Brave Browser']
+    for (const a of apps) for (const base of ['/Applications', path.join(env.HOME || '', 'Applications')]) if (fs.existsSync(path.join(base, a))) return path.join(base, a)
+    return null
+  }
   const names = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'microsoft-edge', 'microsoft-edge-stable']
   const dirs = [...String(env.PATH || '').split(':'), '/usr/bin', '/usr/local/bin', '/snap/bin', '/opt/google/chrome']
   for (const n of names) for (const d of dirs) if (d && fs.existsSync(path.join(d, n))) return path.join(d, n)
