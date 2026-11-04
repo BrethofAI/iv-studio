@@ -5,6 +5,10 @@
 <p align="center">
   <a href="https://github.com/hollisorg/iv-studio/releases/latest/download/IV-Studio-Setup.exe"><b>Download for Windows</b></a>
   &nbsp;·&nbsp;
+  <a href="https://github.com/hollisorg/iv-studio/releases/latest/download/IV-Studio-mac-arm64.dmg"><b>Mac (Apple Silicon)</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/hollisorg/iv-studio/releases/latest/download/IV-Studio-mac-x64.dmg"><b>Mac (Intel)</b></a>
+  &nbsp;·&nbsp;
   <a href="https://github.com/hollisorg/iv-studio/releases/latest/download/IV-Studio.AppImage"><b>Linux (AppImage)</b></a>
   &nbsp;·&nbsp;
   <a href="#what-you-need">What you need</a>
@@ -141,7 +145,8 @@ cloud. No strong graphics card? Shots can also render on a GPU in your own [RunP
 
 ## What you need
 
-- **Windows 10 or 11** (64-bit), or **64-bit Linux** (the AppImage, from 0.2.8; see [Linux](#linux)).
+- **Windows 10 or 11** (64-bit), **64-bit Linux** (the AppImage, from 0.2.8; see [Linux](#linux)), or a **Mac**
+  with macOS 12 or newer, Apple Silicon or Intel (from 0.3.2; it renders in the cloud, see [Mac](#mac)).
 - **An NVIDIA GPU, or the cloud.** 24 GB of VRAM is what IV Studio is tested on (an RTX 4090); 16 GB works
   with smaller previews and finals. 64 GB of system RAM is recommended. Without a suitable card, shots and
   sequences can render on a cloud GPU in your own RunPod or Modal account; pictures, music and voices still need a
@@ -189,6 +194,36 @@ interpolation when those are installed in your ComfyUI, as in the cloud. The Lin
 GitHub's Ubuntu machines (every page, the agent server, Shinobi and website capture); renders on a Linux GPU
 haven't been tried yet. In Settings → Agents, the command for Claude Code or Codex runs a small script that opens
 the AppImage, so it keeps working after updates.
+
+### Mac
+
+A Mac has no NVIDIA graphics card, and MiniMax H3 needs one, so on a Mac IV Studio is the studio and the cloud is
+the GPU: shots, hunts, finishes and sequences render on your own [RunPod](#on-runpod) or [Modal](#on-modal)
+account, or on [Comfy Cloud](#on-comfy-cloud).
+
+1. Download the `.dmg` for your Mac: [Apple Silicon (M1 and newer)](https://github.com/hollisorg/iv-studio/releases/latest/download/IV-Studio-mac-arm64.dmg)
+   or [Intel](https://github.com/hollisorg/iv-studio/releases/latest/download/IV-Studio-mac-x64.dmg). Open it and drag
+   IV Studio into Applications.
+2. The app isn't signed with an Apple Developer ID yet, so the first time macOS says it can't check it. Open
+   **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to IV Studio (once).
+3. Open the **Cloud** page (the Dashboard and the title bar point there) and set up RunPod, Modal or Comfy Cloud.
+
+What's different on a Mac:
+
+- **Renders:** in the cloud. Finals there use a 2× AI upscale (Real-ESRGAN) and RIFE frame interpolation in place
+  of DLSS 5, which is Windows-only.
+- **Pictures and music** need a ComfyUI with their models: Comfy Cloud, or a ComfyUI on your Mac (IV Studio
+  finds and starts the ComfyUI Desktop app, `ComfyUI.app`, or a ComfyUI folder in your home folder). Note that
+  the ComfyUI Desktop app listens on port 8000: set `http://127.0.0.1:8000` in Settings if you use it.
+- **Voices** run on your Mac's processor, not a GPU, so they're slow; not yet tried on a real Mac.
+- **Updates:** an unsigned Mac app can't install its own updates, so IV Studio tells you when a new version is out
+  (**↓ Get …** at the bottom of the sidebar) and opens its download page; drag the new version over the old one.
+- **Keys** (RunPod, Civitai, Comfy.org) are kept in the macOS Keychain.
+- **ffmpeg** in the Mac app is Martin Riedl's GPL static build of FFmpeg 9.0.2 (the npm package's Mac builds are
+  made with `--enable-nonfree` and can't be shared).
+
+The Mac app is built and checked on GitHub's Apple Silicon and Intel machines (every page, the agent server,
+edit export, Shinobi and website capture with Chrome). It hasn't been tried on a person's Mac yet.
 
 **Updates.** From 0.2.1 on, IV Studio checks for a new version when it starts and every six hours, and
 downloads it in the background. Click **↻ Update to …** at the bottom of the sidebar (or **Restart to

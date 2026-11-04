@@ -1,8 +1,10 @@
 // The writer's Ollama address (src/service/prompter.js): the setting, OLLAMA_HOST, and an Ollama elsewhere
-// (another container or PC), stood in for by a fake Ollama on 127.0.0.2.
+// (another container or PC), stood in for by a fake Ollama on 127.0.0.2 (on a Mac, which has only 127.0.0.1, on this
+// machine's own network address).
 //   node test/ollama-address.mjs
 import assert from 'node:assert/strict'
 import http from 'node:http'
+import os from 'node:os'
 import { cpuOptions, ensureOllama, normalizeOllamaUrl, ollamaIsLocal, ollamaJson, ollamaStatus, ollamaUrl, setOllamaSource } from '../src/service/prompter.js'
 
 let n = 0
@@ -57,14 +59,16 @@ const server = http.createServer((req, res) => {
     res.end('{}')
   })
 })
-await new Promise((r) => server.listen(0, '127.0.0.2', r))
+const HOST = process.platform === 'darwin' ? Object.values(os.networkInterfaces()).flat().find((a) => a?.family === 'IPv4' && !a.internal)?.address : '127.0.0.2'
+if (!HOST) throw new Error('No network address to stand in for another machine.')
+await new Promise((r) => server.listen(0, HOST, r))
 const { port } = server.address()
 
 try {
   await ok('an Ollama elsewhere is found and its models listed', async () => {
-    setOllamaSource(() => `127.0.0.2:${port}`)
+    setOllamaSource(() => `${HOST}:${port}`)
     const s = await ollamaStatus()
-    assert.equal(s.url, `http://127.0.0.2:${port}`)
+    assert.equal(s.url, `http://${HOST}:${port}`)
     assert.equal(s.local, false)
     assert.equal(s.running, true)
     assert.equal(s.installed, true)
@@ -80,11 +84,11 @@ try {
   })
 
   await ok('an Ollama elsewhere that is down is reported, not started', async () => {
-    setOllamaSource(() => '127.0.0.2:9')
+    setOllamaSource(() => `${HOST}:9`)
     const s = await ollamaStatus()
     assert.equal(s.running, false)
     assert.equal(s.installed, true)
-    await assert.rejects(ensureOllama(), /isn't answering at http:\/\/127\.0\.0\.2:9/)
+    await assert.rejects(ensureOllama(), new RegExp(`isn't answering at http://${HOST.replace(/\./g, '\\.')}:9`))
   })
 } finally {
   server.close()

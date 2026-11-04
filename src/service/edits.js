@@ -6,7 +6,7 @@
 //   marker  { id, t, label, color }
 //           start = where it sits on the timeline; in/out = the part of the media it plays (seconds).
 // Video clips carry their own sound (mixed with the audio tracks) unless muted.
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -35,6 +35,20 @@ const readJson = (file, fallback) => {
   }
 }
 const now = () => new Date().toISOString()
+
+// FFmpeg 7 replaced -filter_complex_script with -/filter_complex (read the option from a file), and FFmpeg 8 dropped
+// the old one; Windows and Linux bundle 6.1.2, the Mac app 9.0.2. Asked once per ffmpeg; old form when unsure.
+const scriptFlags = new Map()
+export function filterScriptFlag(ffmpeg) {
+  if (!scriptFlags.has(ffmpeg)) {
+    let major = 0
+    try {
+      major = Number(/ffmpeg version n?(\d+)\./i.exec(spawnSync(ffmpeg, ['-hide_banner', '-version'], { encoding: 'utf8', windowsHide: true }).stdout || '')?.[1] || 0)
+    } catch {}
+    scriptFlags.set(ffmpeg, major >= 7 ? '-/filter_complex' : '-filter_complex_script')
+  }
+  return scriptFlags.get(ffmpeg)
+}
 
 export const editLength = (e) => e.clips.reduce((m, c) => Math.max(m, clipEnd(c)), 0)
 
@@ -166,7 +180,7 @@ export class Edits {
     }
     const script = path.join(textDir, 'graph.txt')
     fs.writeFileSync(script, filters.join(';\n'))
-    args.push('-filter_complex_script', script, '-map', '[vout]', '-map', '[aout]', '-t', total.toFixed(3), '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-r', String(fps), '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', outFile)
+    args.push(filterScriptFlag(this.ffmpeg), script, '-map', '[vout]', '-map', '[aout]', '-t', total.toFixed(3), '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p', '-r', String(fps), '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', outFile)
     return { args, total }
   }
 

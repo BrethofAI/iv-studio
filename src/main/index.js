@@ -43,7 +43,10 @@ import { checkKey as checkComfyCloudKey, COMFY_CLOUD, summarise as summariseComf
 // Code, Codex, Ollama, git) and what they need (node) would not be found; add the usual install folders.
 if (process.platform === 'darwin') process.env.PATH = [...new Set([...String(process.env.PATH || '').split(':'), ...EXTRA_BIN()].filter(Boolean))].join(':')
 if (process.env.IV_STUDIO_USER_DATA) app.setPath('userData', process.env.IV_STUDIO_USER_DATA)
-if (!app.requestSingleInstanceLock()) app.quit()
+if (!app.requestSingleInstanceLock()) {
+  console.error('IV Studio is already running; this copy quits.')
+  app.quit()
+}
 // ComfyUI refuses cross-site browser requests, so the window loads outputs through ivmedia://view?...,
 // which the main process fetches from ComfyUI's /view (Range passed through so videos can seek).
 // The editor plays local media through ivfile://local/?p=<path> (seekable, any media file on this PC).

@@ -50,7 +50,8 @@ export IV_STUDIO_USER_DATA="$OUT/userdata" IV_STUDIO_DATA="$OUT/data"
 pages_ok() { node -e "const s=require('$OUT/window/smoke.json');if(s.pages.length<8||s.pages.some(p=>p.text<20))process.exit(1)" 2>/dev/null; }
 for try in 1 2; do
   rm -rf "$OUT/window"
-  run window env IV_STUDIO_SMOKE="$OUT/window" bash -c "$(declare -f tmo); tmo 180 '$APP/Contents/MacOS/IV Studio'"
+  run window env IV_STUDIO_SMOKE="$OUT/window" ELECTRON_ENABLE_LOGGING=1 bash -c "$(declare -f tmo); env | grep -i '^electron' ; date; tmo 180 '$APP/Contents/MacOS/IV Studio' --enable-logging; echo \"exit \$?\"; date"
+  cat "$OUT/window.log"
   [ -f "$OUT/window/smoke.json" ] && cat "$OUT/window/smoke.json"
   if pages_ok; then break; fi
   echo "window pass $try didn't open every page"
@@ -60,6 +61,8 @@ pages_ok && results+=("ok   window-pages") || results+=("FAIL window-pages")
 # the MCP server from the app, with the exact command the app gives agents (Settings -> Agents)
 MCP_CMD="$(node -p "require('$OUT/window/smoke.json').mcp.command" 2>/dev/null)"
 MCP_ARGS_JSON="$(node -p "JSON.stringify(require('$OUT/window/smoke.json').mcp.args)" 2>/dev/null)"
+# without the window's answer, the same command it gives: the app's own binary on its bundled mcp.js
+[ -n "$MCP_CMD" ] || { MCP_CMD="$APP/Contents/MacOS/IV Studio"; MCP_ARGS_JSON="$(node -p "JSON.stringify([process.argv[1]])" "$APP/Contents/Resources/app.asar/out/main/mcp.js")"; }
 echo "MCP: $MCP_CMD $MCP_ARGS_JSON"
 run mcp-app env MCP_COMMAND="$MCP_CMD" MCP_ARGS="$MCP_ARGS_JSON" bash -c "$(declare -f tmo); tmo 120 node test/mcp-smoke.mjs"
 
