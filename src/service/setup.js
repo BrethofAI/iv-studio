@@ -9,7 +9,40 @@ export function comboOptions(info, cls, input) {
   return Array.isArray(spec[0]) ? spec[0] : spec[1]?.options || []
 }
 
-export async function checkSetup({ comfy, template, manifest, characters }) {
+const base = (o) => o.replace(/\\/g, '/').split('/').pop()
+// Which workflows each model's pick in Settings → Models covers (plan.js: text, frames and continue run fl2va).
+const PICKS = { fl2va: ['text', 'frames', 'continue'], ref2va: ['reference', 'take', 'retake'] }
+
+// The file this ComfyUI has for a model: IV Studio's own build (match, alt), else another version of the same
+// model (accept: patterns, like the fp8 or NVFP4 build ComfyUI's templates download), else the one picked in
+// Settings → Models. { file, how: 'exact' | 'version' | 'picked' } or null. Files in subfolders keep their path.
+export function resolveModel(m, opts, chosen = {}) {
+  const names = [m.match, ...(m.alt || [])]
+  const exact = opts.find((o) => names.includes(base(o)))
+  if (exact) return { file: exact, how: 'exact' }
+  const version = (m.accept || []).map((a) => new RegExp(a, 'i')).reduce((hit, re) => hit || opts.find((o) => re.test(base(o))), null)
+  if (version) return { file: version, how: 'version' }
+  const pick = (PICKS[m.id] || []).map((k) => chosen[k]).find((f) => f && opts.includes(f))
+  return pick ? { file: pick, how: 'picked' } : null
+}
+
+// IV Studio's graphs name its own builds at the top of each models folder; for every required model this ComfyUI
+// has in another version or in a subfolder, the name to use instead (Comfy.submit swaps it into every graph).
+// info needs only the models' loader nodes.
+export function modelFileMap(manifest, info, chosen = {}) {
+  const map = {}
+  for (const m of manifest.models) {
+    if (m.optional) continue
+    const [cls, input] = m.loader.split('.')
+    const opts = comboOptions(info, cls, input) || []
+    if (opts.includes(m.match)) continue
+    const r = resolveModel(m, opts, chosen)
+    if (r) map[m.match] = r.file
+  }
+  return map
+}
+
+export async function checkSetup({ comfy, template, manifest, characters, chosen = {} }) {
   const items = []
   let stats
   try {
@@ -52,10 +85,11 @@ export async function checkSetup({ comfy, template, manifest, characters }) {
   for (const m of manifest.models) {
     const [cls, input] = m.loader.split('.')
     const opts = comboOptions(info, cls, input) || []
-    // optional: only for designing characters, so missing is a warning; alt: other names that count as present
-    const names = [m.match, ...(m.alt || [])]
-    const found = opts.find((o) => names.includes(o.replace(/\\/g, '/').split('/').pop()))
-    items.push({ id: `model:${m.id}`, label: m.optional ? `${m.label} · for ${m.optionalFor || 'optional tools'}` : m.label, status: found ? 'ok' : m.optional ? 'warn' : 'missing', detail: found || `Not found (${m.match})`, fix: found ? undefined : `Download into models/${m.folder}`, kind: 'model', model: m.id, size: m.size, optional: !!m.optional, page: m.url.match(/^https:\/\/huggingface\.co\/[^/]+\/[^/]+/)?.[0] })
+    // optional: only for one tool, so missing is a warning; alt/accept: other names and versions that count as present
+    const r = resolveModel(m, opts, chosen)
+    const found = r?.file
+    const detail = !r ? `Not found (${m.match})` : r.how === 'version' ? `${found} · another version of ${m.match}, used in its place` : r.how === 'picked' ? `${found} · your pick in Settings → Models` : found
+    items.push({ id: `model:${m.id}`, label: m.optional ? `${m.label} · for ${m.optionalFor || 'optional tools'}` : m.label, status: found ? 'ok' : m.optional ? 'warn' : 'missing', detail, fix: found ? undefined : `Download into models/${m.folder}`, kind: 'model', model: m.id, size: m.size, optional: !!m.optional, page: m.url.match(/^https:\/\/huggingface\.co\/[^/]+\/[^/]+/)?.[0] })
   }
 
   const loras = comboOptions(info, 'LoraLoaderModelOnly', 'lora_name') || []

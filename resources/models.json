@@ -13,6 +13,9 @@
         "text",
         "frames",
         "continue"
+      ],
+      "accept": [
+        "fl2va"
       ]
     },
     {
@@ -25,6 +28,9 @@
       "size": 20970379616,
       "needed_for": [
         "reference"
+      ],
+      "accept": [
+        "ref2va"
       ]
     },
     {
@@ -37,6 +43,9 @@
       "size": 14952506624,
       "needed_for": [
         "all"
+      ],
+      "accept": [
+        "^qwen3vl_32b_minimax_h3_"
       ]
     },
     {
@@ -49,6 +58,9 @@
       "size": 2811065184,
       "needed_for": [
         "all"
+      ],
+      "accept": [
+        "^minimax_h3_video_vae"
       ]
     },
     {
@@ -61,6 +73,9 @@
       "size": 605254808,
       "needed_for": [
         "all"
+      ],
+      "accept": [
+        "^minimax_h3_audio_vae"
       ]
     },
     {
@@ -73,6 +88,9 @@
       "size": 366647000,
       "needed_for": [
         "all"
+      ],
+      "accept": [
+        "DMAD.*4step"
       ]
     },
     {
@@ -85,6 +103,9 @@
       "size": 690592672,
       "needed_for": [
         "finish"
+      ],
+      "accept": [
+        "^minimax_h3_latent_upscaler"
       ]
     },
     {

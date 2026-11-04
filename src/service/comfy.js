@@ -16,6 +16,17 @@ export class Comfy {
     // RunPod (runpod.js): async () => the address of a pod started because the last one shut itself off,
     // or null when the current one is fine. Called once when a request can't reach the cloud.
     this.waker = null
+    // Studio: async () => { IV Studio's model file: the version this ComfyUI has } (setup.js modelFileMap), so a
+    // ComfyUI set up from ComfyUI's own templates (an fp8 or NVFP4 build) renders without the exact files.
+    this.fileMapper = null
+    this.fileMap = null
+  }
+
+  // The model names to swap into a graph, asked for again after a minute (the person may add files meanwhile).
+  async filesFor() {
+    if (this.remote || !this.fileMapper) return {}
+    if (!this.fileMap || Date.now() - this.fileMap.at > 60000) this.fileMap = { at: Date.now(), map: await this.fileMapper().catch(() => ({})) }
+    return this.fileMap.map
   }
 
   get remote() {
@@ -79,6 +90,7 @@ export class Comfy {
   // front: put it ahead of waiting renders (used for quick jobs such as writing a prompt).
   async submit(prompt, extra = {}, { front = false } = {}) {
     outputsUnder(prompt, this.folders.output)
+    renameFiles(prompt, await this.filesFor())
     const r = await this.req('/prompt', { method: 'POST', json: { prompt, client_id: this.clientId, extra_data: extra, ...(front ? { front: true } : {}) } })
     return r.prompt_id
   }
@@ -132,4 +144,11 @@ function summariseNodeErrors(errs) {
   return Object.entries(errs)
     .map(([id, e]) => `[${e.class_type} #${id}: ${(e.errors || []).map((x) => x.details || x.message).join('; ')}]`)
     .join(' ')
+}
+
+// Swaps model file names in a graph's inputs (IV Studio's own build -> the version this ComfyUI has).
+export function renameFiles(prompt, map) {
+  if (!map || !Object.keys(map).length) return prompt
+  for (const node of Object.values(prompt)) for (const [k, v] of Object.entries(node.inputs || {})) if (typeof v === 'string' && map[v]) node.inputs[k] = map[v]
+  return prompt
 }

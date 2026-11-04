@@ -13,7 +13,7 @@ import { adaptGraph, capabilities, withLivePreview } from './remote.js'
 import { Cast, resolveMentions } from './cast.js'
 import { contextIrGraph, fromContextIr, writeHarness, writeLocal, writeStoryLocal } from './prompter.js'
 import { renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
-import { checkSetup, comboOptions } from './setup.js'
+import { checkSetup, comboOptions, modelFileMap } from './setup.js'
 import { comfyPlace, installPacks, missingPacks } from './nodepacks.js'
 
 // A new shot's name from its prompt: the first words of [Shot 1] (not "subject_definitions" or the frames line),
@@ -77,6 +77,7 @@ export class Studio {
     this.meta = JSON.parse(fs.readFileSync(path.join(resourcesDir, 'workflows', 'iv_studio_api.groups.json'), 'utf8'))
     this.manifest = JSON.parse(fs.readFileSync(path.join(resourcesDir, 'models.json'), 'utf8'))
     this.comfy = new Comfy(comfyUrl, `iv-studio-${randomUUID().slice(0, 8)}`, comfyToken)
+    this.comfy.fileMapper = () => this.modelFiles()
     this.outputDir = outputDir || null
     this.progress = new Map() // promptId -> {value, max, node}
     this.live = new Map() // promptId -> the latest live preview step { image (data URL), step, total, take, at }
@@ -152,11 +153,20 @@ export class Studio {
   }
 
   // ---------- setup ----------
+  // The required models this ComfyUI has in another version than IV Studio's own (setup.js modelFileMap), read
+  // from just their loader nodes.
+  async modelFiles() {
+    const classes = [...new Set(this.manifest.models.filter((m) => !m.optional).map((m) => m.loader.split('.')[0]))]
+    const info = Object.assign({}, ...(await Promise.all(classes.map((c) => this.comfy.objectInfo(c).catch(() => ({}))))))
+    return modelFileMap(this.manifest, info, this.models)
+  }
+
   // An unreachable ComfyUI still reports remote, so the title bar keeps its cloud badge and GPU meter.
   async checkSetup() {
     let result
     try {
-      result = await checkSetup({ comfy: this.comfy, template: this.template, manifest: this.manifest, characters: this.characters() })
+      result = await checkSetup({ comfy: this.comfy, template: this.template, manifest: this.manifest, characters: this.characters(), chosen: this.models })
+      this.comfy.fileMap = null
     } catch (err) {
       return { ready: false, items: [{ id: 'comfyui', label: 'ComfyUI', status: 'missing', detail: err.message }], remote: this.comfy.remote }
     }
