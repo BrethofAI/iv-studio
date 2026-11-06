@@ -2598,9 +2598,50 @@ body.resizing * {
   background: var(--ink-2);
   border: 1px solid var(--line);
   cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
 }
 .workflow-card:hover {
   border-color: var(--red);
+}
+/* the card's own art: on the right, faded out toward the text on the left and toward the bottom */
+.workflow-art {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--card-art) right center / cover no-repeat;
+  -webkit-mask-image: linear-gradient(to right, transparent 22%, #000 78%), linear-gradient(to bottom, #000 30%, rgba(0, 0, 0, 0.45) 100%);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to right, transparent 22%, #000 78%), linear-gradient(to bottom, #000 30%, rgba(0, 0, 0, 0.45) 100%);
+  mask-composite: intersect;
+  opacity: 0.3;
+  transition:
+    opacity 0.25s ease,
+    transform 0.4s ease;
+}
+.workflow-card:hover .workflow-art,
+.workflow-card:focus-visible .workflow-art {
+  opacity: 0.36;
+  transform: scale(1.03);
+}
+/* a soft halo in the card's own colour keeps the letters on dark wherever the art runs behind them */
+.workflow-card > :not(.workflow-art) {
+  text-shadow:
+    0 0 2px var(--ink-2),
+    0 0 5px var(--ink-2),
+    0 0 10px var(--ink-2),
+    0 0 16px var(--ink-2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .workflow-art {
+    transition: none;
+  }
+  .workflow-card:hover .workflow-art,
+  .workflow-card:focus-visible .workflow-art {
+    transform: none;
+  }
 }
 .workflow-name {
   font: 700 44px / 1 var(--display);

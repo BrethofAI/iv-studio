@@ -40,3 +40,21 @@ Incognito still shows the closed eye on every page.
 - Projects (2026-10-30, when Projects joined the sidebar): projects 303, a director's chair and a megaphone.
 - The app copies are 1400 × 737 WebP (quality 86), the eye's own size. Raw outputs are in ComfyUI's
   `output\IV-Studio\page-art\`. `page-art-banners.jpg` shows every page's banner in the app.
+
+## The Workflows cards (2026-11-06)
+
+Matthew asked for each card on the Workflows page to have its own picture behind its text, faded, in the banners' style.
+
+- ChatGPT image generation through the Codex CLI (`~/.claude/skills/chapter-flow-site/scripts/codex-images.ps1`),
+  Matthew's default for stills. No text in the pictures; the card sets its own type in code.
+- References: Shinobi was drawn first from the Shinobi and Workflows banners and approved as the concept; the
+  other four used the Shinobi picture plus their own page's banner (Reel uses the music banner, as its page does).
+- Subjects: sequences (one unbroken looping filmstrip), sizzle (a lit match whose flame becomes film), reel (a
+  record with photographs fanned around it), shinobi (a katana cutting a filmstrip), replace (two masks swapping).
+  The prompts are in `workflow-cards.json`.
+- The app copies are `src/renderer/src/assets/workflows/<page>.webp`, 800 x 533, WebP quality 80 (49 to 77 KB).
+  The 1536 x 1024 masters are kept outside the repo.
+- On the card (`.workflow-art` in `studio.css`): right-aligned, 30% strength, faded out toward the left and the
+  bottom; 36% and a 3% zoom on hover or keyboard focus (no zoom or transition with reduced motion). A soft halo in
+  the card's own colour behind the text keeps the letters on dark: measured under the glyphs, the body text stays
+  within about 0.2 of its plain-card contrast (5.9:1) at the 5th percentile, and at least 5.0:1 at its worst pixel.

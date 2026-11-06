@@ -1,0 +1,47 @@
+{
+  "made": "2026-11-06",
+  "tool": "ChatGPT image generation through the Codex CLI (codex-images.ps1)",
+  "style": "No text, no letters, no numbers, no logos, no watermark, no frame or border.",
+  "cards": [
+    {
+      "file": "sequences.webp",
+      "prompt": "A 3:2 landscape illustration for the background of a small app card. Match the attached reference images exactly in style: flat hand-drawn screen-print illustration, near-black background, coral-red and salmon-pink liquid swirling contour lines, fine speckled dot texture, same palette and line weight. Subject: one single long unbroken filmstrip that curls and loops through the air as one continuous ribbon, its frames blank and glowing softly. Put the subject in the right half of the frame; let the left third fall away to almost plain black with only faint thin swirls, so text can sit there. Do not copy the reference composition; only its look.",
+      "references": [
+        "shinobi master (the approved concept)",
+        "src/renderer/src/assets/pages/sequences.webp"
+      ]
+    },
+    {
+      "file": "sizzle.webp",
+      "prompt": "A 3:2 landscape illustration for the background of a small app card. Match the attached reference images exactly in style: flat hand-drawn screen-print illustration, near-black background, coral-red and salmon-pink liquid swirling contour lines, fine speckled dot texture, same palette and line weight. Subject: a single lit match held upright, its flame rising and turning into a short curling strip of blank film frames, a few sparks around it. Put the subject in the right half of the frame; let the left third fall away to almost plain black with only faint thin swirls, so text can sit there. Do not copy the reference composition; only its look.",
+      "references": [
+        "shinobi master (the approved concept)",
+        "src/renderer/src/assets/pages/sizzle.webp"
+      ]
+    },
+    {
+      "file": "reel.webp",
+      "prompt": "A 3:2 landscape illustration for the background of a small app card. Match the attached reference images exactly in style: flat hand-drawn screen-print illustration, near-black background, coral-red and salmon-pink liquid swirling contour lines, fine speckled dot texture, same palette and line weight. Subject: a vinyl record seen at an angle with four or five blank photograph prints fanned out around it, and concentric pulse rings radiating from the record like a beat. The photographs are blank or show only simple swirl shapes, no faces. Put the subject in the right half of the frame; let the left third fall away to almost plain black with only faint thin swirls, so text can sit there. Do not copy the reference composition; only its look.",
+      "references": [
+        "shinobi master (the approved concept)",
+        "src/renderer/src/assets/pages/music.webp"
+      ]
+    },
+    {
+      "file": "shinobi.webp",
+      "prompt": "A 3:2 landscape illustration for the background of a small app card. Match the attached reference images exactly in style: flat hand-drawn screen-print illustration, near-black background, coral-red and salmon-pink liquid swirling contour lines, fine speckled dot texture, same palette and line weight. Subject: a single katana held at a diagonal, its blade cutting cleanly through a short strip of film so the two halves of the strip fly apart, small sparks along the cut. Put the subject in the right half of the frame; let the left third fall away to almost plain black with only faint thin swirls, so text can sit there. Do not copy the reference composition; only its look.",
+      "references": [
+        "src/renderer/src/assets/pages/shinobi.webp",
+        "src/renderer/src/assets/pages/workflows.webp"
+      ]
+    },
+    {
+      "file": "replace.webp",
+      "prompt": "A 3:2 landscape illustration for the background of a small app card. Match the attached reference images exactly in style: flat hand-drawn screen-print illustration, near-black background, coral-red and salmon-pink liquid swirling contour lines, fine speckled dot texture, same palette and line weight. Subject: two theatre masks side by side, one lifting away while the other slides into its place, with a swirl of motion lines between them. Put the subject in the right half of the frame; let the left third fall away to almost plain black with only faint thin swirls, so text can sit there. Do not copy the reference composition; only its look.",
+      "references": [
+        "shinobi master (the approved concept)",
+        "src/renderer/src/assets/pages/replace.webp"
+      ]
+    }
+  ]
+}

@@ -1,5 +1,11 @@
 import Hero from './Hero'
 
+// Each tool card's own art (assets/workflows/<page>.webp), drawn in the page banners' style and faded behind the
+// card's text (docs/art/README.md). A tool without a picture just shows the plain card.
+const CARD_ART = Object.fromEntries(
+  Object.entries(import.meta.glob('../assets/workflows/*.webp', { eager: true, import: 'default' })).map(([file, url]) => [file.split('/').pop().replace('.webp', ''), url])
+)
+
 // Tools that take a video further. Each is its own page; new ones are added to TOOLS.
 const TOOLS = [
   { page: 'sequences', name: 'Sequences', tag: 'Several shots, one continuous take', about: 'Write a scene as a list of 10 or 15 second shots and render them as one unbroken video, in one take or shot by shot, then retake any stretch and render it out.', credit: 'H3 Multishot' },
@@ -20,6 +26,7 @@ export default function Workflows({ go }) {
       <div className="workflow-cards">
         {TOOLS.map((t) => (
           <button key={t.page} className="workflow-card" onClick={() => go(t.page)}>
+            {CARD_ART[t.page] && <span className="workflow-art" aria-hidden="true" style={{ '--card-art': `url("${CARD_ART[t.page]}")` }} />}
             <span className="mono pink">{t.tag}</span>
             <span className="workflow-name">{t.name}</span>
             <span className="small dim">{t.about}</span>
