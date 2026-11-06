@@ -27,11 +27,12 @@ const STATE_TEXT = {
 const src = (file) => (file?.url ? media(file.url) : file?.path ? fileUrl(file.path) : null)
 
 // Every character in one place: the ones you can use now (presets), ready-made ones to download, and
-// characters you're designing or training.
-export function CharacterList({ openCharacter, notify, characters, setCharacters, go }) {
+// characters you're designing or training. Each is a portrait card; its settings open in a pop-up.
+export function CharacterList({ openCharacter, notify, characters, setCharacters, go, startShotWith }) {
   const [list, setList] = useState(null)
   // which character's LoRA the picker is choosing ('new' adds a character)
   const [pickFor, setPickFor] = useState(null)
+  const [editing, setEditing] = useState(null)
   const [ready, setReady] = useState([])
   const [loras, setLoras] = useState([])
   const [progress, setProgress] = useState({})
@@ -74,167 +75,263 @@ export function CharacterList({ openCharacter, notify, characters, setCharacters
   const has = (lora) => loras.some((l) => l.replace(/\\/g, '/').toLowerCase() === String(lora).replace(/\\/g, '/').toLowerCase())
   const offered = ready.filter((r) => !characters.some((c) => c.id === r.id))
   const face = (c) => c.picture || ready.find((r) => r.id === c.id)?.picture
+  const voiceOf = (c) => voices.find((v) => v.id === c.voiceId)
+  const downloadLabel = (id, size) => (progress[id] != null ? `Downloading ${Math.round(progress[id] * 100)}%` : `Download · ${Math.round(size / 1e6)} MB`)
+  const open = characters.find((c) => c.id === editing)
+  const unfinished = (list || []).filter((t) => !t.characterId).length
 
   return (
     <div className="characters">
       <Hero art="characters" title="Characters" kicker="Your recurring actors" />
-      <p className="lede">
+      <p className="lede cast-lede">
         The people H3 plays, the same in every shot.
         <span className="lede-small dim">
-          A character is a trained H3 LoRA plus its trigger word: pick one in Create or Sequences and write {'{char}'} in the prompt where they go. Download a ready-made one, add a LoRA you already have, or design and train your own.
+          Pick one in Create or Sequences and write <span className="mono">{'{char}'}</span> where they go.
         </span>
       </p>
 
-      <section className="group">
-        <div className="group-head">
-          <h2>Your characters</h2>
-          <p className="dim small">Ready to use in Create, Sequences and Replace.</p>
+      <datalist id="iv-loras">
+        {loras.filter((l) => /h3|minimax/i.test(l)).map((l) => (
+          <option key={l} value={l} />
+        ))}
+      </datalist>
+
+      <section className="cast-section">
+        <div className="cast-head">
+          <h2>
+            Your characters <span className="cast-count mono">{characters.length}</span>
+          </h2>
+          <p className="dim small">Ready to use in Create, Sequences and Replace. Click one to change its settings.</p>
         </div>
-        <div className="group-body">
-          <datalist id="iv-loras">
-            {loras.filter((l) => /h3|minimax/i.test(l)).map((l) => (
-              <option key={l} value={l} />
-            ))}
-          </datalist>
-          <div className="preset-cards">
-            {characters.map((c) => {
-              const found = has(c.lora)
-              const offer = ready.find((r) => r.id === c.id && r.available)
-              return (
-                <div key={c.id} className="preset-card">
-                  <div className="preset-face">{face(c) ? <img src={fileUrl(face(c))} alt="" /> : <span>{c.name.slice(0, 1)}</span>}</div>
-                  <div className="preset-fields">
-                    <input className="preset-name" value={c.name} onChange={(e) => saveCharacter(c.id, { name: e.target.value })} />
-                    <div className="row tight">
-                      <span className="row-label">Trigger</span>
-                      <input className="mono" value={c.trigger} onChange={(e) => saveCharacter(c.id, { trigger: e.target.value })} />
-                    </div>
-                    <div className="row tight">
-                      <span className="row-label">Strength</span>
-                      <input className="mini" type="number" step={0.05} min={0} max={1.5} value={c.strength} onChange={(e) => saveCharacter(c.id, { strength: Number(e.target.value) })} />
-                    </div>
-                    <div className="row tight">
-                      <span className="row-label">LoRA</span>
-                      <div className="lora-field">
-                        <input list="iv-loras" value={c.lora} onChange={(e) => saveCharacter(c.id, { lora: e.target.value })} />
-                        <button className="btn btn-small" onClick={() => setPickFor(c.id)}>
-                          Choose
-                        </button>
-                      </div>
-                    </div>
-                    <div className="row tight">
-                      <span className="row-label">Voice</span>
-                      <select value={c.voiceId || ''} onChange={(e) => saveCharacter(c.id, { voiceId: e.target.value || null, voiceDeclined: !e.target.value })}>
-                        <option value="">No voice</option>
-                        {voices.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="row-actions">
-                      <span className={`mono small ${found ? 'cloud-ok' : 'pink'}`}>{found ? '● LoRA found' : '● LoRA not in ComfyUI'}</span>
-                      {!found && offer && (
-                        <button className="btn btn-small btn-primary" disabled={progress[c.id] != null} onClick={() => install(c.id)}>
-                          {progress[c.id] != null ? `Downloading ${Math.round(progress[c.id] * 100)}%` : `Download (${Math.round(offer.lora.size / 1e6)} MB)`}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <TileDelete name={c.name} keeps="Only the preset goes; its LoRA file stays in ComfyUI, and shots already made with it keep working." notify={notify} onDelete={async () => setCharacters(await C.save(characters.filter((x) => x.id !== c.id)))} />
-                </div>
-              )
-            })}
-          </div>
-          <button className="btn btn-small" onClick={() => setPickFor('new')}>
-            + Add one from a LoRA
+        <div className="cast-grid">
+          {characters.map((c) => {
+            const found = has(c.lora)
+            const v = voiceOf(c)
+            return (
+              <div key={c.id} className="portrait">
+                <button className="portrait-open" onClick={() => setEditing(c.id)} aria-label={`${c.name}: settings`}>
+                  <span className="portrait-face">{face(c) ? <img src={fileUrl(face(c))} alt="" /> : <span className="portrait-initial">{c.name.slice(0, 1)}</span>}</span>
+                  {!found && <span className="portrait-flag mono">LoRA missing</span>}
+                  <span className="portrait-body">
+                    <span className="portrait-name">{c.name}</span>
+                    <span className="portrait-meta mono">
+                      {c.trigger} · {!v ? 'no voice' : v.name === c.name ? 'own voice' : v.name}
+                    </span>
+                  </span>
+                </button>
+                {found && startShotWith && (
+                  <button className="btn btn-small btn-primary portrait-action" onClick={() => startShotWith(c.id)}>
+                    New shot
+                  </button>
+                )}
+              </div>
+            )
+          })}
+          <button className="portrait portrait-add" onClick={() => setPickFor('new')}>
+            <span className="portrait-plus">+</span>
+            <span className="portrait-name">Add from a LoRA</span>
+            <span className="dim small">One you already have in ComfyUI</span>
           </button>
-          {pickFor && (
-            <LoraPicker
-              notify={notify}
-              go={go}
-              onClose={() => setPickFor(null)}
-              onPick={async ({ name, words = [], title }) => {
-                // a new character from the LoRA, or another LoRA for an existing one
-                if (pickFor === 'new') setCharacters(await C.save([...characters, { id: `char${Date.now().toString(36)}`, name: title || loraTitle(name), lora: name, strength: 0.8, trigger: words[0] || 'n4m3' }]))
-                else await saveCharacter(pickFor, { lora: name, ...(words[0] ? { trigger: words[0] } : {}) })
-                setPickFor(null)
-              }}
-            />
-          )}
         </div>
       </section>
 
       {offered.length > 0 && (
-        <section className="group">
-          <div className="group-head">
+        <section className="cast-section">
+          <div className="cast-head">
             <h2>Ready-made</h2>
-            <p className="dim small">IV Studio's own invented characters. Download one (about 150 MB) and they join your characters.</p>
+            <p className="dim small">IV Studio's own invented characters. Download one and they join your characters.</p>
           </div>
-          <div className="group-body">
-            <div className="ready-cards">
-              {offered.map((r) => (
-                <div key={r.id} className="ready-card">
+          <div className="cast-grid">
+            {offered.map((r) => (
+              <div key={r.id} className="portrait portrait-ready">
+                <span className="portrait-face">
                   <img src={fileUrl(r.picture)} alt={`${r.name}'s face`} />
-                  <div className="ready-body">
-                    <span className="ready-name">{r.name}</span>
-                    <span className="small dim">{r.about}</span>
-                    <span className="mono small">
-                      trigger {r.trigger} · strength {r.strength}
-                    </span>
-                    {r.available ? (
-                      <button className="btn btn-small btn-primary" disabled={progress[r.id] != null} onClick={() => install(r.id)}>
-                        {progress[r.id] != null ? `Downloading ${Math.round(progress[r.id] * 100)}%` : `Download (${Math.round(r.lora.size / 1e6)} MB)`}
-                      </button>
-                    ) : (
-                      <span className="mono small dim">Coming soon</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                </span>
+                <span className="portrait-body">
+                  <span className="portrait-name">{r.name}</span>
+                  {r.about && <span className="portrait-about small">{r.about}</span>}
+                  {r.available ? (
+                    <button className="btn btn-small btn-primary" disabled={progress[r.id] != null} onClick={() => install(r.id)}>
+                      {downloadLabel(r.id, r.lora.size)}
+                    </button>
+                  ) : (
+                    <span className="portrait-meta mono">Coming soon</span>
+                  )}
+                </span>
+              </div>
+            ))}
           </div>
         </section>
       )}
 
-      <section className="group">
-        <div className="group-head">
+      <section className="cast-section">
+        <div className="cast-head">
           <h2>Train your own</h2>
-          <p className="dim small">Design an invented person, give them talking clips and a voice, and train their LoRA on your Modal account (about 30 minutes and $3–4). Only invented people, or real people who agreed to it.</p>
+          <p className="dim small">Design an invented person, give them talking clips and a voice, and train their LoRA on your Modal account: about 30 minutes and $3–4. Only invented people, or real people who agreed to it.</p>
         </div>
-        <div className="group-body">
-          <div className="row">
-            <span className="row-label">Name</span>
+        <form
+          className="cast-new"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (name.trim()) create()
+          }}
+        >
+          <label>
+            <span className="mono label">Name</span>
             <input value={name} placeholder="e.g. Maya Ortiz" onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="row">
-            <span className="row-label">Who</span>
+          </label>
+          <label>
+            <span className="mono label">Who</span>
             <input value={who} placeholder="a man in his fifties" onChange={(e) => setWho(e.target.value)} />
-          </div>
-          <button className="btn btn-primary" disabled={!name.trim()} onClick={create}>
+          </label>
+          <button className="btn btn-primary" type="submit" disabled={!name.trim()}>
             Start designing
           </button>
-          {list?.length > 0 && (
-            <div className="tiles seq-tiles">
+        </form>
+        {list?.length > 0 && (
+          <>
+            <p className="mono label cast-sub">
+              Designs and trainings{unfinished > 0 && <span className="dim"> · {unfinished} not finished</span>}
+            </p>
+            <div className="cast-grid cast-grid-small">
               {list.map((t) => (
-                <div key={t.id} className="tile-wrap">
-                  <button className="tile char-tile" onClick={() => openCharacter(t.id)}>
-                    {t.cover ? <img src={src(t.cover)} alt="" /> : <span className="char-cover-empty mono dim">No face yet</span>}
-                    <div className="tile-body">
-                      <span className="tile-name">{t.name}</span>
-                      <span className="mono dim">
-                        {t.trigger} · {t.characterId ? 'ready to use' : t.state ? STATE_TEXT[t.state] || t.state : `step: ${t.step}`}
-                      </span>
-                    </div>
+                <div key={t.id} className="portrait tile-wrap">
+                  <button className="portrait-open" onClick={() => openCharacter(t.id)}>
+                    <span className="portrait-face">{t.cover ? <img src={src(t.cover)} alt="" /> : <span className="portrait-initial">{t.name.slice(0, 1)}</span>}</span>
+                    <span className={`portrait-flag mono ${t.characterId ? 'ok' : ''}`}>{t.characterId ? 'Trained' : t.state ? STATE_TEXT[t.state] || t.state : `Step: ${t.step}`}</span>
+                    <span className="portrait-body">
+                      <span className="portrait-name">{t.name}</span>
+                      <span className="portrait-meta mono">{t.trigger}</span>
+                    </span>
                   </button>
                   <TileDelete name={t.name} keeps={t.characterId ? 'The character preset and its LoRA stay; this removes the design stills, clips and dataset.' : 'This removes its design stills, clips and dataset.'} notify={notify} onDelete={async () => (await window.ivstudio.training.delete(t.id), setList(await window.ivstudio.training.list()))} />
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </section>
+
+      {open && (
+        <CharacterSettings
+          c={open}
+          face={face(open)}
+          found={has(open.lora)}
+          offer={ready.find((r) => r.id === open.id && r.available)}
+          voices={voices}
+          progress={progress[open.id]}
+          downloadLabel={downloadLabel}
+          picking={!!pickFor}
+          save={(patch) => saveCharacter(open.id, patch)}
+          install={() => install(open.id)}
+          chooseLora={() => setPickFor(open.id)}
+          newShot={startShotWith ? () => startShotWith(open.id) : null}
+          remove={async () => {
+            setEditing(null)
+            setCharacters(await C.save(characters.filter((x) => x.id !== open.id)))
+          }}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      {pickFor && (
+        <LoraPicker
+          notify={notify}
+          go={go}
+          onClose={() => setPickFor(null)}
+          onPick={async ({ name, words = [], title }) => {
+            // a new character from the LoRA (its settings open next), or another LoRA for an existing one
+            if (pickFor === 'new') {
+              const id = `char${Date.now().toString(36)}`
+              setCharacters(await C.save([...characters, { id, name: title || loraTitle(name), lora: name, strength: 0.8, trigger: words[0] || 'n4m3' }]))
+              setEditing(id)
+            } else await saveCharacter(pickFor, { lora: name, ...(words[0] ? { trigger: words[0] } : {}) })
+            setPickFor(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// One character's settings in a pop-up: name, trigger, strength, LoRA and voice. Changes save as you type.
+function CharacterSettings({ c, face, found, offer, voices, progress, downloadLabel, picking, save, install, chooseLora, newShot, remove, onClose }) {
+  useEffect(() => {
+    const esc = (e) => e.key === 'Escape' && !picking && onClose()
+    window.addEventListener('keydown', esc)
+    return () => window.removeEventListener('keydown', esc)
+  }, [picking])
+  return (
+    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal cast-modal" role="dialog" aria-label={`${c.name} settings`}>
+        <div className="cast-modal-face">{face ? <img src={fileUrl(face)} alt="" /> : <span className="portrait-initial">{c.name.slice(0, 1)}</span>}</div>
+        <div className="cast-modal-body">
+          <div className="cast-modal-top">
+            <input className="cast-modal-name" value={c.name} aria-label="Name" onChange={(e) => save({ name: e.target.value })} />
+            <button className="link-btn mono cast-modal-close" onClick={onClose} aria-label="Close">
+              ✕
+            </button>
+          </div>
+          <div className="cast-modal-status">
+            <span className={`mono small ${found ? 'cloud-ok' : 'pink'}`}>{found ? '● LoRA found in ComfyUI' : '● LoRA not in ComfyUI'}</span>
+            {!found && offer && (
+              <button className="btn btn-small btn-primary" disabled={progress != null} onClick={install}>
+                {downloadLabel(c.id, offer.lora.size)}
+              </button>
+            )}
+          </div>
+
+          <div className="cast-fields">
+            <label className="cast-field">
+              <span className="mono label">Trigger word</span>
+              <input className="mono" value={c.trigger} onChange={(e) => save({ trigger: e.target.value })} />
+            </label>
+            <label className="cast-field">
+              <span className="mono label">
+                Strength <span className="cast-value">{Number(c.strength).toFixed(2)}</span>
+              </span>
+              <input type="range" min={0} max={1.5} step={0.05} value={c.strength} onChange={(e) => save({ strength: Number(e.target.value) })} />
+            </label>
+            <div className="cast-field cast-field-wide">
+              <span className="mono label">LoRA file</span>
+              <div className="lora-field">
+                <input list="iv-loras" value={c.lora} title={c.lora} onChange={(e) => save({ lora: e.target.value })} />
+                <button className="btn btn-small" onClick={chooseLora}>
+                  Choose
+                </button>
+              </div>
+            </div>
+            <label className="cast-field cast-field-wide">
+              <span className="mono label">Voice</span>
+              <select value={c.voiceId || ''} onChange={(e) => save({ voiceId: e.target.value || null, voiceDeclined: !e.target.value })}>
+                <option value="">No voice</option>
+                {voices.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="cast-modal-foot">
+            <button
+              className="link-btn mono danger"
+              onClick={async () => (await ask({ title: `Delete “${c.name}”?`, message: 'Only the preset goes; its LoRA file stays in ComfyUI, and shots already made with it keep working.', confirm: 'Delete', danger: true })) && remove()}
+            >
+              Delete
+            </button>
+            <span className="cast-modal-spacer" />
+            {newShot && found && (
+              <button className="btn btn-small" onClick={newShot}>
+                New shot with {c.name.split(' ')[0]}
+              </button>
+            )}
+            <button className="btn btn-small btn-primary" onClick={onClose}>
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

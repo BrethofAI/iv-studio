@@ -383,7 +383,7 @@ export default function App() {
         {page === 'sizzle' && <SizzleList {...ctx} />}
         {page === 'sizzle-project' && sizzleId && <SizzleProject key={sizzleId} sizzleId={sizzleId} {...ctx} />}
         {page === 'shinobi-film' && shinobiId && <ShinobiProject key={shinobiId} projectId={shinobiId} {...ctx} />}
-        {page === 'characters' && <CharacterList {...ctx} />}
+        {page === 'characters' && <CharacterList {...ctx} startShotWith={startShotWith} />}
         {page === 'character' && trainingId && <CharacterTrainer key={trainingId} trainingId={trainingId} {...ctx} />}
         {page === 'setup' && <Setup {...ctx} />}
         {page === 'cloud' && <Cloud {...ctx} />}

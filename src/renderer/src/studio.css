@@ -2379,15 +2379,6 @@ body.resizing * {
 .char-steps {
   margin: 0 0 8px;
 }
-.char-tile img,
-.char-cover-empty {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  aspect-ratio: 4 / 5;
-  object-fit: cover;
-  background: var(--ink-3);
-}
 .char-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -2768,48 +2759,9 @@ body.resizing * {
   }
 }
 
-/* ---------- characters page: presets and ready-made ---------- */
-.preset-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-  gap: 12px;
-}
-.preset-card {
-  position: relative;
-  display: grid;
-  grid-template-columns: 112px 1fr;
-  gap: 16px;
-  padding: 14px;
-  background: var(--ink-2);
-  border: 1px solid var(--line);
-}
-.preset-card:hover .tile-delete {
-  opacity: 1;
-}
-.preset-face {
-  display: grid;
-  place-items: center;
-  width: 112px;
-  height: 112px;
-  overflow: hidden;
-  background: var(--ink-3);
-  font: 700 48px / 1 var(--display);
-  color: var(--pink);
-}
-.preset-face img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.preset-fields {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
-.preset-fields .row.tight {
-  grid-template-columns: 72px 1fr;
-  margin: 0;
-}
+/* ---------- characters page (2026-11-06 redesign) ----------
+   Each character is a portrait card: the face fills it, name and trigger sit on a fade at the bottom. Settings open in
+   a pop-up (.cast-modal) instead of sitting in the card. Ready-made and in-training characters use the same card. */
 .preset-name {
   font: 700 24px / 1.1 var(--display);
   text-transform: uppercase;
@@ -2823,36 +2775,331 @@ body.resizing * {
   border-bottom-color: var(--line-strong);
   outline: none;
 }
-.ready-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-  gap: 12px;
+.cast-lede {
+  margin-bottom: 22px;
 }
-.ready-card {
+.cast-section {
   display: grid;
-  grid-template-columns: 168px 1fr;
+  gap: 18px;
+  border-top: 1px solid var(--line);
+  padding: 28px 0 34px;
+}
+.cast-head {
+  display: grid;
+  gap: 4px;
+}
+.cast-head h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0;
+  font: 800 30px / 1 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.cast-head p {
+  margin: 0;
+  max-width: 70ch;
+}
+.cast-count {
+  font-size: 13px;
+  color: var(--pink);
+}
+.cast-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 240px));
+  gap: 14px;
+}
+.cast-grid-small {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 180px));
+}
+.cast-sub {
+  margin: 8px 0 -4px;
+}
+
+.portrait {
+  position: relative;
+  display: block;
+  aspect-ratio: 3 / 4;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--ink-3);
+  border: 1px solid var(--line);
+  transition: border-color 0.15s;
+}
+.portrait:hover,
+.portrait:focus-within {
+  border-color: var(--line-strong);
+}
+.portrait-open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+.portrait-open:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: -2px;
+}
+.portrait-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.portrait-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.portrait:hover .portrait-face img {
+  transform: scale(1.035);
+}
+.portrait-initial {
+  font: 800 72px / 1 var(--display);
+  color: var(--pink);
+}
+.portrait-body {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: grid;
+  gap: 4px;
+  padding: 48px 14px 13px;
+  background: linear-gradient(to top, rgba(16, 12, 14, 0.96) 0%, rgba(16, 12, 14, 0.82) 45%, rgba(16, 12, 14, 0) 100%);
+}
+.portrait-name {
+  font: 800 24px / 1 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.portrait-meta {
+  color: var(--paper-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.portrait-about {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--paper-dim);
+  line-height: 1.4;
+}
+.portrait-ready .portrait-body .btn {
+  justify-self: start;
+  margin-top: 4px;
+}
+.portrait-flag {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 5px 8px;
+  background: rgba(16, 12, 14, 0.85);
+  border: 1px solid var(--pink);
+  color: var(--pink);
+}
+.portrait-flag.ok {
+  border-color: #6ee7a8;
+  color: #6ee7a8;
+}
+/* "New shot" shows on hover, over the top right corner */
+.portrait-action {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.15s, transform 0.15s;
+}
+.portrait:hover .portrait-action,
+.portrait-action:focus-visible {
+  opacity: 1;
+  transform: none;
+}
+.portrait-add {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 6px;
+  padding: 16px;
+  text-align: center;
+  background: transparent;
+  border: 1px dashed var(--line-strong);
+  color: var(--paper);
+}
+.portrait-add:hover {
+  border-color: var(--pink);
+}
+.portrait-add .portrait-name {
+  font-size: 20px;
+  white-space: normal;
+}
+.portrait-plus {
+  font: 300 46px / 1 var(--display);
+  color: var(--pink);
+}
+@media (hover: none) {
+  .portrait-action {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* the new-character form: one row of two fields and the button */
+.cast-new {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 16px;
   background: var(--ink-2);
   border: 1px solid var(--line);
 }
-.ready-card img {
-  width: 168px;
+.cast-new label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.cast-new .label,
+.cast-field .label {
+  margin: 0;
+}
+.cast-new .btn {
+  height: 42px;
+}
+@media (max-width: 760px) {
+  .cast-new {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cast-new .btn {
+    justify-self: start;
+  }
+}
+
+/* one character's settings */
+.modal.cast-modal {
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 0;
+  width: min(760px, 100%);
+  padding: 0;
+  border-top: 3px solid var(--pink);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+}
+.cast-modal-face {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  background: var(--ink-3);
+  overflow: hidden;
+}
+.cast-modal-face img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
   height: 100%;
-  min-height: 168px;
   object-fit: cover;
 }
-.ready-body {
+.cast-modal-body {
   display: grid;
-  gap: 8px;
+  gap: 14px;
   align-content: start;
-  padding: 14px;
+  min-width: 0;
+  padding: 20px 24px 18px;
 }
-.ready-body .btn {
-  justify-self: start;
+.cast-modal-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-.ready-name {
-  font: 700 28px / 1 var(--display);
+.cast-modal-name {
+  flex: 1;
+  min-width: 0;
+  padding: 0 0 2px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  font: 800 34px / 1.05 var(--display);
   text-transform: uppercase;
   color: var(--cream);
+}
+.cast-modal-name:focus {
+  border-bottom-color: var(--line-strong);
+  outline: none;
+}
+.cast-modal-close {
+  font-size: 14px;
+  padding: 6px 4px;
+}
+.cast-modal-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: -6px;
+}
+.cast-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.cast-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  align-content: start;
+}
+.cast-field-wide {
+  grid-column: 1 / -1;
+}
+.cast-field input[type='range'] {
+  width: 100%;
+  margin: 10px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  accent-color: var(--pink);
+}
+.cast-value {
+  color: var(--paper);
+  margin-left: 6px;
+}
+.cast-modal-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.cast-modal-spacer {
+  flex: 1;
+}
+@media (max-width: 700px) {
+  .modal.cast-modal {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cast-modal-face {
+    height: 220px;
+  }
+  .cast-modal-face img {
+    object-position: 50% 30%;
+  }
+  .cast-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* the Infinite Variance eye in the title bar's corner (white, from IV's own logo) */
