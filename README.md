@@ -171,7 +171,7 @@ cloud. No strong graphics card? Shots can also render on a GPU in your own [RunP
 3. Start ComfyUI, then IV Studio. **Settings → Setup** checks ComfyUI, your GPU, the node packs and every
    model, installs missing node packs into ComfyUI with one click (restart ComfyUI afterwards), and
    downloads missing models straight into ComfyUI's models folder (each checked against the SHA-256 its
-   host publishes).
+   host publishes). Its **Updates** row keeps ComfyUI, its node packs and ComfyUI-Manager up to date.
 4. For voices, open **Audio → Voices** and press **Set up voices** once. For music, open
    **Audio → Music** and download the engine you want.
 
@@ -639,12 +639,21 @@ IV Studio is a front end for your own ComfyUI; every picture, video and song is 
   their requirements are installed with ComfyUI's own Python (never the torch family, which ComfyUI already
   has). A folder that's already there is left alone. Restart ComfyUI afterwards. Agents can do the same
   with `install_node_packs`. Replace and Cut out also use SAM 3, which recent ComfyUI has built in.
+- **Updates.** **Settings → Setup → Updates** checks ComfyUI against its newest stable release and counts
+  the custom node packs with updates. **Update everything** saves a ComfyUI-Manager snapshot, updates every
+  pack (Manager included) and ComfyUI through Manager, then restarts ComfyUI and waits for it; nothing runs
+  while ComfyUI is rendering. **Undo last update** restores the snapshot, and switches back on the plain-folder
+  packs (IV Studio's own among them) that Manager's restore switches off. It needs ComfyUI-Manager (Setup
+  offers to install it) and a ComfyUI on this PC; under the ComfyUI Desktop app, which updates ComfyUI itself,
+  it updates the node packs. Agents: `check_comfy_updates`, `update_comfy`, `undo_comfy_update`.
+- **The latent upscaler.** ComfyUI 0.44 and newer have the H3 latent upscaler built in; there, finishes use
+  ComfyUI's own (same model and size) and the LBH node pack below isn't needed.
 
   | Pack | Used for | Version |
   | --- | --- | --- |
   | [ComfyUI-MiniMaxH3Mod (RefMods)](https://github.com/Luisacaotica/ComfyUI-MiniMaxH3Mod) | Shots | Comfy Registry 0.2.9 |
   | [Fantastic MiniMaxH3 PromptBuilder (media loader)](https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder) | Shots | commit `22e719f` |
-  | [MiniMax H3 latent upscaler](https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler) | Shots | commit `40316cf` |
+  | [MiniMax H3 latent upscaler](https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler) | Shots (ComfyUI before 0.44) | commit `40316cf` |
   | [VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) | Shots | commit `4d907be` |
   | [DLSS5 Enhancer v15 (Strix-3D)](https://github.com/Strix-3D/ComfyUI-DLSS5-Enhancer-v15) | Shots (Windows only) | Comfy Registry 1.3.1 |
   | [rgthree-comfy](https://github.com/rgthree/rgthree-comfy) | Shots | commit `d7297b4` |
@@ -769,7 +778,7 @@ Agents learn how to use it from `resources/agent-guide.md`: the server's instruc
 
 - **Guide and start menu:** `get_guide`, `get_menu`.
 - **Images:** `list_image_models`, `make_image`, `list_images`, `get_image`, `cancel_image`, `delete_image`.
-- **Shots:** `check_setup`, `install_node_packs`, `list_characters`, `list_projects`, `plan_render`, `check_prompt`,
+- **Shots:** `check_setup`, `install_node_packs`, `check_comfy_updates`, `update_comfy`, `undo_comfy_update`, `list_characters`, `list_projects`, `plan_render`, `check_prompt`,
   `generate_previews`, `finish_candidate`, `enhance_final`, `rank_takes`, `review_take`, `make_previs`.
 - **Cast and places:** `list_cast`, `save_place`.
 - **Projects (short films):** `list_films`, `create_film`, `get_film`, `update_film`, `set_film_script`,

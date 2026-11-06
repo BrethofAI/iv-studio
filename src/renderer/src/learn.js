@@ -147,6 +147,13 @@ export const TIPS_FOR_ART = { create: 'create', shots: 'shots', projects: 'proje
 // Learn page (and a dot on its sidebar item) shows the current version's once, until it's been seen.
 export const NEWS = [
   {
+    version: '0.3.3',
+    items: [
+      { card: 'startcomfy', text: 'Settings → Setup → Updates keeps ComfyUI up to date: Check for updates, then Update everything updates ComfyUI, every custom node pack and ComfyUI-Manager, saving a snapshot first and restarting ComfyUI after. Undo last update puts it all back.' },
+      { card: 'finish', text: 'On ComfyUI 0.44 or newer, finishes use ComfyUI’s own H3 latent upscaler: the same model and size, faster, without the memory spikes.' }
+    ]
+  },
+  {
     version: '0.3.2',
     items: [
       { card: 'cloud', text: 'IV Studio runs on a Mac (Apple Silicon and Intel). A Mac has no NVIDIA card for MiniMax H3, so shots render on your RunPod or Modal account, or on Comfy Cloud: the Dashboard points you to the Cloud page.' }
