@@ -147,6 +147,12 @@ export const TIPS_FOR_ART = { create: 'create', shots: 'shots', projects: 'proje
 // Learn page (and a dot on its sidebar item) shows the current version's once, until it's been seen.
 export const NEWS = [
   {
+    version: '0.3.4',
+    items: [
+      { card: 'sizzle', text: 'Each Workflows tool (Sequences, Sizzle, Reel, Shinobi and Replace) has its own picture on its card, drawn in the style of IV Studio’s page banners.' }
+    ]
+  },
+  {
     version: '0.3.3',
     items: [
       { card: 'startcomfy', text: 'Settings → Setup → Updates keeps ComfyUI up to date: Check for updates, then Update everything updates ComfyUI, every custom node pack and ComfyUI-Manager, saving a snapshot first and restarting ComfyUI after. Undo last update puts it all back.' },
