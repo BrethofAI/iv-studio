@@ -711,7 +711,7 @@ top of the page.
 1. **RunPod account.** Paste an API key from RunPod's Settings → API Keys page (read/write). It is checked
    with RunPod, then stored encrypted on your PC, and used only to make your storage volume and to start and
    stop your own pods.
-2. **GPU and shut-off.** Pick an L40S or RTX 6000 Ada (48 GB), A100 or H100 (80 GB) or RTX 4090 (24 GB). The
+2. **GPU and shut-off.** Pick an L40S or RTX 6000 Ada (48 GB), A100 or H100 (80 GB), RTX 5090 (32 GB) or RTX 4090 (24 GB). The
    page shows RunPod's live hourly price and whether each is free right now; billing is by the second.
 3. **Set up.** IV Studio makes a 100 GB network volume in a RunPod data center that has your GPU and starts a
    pod from RunPod's official PyTorch image with this version's `resources/cloud` folder. The first pod installs

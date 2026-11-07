@@ -21,12 +21,14 @@ const CHUNK = 64 * 1024 * 1024 // RunPod's proxy refuses request bodies over 100
 
 // GPUs that hold MiniMax H3 comfortably, in the order IV Studio falls back through when the chosen one is out
 // of stock in the volume's data center. Prices are RunPod's Secure Cloud list prices (2026-11-03, per hour,
-// billed by the second); the Cloud page shows the live ones from RunPod's catalog when it can reach it.
+// billed by the second; the RTX 5090 checked 2026-11-06); the Cloud page shows the live ones from RunPod's
+// catalog when it can reach it. The 5090 is Blackwell: the pod's torch comes from the CUDA 12.8 index, which has it.
 export const GPUS = [
   { id: 'NVIDIA L40S', label: 'L40S · 48 GB', perHour: 1.09, note: 'Recommended: fits H3 in memory, best value' },
   { id: 'NVIDIA RTX 6000 Ada Generation', label: 'RTX 6000 Ada · 48 GB', perHour: 0.99, note: 'Same memory as the L40S, a little slower' },
   { id: 'NVIDIA A100 80GB PCIe', label: 'A100 · 80 GB', perHour: 1.79, note: 'More memory headroom for long sequences' },
   { id: 'NVIDIA H100 80GB HBM3', label: 'H100 · 80 GB', perHour: 3.99, note: 'About twice as fast, about four times the price' },
+  { id: 'NVIDIA GeForce RTX 5090', label: 'RTX 5090 · 32 GB', perHour: 1.19, note: 'The newest GeForce: more memory than the 4090; often short on stock' },
   { id: 'NVIDIA GeForce RTX 4090', label: 'RTX 4090 · 24 GB', perHour: 0.89, note: 'The cheapest; the same card IV Studio is built on' }
 ]
 
