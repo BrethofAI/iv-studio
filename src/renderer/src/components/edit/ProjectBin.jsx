@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { media as comfyMedia } from '../../media'
 import { fileUrl, timecode } from './model'
 import { Wave, usePeaks } from './thumbs'
+import Loading from '../Loading'
 
 const BINS = [
   ['all', 'All'],
@@ -115,7 +116,7 @@ export default function ProjectBin({ media, sourceId, onSource, onAdd, onTitle, 
       )}
       {tab === 'library' && (
         <div className="bin-grid">
-          {lib === null && <p className="small dim mono">Loading…</p>}
+          {lib === null && <Loading label="Loading" small />}
           {lib && libList.length === 0 && <p className="small dim">{lib.length ? 'Nothing matches.' : 'Nothing made yet.'}</p>}
           {libList.map((item) => (
             <button key={item.key} className={`bin-tile ${item.type === 'video' ? 'video' : 'audio'}`} disabled={!!busy} onClick={() => addOutput(item)} title={`${item.group} · ${item.label}\nClick to add it to this edit`}>

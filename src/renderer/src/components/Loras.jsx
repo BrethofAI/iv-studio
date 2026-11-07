@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Hero from './Hero'
 import { fileUrl } from './edit/model'
+import Loading from './Loading'
 
 // LoRAs as pictures: Civitai's H3 LoRAs (Discover) and the ones on this PC (Yours), with clips that play on
 // hover. LoraPicker is the same thing in a dialog, for Create's LoRA tray and for Characters.
@@ -137,7 +138,7 @@ function Discover({ meta, onOpen, compact = false }) {
         ))}
       </div>
       {!busy && !error && items.length === 0 && <p className="dim">Nothing matches. Try another word or tag.</p>}
-      <div className="lora-more">{busy ? <span className="mono dim">Loading…</span> : next && <button className="btn btn-small" onClick={() => load(true)}>Show more</button>}</div>
+      <div className="lora-more">{busy ? <Loading label="Loading more" small /> : next && <button className="btn btn-small" onClick={() => load(true)}>Show more</button>}</div>
       <p className="small dim">From Civitai. Each LoRA keeps its maker's licence, shown before you download. LoRAs of real people aren't shown.</p>
     </div>
   )
@@ -201,7 +202,7 @@ function Details({ id, meta, onClose, onUse, go }) {
     <div className="lora-modal-backdrop" onClick={onClose}>
       <div className="lora-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={m?.name || 'LoRA'}>
         <div className="lora-modal-gallery">
-          {!m && !error && <p className="mono dim">Loading…</p>}
+          {!m && !error && <Loading label="Loading" />}
           {m && gallery.length === 0 && <p className="dim">No previews to show.</p>}
           <div className="lora-modal-grid" style={{ columnCount: gallery.length <= 1 ? 1 : gallery.length <= 4 ? 2 : 3 }}>
             {gallery.map((p, i) => (

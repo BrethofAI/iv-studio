@@ -83,6 +83,13 @@ export function ShutDownGpu({ notify, className = 'btn btn-small' }) {
   )
 }
 
+// The cloud services, as cards on the Cloud page.
+const PROVIDERS = [
+  { id: 'runpod', label: 'RunPod', line: 'Your own account. Billed by the second while the GPU is up.' },
+  { id: 'modal', label: 'Modal', line: 'Your own account. Billed by the second while the GPU is up.' },
+  { id: 'comfycloud', label: 'Comfy Cloud', line: 'Comfy’s own ComfyUI. Billed per run; only Comfy’s nodes and models.' }
+]
+
 const IDLE = [
   [180, '3 min'],
   [300, '5 min'],
@@ -357,43 +364,49 @@ export default function Cloud({ notify, recheck, setup, info }) {
     <div className="cloud">
       <Hero art="cloud" title="Cloud" kicker="Your own GPU · by the second" />
       <p className="lede">
-        No strong graphics card? Render on a cloud GPU in your own RunPod or Modal account, or on Comfy Cloud.
-        <span className="lede-small dim">Pick one. RunPod and Modal bill by the second only while the GPU is up, and it shuts itself off when you stop; IV Studio sets everything up. Comfy Cloud is Comfy’s own ComfyUI, billed per run on your Comfy plan, with only the nodes and models Comfy provides.</span>
+        No strong graphics card? Render on a cloud GPU instead.
+        <span className="lede-small dim">Pick a cloud service below and set it up once; then switch between this PC and the cloud whenever you like.</span>
       </p>
 
-      <div className="cloud-switch">
-        <span className="row-label">Cloud</span>
-        <div className="segmented">
-          {[
-            ['runpod', 'RunPod'],
-            ['modal', 'Modal'],
-            ['comfycloud', 'Comfy Cloud']
-          ].map(([id, label]) => (
-            <button
-              key={id}
-              className={st.provider === id ? 'on' : ''}
-              disabled={!!busy || onCloud}
-              title={onCloud ? 'Switch rendering to My PC first' : undefined}
-              onClick={() => run('Switching', () => window.ivstudio.cloud.provider(id))}
-            >
-              {label}
-            </button>
-          ))}
+      <section className="cloud-control">
+        <div className="cloud-control-head">
+          <span className="mono label">Render on</span>
+          <span className={`cloud-status mono small ${onCloud ? 'on' : ''}`}>
+            <span className="cloud-status-dot" />
+            {busy ? `${busy}…` : onCloud ? wake || `Rendering on ${PROVIDERS.find((p) => p.id === st.provider)?.label}` : 'Rendering on this PC'}
+          </span>
+          {setUpDone && !comfyCloud && <ShutDownGpu notify={notify} className="btn btn-small cloud-stop" />}
         </div>
-      </div>
+        <div className="cloud-choices two">
+          <button className={`cloud-choice ${!onCloud ? 'on' : ''}`} disabled={!!busy} aria-pressed={!onCloud} onClick={() => !onCloud || use('local')}>
+            <span className="cloud-choice-name">This PC</span>
+            <span className="small dim">Your own graphics card. Free.</span>
+          </button>
+          <button className={`cloud-choice ${onCloud ? 'on' : ''}`} disabled={!!busy || !setUpDone} aria-pressed={onCloud} title={setUpDone ? undefined : 'Set the cloud service up below first'} onClick={() => onCloud || use('cloud')}>
+            <span className="cloud-choice-name">The cloud</span>
+            <span className="small dim">{setUpDone ? `${PROVIDERS.find((p) => p.id === st.provider)?.label}, ready` : `Set up ${PROVIDERS.find((p) => p.id === st.provider)?.label} below first`}</span>
+          </button>
+        </div>
 
-      <div className="cloud-switch">
-        <div className="segmented">
-          <button className={!onCloud ? 'on' : ''} disabled={!!busy} onClick={() => use('local')}>
-            My PC
-          </button>
-          <button className={onCloud ? 'on' : ''} disabled={!!busy || !setUpDone} onClick={() => use('cloud')}>
-            Cloud
-          </button>
+        <div className="cloud-control-head">
+          <span className="mono label">Cloud service</span>
+          {onCloud && <span className="small dim">Switch to This PC to change it.</span>}
         </div>
-        <span className="mono small dim">{busy ? `${busy}…` : onCloud ? wake || 'Rendering in the cloud.' : 'Rendering on this PC.'}</span>
-        {setUpDone && !comfyCloud && <ShutDownGpu notify={notify} className="btn btn-small cloud-stop" />}
-      </div>
+        <div className="cloud-choices three">
+          {PROVIDERS.map((p) => {
+            const ready = p.id === 'comfycloud' ? !!st.comfycloud?.hasKey : p.id === 'runpod' ? !!st.runpod?.ready : !!(st.cloud?.url && st.cloud?.modelsAt)
+            return (
+              <button key={p.id} className={`cloud-choice small-choice ${st.provider === p.id ? 'on' : ''}`} disabled={!!busy || onCloud} aria-pressed={st.provider === p.id} onClick={() => st.provider === p.id || run('Switching', () => window.ivstudio.cloud.provider(p.id))}>
+                <span className="cloud-choice-top">
+                  <span className="cloud-choice-name">{p.label}</span>
+                  {ready && <span className="mono cloud-ok cloud-ready">Ready</span>}
+                </span>
+                <span className="small dim">{p.line}</span>
+              </button>
+            )
+          })}
+        </div>
+      </section>
 
       {comfyCloud && <ComfyCloudSteps st={st} busy={busy} run={run} notify={notify} refresh={refresh} />}
       {runpod && <RunPodSteps st={st} busy={busy} run={run} notify={notify} refresh={refresh} links={info?.links} />}

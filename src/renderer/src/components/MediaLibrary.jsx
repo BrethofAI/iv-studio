@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { media } from '../media'
 import Hero from './Hero'
 import { fileUrl } from './edit/model'
+import Loading from './Loading'
 
 // Everything made in IV Studio in one place: shot, sequence and Replace renders, Edit exports, pictures
 // (Create -> Image), songs and voice lines. The takes of one shot (its previews and finals), of one sequence or of one edit are a single
@@ -34,9 +35,17 @@ export function toSets(items) {
   return sets.sort((a, b) => b.at.localeCompare(a.at))
 }
 
+// Pictures and videos sit in a frame of their own shape, as big as the stage allows (see .viewer-frame).
 function Player({ item }) {
-  if (item.type === 'video') return <video key={item.key} className="viewer-media" src={src(item.file)} controls autoPlay playsInline />
-  if (item.type === 'image') return <img key={item.key} className="viewer-media" src={src(item.file)} alt={item.label} />
+  const [ar, setAr] = useState(null)
+  useEffect(() => setAr(null), [item.key])
+  const frame = (child) => (
+    <div className="viewer-frame" style={{ '--ar': ar || 16 / 9, visibility: ar ? 'visible' : 'hidden' }}>
+      {child}
+    </div>
+  )
+  if (item.type === 'video') return frame(<video key={item.key} className="viewer-media" src={src(item.file)} controls autoPlay playsInline onLoadedMetadata={(e) => setAr(e.target.videoWidth / e.target.videoHeight || 16 / 9)} />)
+  if (item.type === 'image') return frame(<img key={item.key} className="viewer-media" src={src(item.file)} alt={item.label} onLoad={(e) => setAr(e.target.naturalWidth / e.target.naturalHeight || 1)} />)
   return (
     <div className="viewer-sound">
       <div className="viewer-sound-art mono">{item.type === 'music' ? '♪' : '“ ”'}</div>
@@ -81,81 +90,92 @@ export function Viewer({ sets, at, setAt, onClose, edits, notify, sendToCreate, 
       notify(err.message)
     }
   }
-  const sound = item.type !== 'video'
+  const sound = item.type !== 'video' && item.type !== 'image'
+  const meta = [item.detail, secs(item.duration), new Date(item.at).toLocaleString()].filter(Boolean)
+  // the one main thing to do next: pictures and sounds go into a shot; a render opens its shot or sequence
+  const primary = item.type === 'image'
+    ? { label: 'Use in a shot', run: () => (onClose(), pictureToShot(item.file.path)) }
+    : sound
+      ? { label: 'Use in a shot', run: () => sendToCreate({ kind: item.type === 'music' ? 'music' : 'line', file: item.file.path, text: item.type === 'voice' ? item.label : '', name: set.name }) }
+      : item.projectId
+        ? { label: 'Open shot', run: () => openShot(item.projectId) }
+        : item.sequenceId
+          ? { label: 'Open sequence', run: () => openSequence(item.sequenceId) }
+          : null
   return (
     <div className="viewer-backdrop" onClick={onClose}>
       <div className="viewer" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={set.name}>
-        <div className="viewer-head">
-          <div className="viewer-title">
-            <span className="mono small dim">
-              {set.group} · {pos + 1} of {flat.length}
-            </span>
-            <h2>{set.name}</h2>
-          </div>
-          <button className="link-btn mono" onClick={onClose}>
-            Close ×
-          </button>
-        </div>
-        <div className="viewer-stage">
-          <button className="viewer-nav" disabled={pos <= 0} onClick={() => step(-1)} aria-label="Previous">
+        <div className={`viewer-stage ${sound ? 'is-sound' : ''}`}>
+          <Player item={item} />
+          <button className="viewer-nav prev" disabled={pos <= 0} onClick={() => step(-1)} aria-label="Previous">
             ‹
           </button>
-          <Player item={item} />
-          <button className="viewer-nav" disabled={pos >= flat.length - 1} onClick={() => step(1)} aria-label="Next">
+          <button className="viewer-nav next" disabled={pos >= flat.length - 1} onClick={() => step(1)} aria-label="Next">
             ›
           </button>
         </div>
-        <div className="viewer-meta">
-          <span className="viewer-variant">{item.variant || item.label}</span>
-          <span className="mono small dim">{[item.detail, secs(item.duration), new Date(item.at).toLocaleString()].filter(Boolean).join(' · ')}</span>
-        </div>
-        {set.items.length > 1 && (
-          <div className="viewer-strip">
-            {set.items.map((x, k) => (
-              <button key={x.key} className={`viewer-thumb ${k === ii ? 'on' : ''}`} onClick={() => setAt([si, k])}>
-                {x.type === 'video' ? <video src={`${src(x.file)}#t=0.3`} muted preload="metadata" /> : x.type === 'image' ? <img src={src(x.file)} alt="" loading="lazy" /> : <span className="viewer-thumb-sound">{x.type === 'music' ? '♪' : '“ ”'}</span>}
-                <span className="mono small">{x.variant || x.label}</span>
-              </button>
-            ))}
+        <aside className="viewer-side">
+          <div className="viewer-head">
+            <span className="mono small dim">
+              {set.group} · {pos + 1} of {flat.length}
+            </span>
+            <button className="viewer-close" onClick={onClose} aria-label="Close" title="Close (Esc)">
+              ×
+            </button>
           </div>
-        )}
-        <div className="viewer-actions">
-          {item.type === 'image' && (
-            <button className="btn btn-small btn-primary" onClick={() => (onClose(), pictureToShot(item.file.path))}>
-              Use in a shot
-            </button>
+          <h2 className="viewer-name">{set.name}</h2>
+          <div className="viewer-meta">
+            <span className="viewer-variant">{item.variant || item.label}</span>
+            {meta.length > 0 && <span className="mono small dim">{meta.join(' · ')}</span>}
+          </div>
+          {set.items.length > 1 && (
+            <div className="viewer-versions">
+              <span className="mono small dim">{set.items.length} versions</span>
+              <div className="viewer-strip">
+                {set.items.map((x, k) => (
+                  <button key={x.key} className={`viewer-thumb ${k === ii ? 'on' : ''}`} onClick={() => setAt([si, k])} title={x.variant || x.label}>
+                    {x.type === 'video' ? <video src={`${src(x.file)}#t=0.3`} muted preload="metadata" /> : x.type === 'image' ? <img src={src(x.file)} alt="" loading="lazy" /> : <span className="viewer-thumb-sound">{x.type === 'music' ? '♪' : '“ ”'}</span>}
+                    <span className="mono">{x.variant || x.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
-          {sound && (
-            <button className="btn btn-small btn-primary" onClick={() => sendToCreate({ kind: item.type === 'music' ? 'music' : 'line', file: item.file.path, text: item.type === 'voice' ? item.label : '', name: set.name })}>
-              Use in a shot
+          <div className="viewer-actions">
+            {primary && (
+              <button className="btn btn-primary" onClick={primary.run}>
+                {primary.label}
+              </button>
+            )}
+            {item.projectId && primary?.label === 'Use in a shot' && (
+              <button className="btn" onClick={() => openShot(item.projectId)}>
+                Open shot
+              </button>
+            )}
+            {item.sequenceId && primary?.label !== 'Open sequence' && (
+              <button className="btn" onClick={() => openSequence(item.sequenceId)}>
+                Open sequence
+              </button>
+            )}
+            <div className="viewer-to-edit">
+              <select value={target} onChange={(e) => setTarget(e.target.value)} aria-label="Which edit">
+                <option value="">A new edit</option>
+                {edits.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+              </select>
+              <button className="btn" onClick={toEdit}>
+                Add to edit
+              </button>
+            </div>
+            <button className="link-btn mono viewer-reveal" onClick={() => window.ivstudio.files.reveal(item.file).catch((err) => notify(err.message))}>
+              Show file
             </button>
-          )}
-          <select value={target} onChange={(e) => setTarget(e.target.value)} title="Which edit">
-            <option value="">New edit</option>
-            {edits.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
-            ))}
-          </select>
-          <button className="btn btn-small" onClick={toEdit}>
-            Add to edit
-          </button>
-          {item.projectId && (
-            <button className="btn btn-small" onClick={() => openShot(item.projectId)}>
-              Open shot
-            </button>
-          )}
-          {item.sequenceId && (
-            <button className="btn btn-small" onClick={() => openSequence(item.sequenceId)}>
-              Open sequence
-            </button>
-          )}
-          <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(item.file).catch((err) => notify(err.message))}>
-            Show file
-          </button>
-          <span className="mono small dim viewer-keys">← → versions · ↑ ↓ next tile · Esc closes</span>
-        </div>
+          </div>
+          <span className="mono small dim viewer-keys">← → versions · ↑ ↓ next · Esc</span>
+        </aside>
       </div>
     </div>
   )
@@ -238,7 +258,7 @@ export default function MediaLibrary(ctx) {
         </div>
         <input className="lib-search" value={q} placeholder="Search" onChange={(e) => setQ(e.target.value)} />
       </div>
-      {items === null && <p className="dim mono">Loading…</p>}
+      {items === null && <Loading label="Loading your library" />}
       {items && sets.length === 0 && <p className="dim">{items.length ? 'Nothing matches.' : 'Nothing made yet. Make a shot on Create, or a song on Audio > Music.'}</p>}
       <div className="lib-grid">
         {sets.map((s, i) => (

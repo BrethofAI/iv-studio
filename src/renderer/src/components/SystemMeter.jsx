@@ -41,6 +41,7 @@ export default function SystemMeter({ notify }) {
   const parts = []
   if (st.gpu) parts.push({ label: 'GPU', used: st.gpu.total - st.gpu.free, total: st.gpu.total })
   parts.push({ label: 'RAM', used: st.ram.total - st.ram.free, total: st.ram.total })
+  const full = parts.some((p) => p.used / p.total > 0.9)
   const title = [st.gpu && `${st.gpu.name}: ${GB(st.gpu.total - st.gpu.free)} of ${GB(st.gpu.total)} GB in use, ${GB(st.gpu.comfyHeld)} GB of it held by ComfyUI.`, `RAM: ${GB(st.ram.total - st.ram.free)} of ${GB(st.ram.total)} GB in use.`].filter(Boolean).join(' ')
   return (
     <span className="system-meter mono" title={title}>
@@ -55,8 +56,19 @@ export default function SystemMeter({ notify }) {
           </span>
         )
       })}
-      <button className="system-free" disabled={freeing} onClick={free} title="Free memory: ComfyUI unloads its models (after a running render finishes), IV Studio's voice engine stops and Ollama lets go of the writer. The next render loads what it needs again.">
-        {freeing ? 'Freeing…' : 'Free'}
+      <button
+        className={`system-free ${full ? 'urge' : ''}`}
+        disabled={freeing}
+        onClick={free}
+        aria-label="Free GPU and RAM memory"
+        title={`Free up GPU and RAM memory now${full ? ' (it’s nearly full)' : ''}: ComfyUI unloads its models (after a running render finishes), IV Studio’s voice engine stops, and the prompt writer lets go. Nothing is deleted; the next render loads what it needs again.`}
+      >
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+          <rect x="3.5" y="3.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2" stroke="currentColor" strokeWidth="1.2" />
+          <path d="M8 10.2V5.8M6.2 7.4 8 5.6l1.8 1.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="system-free-label">{freeing ? 'Freeing…' : 'Free memory'}</span>
       </button>
     </span>
   )

@@ -301,8 +301,8 @@ export default function App() {
     <div className={`app ${incognito ? 'incognito' : ''} ${focus && page === 'edit' ? 'app-focus' : ''} ${info?.platform === 'darwin' ? 'mac' : ''}`}>
       <header className="titlebar">
         <img className="brand-logo" src={incognito ? ivMarkClosed : ivMark} alt="Infinite Variance" />
-        <span className="mono">Infinite Variance</span>
-        <span className="mono dim">/ Studio</span>
+        <span className="mono brand-text">Infinite Variance</span>
+        <span className="mono dim brand-text">/ Studio</span>
         {info?.testCopy && <span className="mono test-copy">Test copy · separate data</span>}
         {info && (
           <button className={`incognito-switch mono ${incognito ? 'on' : ''}`} onClick={switchIncognito} title={incognito ? 'Leave Incognito (restarts IV Studio)' : 'Go Incognito: a private space (restarts IV Studio)'}>
@@ -323,7 +323,7 @@ export default function App() {
           )}
           {/* on a Mac the cloud comes first; Start ComfyUI stays on Settings → Setup */}
           {comfyDown && info?.platform !== 'darwin' && <StartComfy notify={notify} recheck={recheck} className="btn btn-small engine-start" />}
-          {setup?.items?.find((i) => i.id === 'gpu') && <span className="mono dim">{setup.items.find((i) => i.id === 'gpu').detail}</span>}
+          {setup?.items?.find((i) => i.id === 'gpu') && <span className="mono dim engine-gpu">{setup.items.find((i) => i.id === 'gpu').detail}</span>}
           {setup?.remote ? <CloudMeter onOpen={() => setPage('cloud')} /> : setup && <SystemMeter notify={notify} />}
         </div>
       </header>
@@ -354,7 +354,8 @@ export default function App() {
           </button>
         </div>
       </nav>
-      <main className={`page ${page === 'edit' ? 'page-editor' : ''}`}>
+      {/* keyed by page: each page change remounts it, so the themed page-in animation plays (studio.css .page-anim) */}
+      <main key={page} className={`page page-anim ${page === 'edit' ? 'page-editor' : ''}`}>
         {page === 'home' && <Dashboard {...ctx} start={startTool} startShotWith={startShotWith} />}
         {page === 'learn' && <Learn learnGo={learnGo} version={info?.version} seenNews={seenNews} markNewsSeen={markNewsSeen} notify={notify} />}
         {page === 'create' &&

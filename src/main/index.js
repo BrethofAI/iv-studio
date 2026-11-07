@@ -210,6 +210,24 @@ function createWindow() {
     return { action: 'deny' }
   })
   win.once('ready-to-show', () => win.show())
+  // A bigger window gets a bigger interface, so a full-screen window on a large monitor isn't a small laptop-sized
+  // layout in one corner. Pages are laid out for about 1600 x 1000; past that everything scales up together (like
+  // browser zoom, so the layout's own breakpoints still apply), to 150% at most.
+  let zoomTimer = null
+  const fitZoom = () => {
+    if (!win || win.isDestroyed()) return
+    const [w, h] = win.getContentSize()
+    const z = Math.round(Math.min(1.5, Math.max(1, Math.min(w / 1600, h / 1000))) * 20) / 20
+    if (Math.abs(win.webContents.getZoomFactor() - z) < 0.01) return
+    win.webContents.setZoomFactor(z)
+    // the window buttons are drawn by the system over the 40 px bar: keep them the bar's (scaled) height
+    try {
+      if (process.platform === 'darwin') win.setWindowButtonPosition({ x: 14, y: Math.round(20 * z - 7) })
+      else win.setTitleBarOverlay({ color: BG, symbolColor: '#f1ede5', height: Math.round(40 * z) })
+    } catch {}
+  }
+  for (const ev of ['resize', 'maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) win.on(ev, () => (clearTimeout(zoomTimer), (zoomTimer = setTimeout(fitZoom, 120))))
+  win.webContents.on('did-finish-load', fitZoom)
   if (TEST_COPY) win.on('page-title-updated', (e) => e.preventDefault())
   win.on('close', () => writeSettings({ window: win.getBounds() }, BASE))
   if (process.env.IV_STUDIO_SMOKE) smokeTest(win, process.env.IV_STUDIO_SMOKE)

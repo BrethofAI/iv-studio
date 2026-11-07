@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { fileUrl } from './edit/model'
 import Hero, { ART } from './Hero'
 import { Tile, toSets, Viewer } from './MediaLibrary'
+import Loading from './Loading'
 
 // The home page: start something in one click, pick up the latest renders, and the cast with their voices.
 // Each quick-start card shows its page's own banner art.
@@ -70,7 +71,7 @@ export default function Dashboard(ctx) {
             Everything in the Library →
           </button>
         </div>
-        {items === null && <p className="dim mono">Loading…</p>}
+        {items === null && <Loading label="Loading your renders" />}
         {items && sets.length === 0 && <p className="dim">Nothing made yet. Start with a shot or a picture above.</p>}
         <div className="lib-grid dash-recent">
           {sets.map((s, i) => (
