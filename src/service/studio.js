@@ -364,7 +364,10 @@ export class Studio {
   async submit({ kind, project, plan, name, parent, previewPlan }) {
     let prompt = buildPrompt(this.template, this.meta, plan.groups, plan.values)
     // live previews of each step (remote.js), on this PC only: the cloud has no websocket to send them over
-    if (kind === 'previews' && this.livePreview !== false && !this.comfy.remote && (await this.capabilities()).livePreview) prompt = withLivePreview(prompt)
+    // (a finish shows its 2 MP pass, a little larger)
+    if (['previews', 'finish'].includes(kind) && this.livePreview !== false && !this.comfy.remote && (await this.capabilities()).livePreview) {
+      prompt = withLivePreview(prompt, kind === 'finish' ? { guiders: ['14', '26'], size: 640 } : {})
+    }
     return this.submitGraph({ kind, graph: prompt, projectId: project.id, plan, name, parent, previewPlan })
   }
 

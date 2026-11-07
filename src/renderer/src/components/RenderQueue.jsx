@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { LiveFrame } from './Live'
 import { ask } from './Confirm'
+import LivePip from './LivePip'
 
 // The render queue at the foot of the sidebar: what ComfyUI is rendering and what waits, from any page, so the
 // person can explore the app while things render. Each of IV Studio's items opens its page and can be cancelled;
@@ -28,6 +29,20 @@ const SHOWN = 4
 export default function RenderQueue({ remote, notify, open }) {
   const [items, setItems] = useState([])
   const [now, setNow] = useState(Date.now())
+  // the floating live preview (LivePip), on or off from the switch at the top of this box; remembered
+  const [pip, setPip] = useState(() => {
+    try {
+      return localStorage.getItem('iv.livePreview') === 'on'
+    } catch {
+      return false
+    }
+  })
+  const setPipSaved = (on) => {
+    setPip(on)
+    try {
+      localStorage.setItem('iv.livePreview', on ? 'on' : 'off')
+    } catch {}
+  }
   useEffect(() => {
     let live = true
     const poll = () =>
@@ -60,6 +75,13 @@ export default function RenderQueue({ remote, notify, open }) {
   const waiting = items.length - running
   return (
     <div className={`render-queue ${items.length ? 'busy' : ''}`}>
+      <button className={`live-switch ${pip ? 'on' : ''}`} role="switch" aria-checked={pip} onClick={() => setPipSaved(!pip)} title={pip ? 'Hide the live preview' : 'Show what’s rendering in a corner of every page'}>
+        <span className="switch-track">
+          <span className="switch-knob" />
+        </span>
+        Live preview
+      </button>
+      {pip && <LivePip items={items} now={now} kindLabel={kindLabel} open={open} onOff={() => setPipSaved(false)} />}
       <div className="render-queue-head">
         <span>Queue</span>
         <span className="dim">{items.length ? [running && `${running} rendering`, waiting && `${waiting} waiting`].filter(Boolean).join(' · ') : 'idle'}</span>
@@ -80,7 +102,8 @@ export default function RenderQueue({ remote, notify, open }) {
                   <span style={{ width: `${pct ?? 0}%` }} />
                 </span>
               )}
-              {item.state === 'running' && item.ours && <LiveFrame promptId={item.promptId} compact />}
+              {/* the small picture here only while the floating live preview is off */}
+              {item.state === 'running' && item.ours && !pip && <LiveFrame promptId={item.promptId} compact />}
             </button>
             {item.ours && (
               <button className="render-queue-x" title="Cancel this render" onClick={() => cancel(item)}>

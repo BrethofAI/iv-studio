@@ -29,17 +29,21 @@ export function capabilities(objectInfo, systemStats) {
 }
 const comboOptions = (spec) => (Array.isArray(spec?.[0]) ? spec[0] : spec?.[1]?.options) || []
 
-// Live previews: the model that feeds the preview samplers (the preview guider, node 14) is wrapped in KJNodes'
-// ModelPreviewOverrideKJ, which sends a small picture of each step over ComfyUI's websocket (kj_preview_override)
-// to the client that queued the prompt. Only previews; the finishing pass is left as it is.
+// Live previews: the model that feeds a guider is wrapped in KJNodes' ModelPreviewOverrideKJ, which sends a small
+// picture of each step over ComfyUI's websocket (kj_preview_override) to the client that queued the prompt.
+// Previews wrap the preview guider (node 14). A finish wraps the 2 MP pass's guider (26) too, and 14 for when
+// ComfyUI has dropped the preview from its cache and renders it again first. Guiders fed by a different model
+// than the first are left alone, and a guider missing from the graph is skipped.
 export const LIVE_TAE = 'taeh3.safetensors'
 export const LIVE_NODE = 'iv_live'
-export function withLivePreview(graph, { guider = '14', size = 448 } = {}) {
+export function withLivePreview(graph, { guiders = ['14'], size = 448 } = {}) {
   const g = structuredClone(graph)
-  const model = g[guider]?.inputs?.model
-  if (!model || g[LIVE_NODE]) return g
+  if (g[LIVE_NODE]) return g
+  const present = guiders.filter((id) => g[id]?.inputs?.model)
+  if (!present.length) return g
+  const model = g[present[0]].inputs.model
   g[LIVE_NODE] = { class_type: 'ModelPreviewOverrideKJ', inputs: { model, max_resolution: size, jpeg_quality: 72, suppress_default_preview: true, preview_frames: 1, preview_fps: 12, tiny_vae: LIVE_TAE } }
-  g[guider].inputs.model = [LIVE_NODE, 0]
+  for (const id of present) if (JSON.stringify(g[id].inputs.model) === JSON.stringify(model)) g[id].inputs.model = [LIVE_NODE, 0]
   return g
 }
 
