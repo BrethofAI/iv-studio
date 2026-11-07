@@ -9,7 +9,7 @@ export const NEWS = [
       { text: 'Create, Settings, Characters and the Workflows tools are redesigned as clear numbered steps; Sizzle, Reel, Sequences, Shinobi and Replace open on animated stages.' },
       { text: 'Shots, Projects and the Library group your work by day, filter by when, kind, who and shape, and open quickly however much you have.' },
       { text: 'Train a character free on your own graphics card, or on RunPod or Modal, with presets, a spending cap, Train more and likeness scoring. Or make a RefMod character from a few pictures in seconds.' },
-      { text: 'Pick the sampler and scheduler for a shot, and keep a resizable live preview of any render over every page.' }
+      { text: 'Pick the sampler and scheduler for a shot, and keep a resizable live preview of any render over every page, including the ones your AI agent starts.' }
     ]
   },
   {

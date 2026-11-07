@@ -1023,20 +1023,55 @@ export class Studio {
 
   // Live progress from ComfyUI's websocket (the studio window keeps one open; the MCP server polls). ComfyUI sends
   // step progress only to the client id that queued the prompt, so this listens as that same id.
+  // A render an agent started through the MCP server is queued under that server's client id, and the MCP server
+  // polls instead of listening, so its step pictures would go nowhere. While such a render of this data folder runs,
+  // the window also listens as its client (a guest socket) and shows the pictures like its own.
   watch(onEvent) {
     // A cloud ComfyUI shuts down when idle; an open websocket would keep it (and its bill) running.
     if (this.comfy.remote) return () => {}
     let ws
     let stopped = false
+    const guests = new Map() // client id -> websocket
+    const open = (clientId) => new WebSocket(`${this.comfy.url.replace(/^http/, 'ws')}/ws?clientId=${encodeURIComponent(clientId)}`)
     const connect = () => {
       if (stopped) return
       try {
-        ws = new WebSocket(`${this.comfy.url.replace(/^http/, 'ws')}/ws?clientId=${this.comfy.clientId}`)
+        ws = open(this.comfy.clientId)
       } catch {
         return setTimeout(connect, 3000)
       }
-      ws.onmessage = (ev) => {
-        if (typeof ev.data !== 'string') return
+      ws.onmessage = (ev) => handle(ev)
+      ws.onclose = () => setTimeout(connect, 3000)
+      ws.onerror = () => {}
+    }
+    const scanGuests = async () => {
+      if (stopped) return
+      try {
+        const q = await this.comfy.queue()
+        const known = this.queueIndex()
+        const want = new Map() // client id -> its running prompt
+        for (const item of q.queue_running || []) {
+          const client = item[3]?.client_id
+          if (client && client !== this.comfy.clientId && /^iv-studio-/.test(client) && known.has(item[1])) want.set(client, item[1])
+        }
+        for (const [client, promptId] of want) {
+          if (guests.has(client)) continue
+          // joining mid-render misses ComfyUI's 'executing' message, so the running prompt comes from the queue
+          if (!this.running) this.running = promptId
+          try {
+            const g = open(client)
+            g.onmessage = (ev) => handle(ev)
+            g.onclose = () => guests.get(client) === g && guests.delete(client)
+            g.onerror = () => {}
+            guests.set(client, g)
+          } catch {}
+        }
+        for (const [client, g] of guests) if (!want.has(client)) (guests.delete(client), g.close())
+      } catch {}
+      if (!stopped) setTimeout(scanGuests, 2000)
+    }
+    const handle = (ev) => {
+      if (typeof ev.data !== 'string') return
         let msg
         try {
           msg = JSON.parse(ev.data)
@@ -1056,15 +1091,15 @@ export class Studio {
           this.live.set(this.running, live)
           msg = { type: 'iv_live', data: live }
         }
-        onEvent?.(msg)
-      }
-      ws.onclose = () => setTimeout(connect, 3000)
-      ws.onerror = () => {}
+      onEvent?.(msg)
     }
     connect()
+    scanGuests()
     return () => {
       stopped = true
       ws?.close()
+      for (const g of guests.values()) g.close()
+      guests.clear()
     }
   }
 }
