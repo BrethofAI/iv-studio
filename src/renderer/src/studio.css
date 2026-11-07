@@ -11869,3 +11869,7 @@ button.set-chip:hover {
   border-color: rgba(110, 231, 168, 0.7);
   color: #8ff0bd;
 }
+/* the editor's How it works pill sizes to its words (the old round "?" had a fixed width) */
+.ed-help .help-btn {
+  width: auto;
+}

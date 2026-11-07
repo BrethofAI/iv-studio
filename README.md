@@ -26,120 +26,179 @@ and a voice, write a shot, hunt a few quick previews and finish the best one at 
 pictures, songs and spoken lines, cut it all together and export. IV Studio drives your own
 [ComfyUI](https://github.com/comfyanonymous/ComfyUI); nothing leaves your machine unless you choose the
 cloud. No strong graphics card? Shots can also render on a GPU in your own [RunPod](https://www.runpod.io) or
-[Modal](https://modal.com) account, billed by the second (see [Cloud](#cloud)).
+[Modal](https://modal.com) account, billed by the second, or on Comfy Cloud (see [Cloud](#cloud)).
+
+**This is IV Studio 1.0.** Every page now walks you through itself (**How it works**), a two-minute tour shows
+the whole app, **Check my PC** sets it up for your computer, and characters train free on your own graphics
+card. See [what's new in 1.0](#whats-new-in-10).
 
 <p align="center">
-  <img src="docs/images/hunt.png" alt="The shot Toast is done: three preview takes of Tess walking out of smoke, and the picked one finished at 3904×2176" width="100%">
+  <img src="docs/images/create.png" alt="Create: Tess picked, Write it for me with the idea, the H3 prompt, and the pinned Your shot card with Hunt 3 previews" width="100%">
 </p>
+
+## What's new in 1.0
+
+- **Help on every page.** A **How it works** button on every page lights up its real controls one at a time
+  with a line on each. The welcome wizard offers a full tour of the app, and Settings → About takes it again.
+- **Check my PC.** On first launch IV Studio reads your graphics card, memory, processor and drives (nothing
+  leaves your PC), says plainly what it can do, and sets previews, finals, the prompt writer and downloads to
+  suit. A guided cloud setup connects RunPod, Modal or Comfy Cloud in a few steps.
+- **Redesigned.** Create (video and image), Settings, Characters, Voices, Lines and Music are numbered step
+  cards. The Workflows tools (Sizzle, Reel, Sequences, Shinobi and Replace) open on animated stages with their
+  main bar centered.
+- **Find anything.** Shots, Projects and the Library group your work by day and filter it by when, kind of
+  shot, who's in it and shape, in a panel that folds away. Long histories open at once: tiles load as you
+  scroll.
+- **Train characters anywhere.** Free on your own graphics card (Fizgig), or on your RunPod or Modal account,
+  with presets, a spending cap, **Train more** and likeness scoring. Or make a **RefMod** character from a few
+  pictures in seconds.
+- **More control.** Pick a shot's sampler and scheduler, and keep a resizable live preview of any render
+  floating over every page.
 
 ## What it does
 
 - **Dashboard.** IV Studio opens on one-click starts for everything it makes, your latest renders and
-  your cast. Every page has its own banner art.
+  your cast. Every page has its own banner art and its own **How it works** tour.
 - **Projects.** A short film as a six-step wizard for anyone: an idea, a script (written for you or your
   own), the cast and places, a storyboard of drawn sketches you can play as an animatic, filming every
   panel, and the finished film. Faces and rooms stay the same from shot to shot.
 - **Shots.** Write a shot (or type the idea in plain words and let **Write it for me** write the H3
   prompt; it looks at your reference pictures and videos first), hunt one to three quick previews, pick
   one and finish it at 1 to 2 MP with DLSS, an RTX 2× upscale and frame generation, or with SeedVR2. Four
-  modes: text, reference pictures, video and audio, first and last frame, and continuing a video.
+  modes: text, reference pictures, video and audio, first and last frame, and continuing a video. Create
+  lays it out as numbered steps beside a pinned **Your shot** card.
 - **Directing.** A prompt checker that catches H3 mistakes before you spend a render, @ mentions for your
-  cast and places, live step pictures while takes render, takes ranked by words heard, likeness and
-  sharpness, side-by-side Compare, a **Review** that names each problem with its seconds and one fix, and a
-  top-down staging board that becomes exact screen directions or a moving grey previs.
-- **Images.** Create switches between **Video** and **Image**: make or edit pictures with six image
+  cast and places, live step pictures while takes render (also in a floating preview over every page),
+  takes ranked by words heard, likeness and sharpness, side-by-side Compare, a **Review** that names each
+  problem with its seconds and one fix, and a top-down staging board that becomes exact screen directions
+  or a moving grey previs.
+- **Images.** Create switches between **Video** and **Image**: make or edit pictures with eight image
   model families (Flux.2 Klein, Flux 3 Klein, Krea 2, Moss, Qwen Image 2.1, Z-Image Turbo, SDXL and H3
   stills with your H3 characters), then use one as a shot's first frame.
 - **LoRAs.** Browse Civitai's MiniMax H3 LoRAs as tall picture cards whose clips play on hover, open one
   for a full-size gallery of its examples, and download it straight into ComfyUI. Your own LoRAs show as
   pictures too, and Create's LoRA tray adds them to a shot with a strength slider.
-- **Characters.** Recurring actors as trained H3 LoRAs with a trigger word. Use the ready-made Tess and
-  Theo, add a LoRA you have, or design, clip and train your own on your Modal account.
+- **Characters.** Recurring actors as trained H3 LoRAs with a trigger word, or as RefMods made from a few
+  pictures in seconds. Use the ready-made Tess and Theo, add a LoRA or RefMod you have, or design, clip and
+  train your own: free on your graphics card, or on your RunPod or Modal account.
 - **Voices.** Give each character a voice: design one from a description, or save one from a recording.
   Type a line and **Speak it**: the character says it on screen, lip-synced. Runs on your PC with
   VoxCPM2 and Whisper.
 - **Music.** Songs with sung lyrics, or instrumentals, from a style and lyrics: MiniMax Music 3 for full
   songs up to five minutes, ACE-Step 1.5 for a draft in seconds. Put a song under an edit, or have a
   character sing it.
-- **Sequences.** Several shots that play as one continuous video, rendered as one take or shot by shot,
-  with retakes of any stretch.
 - **Edit.** A Premiere-style editor with a full-screen workspace: project bin, source and program
   monitors, as many video and audio tracks as you need, filmstrips and waveforms, markers, J/K/L,
   insert and overwrite, razor, ripple and rolling trims, and MP4 export at 1080p, 4K, vertical or square
   at a set loudness. Right-click to make new footage on the timeline (extend, bridge, fill a gap, retake a
   stretch), cut out a person or thing with see-through edges, or reframe a shot to a new shape with H3
   drawing what lies beyond its edges.
-- **Workflows.** **Sizzle** turns a website into a promo film: your agent storyboards it from the real
+- **Workflows.** Five tools, each opening on its own animated stage. **Sequences:** several shots as one
+  continuous video. **Sizzle** turns a website into a promo film: your agent storyboards it from the real
   site, then H3 shots, pictures, music and the site's own screens are cut together on the beat. **Reel**
-  cuts pictures or clips to a song's beat. **Replace** swaps a person or an object in a video while the
-  camera, motion and sound stay. **Shinobi** lets an agent cut a whole edit in code.
-- **Learn.** Every feature on one searchable page, a **?** with the easy-to-miss tips on every page, and
-  short tutorial videos inside the app.
-- **Library and Queue.** Every shot, sequence, picture, export, song and spoken line in one place, with
-  each shot's versions grouped together. Above it, the render queue shows what's rendering and what waits.
-- **Cloud.** Render shots and sequences on your own RunPod or Modal account instead of your PC, with a running time
-  and cost meter in the title bar and a **Shut down GPU** button.
+  cuts pictures or clips to a song's beat. **Replace** swaps a person or changes the scene in a video while
+  the camera, motion and sound stay. **Shinobi** lets an agent cut a whole edit in code.
+- **Library and Queue.** Every shot, sequence, picture, export, song and spoken line in one place, a day at a
+  time, filtered by when, where it came from, kind, who and shape. Above it, the render queue shows what's
+  rendering and what waits.
+- **Help.** **How it works** on every page, a full tour from the welcome wizard, What's new after every
+  update, and the PDF guide.
+- **Check my PC.** Reads your hardware on first launch and sets IV Studio up to suit it.
+- **Cloud.** Render shots and sequences on your own RunPod or Modal account, or on Comfy Cloud, set up with a
+  guided wizard, with a running time and cost meter in the title bar and a **Shut down GPU** button.
 - **Incognito.** A private space whose work never shows in the normal app.
-- **Agents.** A local MCP server with 147 tools and a start menu gives Claude Code or any MCP client nearly
+- **Agents.** A local MCP server with 154 tools and a start menu gives Claude Code or any MCP client nearly
   everything a person can do in the window.
 - **Updates.** IV Studio updates itself: one click installs a new version and reopens.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/projects.png" alt="Projects: short films as cards, The Seed, The Last Piece and Last Watch, each at its wizard step"></td>
-    <td width="50%"><img src="docs/images/staging-board.png" alt="The staging board: Tess on a top-down floor with the camera's view, lens, height and move, and the words it becomes"></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>A short film, step by step</sub></td>
-    <td align="center"><sub>Stage the shot on a board; it becomes exact directions or a previs clip</sub></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/images/dashboard.png" alt="Dashboard: quick-start cards, recent shots grouped by version, and the cast"></td>
-    <td width="50%"><img src="docs/images/create.png" alt="Create: Tess picked, two LoRAs in the tray, a Write it for me idea and the H3 prompt"></td>
+    <td width="50%"><img src="docs/images/dashboard.png" alt="Dashboard: what's new in 1.0, quick-start cards and recent renders"></td>
+    <td width="50%"><img src="docs/images/tour.png" alt="How it works: the Create tour lighting up What happens, with its card and Next"></td>
   </tr>
   <tr>
     <td align="center"><sub>Start anything from the Dashboard</sub></td>
-    <td align="center"><sub>Describe the shot and let it be written, with LoRAs as pictures</sub></td>
+    <td align="center"><sub>How it works: every page walks you through itself</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/image.png" alt="Create in Image mode: Generate or Edit, and six image model families"></td>
+    <td width="50%"><img src="docs/images/welcome.png" alt="Check my PC: this PC can do everything, with the graphics card, memory, processor, free space and prompt writer rated"></td>
+    <td width="50%"><img src="docs/images/hunt.png" alt="A Dry Seat shot: two preview takes of Tess at a rainy bus stop, ready to pick, and the final below"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Check my PC sets IV Studio up for your computer</sub></td>
+    <td align="center"><sub>Hunt a few takes, pick one, finish it at full size</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/shots.png" alt="Shots: filters for status, when, kind, who and shape, and The Seed's shots under their day"></td>
+    <td width="50%"><img src="docs/images/projects.png" alt="Projects: seven short films as cards, filtered by where each one is"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Every shot, a day at a time, with filters</sub></td>
+    <td align="center"><sub>A short film, step by step</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/image.png" alt="Create in Image mode: Generate or Edit, and eight image model families"></td>
+    <td width="50%"><img src="docs/images/staging-board.png" alt="The staging board: Tess on a top-down floor with the camera's view, lens, height and move, and the words it becomes"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Pictures too: generate or edit on eight model families</sub></td>
+    <td align="center"><sub>Stage the shot on a board; it becomes exact directions or a previs clip</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/characters.png" alt="Characters: Tess and Theo, and Train your own with Train a LoRA (free on your PC) and Make a RefMod"></td>
+    <td width="50%"><img src="docs/images/training.png" alt="Training a character: the recipe presets, and where it trains: free on this PC, RunPod or Modal"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Recurring characters, ready-made or your own</sub></td>
+    <td align="center"><sub>Train free on your PC, or rent a cloud GPU</sub></td>
+  </tr>
+  <tr>
     <td width="50%"><img src="docs/images/loras.png" alt="LoRAs: Civitai's cinematic MiniMax H3 LoRAs as tall picture cards"></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>Pictures too: generate or edit on six model families</sub></td>
-    <td align="center"><sub>Find H3 LoRAs on Civitai</sub></td>
-  </tr>
-  <tr>
     <td width="50%"><img src="docs/images/lora-details.png" alt="A LoRA's pop-up: its example clips, maker, trigger words, licence, file and tags"></td>
-    <td width="50%"><img src="docs/images/characters.png" alt="Characters: Tess and Theo, each with a LoRA, trigger and voice"></td>
   </tr>
   <tr>
+    <td align="center"><sub>Find H3 LoRAs on Civitai</sub></td>
     <td align="center"><sub>Every LoRA's examples, trigger words and licence</sub></td>
-    <td align="center"><sub>Recurring characters, ready-made or trained</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/voices.png" alt="Voices: Tess's and Theo's voices, each given to a character, and a voice designer"></td>
-    <td width="50%"><img src="docs/images/music.png" alt="Music: a film-score swell and two takes of a trailer score"></td>
+    <td width="50%"><img src="docs/images/voices.png" alt="Voices: Tess's and Theo's voices with their waveforms, each given to a character, and a voice designer"></td>
+    <td width="50%"><img src="docs/images/music.png" alt="Music: MiniMax Music 3 or ACE-Step, a style and lyrics with sections"></td>
   </tr>
   <tr>
     <td align="center"><sub>A voice for every character</sub></td>
     <td align="center"><sub>Songs and scores, made on your PC</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/edit.png" alt="Edit in full screen: project bin, source and program monitors, effect controls, and a timeline with filmstrips, waveforms and markers"></td>
-    <td width="50%"><img src="docs/images/library.png" alt="Library: shots grouped with their versions, filtered by videos, images, music and voice lines"></td>
+    <td width="50%"><img src="docs/images/edit.png" alt="Edit: project bin, source and program monitors, effect controls, and a timeline with filmstrips and titles"></td>
+    <td width="50%"><img src="docs/images/library.png" alt="Library: everything you made with filters for when, where from, kind, who and shape"></td>
   </tr>
   <tr>
-    <td align="center"><sub>A Premiere-style editor, full screen, with your agent cutting alongside</sub></td>
+    <td align="center"><sub>A Premiere-style editor, with your agent cutting alongside</sub></td>
     <td align="center"><sub>Everything you've made, in one place</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/sizzle.png" alt="Sizzle: infinitevariance.ai captured screen by screen, with its colours, fonts and logo"></td>
-    <td width="50%"><img src="docs/images/cloud.png" alt="Cloud: set up Modal, pick a GPU (L40S, A100 or H100) and when it shuts off"></td>
+    <td width="50%"><img src="docs/images/workflows.png" alt="Workflows: Sequences, Sizzle, Reel, Shinobi and Replace as cards with their own art"></td>
+    <td width="50%"><img src="docs/images/sizzle.png" alt="Sizzle: a wall of flames behind the web address bar, centered on its stage"></td>
   </tr>
   <tr>
-    <td align="center"><sub>A website, made into a promo film</sub></td>
-    <td align="center"><sub>No big GPU? Render on your own Modal account</sub></td>
+    <td align="center"><sub>Five tools for after a render</sub></td>
+    <td align="center"><sub>Sizzle: a website, made into a promo film</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/reel.png" alt="Reel: beat bars and a drop bar for pictures and a song, then numbered steps and the Your reel card"></td>
+    <td width="50%"><img src="docs/images/cloud.png" alt="Cloud: render on this PC or the cloud, RunPod, Modal or Comfy Cloud, and the RunPod account step"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Reel: pictures and a song, cut to the beat</sub></td>
+    <td align="center"><sub>No big GPU? Render on your own cloud account</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/settings.png" alt="Settings: a section index and cards for the prompt writer, Civitai and agents"></td>
+    <td width="50%"><img src="docs/images/setup.png" alt="Settings → Setup: ComfyUI and the GPU ready, and every model checked"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Settings, one card per topic</sub></td>
+    <td align="center"><sub>Setup checks and downloads what ComfyUI needs</sub></td>
   </tr>
 </table>
 
@@ -158,9 +217,9 @@ cloud. No strong graphics card? Shots can also render on a GPU in your own [RunP
   offers **Start ComfyUI** whenever it isn't running.
 - **Disk space.** About 60 GB for the H3 models. Music adds about 14 GB (MiniMax Music 3) or 10 GB
   (ACE-Step); voices add about 12 GB. Each is a one-click download inside the app.
-- **Optional:** [Ollama](https://ollama.com) for the free local prompt writer, and a
-  [Modal](https://modal.com) account (cloud rendering and character training) or a
-  [RunPod](https://www.runpod.io) account (cloud rendering).
+- **Optional:** [Ollama](https://ollama.com) for the free local prompt writer;
+  [Fizgig](https://github.com/shootthesound/Fizgig) to train characters on your own graphics card (16 GB or more);
+  and a [RunPod](https://www.runpod.io) or [Modal](https://modal.com) account for cloud rendering and training.
 
 ## Install
 
@@ -168,11 +227,14 @@ cloud. No strong graphics card? Shots can also render on a GPU in your own [RunP
    (about 180 MB).
 2. Run it. The installer isn't code-signed yet, so Windows may show **"Windows protected your PC"**.
    Click **More info → Run anyway**. It installs for your user only; no admin rights needed.
-3. Start ComfyUI, then IV Studio. **Settings → Setup** checks ComfyUI, your GPU, the node packs and every
+3. Open IV Studio. On first launch **Check my PC** reads your graphics card, memory and drives (nothing
+   leaves your PC), says what it can do, and sets previews, finals, the prompt writer and the downloads to
+   suit; it ends by offering a two-minute tour of the app. IV Studio starts ComfyUI for you when it can.
+4. **Settings → Setup** checks ComfyUI, your GPU, the node packs and every
    model, installs missing node packs into ComfyUI with one click (restart ComfyUI afterwards), and
    downloads missing models straight into ComfyUI's models folder (each checked against the SHA-256 its
    host publishes). Its **Updates** row keeps ComfyUI, its node packs and ComfyUI-Manager up to date.
-4. For voices, open **Audio → Voices** and press **Set up voices** once. For music, open
+5. For voices, open **Audio → Voices** and press **Set up voices** once. For music, open
    **Audio → Music** and download the engine you want.
 
 Your projects, voices and songs are kept in `%APPDATA%\IV Studio`; renders are saved in ComfyUI's
@@ -238,12 +300,14 @@ by hand once.
 
 ## Dashboard
 
-IV Studio opens on the **Dashboard**: one-click starts for a shot, a picture, a longer scene, an edit, a song,
-a voice line, a website film or a new character; your eight most recent renders; and your cast, each with
-their face, their voice, and **New shot** to start a shot with them already picked.
+IV Studio opens on the **Dashboard**: one-click starts for a shot, a picture, a short film, an edit, a song,
+a voice line, a website film or a new character; your most recent renders; and your cast, each with their
+face, their voice, and **New shot** to start a shot with them already picked. After an update, a strip at the
+top says what's new in that version (Settings → Updates keeps the last few).
 
 Every page opens on its own banner, drawn in the Infinite Variance eye style: a clapperboard for Shots,
-scissors for Edit, a storm cloud for Cloud, a record player for Music, and so on.
+scissors for Edit, a storm cloud for Cloud, a record player for Music, and so on. On wide windows the art
+stays against the right edge.
 
 ## How a shot works
 
@@ -256,15 +320,22 @@ scissors for Edit, a storm cloud for Cloud, a record player for Music, and so on
    - **First / last frame:** the clip opens on a picture and can end on a second one.
    - **Continue a video:** carries a clip on from its last frames.
 
+   Create is laid out as numbered steps (what kind of shot, who's in it, what it builds on, what happens,
+   shape and size) beside a pinned **Your shot** card that shows the frame in its shape and the Hunt button.
    Set the aspect, length, preview size and how many previews to hunt (1 to 3). Optional extras: a voice
-   line to lip-sync, RefMods, extra LoRAs and the step count.
+   line to lip-sync, RefMods and LoRAs (both in **Who's in it**), and under **Advanced** the steps, sampler and
+   scheduler (from your ComfyUI's own lists; er_sde and beta by default).
 2. **Hunt.** IV Studio queues the previews on ComfyUI and shows them as they finish.
 3. **Pick and finish.** Choose a preview and set the final size (1, 1.5 or 2 MP), the enhancer and the
    sound source. The finish starts from the preview's own latent, so the motion stays the same.
    - **DLSS 5** (the default): RTX 2× upscale and frame generation (30/50/60/120 fps), seconds per shot.
    - **SeedVR2** (3B): restores face, eye and hair detail and upscales to 1080p, 1440p or 2160p, on any
      NVIDIA card. **Enhance** runs either one again on a finished shot.
-4. **Shots.** Every shot keeps its runs, previews and finals. **Show in folder** opens the file.
+4. **Shots.** Every shot keeps its runs, previews and finals. **Show in folder** opens the file. The Shots page
+   groups them by the day you last worked on them (older ones by month; each day's heading stays at the top as
+   you scroll and folds away with a click) and filters them by status, when, kind of shot, who's in it and
+   shape, in a panel that folds away. Tiles load their video only as they come near the screen, so a long
+   history opens at once.
 
 ### Before and after a render
 
@@ -277,7 +348,8 @@ scissors for Edit, a storm cloud for Cloud, a record player for Music, and so on
   picture is attached as a reference, and a text shot switches to References mode by itself.
 - **Draft or Standard.** Draft previews take 4 steps instead of 8, roughly 40% faster, for hunting ideas.
 - **Live previews.** Each take's step pictures stream to the page while it renders (H3's tiny decoder
-  through KJNodes), so a bad take shows itself in about 20 seconds.
+  through KJNodes), so a bad take shows itself in about 20 seconds. **Live preview** (above the Library
+  button) floats the running render over every page: drag it to any corner, resize it, or fold it to a pill.
 - **Ranked takes.** When a run finishes, the takes are scored: the spoken words Whisper hears back, likeness
   to the character (InsightFace), no frozen stretches and sharpness. The best is marked only when it clearly
   leads, with the reasons in words, and every pick you make tunes the weights.
@@ -374,23 +446,35 @@ shot's first frame), **Edit this**, **Add to edit**, **Make more like this** or 
 
 ## Characters
 
-A character is a trained MiniMax H3 LoRA plus its trigger word; write `{char}` in the prompt where the
-character goes. On the **Characters** page:
+A character is a trained MiniMax H3 LoRA plus its trigger word, or a RefMod; write `{char}` in the prompt
+where the character goes. On the **Characters** page:
 
-- **Your characters:** each with its picture, trigger, strength, LoRA (checked against ComfyUI) and voice.
+- **Your characters:** portrait cards; click one for its trigger, strength, LoRA or RefMod (checked against
+  ComfyUI) and voice. **Add from a LoRA or RefMod** adds one you already have.
 - **Ready-made:** IV Studio's own invented characters, Tess Marlow and Theo Lindqvist. Download one and
   its LoRA (about 150 MB, from this repo's `characters-v1` release, checked against its SHA-256) goes into
   ComfyUI, and their bundled voice comes with them.
-- **Train your own,** the method that made Tess:
+- **Make a RefMod:** up to six pictures (and a voice clip) become a RefMod character on your PC in seconds,
+  with no training (ComfyUI-MiniMaxH3Mod's RefMod extractor). It works in Create's shots.
+- **Train a LoRA,** the method that made Tess, for the best likeness:
   1. **Design:** describe the face; Z-Image Turbo renders four candidates on your PC. The one you pick is
      rendered in eight scenes on the same seed. Or add your own pictures, only of an invented person or
      someone who agreed.
   2. **Clips:** H3 renders talking clips from the stills and the character's voice, or you add your own.
      Everything is fitted to Fizgig's rules (24 fps, 17n+5 frames, 32 kHz stereo).
-  3. **Train:** Fizgig on your own Modal account, with the minutes and dollars shown first. Theo took
-     56 minutes and about $4.10 on an H200.
-  4. **Pick:** checkpoints are rendered side by side on one seed; the one you choose becomes a character,
-     keeping the voice its clips were made with.
+  3. **Train:** with [Fizgig](https://github.com/shootthesound/Fizgig), where you choose:
+     - **This PC, free:** on your own NVIDIA card with 16 GB or more. A Standard run is a few hours; when
+       Check my PC finds a card that can, the page says **Free on your PC** and the Train step starts there.
+     - **RunPod or Modal:** your own account, by the second, with the minutes and dollars shown first. Theo
+       took 56 minutes and about $4.10 on an H200. On RunPod, IV Studio makes an 80 GB storage volume (kept
+       for later runs) and a training pod that deletes itself when the run is done.
+
+     The recipe: Quick, Standard or Thorough; look and voice, or look only; normal or fine detail; the person
+     or their whole look; how many checkpoints; and, under Advanced, rank, epochs, seed, caption dropout,
+     schedule and base precision. A **spending cap** stops a cloud run at your budget and keeps what it saved.
+     **Train more** carries a finished run on from its last saved state.
+  4. **Pick:** checkpoints are rendered side by side on one seed, and **Score them for likeness** marks the
+     closest; the one you choose becomes a character, keeping the voice its clips were made with.
 
   **Likeness:** with InsightFace's face models (a one-time 289 MB download; non-commercial licence), IV
   Studio scores every still and clip against the picked face and can keep the closest of each scene.
@@ -518,8 +602,11 @@ It can make new footage on the timeline too.
 The **Library** button above the Visual | Audio switch opens everything you've made: shot finals and
 previews, sequences, Replace runs, pictures, Edit exports, songs and spoken lines, newest first. A shot's
 previews and finals are one tile with an "N versions" badge; click it to watch every version in a large
-viewer and step through them with the arrow keys. Filter by type (videos, images, music, voice lines) or
-search, then add any of them to an edit or use a sound as a shot's voice line.
+viewer and step through them with the arrow keys. Everything sits under the day it was made (older work by
+month), filtered by type (videos, images, music, voice lines), when, where it came from (Shots, Sequences,
+Replace, Edit exports, Images, Music, Voice lines) and, for shots, their kind, who's in them and their shape;
+sort by newest, oldest, name or most versions. Then add any of them to an edit or use a sound as a shot's
+voice line.
 
 Above it, the **Queue** shows what ComfyUI is rendering and what waits, on every page: each render's name,
 its step and time, a click to open its page, and × to cancel one of IV Studio's own. Renders an agent
@@ -543,6 +630,11 @@ Incognito keeps things out of IV Studio's normal views. It isn't encryption: the
 the folders above, and LoRAs trained in Incognito land in ComfyUI's LoRAs folder like any other.
 
 ## Workflows
+
+Five tools for what comes after a render. Each opens on its own animated stage with its main bar centered (a
+wall of fire for Sizzle, a beat for Reel, running film for Sequences, blade cuts for Shinobi, a scanning swap
+for Replace), then works in numbered steps; the stages pause when they're off screen and stay still if your
+system asks for reduced motion. Sequences is described [above](#sequences).
 
 ### Sizzle
 
@@ -606,17 +698,20 @@ captions from speech and sound cues. It renders on your PC with the Edge or Chro
 Shinobi's engine is [OpenKatana](https://github.com/rk0neki/OpenKatana) (Apache-2.0), installed unmodified;
 Shinobi isn't affiliated with OpenKatana or with Higgsfield, whose Katana inspired it.
 
-## Learn
+## Help on every page
 
 <p align="center">
-  <img src="docs/images/learn.png" alt="Learn: every feature as a card, with search, Try it and the guide" width="100%">
+  <img src="docs/images/tour.png" alt="How it works: the Create tour lighting up What happens, with its card and Next" width="100%">
 </p>
 
-**Learn** in the sidebar lists everything IV Studio can do as cards in seven groups, with a search that
-understands everyday words ("make it vertical", "same face every shot"). **Try it** opens the right page in
-the right mode, and **What's new** shows each version's additions. Every page banner (and the editor) has a
-**?** with the easy-to-miss tips for that page. **Open the guide (PDF)**, at the top of Learn and in every **?**,
-opens the IV Studio guide: step by step, with every button pointed out. Tutorial videos are coming soon.
+Every page has a **How it works** button by its title (and in the editor's top bar). Click it and the page
+walks you through itself: each part lights up in turn with a line about it, and Next, Back, the arrow keys or
+Esc move through it. The button glows until you've taken that page's tour once. Steps follow the page as it
+is, so Create's tour includes the reference step only in the modes that take references.
+
+The welcome wizard (**Check my PC**) ends by offering a **full tour**: about two minutes across the whole app,
+ending on the How it works button. Take it again from Settings → About, where the PDF guide is too. After an
+update, **What's new** shows on the Dashboard once.
 
 ## How IV Studio uses ComfyUI
 
@@ -692,8 +787,9 @@ IV Studio is a front end for your own ComfyUI; every picture, video and song is 
 
 No strong graphics card, or want your PC back while it renders? The **Cloud** page renders on a GPU in your
 own [RunPod](https://www.runpod.io) or [Modal](https://modal.com) account instead: your account, billed to
-you by them. Or use [Comfy Cloud](https://www.comfy.org/cloud), Comfy's own hosted ComfyUI. Pick one at the
-top of the page.
+you by them. Or use [Comfy Cloud](https://www.comfy.org/cloud), Comfy's own hosted ComfyUI. Pick one on the
+page, or press **Guided setup** for a few steps: pick a service, connect your account, choose a GPU and when it
+shuts off, set it up, switch it on. Check my PC offers the same wizard when it recommends the cloud.
 
 ### On Comfy Cloud
 
@@ -750,13 +846,13 @@ or 120 fps) in place of DLSS, which needs an NVIDIA card on Windows.
 
 **What still needs a local NVIDIA GPU (on RunPod and Modal):** Images, Music, Voices (and **Speak it**), designing a new
 character's stills and clips, and Replace. LoRAs you download from Civitai go into your local ComfyUI, so
-cloud renders don't see them yet. Training a character always runs on Modal, whichever cloud renders.
+cloud renders don't see them yet. Training a character runs on your PC, RunPod or Modal, whichever renders.
 
 ## Agents (MCP)
 
-IV Studio includes a local MCP server (stdio) with 147 tools. It uses the same projects, characters, voices
+IV Studio includes a local MCP server (stdio) with 154 tools. It uses the same projects, characters, voices
 and songs as the window, so Claude Code or any MCP client can render shots and sequences, make pictures,
-speak lines, make music, cut them together and export. **Settings → Agents (MCP)** has the command for your
+speak lines, make music, cut them together and export. **Settings → Agents** has the command for your
 install, a message to paste into any agent, and a button that adds the IV Studio skill to Claude Code.
 
 **Start menu.** When a chat opens without a request, the agent offers IV Studio's menu as one
@@ -778,8 +874,9 @@ Agents learn how to use it from `resources/agent-guide.md`: the server's instruc
 
 - **Guide and start menu:** `get_guide`, `get_menu`.
 - **Images:** `list_image_models`, `make_image`, `list_images`, `get_image`, `cancel_image`, `delete_image`.
+- **This PC:** `scan_hardware` (what Check my PC sees and recommends), `free_memory`.
 - **Shots:** `check_setup`, `install_node_packs`, `check_comfy_updates`, `update_comfy`, `undo_comfy_update`, `list_characters`, `list_projects`, `plan_render`, `check_prompt`,
-  `generate_previews`, `finish_candidate`, `enhance_final`, `rank_takes`, `review_take`, `make_previs`.
+  `list_samplers`, `generate_previews`, `finish_candidate`, `enhance_final`, `rank_takes`, `review_take`, `make_previs`.
 - **Cast and places:** `list_cast`, `save_place`.
 - **Projects (short films):** `list_films`, `create_film`, `get_film`, `update_film`, `set_film_script`,
   `write_film_script`, `break_down_film`, `sketch_film_shots`, `edit_film_shot`, `write_film_shot_prompt`,
@@ -804,13 +901,14 @@ Agents learn how to use it from `resources/agent-guide.md`: the server's instruc
 - **LoRAs:** `search_loras`, `get_lora`, `download_lora` (needs `CIVITAI_API_KEY` in the server's
   environment), `list_my_loras`, `identify_lora`.
 - **Characters:** `list_ready_characters`, `install_ready_character`, `save_character`, `delete_character`,
-  `list_choices` (LoRAs and RefMods).
+  `list_choices` (LoRAs and RefMods), `make_refmod_character`.
 - **Character training:** `list_character_trainings`, `get_character_training`,
   `create_character_training`, `update_character_training`, `design_faces`, `pick_face`, `design_scenes`,
   `pick_still`, `make_training_clips`, `set_training_item`, `add_training_files`, `rank_likeness`,
-  `estimate_training`, `start_training` (paid: needs the person's OK and `confirm_cost`), `stop_training`,
-  `test_checkpoints`, `adopt_checkpoint`.
-- **Replace:** `replace_check`, `replace_video`, `replace_history`.
+  `estimate_training` and `start_training` (on this PC, RunPod or Modal, with the recipe options and `more` to
+  carry a run on; a paid run needs the person's OK and `confirm_cost`), `stop_training`, `test_checkpoints`,
+  `score_checkpoints`, `adopt_checkpoint`.
+- **Replace:** `replace_check`, `replace_video`, `replace_history`, `remake_paint`, `remake_use_picture`, `remake_render`.
 - **Shinobi:** `shinobi_status`, `shinobi_setup`, `shinobi_tools`, `shinobi`, `shinobi_project`.
 - **Sizzle:** `sizzle_capture`, `view_sizzle_capture`, `list_sizzles`, `get_sizzle`, `save_sizzle_plan`,
   `approve_sizzle_plan`, `make_sizzle_assets`, `sizzle_first_cut`, `sizzle_to_shinobi`, `delete_sizzle`.
@@ -863,6 +961,10 @@ Tests are in `test/`:
   design and sequences on real hardware (the last one queues GPU renders).
 - `media-prepare.mjs`, `models-download.mjs`, `prompt-writer.mjs`: media trims, checked downloads and the
   local prompt writer.
+- `tours.mjs`: every How it works tour exists, reads well, and points only at parts the window still has.
+- `hardware.mjs`, `training-recipe.mjs`, `training-runpod.mjs`, `sampler-choice.mjs`, `refmods.mjs`,
+  `news.mjs`: Check my PC's advice, the training recipe and its spending cap, RunPod training against a mock,
+  the sampler choice, RefMod characters and What's new.
 
 ## Licences
 

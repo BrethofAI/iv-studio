@@ -2,6 +2,17 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.0.0',
+    items: [
+      { text: 'IV Studio 1.0. Every page has a How it works button that walks you through its real controls, and a full tour shows the whole app in two minutes (Settings, About takes it again).' },
+      { text: 'Check my PC reads your graphics card, memory and drives and sets IV Studio up to suit them, and a guided cloud setup connects RunPod, Modal or Comfy Cloud.' },
+      { text: 'Create, Settings, Characters and the Workflows tools are redesigned as clear numbered steps; Sizzle, Reel, Sequences, Shinobi and Replace open on animated stages.' },
+      { text: 'Shots, Projects and the Library group your work by day, filter by when, kind, who and shape, and open quickly however much you have.' },
+      { text: 'Train a character free on your own graphics card, or on RunPod or Modal, with presets, a spending cap, Train more and likeness scoring. Or make a RefMod character from a few pictures in seconds.' },
+      { text: 'Pick the sampler and scheduler for a shot, and keep a resizable live preview of any render over every page.' }
+    ]
+  },
+  {
     version: '0.3.4',
     items: [
       { text: 'Each Workflows tool (Sequences, Sizzle, Reel, Shinobi and Replace) has its own picture on its card, drawn in the style of IV Studio’s page banners.' }

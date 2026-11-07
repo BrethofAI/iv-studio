@@ -375,10 +375,18 @@ The Characters page (and these tools) turn an invented person into a character p
    `list_voices` works), then `make_training_clips`:
    H3 talking clips from the face and the stills. `rank_likeness` scores them; render weak ones again
    (`make_training_clips` redo) or drop them (`set_training_item` keep false). Aim for 0.45+.
-4. `estimate_training`, tell the person the minutes and dollars, and `start_training` only after they
-   agree (it bills their Modal account; Theo took 56 minutes and about $4.10 on an H200; Modal's Starter plan has no B200).
-5. When `train.state` is `done`: `test_checkpoints` with 2-4 epochs (late ones often win), compare the
-   renders, and `adopt_checkpoint` the best. It's then a character like any other.
+4. Where it trains (`options.where`): `local` is free on this PC's own NVIDIA card (16 GB or more; Fizgig
+   installed; a Standard run takes a few hours and nothing should render meanwhile; `scan_hardware` says
+   whether this PC can), `modal` or `runpod` rent a GPU on the person's own account. The recipe is in
+   `options` too (preset quick/standard/thorough, learn, detail, mode, checkpoints, and a `budget` cap for the
+   cloud). `estimate_training`, tell the person the minutes (and the dollars, in the cloud), and
+   `start_training` only after they agree (a cloud run bills their account and needs `confirm_cost`; Theo took
+   56 minutes and about $4.10 on an H200 on Modal; Modal's Starter plan has no B200). Training an MCP agent
+   starts on RunPod is refused: the RunPod key is sealed by the window, so start that one from the Characters page.
+5. When `train.state` is `done`: `test_checkpoints` with 2-4 epochs (late ones often win), `score_checkpoints`
+   for likeness, compare the renders, and `adopt_checkpoint` the best. It's then a character like any other.
+   `start_training` with `more` carries a finished run on from its last saved state.
+6. No time to train? `make_refmod_character` makes a RefMod character from up to six pictures in seconds.
 
 ## Incognito
 
