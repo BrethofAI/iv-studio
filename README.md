@@ -138,7 +138,7 @@ card. See [what's new in 1.0](#whats-new-in-10).
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/image.png" alt="Create in Image mode: Generate or Edit, and eight image model families"></td>
-    <td width="50%"><img src="docs/images/staging-board.png" alt="The staging board: Tess on a top-down floor with the camera's view, lens, height and move, and the words it becomes"></td>
+    <td width="50%"><img src="docs/images/staging-board.png" alt="The staging board on Create: Tess and a second person on a top-down floor, a wide lens and an arcing camera, and the staging words it writes"></td>
   </tr>
   <tr>
     <td align="center"><sub>Pictures too: generate or edit on eight model families</sub></td>
@@ -153,7 +153,7 @@ card. See [what's new in 1.0](#whats-new-in-10).
     <td align="center"><sub>Train free on your PC, or rent a cloud GPU</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/loras.png" alt="LoRAs: Civitai's cinematic MiniMax H3 LoRAs as tall picture cards"></td>
+    <td width="50%"><img src="docs/images/loras.png" alt="LoRAs: a Civitai search for painting styles, shown as tall picture cards under the page's own banner"></td>
     <td width="50%"><img src="docs/images/lora-details.png" alt="A LoRA's pop-up: its example clips, maker, trigger words, licence, file and tags"></td>
   </tr>
   <tr>
