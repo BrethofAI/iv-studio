@@ -1,5 +1,6 @@
 {
-  "_note": "Links the app shows. modalSignup: set to the Modal referral/affiliate link once Matt has one; while it is null the Cloud page uses Modal's normal sign-up page and does not mention supporting IV Studio.",
+  "_note": "Links the app shows. runpodSignup: Matt's RunPod referral link (2026-11-07); where RunPod sign-up shows, a short note says signing up through it supports IV Studio. modalSignup: set to the Modal referral/affiliate link once Matt has one; while it is null the Cloud page uses Modal's normal sign-up page and does not mention supporting IV Studio.",
   "website": "https://infinitevariance.ai",
+  "runpodSignup": "https://runpod.io?ref=mdq1gvh6",
   "modalSignup": null
 }

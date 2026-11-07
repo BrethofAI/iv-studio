@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 import Hero from './Hero'
+import Stage from './Stage'
+import { ToolShelf, ShelfTile, Step } from './FlowKit'
+import { SetCode } from './SettingsKit'
 import TileDelete from './TileDelete'
 import { fileUrl } from './edit/model'
 
@@ -11,6 +14,14 @@ const Z = () => window.ivstudio.sizzle
 const KIND = { h3: 'H3 shot', image: 'Picture', screen: 'Site screen', title: 'Title' }
 // An H3 prompt's shot description, without its field labels and sound fields.
 const shotText = (p) => String(p || '').replace(/^\s*integrated_multimodal_description:\s*/i, '').split(/\n\s*overall_soundscape:/i)[0].replace(/\s*There is no writing anywhere in the picture\.?/i, '')
+const PROGRESS = [
+  ['captured', 'Captured'],
+  ['planning', 'Storyboard'],
+  ['approved', 'Approved'],
+  ['rendering', 'Pieces'],
+  ['ready', 'Cut'],
+  ['editing', 'Refined']
+]
 const STATUS = { planning: 'Storyboard', approved: 'Approved', rendering: 'Making the pieces', ready: 'Pieces ready', editing: 'Cut in Shinobi' }
 
 function agentMessage(s) {
@@ -26,11 +37,12 @@ function agentMessage(s) {
   return `Carry on with the ${s.name} sizzle (sizzle id ${s.id}): get_sizzle shows where it is.`
 }
 
-export function SizzleList({ notify, openSizzle }) {
+export function SizzleList({ notify, openSizzle, go }) {
   const [list, setList] = useState(null)
   const [url, setUrl] = useState('')
   const [format, setFormat] = useState('16:9')
   const [busy, setBusy] = useState(null)
+  const [q, setQ] = useState('')
   useEffect(() => {
     Z().list().then(setList)
     return Z().onLog((line) => setBusy(line))
@@ -44,44 +56,39 @@ export function SizzleList({ notify, openSizzle }) {
       setBusy(null)
     }
   }
+  const shown = (list || []).filter((s) => !q.trim() || `${s.name} ${s.url}`.toLowerCase().includes(q.trim().toLowerCase()))
   return (
-    <div className="sizzle">
-      <Hero art="sizzle" title="Sizzle" kicker="A website, made into a film" />
-      <p className="lede">
-        Put in a web address and get a promo film.
-        <span className="lede-small dim">IV Studio captures the site as people see it. Your agent writes a storyboard from it, you approve it, and the H3 shots, pictures, music and voice-over are made on this PC. Then IV Studio cuts it on the music's beat with the site's own screens and colours, and your agent can refine the cut in Shinobi.</span>
-      </p>
-      <div className="sizzle-start">
-        <input value={url} placeholder="https://your-site.com" onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && url.trim() && !busy && capture()} />
-        <div className="segmented ed-seg">
-          {['16:9', '9:16', '1:1'].map((f) => (
-            <button key={f} className={format === f ? 'on' : ''} onClick={() => setFormat(f)}>
-              {f}
-            </button>
-          ))}
-        </div>
-        <button className="btn btn-primary" disabled={!url.trim() || !!busy} onClick={capture}>
-          Capture the site
-        </button>
-      </div>
-      {busy && <p className="mono small dim">{busy}</p>}
-      <div className="tiles">
-        {list?.map((s) => (
-          <div key={s.id} className="tile-wrap">
-            <button className="tile" onClick={() => openSizzle(s.id)}>
-              <div className="tile-media">{s.final ? <video src={`${fileUrl(s.final)}#t=1`} muted preload="metadata" /> : s.cover && <img src={fileUrl(s.cover)} alt="" />}</div>
-              <div className="tile-body">
-                <span className="tile-name">{s.name}</span>
-                <span className="mono dim small">
-                  {STATUS[s.status] || s.status} · {s.scenes} scene{s.scenes === 1 ? '' : 's'}
-                </span>
-                <span className="mono dim small">{new URL(s.url).hostname}</span>
-              </div>
-            </button>
-            <TileDelete name={s.name} keeps="Its renders, song and Shinobi film stay." notify={notify} onDelete={async () => (await Z().delete(s.id), setList(await Z().list()))} />
+    <div className="sizzle flow-page">
+      <Stage effect="fire" art="sizzle" title="Sizzle" kicker="A website, made into a film" back={go && { label: 'Workflows', onClick: () => go('workflows') }}>
+        <div className="stage-panel">
+          <input value={url} placeholder="https://your-site.com" onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && url.trim() && !busy && capture()} aria-label="Web address" />
+          <div className="segmented ed-seg" role="radiogroup" aria-label="Shape">
+            {['16:9', '9:16', '1:1'].map((f) => (
+              <button key={f} className={format === f ? 'on' : ''} onClick={() => setFormat(f)}>
+                {f}
+              </button>
+            ))}
           </div>
+          <button className="btn btn-primary" disabled={!url.trim() || !!busy} onClick={capture}>
+            {busy ? 'Capturing…' : 'Capture the site'}
+          </button>
+        </div>
+        <p className="stage-note small">{busy || 'IV Studio captures the site, your agent writes a storyboard, you approve it, and the shots, music and voice-over are made on this PC.'}</p>
+      </Stage>
+
+      <ToolShelf label="Your sizzles" count={shown.length} q={q} setQ={setQ} empty="None yet. Put a web address in the bar above.">
+        {shown.map((s) => (
+          <ShelfTile
+            key={s.id}
+            onOpen={() => openSizzle(s.id)}
+            media={s.final ? <video src={`${fileUrl(s.final)}#t=1`} muted preload="metadata" /> : s.cover ? <img src={fileUrl(s.cover)} alt="" loading="lazy" /> : <span className="shelf-empty-art">Sizzle</span>}
+            status={STATUS[s.status] || s.status}
+            name={s.name}
+            meta={[`${s.scenes} scene${s.scenes === 1 ? '' : 's'}`, new URL(s.url).hostname]}
+            del={<TileDelete name={s.name} keeps="Its renders, song and Shinobi film stay." notify={notify} onDelete={async () => (await Z().delete(s.id), setList(await Z().list()))} />}
+          />
         ))}
-      </div>
+      </ToolShelf>
     </div>
   )
 }
@@ -96,7 +103,6 @@ function Piece({ sc }) {
 export function SizzleProject({ sizzleId, notify, go, openShinobi }) {
   const [s, setS] = useState(null)
   const [busy, setBusy] = useState(null)
-  const [copied, setCopied] = useState(false)
   const load = () => Z().get(sizzleId).then(setS, (err) => notify(err.message))
   useEffect(() => {
     load()
@@ -127,20 +133,29 @@ export function SizzleProject({ sizzleId, notify, go, openShinobi }) {
   const made = s.scenes.filter((x) => x.kind === 'h3' || x.kind === 'image')
   const done = made.filter((x) => x.status === 'success').length
   const rendering = s.render?.state && !s.render.video && !s.render.error
+  const at = Math.max(1, PROGRESS.findIndex(([id]) => id === s.status))
 
   return (
-    <div className="sizzle">
-      <Hero art="sizzle" title={s.name} kicker="Website sizzle" />
-      <button className="link-btn mono" onClick={() => go('sizzle')}>
-        ← All sizzles
-      </button>
+    <div className="sizzle create-v2 flow-page">
+      <Hero art="sizzle" help="sizzle-project" title={s.name} kicker={`Website sizzle · ${s.format}`} back={{ label: 'All sizzles', onClick: () => go('sizzle') }} />
+      {/* where it's at: captured, storyboard, approved, pieces, cut, refined */}
+      <ol className="wizard-steps flow-progress" aria-label="Progress">
+        {PROGRESS.map(([id, label], i) => (
+          <li key={id} className={`${i === at ? 'on' : ''} ${i <= at ? 'reached' : ''}`}>
+            <span className="flow-progress-in">
+              <span className="wizard-n">{i < at ? '✓' : i + 1}</span>
+              <span className="wizard-label">{label}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
       <p className="mono small dim sz-status">
-        {STATUS[s.status] || s.status} · {s.url} · {s.format}
+        {s.url}
         {busy && ` · ${busy.replace(/…$/, '')}…`}
       </p>
 
-      <section className="block">
-        <p className="mono label">01 · The site, as captured</p>
+      <div className="create-steps">
+      <Step n={1} title="The site, as captured" sub="Its screens, colours, fonts, logo and pictures: what the film is built from.">
         <div className="sz-site">
           <img className="sz-hero" src={fileUrl(capture('hero').file)} alt="The top of the page" />
           <div className="sz-kit">
@@ -171,10 +186,9 @@ export function SizzleProject({ sizzleId, notify, go, openShinobi }) {
             </figure>
           ))}
         </div>
-      </section>
+      </Step>
 
-      <section className="block">
-        <p className="mono label">02 · Storyboard{s.plan && ` · ${s.plan.seconds} s`}</p>
+      <Step n={2} title="Storyboard" sub={s.plan ? `${s.scenes.length} scenes · ${s.plan.seconds} s` : 'Your agent writes it from the capture; you approve it before anything renders.'}>
         {!s.plan && <p className="small dim">Your agent writes it from the capture. Paste the message below into Claude Code, Codex or another agent connected to IV Studio (Settings → Agents).</p>}
         {s.plan && (
           <>
@@ -239,21 +253,18 @@ export function SizzleProject({ sizzleId, notify, go, openShinobi }) {
             </div>
           </>
         )}
-      </section>
+      </Step>
 
-      <section className="block">
-        <p className="mono label">03 · {s.final ? 'The film' : 'Your agent'}</p>
+      <Step n={3} title={s.final ? 'The film' : 'Your agent'} sub={s.final ? 'The latest cut. Your agent can keep refining it in Shinobi.' : 'Paste this into Claude Code, Codex or another agent connected to IV Studio (Settings → Agents).'}>
         {s.final && <video key={s.final} className="sz-final" src={fileUrl(s.final)} controls playsInline />}
         {s.cut && (
           <p className="mono small dim">
             First cut {new Date(s.cut.at).toLocaleString()} · {s.cut.seconds} s{s.render?.error ? ` · the render failed: ${s.render.error}` : ''}
           </p>
         )}
-        <pre className="code shinobi-brief">{msg}</pre>
-        <button className="btn btn-small" onClick={() => navigator.clipboard.writeText(msg).then(() => (setCopied(true), setTimeout(() => setCopied(false), 1500)))}>
-          {copied ? 'Copied' : 'Copy message'}
-        </button>
-      </section>
+        <SetCode text={msg} label="Copy message" tall />
+      </Step>
+      </div>
     </div>
   )
 }

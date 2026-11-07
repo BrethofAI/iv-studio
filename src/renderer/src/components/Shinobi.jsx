@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import Hero from './Hero'
+import Stage from './Stage'
+import { ToolShelf, ShelfTile, Step, Choices, Summary, SummaryDock, SummaryFrame } from './FlowKit'
+import { AspectTiles } from './CreateKit'
+import { SetCode } from './SettingsKit'
 import TileDelete from './TileDelete'
 import { fileUrl } from './edit/model'
 
@@ -12,7 +16,7 @@ const RUNNING = ['running', 'queued']
 const base = (p) => String(p).split(/[\\/]/).pop()
 
 // Set up the engine once, then films: create one or open one.
-export function ShinobiList({ openShinobi, notify }) {
+export function ShinobiList({ openShinobi, notify, go }) {
   const [st, setSt] = useState(null)
   const [list, setList] = useState([])
   const [name, setName] = useState('')
@@ -43,64 +47,46 @@ export function ShinobiList({ openShinobi, notify }) {
   }
   if (!st) return null
   return (
-    <div className="shinobi">
-      <Hero art="shinobi" title="Shinobi" kicker="Edits your agent cuts" />
-      <p className="lede">
-        Hand your footage to an agent and get a finished edit.
-        <span className="lede-small dim">
-          Cuts on the beat, speed ramps, camera moves, typography, effects and sound, written by your agent (or a recipe) and rendered on this PC. Works with your IV Studio renders.
-        </span>
-      </p>
-      {!st.installed ? (
-        <section className="group">
-          <div className="group-head">
-            <h2>Set up Shinobi</h2>
-            <p className="dim small">Once, about 440 MB and under a minute. It renders with {st.browser ? base(st.browser).replace('.exe', '') : 'Edge, Chrome or Chromium'} and IV Studio's own ffmpeg; nothing else to install.</p>
-          </div>
-          <div className="group-body">
-            {!st.browser && <p className="small pink">Shinobi needs Microsoft Edge or Google Chrome to draw frames.</p>}
-            <button className="btn btn-primary" disabled={busy || !st.browser} onClick={install}>
-              {busy ? 'Setting up…' : 'Set up Shinobi'}
-            </button>
-            {busy && log.length > 0 && <pre className="code cloud-log">{log.join('\n')}</pre>}
-            <p className="small dim">Installs Shinobi's renderer (about 440 MB) at a fixed version into IV Studio's own folder. Nothing else on your PC changes.</p>
-          </div>
-        </section>
-      ) : (
-        <>
-          <section className="group">
-            <div className="group-head">
-              <h2>New film</h2>
-            </div>
-            <div className="group-body">
-              <div className="row">
-                <span className="row-label">Name</span>
-                <input value={name} placeholder="e.g. Theo teaser" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && name.trim() && create()} />
-              </div>
+    <div className="shinobi flow-page">
+      <Stage effect="slash" art="shinobi" title="Shinobi" kicker="Edits your agent cuts" back={go && { label: 'Workflows', onClick: () => go('workflows') }}>
+        {st.installed ? (
+          <>
+            <div className="stage-panel">
+              <input value={name} placeholder="Name your film, e.g. Theo teaser" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && name.trim() && create()} aria-label="Film name" />
               <button className="btn btn-primary" disabled={!name.trim()} onClick={create}>
                 Start a film
               </button>
             </div>
-          </section>
-          {list.length > 0 && (
-            <div className="tiles seq-tiles">
-              {list.map((p) => (
-                <div key={p.id} className="tile-wrap">
-                <button className="tile" onClick={() => openShinobi(p.id)}>
-                  {p.cover ? <video className="shinobi-cover" src={`${fileUrl(p.cover)}#t=0.5`} muted preload="metadata" /> : <span className="shinobi-cover empty mono dim">No render yet</span>}
-                  <div className="tile-body">
-                    <span className="tile-name">{p.name}</span>
-                    <span className="mono dim">
-                      {p.assets} media · {p.renders} render{p.renders === 1 ? '' : 's'}
-                    </span>
-                  </div>
-                </button>
-                <TileDelete name={p.name} keeps="Its renders go too (copy any you want to keep, or send them to Edit first). Your original files stay." notify={notify} onDelete={async () => (await window.ivstudio.shinobi.delete(p.id), setList(await window.ivstudio.shinobi.projects()))} />
-                </div>
-              ))}
+            <p className="stage-note small">Cuts on the beat, speed ramps, camera moves, typography, effects and sound, written by your agent (or a recipe) and rendered on this PC.</p>
+          </>
+        ) : (
+          <>
+            <div className="stage-panel stage-setup">
+              <span className="stage-drop-text">Set up Shinobi once · about 440 MB</span>
+              <button className="btn btn-primary" disabled={busy || !st.browser} onClick={install}>
+                {busy ? 'Setting up…' : 'Set up Shinobi'}
+              </button>
             </div>
-          )}
-        </>
+            <p className="stage-note small">{st.browser ? `It renders with ${base(st.browser).replace('.exe', '')} and IV Studio's own ffmpeg, at a fixed version in IV Studio's own folder. Nothing else on your PC changes.` : 'Shinobi needs Microsoft Edge or Google Chrome to draw frames.'}</p>
+          </>
+        )}
+      </Stage>
+      {busy && log.length > 0 && <pre className="code cloud-log">{log.join('\n')}</pre>}
+
+      {st.installed && (
+        <ToolShelf label="Your films" count={list.length} empty="No films yet. Name one in the bar above.">
+          {list.map((p) => (
+            <ShelfTile
+              key={p.id}
+              onOpen={() => openShinobi(p.id)}
+              media={p.cover ? <video src={`${fileUrl(p.cover)}#t=0.5`} muted preload="metadata" /> : <span className="shelf-empty-art">No render yet</span>}
+              status={p.renders ? `${p.renders} render${p.renders === 1 ? '' : 's'}` : null}
+              name={p.name}
+              meta={[`${p.assets} media`]}
+              del={<TileDelete name={p.name} keeps="Its renders go too (copy any you want to keep, or send them to Edit first). Your original files stay." notify={notify} onDelete={async () => (await window.ivstudio.shinobi.delete(p.id), setList(await window.ivstudio.shinobi.projects()))} />}
+            />
+          ))}
+        </ToolShelf>
       )}
     </div>
   )
@@ -120,7 +106,6 @@ export function ShinobiProject({ projectId, notify, go }) {
   const [busy, setBusy] = useState(null)
   const [tools, setTools] = useState(null)
   const [query, setQuery] = useState('')
-  const [copied, setCopied] = useState(false)
   const S = window.ivstudio.shinobi
   const load = () => S.project(projectId).then((x) => (setP(x), x))
   useEffect(() => {
@@ -152,6 +137,15 @@ export function ShinobiProject({ projectId, notify, go }) {
   // A style that needs music says so ("needs music; 3+ clips"); "music optional" doesn't count.
   const needsMusic = chosen && /\bmusic\b/i.test(chosen.needs) && !/music optional/i.test(chosen.needs)
 
+  const lastRender = [...p.renders].reverse().find((r) => r.video)
+  const cover = lastRender ? { path: lastRender.video, kind: 'video' } : visual[0] ? { path: visual[0].path, kind: visual[0].kind } : null
+  const facts = [
+    ['Media', `${visual.length} picture${visual.length === 1 ? '' : 's'} or clip${visual.length === 1 ? '' : 's'}`],
+    ['Sound', music ? music.name : 'none yet'],
+    ['Edit', p.timeline ? `${p.timeline.seconds} s · ${p.timeline.shots} shots` : 'not built yet'],
+    ['Renders', String(p.renders.length)]
+  ]
+  const action = { label: rendering ? 'Rendering…' : p.timeline ? 'Render the saved edit' : 'Build a first cut first', disabled: !p.timeline || rendering || !!busy, onClick: () => render() }
   async function firstCut() {
     await act('Building the first cut', async () => {
       const r = await S.call('build_recipe', { project_id: projectId, family: chosen.family, asset_ids: visual.map((a) => a.id), music_asset_id: music?.id ?? null, text: text || null, seconds, width: W, height: H, fps: 30 })
@@ -183,12 +177,13 @@ ${brief || '(describe the film here)'}
 Read the guides first (shinobi read_guide: agent, timeline, effects). Look at the media with preview_source before choosing shots, preview the timeline before rendering, and render with start_render. Tell me when it's ready; I'll review it in IV Studio's Shinobi page.`
 
   return (
-    <div className="shinobi">
-      <Hero art="shinobi" title={p.name} kicker="Shinobi film" />
+    <div className="shinobi create-v2 flow-page">
+      <Hero art="shinobi" help="shinobi-film" title={p.name} kicker="Shinobi film" back={go && { label: 'All films', onClick: () => go('shinobi') }} />
       {busy && <p className="mono small dim">{busy}…</p>}
 
-      <section className="block">
-        <p className="mono label">01 · Brief and media</p>
+      <div className="create-layout">
+      <div className="create-steps">
+      <Step n={1} title="Brief and media" sub="What the film is, and the pictures, clips and sound it's cut from.">
         <textarea rows={4} value={brief} placeholder="What's the film? Mood, pace, length, aspect, music, the words on screen…" onChange={(e) => setBrief(e.target.value)} onBlur={() => S.saveBrief(projectId, brief)} />
         <div className="media-actions">
           <button className="btn btn-small" onClick={() => act('Importing', async () => setP({ ...(await S.importFiles(projectId)), brief }))}>
@@ -232,37 +227,20 @@ Read the guides first (shinobi read_guide: agent, timeline, effects). Look at th
             ))}
           </div>
         )}
-      </section>
+      </Step>
 
-      <section className="block">
-        <p className="mono label">02 · A first cut, no agent needed</p>
-        <p className="small dim">Pick a style and Shinobi lays out a starting edit from your media. Your agent can take it from there.</p>
-        <div className="shinobi-presets">
-          {presets.map((x) => (
-            <button key={x.name} className={`mode-card ${preset === x.name ? 'on' : ''}`} onClick={() => setPreset(x.name)}>
-              <span className="mode-name">{x.title}</span>
-              <span className="dim small">{x.about}</span>
-              <span className="mono small">Needs {x.needs}</span>
-            </button>
-          ))}
-        </div>
-        <div className="row">
-          <span className="row-label">Shape</span>
-          <div className="segmented">
-            {ASPECTS.map(([a]) => (
-              <button key={a} className={aspect === a ? 'on' : ''} onClick={() => setAspect(a)}>
-                {a}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="row">
-          <span className="row-label">Seconds</span>
-          <input className="mini" type="number" min={3} max={60} value={seconds} onChange={(e) => setSeconds(Number(e.target.value))} />
-        </div>
-        <div className="row">
-          <span className="row-label">Title</span>
-          <input value={text} placeholder="optional words on screen" onChange={(e) => setText(e.target.value)} />
+      <Step n={2} title="A first cut" sub="No agent needed: pick a style and Shinobi lays out a starting edit from your media. Your agent can take it from there.">
+        <Choices label="Style" className="shinobi-presets" value={preset} onChange={setPreset} options={presets.map((x) => [x.name, x.title, x.about, `Needs ${x.needs}`])} />
+        <AspectTiles aspects={ASPECTS.map(([a]) => a)} value={aspect} onChange={setAspect} />
+        <div className="create-grid">
+          <label className="create-field">
+            <span className="create-label mono">Seconds</span>
+            <input className="mini" type="number" min={3} max={60} value={seconds} onChange={(e) => setSeconds(Number(e.target.value))} />
+          </label>
+          <label className="create-field">
+            <span className="create-label mono">Title</span>
+            <input value={text} placeholder="optional words on screen" onChange={(e) => setText(e.target.value)} />
+          </label>
         </div>
         <button className="btn btn-primary" disabled={!visual.length || !chosen || !!busy || (needsMusic && !music)} onClick={firstCut}>
           Build the first cut
@@ -281,25 +259,12 @@ Read the guides first (shinobi read_guide: agent, timeline, effects). Look at th
             Saved edit: {p.timeline.seconds} s · {p.timeline.width}×{p.timeline.height} · {p.timeline.fps} fps · {p.timeline.shots} shots · {p.timeline.texts} titles
           </p>
         )}
-      </section>
+      </Step>
 
-      <section className="block">
-        <p className="mono label">03 · Hand it to your agent</p>
-        <p className="small dim">
-          Your agent edits through IV Studio's MCP (Settings → Agents). This message tells it which film, what's in it and what you want.
-        </p>
-        <pre className="code shinobi-brief">{agentBrief}</pre>
-        <button
-          className="btn btn-small"
-          onClick={() => {
-            S.saveBrief(projectId, brief)
-            navigator.clipboard.writeText(agentBrief)
-            setCopied(true)
-            setTimeout(() => setCopied(false), 1500)
-          }}
-        >
-          {copied ? 'Copied' : 'Copy for your agent'}
-        </button>
+      <Step n={3} title="Hand it to your agent" sub="Your agent edits through IV Studio's MCP (Settings → Agents). This message tells it which film, what's in it and what you want.">
+        <div onClick={() => S.saveBrief(projectId, brief)}>
+          <SetCode text={agentBrief} label="Copy for your agent" tall />
+        </div>
         <details className="shinobi-tools" onToggle={(e) => e.target.open && !tools && S.tools().then(setTools)}>
           <summary className="mono dim">Everything Shinobi can do ({tools?.length || 72} tools)</summary>
           <input value={query} placeholder="Search: beat, captions, 3D, speed…" onChange={(e) => setQuery(e.target.value)} />
@@ -312,14 +277,9 @@ Read the guides first (shinobi read_guide: agent, timeline, effects). Look at th
               </div>
             ))}
         </details>
-      </section>
+      </Step>
 
-      <section className="block">
-        <p className="mono label">04 · Render and review</p>
-        <button className="btn btn-primary" disabled={!p.timeline || rendering || !!busy} onClick={render}>
-          {rendering ? 'Rendering…' : 'Render the saved edit'}
-        </button>
-        {!p.timeline && <p className="small dim">Build a first cut, or ask your agent for an edit, first.</p>}
+      <Step n={4} title="Render and review" sub={p.timeline ? 'Render the saved edit, then send a render to Edit or show it in its folder.' : 'Build a first cut, or ask your agent for an edit, first.'}>
         <div className="char-clips">
           {p.renders.map((r) => (
             <div key={r.id} className="char-clip">
@@ -340,7 +300,12 @@ Read the guides first (shinobi read_guide: agent, timeline, effects). Look at th
             </div>
           ))}
         </div>
-      </section>
+      </Step>
+      </div>
+
+      <Summary label="Your film" kind={aspect} frame={<SummaryFrame aspect={aspect} src={cover && fileUrl(cover.path)} video={cover && cover.kind !== 'image'} tag={p.timeline ? `${p.timeline.seconds} s edit` : null} />} facts={facts} action={action} />
+      </div>
+      <SummaryDock facts={facts} action={action} />
     </div>
   )
 }

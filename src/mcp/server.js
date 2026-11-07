@@ -30,7 +30,11 @@ import { comfyFolders, contentDir, dataDir, readSettings, resourcesDir, writerOf
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
-import { launcherFor } from '../service/comfylauncher'
+import { comfyUp, findLaunchers, launcherFor } from '../service/comfylauncher'
+import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
+import { comboOptions } from '../service/setup'
+import { harnessStatus } from '../service/harness'
+import { ollamaStatus } from '../service/prompter'
 import { applyOps, clipEnd, TRACK_ID, tracksOf, videoLayers } from '../service/timeline'
 import { TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
@@ -40,6 +44,7 @@ import { Remake, REMAKE_KINDS } from '../service/remake'
 import { VOICE_ENGINES, Voices } from '../service/voices'
 import { ACE_KEYS, Music, MUSIC_DEFAULTS, MUSIC_ENGINES } from '../service/music'
 import { IMAGE_ASPECTS, IMAGE_FAMILIES, Images } from '../service/images'
+import { RefMods } from '../service/refmods'
 import { Civitai, LORA_SORTS, LORA_TAGS } from '../service/civitai'
 import { Comfy } from '../service/comfy'
 import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
@@ -92,6 +97,8 @@ const request = {
   previews: z.number().int().min(1).max(3).default(3),
   seed: z.number().int().min(0).default(4242).describe('Previews use seed, seed+1000, seed+2000'),
   steps: z.number().int().min(4).max(20).default(8),
+  sampler: z.string().optional().describe('Preview sampler (list_samplers); default er_sde'),
+  scheduler: z.string().optional().describe('Preview scheduler (list_samplers); default beta'),
   media,
   overlapFrames: z.number().int().optional().describe('continue mode: 5, 22, 39 or 56'),
   voiceLine: z.string().optional().describe('Absolute path to a voice recording; the previews lip-sync to it'),
@@ -619,7 +626,7 @@ const firstOutput = async (id, jobId, kind) => {
   if (!o) throw new Error('That render has not finished yet; check get_character_training.')
   return { path: o.path, url: o.url, filename: o.filename }
 }
-const TRAIN_HOW = 'Steps: create_character_training -> design_faces -> pick_face -> design_scenes -> pick_still (each scene) -> make_training_clips -> estimate_training -> start_training (paid, ask first) -> get_character_training until done -> test_checkpoints -> adopt_checkpoint. Look at the pictures by reading their files, and clips with grab_frame.'
+const TRAIN_HOW = 'Steps: create_character_training -> design_faces -> pick_face -> design_scenes -> pick_still (each scene) -> make_training_clips -> estimate_training -> start_training (paid, ask first) -> get_character_training until done -> test_checkpoints -> score_checkpoints -> adopt_checkpoint. Look at the pictures by reading their files, and clips with grab_frame.'
 tool('list_character_trainings', `Characters being designed or trained (the Characters page). ${TRAIN_HOW}`, {}, () => trainings.list())
 tool('get_character_training', 'A character training: face candidates, scene stills, clips (with render status and files), the cost estimate, training progress, checkpoints and tests.', { trainingId: z.string() }, ({ trainingId }) => trainingView(trainingId))
 tool('create_character_training', `Start designing a new invented character. ${TRAIN_HOW}`, {
@@ -681,20 +688,53 @@ tool('add_training_files', "Add the person's own pictures or clips (needs consen
   files: z.array(z.string()).min(1),
   caption: z.string().default('').describe('Clothes, place, framing; never the face')
 }, ({ trainingId, kind, files, caption }) => trainingView((kind === 'still' ? trainings.addStills(trainingId, files, caption) : trainings.addClips(trainingId, files, caption)).id))
-tool('estimate_training', 'Steps, minutes and dollars of a training run on Modal, before starting it.', {
+tool('estimate_training', 'Steps, minutes and dollars of a training run (Modal, RunPod or this PC by options.where), before starting it, for the given recipe (options) or for Train more (more). Also returns each preset\'s minutes and dollars, the rank and about how many checkpoints it saves, and capped (true when the budget will stop it early).', {
   trainingId: z.string(),
-  gpu: z.enum(TRAIN_GPUS.map((g) => g.id)).default('B200'),
-  epochs: z.number().int().min(10).max(200).optional()
+  gpu: z.string().optional().describe('Modal: B200, H200, H100. RunPod: its GPU name (e.g. NVIDIA L40S). This PC: leave out'),
+  epochs: z.number().int().min(10).max(200).optional().describe("Leave out for the preset's own"),
+  options: z
+    .object({
+      where: z.enum(['modal', 'runpod', 'local']).optional().describe("modal or runpod: the person's own account, billed. local: this PC with Fizgig, free (Fizgig installed, the H3 files in ComfyUI). RunPod training starts only from the app window, which holds the key"),
+      precision: z.enum(['auto', 'int8']).optional().describe("Fizgig's base: auto (fits the card; may use 4-bit on 24 GB) or int8 (accurate, the cloud's)"),
+      preset: z.enum(['quick', 'standard', 'thorough']).optional().describe('quick: rank 8, short (Fizgig Fast). standard: what Tess and Theo used. thorough: half as long again'),
+      learn: z.enum(['look', 'look_voice']).optional().describe('look: stills only (no clips, cheaper). look_voice: stills and talking clips (the voice too)'),
+      detail: z.enum(['normal', 'fine']).optional().describe('fine: about 0.5 MP instead of 0.25 MP, for small details (scars, tattoos); about twice the cost'),
+      mode: z.enum(['likeness', 'whole']).optional().describe("likeness: H3's identity blocks 20-49 (Fizgig Default). whole: 6-49 (More Blocks), the whole look"),
+      checkpoints: z.union([z.literal(10), z.literal(20), z.literal(40)]).optional().describe('About how many checkpoints to save for comparing'),
+      rank: z.union([z.literal(8), z.literal(16), z.literal(32)]).optional().describe("Overrides the preset's rank"),
+      seed: z.number().int().min(0).optional(),
+      captionDropout: z.union([z.literal(0), z.literal(0.05), z.literal(0.1)]).optional(),
+      cleanEnd: z.union([z.literal(60), z.literal(8)]).optional().describe('60: likeness and style (default). 8: weighted to movement'),
+      budget: z.number().min(0.5).max(500).optional().describe('Dollars: training stops itself there (even with IV Studio closed); the checkpoints saved so far stay')
+    })
+    .optional(),
+  more: z.number().int().min(5).max(120).optional().describe('Train more: this many extra epochs on the last finished or stopped run, from its last saved state (same recipe)'),
 }, ({ trainingId, ...opts }) => trainings.estimateFor(trainings.get(trainingId), opts))
-tool('start_training', "Train the character LoRA on the person's own Modal account (signed in on the Cloud page). This costs real money: run estimate_training, tell the person the minutes and dollars, and only call this after they say yes, passing confirm_cost with that dollar figure. Runs in the background; poll get_character_training (train.state, train.progress).", {
+tool('start_training', "Train the character LoRA: on this PC with Fizgig (options.where local, free; confirm_cost 0), or on the person's own Modal account (signed in on the Cloud page; RunPod only from the app window). The cloud costs real money: run estimate_training, tell the person the minutes and dollars, and only call this after they say yes, passing confirm_cost with that dollar figure. Runs in the background; poll get_character_training (train.state, train.progress).", {
   trainingId: z.string(),
-  gpu: z.enum(TRAIN_GPUS.map((g) => g.id)).default('B200'),
+  gpu: z.string().optional().describe('Modal: B200, H200, H100. RunPod: its GPU name (e.g. NVIDIA L40S). This PC: leave out'),
   epochs: z.number().int().min(10).max(200).optional(),
-  confirm_cost: z.number().describe('The estimated dollars the person agreed to')
-}, async ({ trainingId, gpu, epochs, confirm_cost }) => {
-  const est = trainings.estimateFor(trainings.get(trainingId), { gpu, epochs })
-  if (confirm_cost < est.dollars - 0.01) throw new Error(`The estimate is $${est.dollars}; ask the person to agree to that first.`)
-  await trainings.startTraining(trainingId, { gpu, epochs })
+  options: z
+    .object({
+      preset: z.enum(['quick', 'standard', 'thorough']).optional().describe('quick: rank 8, short (Fizgig Fast). standard: what Tess and Theo used. thorough: half as long again'),
+      learn: z.enum(['look', 'look_voice']).optional().describe('look: stills only (no clips, cheaper). look_voice: stills and talking clips (the voice too)'),
+      detail: z.enum(['normal', 'fine']).optional().describe('fine: about 0.5 MP instead of 0.25 MP, for small details (scars, tattoos); about twice the cost'),
+      mode: z.enum(['likeness', 'whole']).optional().describe("likeness: H3's identity blocks 20-49 (Fizgig Default). whole: 6-49 (More Blocks), the whole look"),
+      checkpoints: z.union([z.literal(10), z.literal(20), z.literal(40)]).optional().describe('About how many checkpoints to save for comparing'),
+      rank: z.union([z.literal(8), z.literal(16), z.literal(32)]).optional().describe("Overrides the preset's rank"),
+      seed: z.number().int().min(0).optional(),
+      captionDropout: z.union([z.literal(0), z.literal(0.05), z.literal(0.1)]).optional(),
+      cleanEnd: z.union([z.literal(60), z.literal(8)]).optional().describe('60: likeness and style (default). 8: weighted to movement'),
+      budget: z.number().min(0.5).max(500).optional().describe('Dollars: training stops itself there (even with IV Studio closed); the checkpoints saved so far stay')
+    })
+    .optional(),
+  more: z.number().int().min(5).max(120).optional().describe('Train more: this many extra epochs on the last finished or stopped run, from its last saved state (same recipe)'),
+  confirm_cost: z.number().describe('The estimated dollars the person agreed to (or the budget, when one is set and lower)')
+}, async ({ trainingId, gpu, epochs, options, more, confirm_cost }) => {
+  const est = trainings.estimateFor(trainings.get(trainingId), { gpu, epochs, options, more })
+  const agreed = est.options.budget ? Math.min(est.dollars, est.options.budget) : est.dollars
+  if (confirm_cost < agreed - 0.01) throw new Error(`The estimate is $${agreed}; ask the person to agree to that first.`)
+  await trainings.startTraining(trainingId, { gpu, epochs, options, more })
   return trainingView(trainingId)
 })
 tool('stop_training', 'Stop a training run on Modal (billing stops; saved epochs stay). Ask the person first.', { trainingId: z.string() }, ({ trainingId }) => trainings.stopTraining(trainingId).then(() => trainingView(trainingId)))
@@ -712,6 +752,10 @@ tool('rank_likeness', 'Score every scene candidate and clip against the picked f
   trainingId: z.string(),
   pick: z.boolean().default(false)
 }, ({ trainingId, pick }) => trainings.rank(trainingId, { pick }))
+tool('score_checkpoints', 'After test_checkpoints has rendered: scores each tested checkpoint for likeness to the picked face (InsightFace, three frames each) and marks the best (bestEpoch). Free and local. A guide: look at the tests too.', { trainingId: z.string() }, async ({ trainingId }) => {
+  const t = await trainings.scoreCheckpoints(trainingId)
+  return { bestEpoch: t.bestEpoch, scores: t.tests.map((x) => ({ epoch: x.epoch, score: x.score ?? null })) }
+})
 tool('adopt_checkpoint', 'Save the chosen epoch as a character preset (strength 0.8), ready for every render.', { trainingId: z.string(), epoch: z.number().int() }, async ({ trainingId, epoch }) => trainingView((await trainings.adopt(trainingId, epoch)).id))
 
 // ---------- Replace (OpenJutsu's workflows) ----------
@@ -794,9 +838,10 @@ tool('set_workflow_model', 'Choose the H3 model one workflow uses (Settings -> M
   return { chosen: studio.models }
 })
 tool('list_choices', 'Character LoRAs and RefMods the ComfyUI can load (for save_character and the refmods of a request).', {}, () => studio.choices())
-tool('save_character', 'Add a character preset, or update one by id. The LoRA must be a name from list_choices. Only invented characters, or real people who agreed to it.', {
+tool('save_character', 'Add a character preset, or update one by id. A character is a LoRA (a name from list_choices, with its trigger word) or a RefMod (refmod: a name from list_choices refmods; {char} then becomes its name). Only invented characters, or real people who agreed to it.', {
   id: z.string().regex(/^[a-z0-9_-]{2,32}$/).describe('Short id, e.g. "tess"'),
   name: z.string().min(1).optional(),
+  refmod: z.string().optional().describe('A RefMod from list_choices refmods, e.g. "characters/maya_ab12cd", for a RefMod character (no LoRA or trigger needed)'),
   lora: z.string().optional(),
   strength: z.number().min(0).max(1.5).optional(),
   trigger: z.string().min(2).optional().describe('The trigger word the LoRA was trained on; prompts write {char} for it'),
@@ -809,7 +854,12 @@ tool('save_character', 'Add a character preset, or update one by id. The LoRA mu
   const list = studio.characters()
   const old = list.find((c) => c.id === id)
   const next = { ...(old || { strength: 0.8 }), id, ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)) }
-  for (const k of ['name', 'lora', 'trigger']) if (!next[k]) throw new Error(`A new character needs ${k}.`)
+  // a RefMod character needs its RefMod; any other a LoRA and its trigger word
+  for (const k of next.refmod && !next.lora ? ['name', 'refmod'] : ['name', 'lora', 'trigger']) if (!next[k]) throw new Error(`A new character needs ${k}.`)
+  if (fields.refmod) {
+    const { refmods } = await studio.choices()
+    if (!refmods.includes(fields.refmod)) throw new Error(`ComfyUI has no RefMod "${fields.refmod}". list_choices shows them.`)
+  }
   if (fields.lora) {
     const { loras } = await studio.choices()
     if (!loras.some((l) => l.replace(/\\/g, '/') === fields.lora.replace(/\\/g, '/'))) throw new Error(`ComfyUI has no LoRA "${fields.lora}". list_choices shows them.`)
@@ -817,6 +867,15 @@ tool('save_character', 'Add a character preset, or update one by id. The LoRA mu
   studio.saveCharacters(old ? list.map((c) => (c.id === id ? next : c)) : [...list, next])
   return next
 })
+// RefMod characters: made from pictures (and a voice clip) on this PC's ComfyUI, in seconds (refmods.js)
+const refmodMaker = new RefMods({ studio, dataDir: DATA })
+tool('make_refmod_character', "Make a character from pictures as a RefMod (no training): 1 to 6 clear pictures of one person (the first becomes their face) and, optionally, a voice clip of up to 15 seconds. Runs on this PC's ComfyUI (about 15 seconds a picture, free) with the ComfyUI-MiniMaxH3Mod pack, saves models/refmods/characters/<name>.safetensors and adds the character; Create shots then use it with {char} for its name. Only the person's own pictures, an invented person, or someone who agreed to it: pass consent true only when the person said so.", {
+  name: z.string().min(1).describe('The character name, e.g. "Maya Ortiz"'),
+  pictures: z.array(z.string()).min(1).max(6).describe('Paths to pictures of the person on this PC; the first is their face'),
+  audio: z.string().optional().describe('Path to a clip of them talking, up to 15 seconds'),
+  who: z.string().optional().describe('A few words on who they are, e.g. "a woman in her thirties"'),
+  consent: z.boolean().describe('True only when the person confirmed these are their own pictures, an invented person, or someone who agreed')
+}, (args) => refmodMaker.make(args))
 // ---------- Audio: voices and spoken lines (IV Studio's own engine: VoxCPM2 and Whisper) ----------
 const voices = new Voices({ dataDir: DATA, resourcesDir: resourcesDir(), ffmpeg: edits.ffmpeg, comfy: studio.comfy })
 // Take ranking (ranking.js): the same scores the window shows, saved on the job
@@ -904,6 +963,40 @@ tool('delete_music', "Delete a song and its file in IV Studio's music folder (Co
 const images = new Images({ studio, dataDir: DATA })
 remake.images = images
 remake.faces = shinobi
+tool('list_samplers', "The samplers and schedulers this ComfyUI offers for a shot's previews (generate_previews sampler and scheduler). IV Studio's tested defaults are er_sde and beta; the 2 MP finish keeps its own refine settings.", {}, async () => {
+  const [k, b] = await Promise.all([studio.comfy.objectInfo('KSamplerSelect'), studio.comfy.objectInfo('BasicScheduler')])
+  return { samplers: comboOptions(k, 'KSamplerSelect', 'sampler_name') || [], schedulers: comboOptions(b, 'BasicScheduler', 'scheduler') || [], defaults: { sampler: 'er_sde', scheduler: 'beta' } }
+})
+tool('scan_hardware', "Check this PC, as the welcome wizard does: graphics card (NVIDIA through nvidia-smi), memory, processor, free space on each drive, and what's installed (ComfyUI, Ollama, Claude Code, Codex, voices, cloud, models). Returns the parts and recommendations: a tier (top, all, most, some, cloud) with a plain verdict, verdicts per part, tips, the way of working (local, both, cloud), suggested shot defaults (previewMp, quality, finalMp, enhancer) and which model groups are worth downloading (the person downloads them in the app: Settings → Check my PC, or Setup). Changes nothing; nothing leaves the PC. Non-NVIDIA cards are only seen in the app's own wizard.", {}, async () => {
+  const s = readSettings(BASE)
+  const running = await comfyUp(s.comfyUrl).catch(() => false)
+  const setup = running ? await studio.checkSetup().catch(() => null) : null
+  const ollama = await ollamaStatus().catch(() => null)
+  const harness = harnessStatus()
+  const launchers = findLaunchers()
+  const ids = new Set(MODEL_GROUPS.flatMap((g) => g.ids))
+  const installs = {
+    comfyRunning: !!running,
+    comfyFound: !!(running || s.comfyFolder || launchers.length),
+    ollama: !!(ollama?.running || ollama?.installed),
+    claude: !!harness.claude.installed,
+    codex: !!harness.codex.installed,
+    voices: !!voices.engine?.installed?.(),
+    cloud: !!(s.cloud || s.runpod),
+    modelsKnown: !!setup,
+    modelsPresent: (setup?.items || []).filter((i) => i.kind === 'model' && i.status === 'ok').map((i) => i.model),
+    modelSizes: Object.fromEntries((studio.manifest?.models || []).filter((m) => ids.has(m.id)).map((m) => [m.id, m.size || 0]))
+  }
+  let modelsFolder = null
+  if (running) {
+    try {
+      const paths = await studio.comfy.req('/internal/folder_paths', { timeout: 5000 })
+      modelsFolder = (paths.diffusion_models || paths.checkpoints || []).map((p) => (Array.isArray(p) ? p[0] : p)).find((p) => p && fs.existsSync(p)) || null
+    } catch {}
+  }
+  const scan = await scanHardware({ installs, comfyFolder: modelsFolder || s.comfyFolder || (launchers[0] ? path.dirname(launchers[0].path) : '') })
+  return { scan, recommendations: recommend(scan) }
+})
 tool('free_memory', "Clear the GPU and RAM now: ComfyUI unloads its models (between prompts; a running render keeps its memory until it finishes), this server's voice engine stops and the prompt writer's Ollama models unload. The next job loads what it needs. Use it when the person asks, or before a big job on a crowded GPU.", {}, async () => {
   await studio.comfy.freeMemory()
   await voices.release()

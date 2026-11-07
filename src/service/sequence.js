@@ -41,6 +41,7 @@ function loaders(template, character, unet) {
     turbo: { class_type: 'LoraLoaderModelOnly', inputs: { model: ['unet', 0], lora_name: template['5'].inputs.lora_name, strength_model: 1 } }
   }
   let model = ['turbo', 0]
+  if (character && !character.lora) throw new Error(`${character.name} is a RefMod character; sequences need a character with a LoRA. Use Create for RefMod characters.`)
   if (character) {
     g.char = { class_type: 'LoraLoaderModelOnly', inputs: { model, lora_name: character.lora, strength_model: character.strength ?? 0.8 } }
     model = ['char', 0]
@@ -57,6 +58,7 @@ export function validateSequence(seq, characters) {
   const errors = []
   const character = seq.character === 'none' ? null : characters.find((c) => c.id === seq.character)
   if (seq.character !== 'none' && !character) errors.push(`Unknown character "${seq.character}".`)
+  if (character && !character.lora) errors.push(`${character.name} is a RefMod character; sequences need a character with a LoRA. Use Create for RefMod characters.`)
   if (!seq.shots?.length) errors.push('Add at least one shot.')
   seq.shots?.forEach((s, i) => !s.prompt?.trim() && errors.push(`Shot ${i + 1} has no prompt.`))
   if (seq.shots?.length > 8) errors.push('At most 8 shots in one take.')

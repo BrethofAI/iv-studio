@@ -114,12 +114,15 @@ export class RunPod {
 
   // resources/cloud (+ models.json and IV Studio's node pack) as a base64 .tar.gz, so the pod runs exactly
   // this version's files without IV Studio publishing anything. Windows' own tar writes it.
-  bundle() {
+  // only: just these files of resources/cloud (the training pod needs runpod_train.py alone)
+  bundle(only = null) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'iv-runpod-'))
     try {
-      for (const f of ['runpod_boot.py', 'gate.py', 'extra_model_paths.yaml', 'cloud.json']) fs.copyFileSync(path.join(this.resourcesDir, 'cloud', f), path.join(dir, f))
-      fs.copyFileSync(path.join(this.resourcesDir, 'models.json'), path.join(dir, 'models.json'))
-      fs.cpSync(path.join(this.resourcesDir, 'comfy-nodes', 'ComfyUI-IV-Studio'), path.join(dir, 'ComfyUI-IV-Studio'), { recursive: true, filter: (s) => !s.includes('__pycache__') })
+      for (const f of only || ['runpod_boot.py', 'gate.py', 'extra_model_paths.yaml', 'cloud.json']) fs.copyFileSync(path.join(this.resourcesDir, 'cloud', f), path.join(dir, f))
+      if (!only) {
+        fs.copyFileSync(path.join(this.resourcesDir, 'models.json'), path.join(dir, 'models.json'))
+        fs.cpSync(path.join(this.resourcesDir, 'comfy-nodes', 'ComfyUI-IV-Studio'), path.join(dir, 'ComfyUI-IV-Studio'), { recursive: true, filter: (s) => !s.includes('__pycache__') })
+      }
       const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar'
       const out = path.join(os.tmpdir(), `iv-runpod-${randomBytes(4).toString('hex')}.tgz`)
       execFileSync(tar, ['-czf', out, '-C', dir, '.'], { windowsHide: true })

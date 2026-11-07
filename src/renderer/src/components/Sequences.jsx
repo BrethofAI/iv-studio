@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { media } from '../media'
 import { Progress } from './Shot'
 import Hero from './Hero'
+import Stage from './Stage'
+import { ToolShelf, ShelfTile, Step, Choices } from './FlowKit'
+import { AspectTiles } from './CreateKit'
 import TileDelete from './TileDelete'
 import PromptWriter, { StoryWriter } from './PromptWriter'
 
@@ -22,44 +25,46 @@ const SHOT_HINT =
 
 export function SequenceList({ openSequence, notify, go }) {
   const [list, setList] = useState(null)
+  const [name, setName] = useState('')
+  const [q, setQ] = useState('')
   useEffect(() => {
     window.ivstudio.sequences.list().then(setList)
   }, [])
 
   async function create() {
     try {
-      openSequence((await window.ivstudio.sequences.create({ name: 'Untitled sequence' })).id)
+      openSequence((await window.ivstudio.sequences.create({ name: name.trim() || 'Untitled sequence' })).id)
     } catch (err) {
       notify(err.message)
     }
   }
+  const shown = (list || []).filter((x) => !q.trim() || x.name.toLowerCase().includes(q.trim().toLowerCase()))
 
   return (
-    <div className="sequences">
-      <Hero art="sequences" back={go && { label: "Workflows", onClick: () => go("workflows") }} title="Sequences" kicker="Several shots, one continuous take" />
-      <p className="lede">
-        Several shots that play as one continuous video.
-        <span className="lede-small dim">Write the shots, render them as one seamless take or shot by shot, redo any stretch, then render out the final.</span>
-      </p>
-      <button className="btn btn-primary" onClick={create}>
-        New sequence
-      </button>
-      <div className="tiles seq-tiles">
-        {list?.map((s) => (
-          <div key={s.id} className="tile-wrap">
-          <button className="tile" onClick={() => openSequence(s.id)}>
-            <div className="tile-body">
-              <span className="tile-name">{s.name}</span>
-              <span className="mono dim">
-                {s.shots} shot{s.shots === 1 ? '' : 's'} · {s.method === 'take' ? 'one take' : 'shot by shot'} · {s.versions} version{s.versions === 1 ? '' : 's'} · {s.renders} final{s.renders === 1 ? '' : 's'}
-              </span>
-              <span className="mono dim">{new Date(s.updatedAt).toLocaleString()}</span>
-            </div>
+    <div className="sequences flow-page">
+      <Stage effect="film" art="sequences" title="Sequences" kicker="Several shots, one continuous take" back={go && { label: 'Workflows', onClick: () => go('workflows') }}>
+        <div className="stage-panel">
+          <input value={name} placeholder="Name a new sequence, e.g. The kitchen letter" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && create()} aria-label="Sequence name" />
+          <button className="btn btn-primary" onClick={create}>
+            New sequence
           </button>
-          <TileDelete name={s.name} notify={notify} onDelete={async () => (await window.ivstudio.sequences.delete(s.id), setList(await window.ivstudio.sequences.list()))} />
-          </div>
+        </div>
+        <p className="stage-note small">Write the shots, render them as one seamless take or shot by shot, redo any stretch, then render out the final.</p>
+      </Stage>
+
+      <ToolShelf label="Your sequences" count={shown.length} q={q} setQ={setQ} empty="No sequences yet. Name one in the bar above.">
+        {shown.map((x) => (
+          <ShelfTile
+            key={x.id}
+            onOpen={() => openSequence(x.id)}
+            media={<span className="shelf-empty-art">{x.shots} shot{x.shots === 1 ? '' : 's'}</span>}
+            status={x.renders ? 'Final ready' : x.versions ? `${x.versions} version${x.versions === 1 ? '' : 's'}` : 'Not rendered'}
+            name={x.name}
+            meta={[x.method === 'take' ? 'One take' : 'Shot by shot', new Date(x.updatedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })]}
+            del={<TileDelete name={x.name} notify={notify} onDelete={async () => (await window.ivstudio.sequences.delete(x.id), setList(await window.ivstudio.sequences.list()))} />}
+          />
         ))}
-      </div>
+      </ToolShelf>
     </div>
   )
 }
@@ -357,16 +362,26 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live,
   const takeRunning = view.versions.some((v) => v.kind === 'take' && v.job && !DONE.includes((live[v.job.id] || v.job).status))
 
   return (
-    <div className="sequence">
-      <Hero art="sequences" back={{ label: 'All sequences', onClick: () => go('sequences') }} kicker={`Sequence · ${shots.length} shot${shots.length === 1 ? '' : 's'}`}>
+    <div className="sequence create-v2 flow-page">
+      <Hero art="sequences" help="sequence" back={{ label: 'All sequences', onClick: () => go('sequences') }} kicker={`Sequence · ${shots.length} shot${shots.length === 1 ? '' : 's'} · ${total} s`}>
         <input className="shot-name" value={seq.name} onChange={(e) => edit({ name: e.target.value })} />
       </Hero>
 
-      <section className="block">
-        <div className="prompt-head">
-          <p className="mono label">01 · Shots</p>
-          <span className="mono dim small">{char ? <>Write {'{char}'} for {char.name.split(' ')[0]} ({char.trigger})</> : 'No character'}</span>
-        </div>
+      <div className="create-steps">
+      <Step n={1} title="How it renders">
+        <Choices
+          label="How it renders"
+          className="flow-two"
+          value={seq.method}
+          onChange={(method) => edit({ method })}
+          options={[
+            ['take', 'One take', 'All shots render together as one seamless take: no cuts, matched colour, unbroken sound. All or nothing.'],
+            ['shots', 'Shot by shot', 'Hunt and pick each shot in turn; each carries on from the end of the one before. Change a shot and only the shots after it need redoing.']
+          ]}
+        />
+      </Step>
+
+      <Step n={2} title="The shots" sub={char ? `Write {char} for ${char.name.split(' ')[0]} (${char.trigger}). Up to 8 shots of ${seq.shotSeconds} s.` : `No character. Up to 8 shots of ${seq.shotSeconds} s.`}>
         <StoryWriter
           character={seq.character}
           shotSeconds={seq.shotSeconds}
@@ -394,27 +409,14 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live,
         <button className="btn btn-small seq-add" disabled={shots.length >= 8} onClick={() => edit({ shots: [...shots, { id: newId(), prompt: '', mode: 'text', media: [] }] })}>
           + Add shot
         </button>
-      </section>
+      </Step>
 
-      <section className="block">
-        <p className="mono label">02 · Settings</p>
-        <div className="row">
-          <span className="row-label">Render</span>
-          <Seg value={seq.method} options={[['take', 'One take'], ['shots', 'Shot by shot']]} onChange={(method) => edit({ method })} />
-        </div>
-        <p className="small dim seq-method-hint">
-          {seq.method === 'take'
-            ? 'All shots render together as one seamless take: no cuts, matched colour, unbroken sound. All or nothing.'
-            : 'Hunt and pick each shot in turn; each one carries on from the end of the shot before. Change a shot and only the shots after it need redoing.'}
-        </p>
+      <Step n={3} title="Look and size" sub="Who plays it, the frame, the size and each shot's length.">
         <div className="row">
           <span className="row-label">Character</span>
           <Seg value={seq.character} options={[...characters.map((c) => [c.id, c.name.split(' ')[0]]), ['none', 'None']]} onChange={(character) => edit({ character })} />
         </div>
-        <div className="row">
-          <span className="row-label">Aspect</span>
-          <Seg value={seq.aspect} options={ASPECTS} onChange={(aspect) => edit({ aspect })} />
-        </div>
+        <AspectTiles aspects={ASPECTS} value={seq.aspect} onChange={(aspect) => edit({ aspect })} />
         <div className="row">
           <span className="row-label">Size</span>
           <Seg value={seq.megapixels} options={SIZES} format={(mp) => `${mp} MP`} onChange={(megapixels) => edit({ megapixels })} />
@@ -458,18 +460,9 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live,
             </div>
           </div>
         )}
-      </section>
+      </Step>
 
-      <section className="block">
-        <p className="mono label">03 · Render</p>
-        <div className="summary mono">
-          <span>
-            {shots.length} shot{shots.length === 1 ? '' : 's'} · {total} s
-          </span>
-          <span className="dim">
-            roughly {estimateMinutes(total, seq.megapixels)} min{seq.method === 'shots' ? ' in total, plus picking' : ''}
-          </span>
-        </div>
+      <Step n={4} title="Render" sub={`${shots.length} shot${shots.length === 1 ? '' : 's'} · ${total} s · roughly ${estimateMinutes(total, seq.megapixels)} min${seq.method === 'shots' ? ' in total, plus picking' : ''}`}>
         {seq.method === 'take' ? (
           <button className="btn btn-primary big" disabled={busy || takeRunning || shots.some((s) => !s.prompt.trim())} onClick={() => act(() => window.ivstudio.sequences.take(sequenceId))}>
             {takeRunning ? 'Rendering…' : view.versions.some((v) => v.kind === 'take') ? 'Render another take' : 'Render take'}
@@ -477,10 +470,9 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live,
         ) : (
           shots.map((s, i) => <ShotRow key={s.id} seqId={sequenceId} i={i} shot={s} state={view.shots[i]} live={live} onStart={onStart} notify={notify} flush={flush} />)
         )}
-      </section>
+      </Step>
 
-      <section className="block">
-        <p className="mono label">04 · Versions</p>
+      <Step n={5} title="Versions" sub="Takes, the shot-by-shot result and retakes. Retake redoes a stretch; Render out makes the final.">
         {view.versions.length === 0 && <p className="dim small">Renders, the shot-by-shot result and retakes appear here.</p>}
         {view.versions.map((v) => {
           const j = v.job && (live[v.job.id] || v.job)
@@ -516,11 +508,10 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live,
             </div>
           )
         })}
-      </section>
+      </Step>
 
       {view.renders.length > 0 && (
-        <section className="block">
-          <p className="mono label">05 · Finals</p>
+        <Step n={6} title="Finals" sub="Rendered out, ready to use.">
           {view.renders.map((r) => {
             const j = r.job && (live[r.job.id] || r.job)
             const v = view.versions.find((x) => x.id === r.versionId)
@@ -545,8 +536,9 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live,
               </div>
             )
           })}
-        </section>
+        </Step>
       )}
+      </div>
     </div>
   )
 }

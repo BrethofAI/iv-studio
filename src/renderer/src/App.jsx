@@ -19,14 +19,17 @@ import { LinesPage, VoicesPage } from './components/Voices'
 import { MusicPage } from './components/Music'
 import MediaLibrary from './components/MediaLibrary'
 import Dashboard from './components/Dashboard'
-import Learn from './components/Learn'
-import { unseenNews } from './learn'
+import TourHost from './components/Tour'
+import { unseenNews } from './news'
 import { ProjectPage, ProjectsList } from './components/Projects'
 import RenderQueue from './components/RenderQueue'
 import { LorasPage } from './components/Loras'
 import Setup from './components/Setup'
-import Images, { CreateKind } from './components/Images'
+import Images from './components/Images'
+import { CreateKind } from './components/CreateKit'
 import Shot from './components/Shot'
+import Welcome from './components/Welcome'
+import CloudWizard from './components/CloudWizard'
 import { UpdateButton } from './components/Update'
 import { SizzleList, SizzleProject } from './components/Sizzle'
 
@@ -36,7 +39,6 @@ import { SizzleList, SizzleProject } from './components/Sizzle'
 const SECTIONS = {
   video: [
     ['home', 'Dashboard'],
-    ['learn', 'Learn'],
     ['create', 'Create'],
     ['projects', 'Projects'],
     ['library', 'Shots'],
@@ -235,8 +237,8 @@ export default function App() {
     switchSection('video')
     setPage('create')
   }
-  // Learn's Try it: the page a card lives on (Create in the right switch and mode). The mode reaches Create and
-  // Image through the iv:learn event, once they've opened.
+  // Go to a page from outside App's props (an iv:go event): the page, its sidebar half, and Create's switch and
+  // mode (which reach Create and Image through the iv:learn event, once they've opened).
   const learnGo = (to) => {
     switchSection(to.section || 'video')
     if (to.create) pickCreateKind(to.create)
@@ -250,7 +252,6 @@ export default function App() {
       return null
     }
   })
-  // The "?" panels' "More on the Learn page" (Help.jsx), which sits outside App's props
   useEffect(() => {
     const go = (e) => learnGo(e.detail)
     window.addEventListener('iv:go', go)
@@ -275,6 +276,18 @@ export default function App() {
   }
 
   const ready = setup?.ready
+  // the welcome wizard: on first launch, and again from Settings → Check my PC (the iv:welcome event)
+  const [welcome, setWelcome] = useState(null)
+  const [cloudWiz, setCloudWiz] = useState(false)
+  useEffect(() => {
+    window.ivstudio.settings.get().then((s) => !s.onboarded && setWelcome('first'), () => {})
+    const open = () => setWelcome('again')
+    window.addEventListener('iv:welcome', open)
+    // the cloud setup wizard: from Check my PC and the Cloud page
+    const cloud = () => setCloudWiz(true)
+    window.addEventListener('iv:cloud-wizard', cloud)
+    return () => (window.removeEventListener('iv:welcome', open), window.removeEventListener('iv:cloud-wizard', cloud))
+  }, [])
   const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, editRun, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle, remakeClip, replaceSeed }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
   // ComfyUI on this PC isn't answering: the title bar offers to start it
@@ -333,7 +346,6 @@ export default function App() {
             <span className="mono dim">{String(i + 1).padStart(2, '0')}</span>
             {label}
             {id === 'settings' && missing > 0 && <span className="nav-dot" />}
-            {id === 'learn' && unseenNews(info?.version, seenNews) && <span className="nav-dot" title="What's new" />}
           </button>
         ))}
         <div className="nav-foot mono">
@@ -356,8 +368,7 @@ export default function App() {
       </nav>
       {/* keyed by page: each page change remounts it, so the themed page-in animation plays (studio.css .page-anim) */}
       <main key={page} className={`page page-anim ${page === 'edit' ? 'page-editor' : ''}`}>
-        {page === 'home' && <Dashboard {...ctx} start={startTool} startShotWith={startShotWith} />}
-        {page === 'learn' && <Learn learnGo={learnGo} version={info?.version} seenNews={seenNews} markNewsSeen={markNewsSeen} notify={notify} />}
+        {page === 'home' && <Dashboard {...ctx} start={startTool} startShotWith={startShotWith} news={unseenNews(info?.version, seenNews)} dismissNews={() => markNewsSeen(info?.version)} />}
         {page === 'create' &&
           (createKind === 'image' ? (
             <Images {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} />
@@ -391,6 +402,9 @@ export default function App() {
         {page === 'settings' && <Settings {...ctx} />}
       </main>
       <ConfirmHost />
+      {cloudWiz && <CloudWizard onClose={() => (setCloudWiz(false), recheck?.(), window.dispatchEvent(new CustomEvent('iv:cloud-changed')))} notify={notify} recheck={recheck} info={info} />}
+      <TourHost />
+      {welcome && <Welcome first={welcome === 'first'} onClose={() => (setWelcome(null), recheck?.())} go={setPage} notify={notify} />}
       {toast && (
         <div className={`toast ${toast.kind}`} onClick={() => setToast(null)}>
           {toast.text}

@@ -77,3 +77,15 @@ Matthew asked for each card on the Workflows page to have its own picture behind
   bottom; 36% and a 3% zoom on hover or keyboard focus (no zoom or transition with reduced motion). A soft halo in
   the card's own colour behind the text keeps the letters on dark: measured under the glyphs, the body text stays
   within about 0.2 of its plain-card contrast (5.9:1) at the 5th percentile, and at least 5.0:1 at its worst pixel.
+
+## The welcome wizard (2026-11-06)
+
+Matthew asked for an onboarding wizard that checks the PC, themed like the other pages, with new art where it needs it.
+
+- ChatGPT image generation through the Codex CLI, the same recipe as the page banners: the Settings banner as the
+  first reference (background and placement), the approved Edit scissors as the second (finish), no text.
+- Three subjects, one per stage: `pc-scan` (a magnifying glass over a microchip) while it scans, `pc-card` (a graphics
+  card with two fans) for Your PC, `pc-path` (a ship's compass on a chip) for Your way and Downloads. Welcome and
+  Ready keep the eye. All three were drawn once and passed a close-up check.
+- The app copies are 1400 x 737 WebP (quality 86), cropped to the middle of the 1672 x 941 masters. Masters, the
+  prompts (`jobs.json`) and the sheet are in `D:\H3Characters\_art\welcome-20261106\`, outside the repo.

@@ -5,6 +5,8 @@ import StageBoard from './StageBoard'
 import { needsPrevis } from '../../../service/staging'
 import { fileUrl } from './edit/model'
 import Hero from './Hero'
+import Loading from './Loading'
+import { dayGroup, groupBy, WHEN, inWhen, Chips, useMore, Groups, FilterPanel } from './ShelfKit'
 import { LoraPicker } from './Loras'
 
 // Projects: a short film made step by step (src/service/productions.js). The list of films, and one film as a
@@ -90,9 +92,28 @@ function useFaces() {
 }
 
 // ---------- the list ----------
+// Where a film is: the wizard's steps, gathered into four stages for the filter.
+const STAGES = [
+  ['writing', 'Writing', ['idea', 'story']],
+  ['planning', 'Planning', ['cast', 'board']],
+  ['filming', 'Filming', ['film']],
+  ['done', 'Watching', ['watch']]
+]
+const SORT_FILMS = [
+  ['new', 'Newest'],
+  ['old', 'Oldest'],
+  ['name', 'Name'],
+  ['shots', 'Most shots']
+]
+
 export function ProjectsList({ notify, openProject }) {
   const [items, setItems] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [q, setQ] = useState('')
+  const [stage, setStage] = useState('all')
+  const [period, setPeriod] = useState('any')
+  const [shape, setShape] = useState('all')
+  const [sort, setSort] = useState('new')
   const load = () => P().list().then(setItems, (err) => (notify(err.message), setItems([])))
   useEffect(() => {
     load()
@@ -113,24 +134,79 @@ export function ProjectsList({ notify, openProject }) {
     load()
   }
   const label = Object.fromEntries(STEPS)
+  const all = items || []
+  const now = Date.now()
+  const stageOf = (p) => STAGES.find(([, , steps]) => steps.includes(p.step || 'idea'))?.[0] || 'writing'
+  const tests = {
+    stage: (p) => stage === 'all' || stageOf(p) === stage,
+    period: (p) => inWhen(period, p.updatedAt, now),
+    shape: (p) => shape === 'all' || p.aspect === shape,
+    q: (p) => !q.trim() || `${p.name} ${p.logline || ''}`.toLowerCase().includes(q.trim().toLowerCase())
+  }
+  const passing = (except) => all.filter((p) => Object.entries(tests).every(([k, t]) => k === except || t(p)))
+  const count = (except, fn) => passing(except).filter(fn).length
+  let shown = passing()
+  if (sort === 'old') shown = [...shown].reverse()
+  if (sort === 'name') shown = [...shown].sort((x, y) => x.name.localeCompare(y.name))
+  if (sort === 'shots') shown = [...shown].sort((x, y) => (y.shots || 0) - (x.shots || 0))
+  const groups = sort === 'new' || sort === 'old' ? groupBy(shown, (p) => dayGroup(p.updatedAt, now)) : [[sort === 'name' ? 'A to Z' : 'Most shots first', shown]]
+  const [limit, more] = useMore(shown.length, 24, `${q}|${stage}|${period}|${shape}|${sort}`)
+  const shapes = [...new Set(all.map((p) => p.aspect).filter(Boolean))]
+
   return (
-    <div className="projects">
+    <div className="projects shelf-page">
       <Hero art="projects" title="Projects" kicker="A short film, step by step" />
       <p className="lede">
         Turn an idea into a short film.
         <span className="lede-small dim">Say what it's about, get a script, cast your characters, see it as a storyboard, then film it shot by shot and watch it come together.</span>
       </p>
-      <div className="proj-cards">
-        <button className="proj-card proj-card-new" disabled={busy} onClick={create}>
-          <span className="proj-card-plus" aria-hidden="true">
-            +
-          </span>
-          <span className="proj-card-name">New film</span>
-          <span className="small dim">Start from an idea or a script you already have.</span>
-        </button>
-        {(items || []).map((p) => (
+      <div className="shelf-tools">
+        <div className="shelf-bar">
+          <div className="segmented" role="tablist" aria-label="Where it is">
+            {[['all', 'All', count('stage', () => true)], ...STAGES.map(([id, name]) => [id, name, count('stage', (p) => stageOf(p) === id)])].map(([id, name, n]) => (
+              <button key={id} role="tab" aria-selected={stage === id} className={stage === id ? 'on' : ''} onClick={() => setStage(id)}>
+                {name} <span className="dim">{n}</span>
+              </button>
+            ))}
+          </div>
+          <input className="list-search" type="search" value={q} placeholder="Search films" onChange={(e) => setQ(e.target.value)} aria-label="Search films" />
+          <label className="shelf-sort mono">
+            Sort
+            <select value={sort} onChange={(e) => setSort(e.target.value)}>
+              {SORT_FILMS.map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="btn btn-primary shelf-new proj-new" disabled={busy} onClick={create}>
+            + New film
+          </button>
+        </div>
+        {all.length > 0 && (
+          <FilterPanel id="projects" total={all.length} shown={shown.length} onClear={() => (setPeriod('any'), setShape('all'))} active={[period !== 'any' && WHEN.find(([w]) => w === period)[1], shape !== 'all' && shape].filter(Boolean)}>
+            <Chips label="When" value={period} onChange={setPeriod} options={WHEN.map(([id, name]) => [id, name, id === 'any' ? undefined : count('period', (p) => inWhen(id, p.updatedAt, now))])} />
+            {shapes.length > 1 && <Chips label="Shape" value={shape} onChange={setShape} options={[['all', 'Any'], ...shapes.map((x) => [x, x, count('shape', (p) => p.aspect === x)])]} />}
+          </FilterPanel>
+        )}
+      </div>
+      {items === null && <Loading label="Loading your films" />}
+      {items?.length === 0 && (
+        <div className="shelf-blank">
+          <p>No films yet. Start from an idea, or a script you already have.</p>
+          <button className="btn btn-primary" disabled={busy} onClick={create}>
+            Start a film
+          </button>
+        </div>
+      )}
+      {items?.length > 0 && shown.length === 0 && <p className="dim">No films match.</p>}
+      <Groups
+        groups={groups}
+        limit={limit}
+        render={(p) => (
           <div key={p.id} className="proj-card" role="button" tabIndex={0} onClick={() => openProject(p.id)} onKeyDown={(e) => e.key === 'Enter' && openProject(p.id)}>
-            <div className="proj-card-cover">{p.cover ? <img src={fileUrl(p.cover)} alt="" /> : <span className="mono small dim">{p.aspect}</span>}</div>
+            <div className="proj-card-cover">{p.cover ? <img src={fileUrl(p.cover)} alt="" loading="lazy" /> : <span className="mono small dim">{p.aspect}</span>}</div>
             <span className="proj-card-name">{p.name}</span>
             {p.logline && <span className="small dim proj-card-logline">{p.logline}</span>}
             <span className="proj-card-foot mono small">
@@ -150,8 +226,9 @@ export function ProjectsList({ notify, openProject }) {
               </button>
             </span>
           </div>
-        ))}
-      </div>
+        )}
+      />
+      {more}
     </div>
   )
 }
@@ -202,7 +279,7 @@ export function ProjectPage({ productionId, notify, go, openShot, openEdit, char
   }
   return (
     <div className="project" ref={top}>
-      <Hero art="projects" back={{ label: 'All films', onClick: () => go('projects') }} kicker={`Short film · ${v.aspect} · ${t.shots ? `${clock(t.seconds)} planned · ` : ''}${clock(v.targetSeconds)} goal`}>
+      <Hero art="projects" help="project" back={{ label: 'All films', onClick: () => go('projects') }} kicker={`Short film · ${v.aspect} · ${t.shots ? `${clock(t.seconds)} planned · ` : ''}${clock(v.targetSeconds)} goal`}>
         <input className="shot-name hero-title-input" value={v.name} aria-label="Film title" onChange={(e) => setV({ ...v, name: e.target.value })} onBlur={(e) => act(() => P().update(v.id, { name: e.target.value.trim() || 'Untitled film' }))} />
       </Hero>
       <nav className="wiz-steps" aria-label="Steps">

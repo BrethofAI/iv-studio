@@ -449,7 +449,7 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
         </span>
         <div className="ed-export">
           <span className="ed-help">
-            <Help page="edit" />
+            <Help page="editor" compact />
           </span>
           <button className="btn btn-small" onClick={() => toggleFocus()} title={focus ? 'Back to IV Studio (Esc)' : 'Full-screen workspace (F11)'}>
             {focus ? 'Exit full screen' : '⤢ Full screen'}

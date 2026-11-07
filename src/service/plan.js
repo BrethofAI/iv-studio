@@ -54,6 +54,10 @@ export const DEFAULTS = {
   megapixels: 0.4,
   seconds: 5,
   steps: 8,
+  // the preview pass's sampler (KSamplerSelect, node 12) and scheduler (BasicScheduler, node 13); the 2 MP finish
+  // keeps its own tuned refine (er_sde, linear_quadratic, 2 steps at 0.4)
+  sampler: 'er_sde',
+  scheduler: 'beta',
   seed: 4242,
   previews: 3,
   overlapFrames: 22,
@@ -74,24 +78,29 @@ export function planPreviews(request, characters) {
   if (!(r.megapixels >= 0.1 && r.megapixels <= 2.5)) errors.push('megapixels must be between 0.1 and 2.5.')
   if (!(r.seconds >= 1 && r.seconds <= 15)) errors.push('seconds must be between 1 and 15.')
   if (!r.prompt?.trim()) errors.push('A prompt is required.')
+  if (!/^[\w.+-]{1,60}$/.test(String(r.sampler || ''))) errors.push(`Unknown sampler "${r.sampler}".`)
+  if (!/^[\w.+-]{1,60}$/.test(String(r.scheduler || ''))) errors.push(`Unknown scheduler "${r.scheduler}".`)
   const character = r.character === 'none' ? null : characters.find((c) => c.id === r.character)
   if (r.character !== 'none' && !character) errors.push(`Unknown character "${r.character}".`)
+  // a RefMod character (refmods.js) is RefMod 1, ahead of any RefMods picked for the shot; a LoRA character loads its LoRA
+  const refChar = character && !character.lora && character.refmod ? character : null
+  const refmods = refChar ? [{ name: refChar.refmod, strength: refChar.strength ?? 1, copies: 1 }, ...r.refmods.filter((m) => m.name !== refChar.refmod)] : r.refmods
   const pictures = r.media.filter((m) => m.kind === 'picture')
   const videos = r.media.filter((m) => m.kind === 'video')
   if (r.mode === 'frames' && (pictures.length < 1 || pictures.length > 2)) errors.push('First / last frame needs 1 picture (first frame) or 2 (first and last).')
-  if (r.mode === 'reference' && !r.media.length && !r.refmods.length) errors.push('Reference to video needs at least one picture, video or audio reference, or a RefMod.')
+  if (r.mode === 'reference' && !r.media.length && !refmods.length) errors.push('Reference to video needs at least one picture, video or audio reference, or a RefMod.')
   if (r.mode === 'continue' && videos.length !== 1) errors.push('Continue a video needs exactly one source video.')
   if (r.mode === 'continue' && ![5, 22, 39, 56].includes(r.overlapFrames)) errors.push('Overlap frames must be 5, 22, 39 or 56.')
-  if (r.refmods.length > 8) errors.push('At most 8 RefMods.')
+  if (refmods.length > 8) errors.push(refChar ? 'At most 7 RefMods with a RefMod character (it takes the first).' : 'At most 8 RefMods.')
   if (errors.length) throw Object.assign(new Error(errors.join(' ')), { errors })
 
   const previews = r.mode === 'continue' ? 1 : Math.min(3, Math.max(1, Math.round(r.previews)))
   const size = resolveSize(r.aspect, r.megapixels)
   const frames = resolveFrames(r.seconds)
-  const groups = [mode.group, character ? 'char_tess' : 'char_none', 'select1']
+  const groups = [mode.group, character && !refChar ? 'char_tess' : 'char_none', 'select1']
   for (let k = 1; k <= previews; k++) groups.push(`preview${k}`)
   if (r.voiceLine) groups.push('voice')
-  if (r.refmods.length) groups.push('refmods')
+  if (refmods.length) groups.push('refmods')
 
   const values = {
     '87': r.prompt,
@@ -99,10 +108,13 @@ export function planPreviews(request, characters) {
     '501.megapixels': r.megapixels,
     '82': r.seconds,
     '503': r.steps,
+    '12.sampler_name': r.sampler,
+    '13.scheduler': r.scheduler,
     '81.seed': r.seed,
     '410.LoraLoaderState': loraState(r.extraLoras)
   }
-  if (character) {
+  if (refChar) values['1004'] = refChar.name
+  else if (character) {
     values['1001.LoraLoaderState'] = loraState([{ name: character.lora, strength: character.strength }])
     values['1002'] = character.trigger
   }
@@ -110,9 +122,9 @@ export function planPreviews(request, characters) {
   if (mediaNode) values[`${mediaNode}.media_state`] = JSON.stringify(r.media.map(mediaItem))
   if (r.mode === 'continue') values['604'] = r.overlapFrames
   if (r.voiceLine) values['801.audio'] = r.voiceLine
-  if (r.refmods.length) {
+  if (refmods.length) {
     for (let k = 1; k <= 8; k++) {
-      const m = r.refmods[k - 1]
+      const m = refmods[k - 1]
       values[`1101.mod_${k}`] = m ? m.name : '(none)'
       values[`1101.strength_${k}`] = m ? (m.strength ?? 1) : 1
       values[`1101.copies_${k}`] = m ? (m.copies ?? 1) : 1

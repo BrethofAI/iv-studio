@@ -9,7 +9,7 @@ export const ART = Object.fromEntries(
 // The page header from the "What If?" artwork: a heavy condensed title and a spaced kicker on the dark
 // left, the page's art fading in on the right (art names one from assets/pages; none is the eye; Incognito
 // shows the closed eye everywhere). children go in place of the title (editable names); back is a link
-// pinned to the top left. help: which page's tips its "?" shows (learn.js TIPS); by default the art's, false
+// pinned to the top left. help: which page's tour its "How it works" starts (tours.js); by default the art's, false
 // for none.
 export default function Hero({ art, title, kicker, back, children, help }) {
   return (

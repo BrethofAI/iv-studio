@@ -13,6 +13,10 @@ import path from 'node:path'
 import { Cloud } from './cloud.js'
 import { probe } from './media.js'
 import { comboOptions } from './setup.js'
+import { readSettings } from './paths.js'
+import { GPUS as RENDER_GPUS, RunPod } from './runpod.js'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 
 // Modal list prices (modal.com/pricing, 2026-10-28), billed by the second. secPerStep is for an IV Studio
 // dataset (stills plus talking clips): measured 1.09 s on an H200 (Theo, 2026-10-28); the B200 and H100
@@ -27,6 +31,11 @@ export const TRAIN_GPUS = [
 const UNSCHEDULABLE = /waiting to be scheduled on a GPU_(\w+) worker.*?(unavailable on (\w+) plan|concurrency limits)/i
 const GRID = Array.from({ length: 8 }, (_, n) => 17 * n + 5) // 5 .. 124 frames
 const VOLUME = 'iv-studio-train'
+// RunPod: the training volume (the H3 training files are about 42 GB; datasets and checkpoints take the rest) and
+// Fizgig's own published image, which has its Python and CUDA ready.
+const RP_VOLUME_GB = 80
+const RP_IMAGE = 'ghcr.io/shootthesound/fizgig:latest'
+const RP_PREFIX = 'iv-train'
 
 // Where each design still is set. Clothes and light vary so neither welds to the trigger.
 export const SCENES = [
@@ -68,48 +77,151 @@ export function suggestTrigger(name) {
 }
 
 // Steps, minutes and dollars for a run. items: stills + clips; clips cost more per step, which the
-// measured seconds-per-step already averages in for a Tess-like mix.
-export function estimate({ items, epochs, gpu = 'B200' }) {
-  const g = TRAIN_GPUS.find((x) => x.id === gpu) || TRAIN_GPUS[0]
+// measured seconds-per-step already averages in for a Tess-like mix. Fine detail (about 0.5 MP) costs about twice
+// as much per step as the normal 0.25 MP.
+export function estimate({ items, epochs, gpu = 'B200', detail = 'normal', where = 'modal', precision = 'auto' }) {
+  const list = trainGpus(where)
+  const g = list.find((x) => x.id === gpu) || list[0]
   const steps = items * epochs
-  const minutes = (steps * g.secPerStep) / 60 + 7 // caching the dataset and starting up
-  return { steps, minutes: Math.ceil(minutes), dollars: +((minutes / 60) * g.perHour + 0.15).toFixed(2), gpu: g.id, perHour: g.perHour }
+  const per = precision === 'int8' && g.secPerStepInt8 ? g.secPerStepInt8 : g.secPerStep
+  const minutes = (steps * per * (detail === 'fine' ? 2 : 1)) / 60 + 7 // caching the dataset and starting up
+  return { steps, minutes: Math.ceil(minutes), dollars: g.perHour ? +((minutes / 60) * g.perHour + 0.15).toFixed(2) : 0, gpu: g.id, perHour: g.perHour, where }
 }
 
 // Enough steps to learn a face from a small set without burning money on a big one (Claire: ~3,500).
 export const defaultEpochs = (items) => Math.max(40, Math.min(120, Math.round(2800 / Math.max(1, items))))
 
-// Fizgig's commands, as Tess's train.sh (checked against Fizgig 4b3f07f).
-export function trainScript({ name, epochs, saveEvery }) {
-  const v = '/vol'
-  const root = `${v}/train/${name}`
+// ---------- the recipe (what the Train step offers; every flag checked against Fizgig 4b3f07f) ----------
+// Presets: Quick is Fizgig's own "MiniMax H3 Fast" (rank 8, a shorter run, tends to come out more flexible);
+// Standard is what Tess and Theo trained with; Thorough runs half as long again, for big sets.
+export const TRAIN_PRESETS = {
+  quick: { label: 'Quick', rank: 8, steps: 1500, min: 30, max: 60, note: 'Fizgig’s Fast recipe: likeness in a few hundred steps, and rank 8 tends to stay flexible.' },
+  standard: { label: 'Standard', rank: 16, steps: 2800, min: 40, max: 120, note: 'What Tess and Theo trained with.' },
+  thorough: { label: 'Thorough', rank: 16, steps: 4200, min: 60, max: 160, note: 'Half as long again, for a big set or when Standard looks unfinished.' }
+}
+export const TRAIN_DEFAULTS = { where: 'modal', preset: 'standard', learn: 'look_voice', detail: 'normal', mode: 'likeness', checkpoints: 20, rank: null, seed: 42, captionDropout: 0.05, cleanEnd: 60, precision: 'auto', budget: null }
+const pickOf = (v, list, d) => (list.includes(v) ? v : d)
+// The options as given (partly, from the window or an agent) made whole and safe.
+export function trainOptions(o = {}) {
+  const d = TRAIN_DEFAULTS
+  o = o || {}
+  const num = (v, lo, hi, def) => (v !== null && v !== '' && Number.isFinite(Number(v)) ? Math.min(hi, Math.max(lo, Number(v))) : def)
+  return {
+    where: pickOf(o.where, ['modal', 'runpod', 'local'], 'modal'),
+    preset: pickOf(o.preset, Object.keys(TRAIN_PRESETS), d.preset),
+    learn: pickOf(o.learn, ['look', 'look_voice'], d.learn),
+    detail: pickOf(o.detail, ['normal', 'fine'], d.detail),
+    mode: pickOf(o.mode, ['likeness', 'whole'], d.mode),
+    checkpoints: pickOf(Number(o.checkpoints), [10, 20, 40], d.checkpoints),
+    rank: o.rank == null || o.rank === '' ? null : pickOf(Number(o.rank), [8, 16, 32], null),
+    seed: Math.round(num(o.seed, 0, 2 ** 31 - 1, d.seed)),
+    captionDropout: pickOf(Number(o.captionDropout ?? d.captionDropout), [0, 0.05, 0.1], d.captionDropout),
+    cleanEnd: pickOf(Number(o.cleanEnd ?? d.cleanEnd), [60, 8], d.cleanEnd),
+    // Fizgig's base precision: auto (its memory planner; it can drop to 4-bit on a 24 GB card) or int8 (the
+    // checkpoint's own, the accurate base the cloud GPUs use)
+    precision: pickOf(o.precision, ['auto', 'int8'], d.precision),
+    budget: o.budget == null || o.budget === '' || !(Number(o.budget) > 0) ? null : +num(o.budget, 0.5, 500, 0.5).toFixed(2)
+  }
+}
+export const rankOf = (opts) => opts.rank || TRAIN_PRESETS[opts.preset].rank
+export function epochsFor(items, opts) {
+  const p = TRAIN_PRESETS[opts.preset]
+  return Math.max(p.min, Math.min(p.max, Math.round(p.steps / Math.max(1, items))))
+}
+// Seconds of GPU a budget buys (after the start-up share the estimate adds), for the script's own timer.
+export function budgetSeconds(budget, perHour) {
+  if (!budget) return null
+  return Math.max(300, Math.floor(((budget - 0.15) / perHour) * 3600))
+}
+
+// ---------- where it trains ----------
+// RunPod Secure Cloud GPUs with room for H3 training (a run peaks at about 26 GB with nothing streamed), by
+// RunPod's list price (2026-11-07). secPerStep: the H100 is Modal's measured figure; the others are scaled by
+// their speed relative to it and are estimates until a run measures them.
+export const RUNPOD_TRAIN_GPUS = [
+  { id: 'NVIDIA L40S', label: 'L40S · 48 GB', perHour: 1.09, secPerStep: 2.6, note: 'The best value: about half the H100’s speed at a quarter of its price.' },
+  { id: 'NVIDIA A100 80GB PCIe', label: 'A100 · 80 GB', perHour: 1.79, secPerStep: 2.1, note: 'Faster than the L40S, more memory.' },
+  { id: 'NVIDIA H100 80GB HBM3', label: 'H100 · 80 GB', perHour: 3.99, secPerStep: 1.5, note: 'The fastest here, about $4 an hour.' },
+  { id: 'NVIDIA RTX 6000 Ada Generation', label: 'RTX 6000 Ada · 48 GB', perHour: 0.99, secPerStep: 2.8, note: 'Like the L40S, a little slower and cheaper.' }
+]
+// This PC: free. Measured on Matt's RTX 4090 (24 GB, 64 GB RAM) with Theo's set, 2026-11-07: Fizgig's auto plan
+// (a 4-bit base, 40 blocks streamed) 3.17 s a step, peak 9.5 GB; the int8 base (40 blocks streamed) 6.73 s, peak 13.8 GB.
+export const LOCAL_TRAIN = { id: 'local', label: 'This PC', perHour: 0, secPerStep: 3.2, secPerStepInt8: 6.7, note: 'Free. Your graphics card is busy while it trains.' }
+export const TRAIN_WHERE = ['modal', 'runpod', 'local']
+export const trainGpus = (where) => (where === 'runpod' ? RUNPOD_TRAIN_GPUS : where === 'local' ? [LOCAL_TRAIN] : TRAIN_GPUS)
+
+// The five files Fizgig trains H3 with (the same files ComfyUI renders with).
+export const MODEL_FILES = {
+  dit: 'minimax_h3_fl2va_pruned_int8_convrot.safetensors',
+  te: 'qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors',
+  vvae: 'minimax_h3_video_vae_fp16.safetensors',
+  avae: 'minimax_h3_audio_vae_fp32.safetensors',
+  adapter: 'minimax_h3_image_training_adapter.safetensors'
+}
+const inDir = (dir) => Object.fromEntries(Object.entries(MODEL_FILES).map(([k, f]) => [k, `${dir}/${f}`]))
+
+// Fizgig's three commands for a run, as argument lists (script path first), so a bash script (Modal, RunPod) and
+// this PC's own Python run exactly the same recipe. root: the run's folder (dataset.toml, loras/); files: the five
+// model files; resume: a saved state's folder name inside loras/ (Train more).
+export function trainArgs({ name, epochs, saveEvery, options, resume = null, root, files }) {
+  const o = trainOptions(options)
+  const rank = String(rankOf(o))
+  const out = `${root}/loras`
+  const blocks = o.mode === 'whole' ? ['--train_blocks', '6-49'] : ['--family_option', 'photo_blocks=20-49', '--family_option', 'clip_blocks=20-49', '--family_option', 'audio_blocks=20-49']
+  return {
+    latents: ['src/fizgig/families/cache.py', '--family', 'minimax', '--stage', 'latents', '--dataset_config', `${root}/dataset.toml`, '--model', files.vvae, '--aux', `audio_vae=${files.avae}`, '--aux', 'clip_still=1'],
+    text: ['src/fizgig/families/cache.py', '--family', 'minimax', '--stage', 'text', '--dataset_config', `${root}/dataset.toml`, '--model', files.te],
+    train: [
+      'src/fizgig/families/train.py', '--family', 'minimax',
+      '--dataset_config', `${root}/dataset.toml`,
+      '--dit', files.dit, '--vae', files.vvae, '--text_encoder', files.te,
+      '--output_dir', out, '--output_name', `${name}_mmh3`,
+      '--network_dim', rank, '--network_alpha', rank,
+      '--optimizer_type', 'automagic3', '--learning_rate', '1e-6',
+      '--max_train_epochs', String(epochs), '--save_every_n_epochs', String(saveEvery), '--seed', String(o.seed),
+      '--save_state', '--save_state_on_train_end', '--keep_last_n_states', '2',
+      '--precision', o.precision, '--blocks_to_swap', '-1', '--ema_decay', '0.98',
+      '--training_adapter', files.adapter,
+      '--family_option', `lownoise_pct=${o.cleanEnd}`, '--family_option', 'highnoise_lr_pct=100',
+      ...blocks,
+      '--family_option', 'tread=0.5@2-47', '--family_option', 'clip_still_as_photo=1', '--family_option', `caption_dropout=${o.captionDropout}`,
+      '--family_option', `audio_vae=${files.avae}`,
+      ...(resume ? ['--resume', `${out}/${resume}`] : [])
+    ]
+  }
+}
+// absolute paths (and anything holding one) quoted, as Tess's script had them; plain words and src/ paths bare
+const sh = (a) => (a.startsWith('/') || /=\//.test(a) || !/^[\w.,:=@/+-]+$/.test(a) ? `"${a.replace(/(["\\$`])/g, '\\$1')}"` : a)
+const line = (args) => `python3 ${args.map(sh).join(' ')}`
+
+// Fizgig's commands as a bash script (Modal: /vol, RunPod: /workspace), with the chosen recipe. maxSeconds: a
+// budget cap the script keeps itself, so it holds even if IV Studio is closed: training stops there, and what was
+// saved so far stays.
+export function trainScript({ name, epochs, saveEvery, options, resume = null, maxSeconds = null, base = '/vol' }) {
+  const root = `${base}/train/${name}`
+  const a = trainArgs({ name, epochs, saveEvery, options, resume, root, files: inDir(`${base}/models`) })
+  const timer = maxSeconds ? `END=$(( $(date +%s) + ${maxSeconds} ))\nleft() { local l=$(( END - $(date +%s) )); [ "$l" -gt 60 ] && echo "$l" || echo 60; }\n` : ''
+  const lim = maxSeconds ? 'timeout --signal=INT --kill-after=120 "$(left)" ' : ''
+  const train = lim + line(a.train)
+  const capped = `set +e
+${train}
+code=$?
+set -e
+if [ "$code" = 124 ] || [ "$code" = 130 ] || [ "$code" = 137 ]; then echo "BUDGET REACHED: training stopped at the spending cap; the checkpoints saved so far are kept"; elif [ "$code" != 0 ]; then exit "$code"; fi`
   return `#!/usr/bin/env bash
 set -euo pipefail
 cd "/opt/Fizgig"
 export PYTHONPATH="/opt/Fizgig/src\${PYTHONPATH:+:$PYTHONPATH}"
-python3 src/fizgig/families/cache.py --family minimax --stage latents --dataset_config "${root}/dataset.toml" --model "${v}/models/minimax_h3_video_vae_fp16.safetensors" --aux "audio_vae=${v}/models/minimax_h3_audio_vae_fp32.safetensors" --aux clip_still=1
-python3 src/fizgig/families/cache.py --family minimax --stage text --dataset_config "${root}/dataset.toml" --model "${v}/models/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
-python3 src/fizgig/families/train.py --family minimax \\
-  --dataset_config "${root}/dataset.toml" \\
-  --dit "${v}/models/minimax_h3_fl2va_pruned_int8_convrot.safetensors" \\
-  --vae "${v}/models/minimax_h3_video_vae_fp16.safetensors" \\
-  --text_encoder "${v}/models/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors" \\
-  --output_dir "${root}/loras" --output_name ${name}_mmh3 \\
-  --network_dim 16 --network_alpha 16 \\
-  --optimizer_type automagic3 --learning_rate 1e-6 \\
-  --max_train_epochs ${epochs} --save_every_n_epochs ${saveEvery} --seed 42 \\
-  --save_state --save_state_on_train_end --keep_last_n_states 2 \\
-  --precision auto --blocks_to_swap -1 --ema_decay 0.98 \\
-  --training_adapter "${v}/models/minimax_h3_image_training_adapter.safetensors" \\
-  --family_option lownoise_pct=60 --family_option highnoise_lr_pct=100 \\
-  --family_option photo_blocks=20-49 --family_option clip_blocks=20-49 --family_option audio_blocks=20-49 \\
-  --family_option tread=0.5@2-47 --family_option clip_still_as_photo=1 --family_option caption_dropout=0.05 \\
-  --family_option "audio_vae=${v}/models/minimax_h3_audio_vae_fp32.safetensors"
+${timer}${line(a.latents)}
+${line(a.text)}
+${maxSeconds ? capped : train}
 `
 }
 
-export const datasetToml = (name) => `[general]
-resolution = [512, 512]
+// 0.25 MP normally (Fizgig's tested default), about 0.5 MP for fine detail. images and cache: the dataset folder
+// and its cache (Modal's by default; RunPod and this PC pass their own).
+export const datasetToml = (name, { detail = 'normal', images = `/vol/datasets/${name}`, cache = `/vol/train/${name}/cache` } = {}) => `[general]
+resolution = [${detail === 'fine' ? '704, 704' : '512, 512'}]
 caption_extension = ".txt"
 batch_size = 1
 num_repeats = 1
@@ -117,9 +229,18 @@ enable_bucket = true
 bucket_no_upscale = true
 
 [[datasets]]
-image_directory = "/vol/datasets/${name}"
-cache_directory = "/vol/train/${name}/cache"
+image_directory = "${images.replace(/\\/g, '/')}"
+cache_directory = "${cache.replace(/\\/g, '/')}"
 `
+
+// Fizgig on this PC: the folder (Settings, else the usual places) with its venv and trainer.
+export function findFizgig(folder, { home = process.env.USERPROFILE || process.env.HOME || '', platform = process.platform } = {}) {
+  const py = (d) => (platform === 'win32' ? path.join(d, 'venv', 'Scripts', 'python.exe') : path.join(d, 'venv', 'bin', 'python'))
+  const ok = (d) => d && fs.existsSync(path.join(d, 'src', 'fizgig', 'families', 'train.py')) && fs.existsSync(py(d))
+  const tries = [folder, home && path.join(home, 'Fizgig'), platform === 'win32' && 'C:\\Fizgig', platform === 'win32' && 'D:\\Fizgig', home && path.join(home, 'fizgig')].filter(Boolean)
+  const dir = tries.find(ok)
+  return dir ? { dir, python: py(dir) } : null
+}
 
 // The H3 reference-to-video prompt for one talking clip.
 export function talkPrompt({ who, talk, voice }) {
@@ -149,6 +270,8 @@ export class Trainings {
     this.onChange = onChange || (() => {})
     this.active = null // the training whose Modal output is streaming
     this.runs = new Map() // training id -> running modal process promise
+    this.localRuns = new Map() // training id -> the timer following a run on this PC
+    this.onLog = onLog
     this.cloud = new Cloud({ dataDir, resourcesDir, onLog: (line) => this.line(line, onLog) })
   }
 
@@ -456,10 +579,10 @@ export class Trainings {
 
   // ---------- the dataset (Fizgig's flat folder) ----------
   // One clip, or several back to back if it's long, on the frame grid at about 0.25 MP.
-  async fitClip(src, outBase, maxParts = 3) {
+  async fitClip(src, outBase, maxParts = 3, pixels = 250000) {
     const info = await probe(this.ffprobe, src)
     if (info.kind !== 'video') throw new Error(`${path.basename(src)} isn't a video.`)
-    const s = Math.sqrt(250000 / (info.width * info.height))
+    const s = Math.sqrt(pixels / (info.width * info.height))
     const W = Math.max(256, Math.round((info.width * s) / 32) * 32)
     const H = Math.max(256, Math.round((info.height * s) / 32) * 32)
     let left = Math.floor(info.duration * 24 + 0.01)
@@ -481,8 +604,9 @@ export class Trainings {
   }
 
   // Builds the dataset folder from the kept stills and clips; returns what's in it.
-  async buildDataset(id) {
+  async buildDataset(id, options) {
     const t = this.get(id)
+    const o = trainOptions(options || t.train?.options)
     const dir = path.join(this.folder(id), 'dataset')
     fs.rmSync(dir, { recursive: true, force: true })
     fs.mkdirSync(dir, { recursive: true })
@@ -495,19 +619,36 @@ export class Trainings {
       fs.writeFileSync(`${base}.txt`, s.caption)
     }
     let c = 0
-    for (const clip of t.clips.filter((x) => x.keep && x.file)) {
+    for (const clip of o.learn === 'look' ? [] : t.clips.filter((x) => x.keep && x.file)) {
       const src = await this.studio.localCopy(clip.file, path.join(this.folder(id), 'clips'))
-      for (const part of await this.fitClip(src, path.join(dir, `${name}_clip_${String(++c).padStart(2, '0')}`))) fs.writeFileSync(part.file.replace(/\.mp4$/, '.txt'), clip.caption)
+      for (const part of await this.fitClip(src, path.join(dir, `${name}_clip_${String(++c).padStart(2, '0')}`), 3, o.detail === 'fine' ? 500000 : 250000)) fs.writeFileSync(part.file.replace(/\.mp4$/, '.txt'), clip.caption)
     }
     const files = fs.readdirSync(dir)
     return { dir, stills: n, clips: files.filter((f) => f.endsWith('.mp4')).length, items: files.filter((f) => !f.endsWith('.txt')).length }
   }
 
-  estimateFor(t, { gpu, epochs } = {}) {
+  estimateFor(t, { gpu, epochs, options, more } = {}) {
+    const o = trainOptions(options || t.train?.options)
+    const list = trainGpus(o.where)
+    const g = list.some((x) => x.id === gpu) ? gpu : list.some((x) => x.id === t.train?.gpu) ? t.train.gpu : o.where === 'modal' ? 'H200' : list[0].id
     // Fizgig trains each clip twice an epoch (Theo: 8 stills + 8 clips = 24 steps an epoch)
-    const items = this.keptStills(t).length + t.clips.filter((x) => x.keep && x.file).length * 2
-    const e = epochs || t.train?.epochs || defaultEpochs(items)
-    return { ...estimate({ items: Math.round(items), epochs: e, gpu: gpu || t.train?.gpu || 'H200' }), epochs: e }
+    const clips = o.learn === 'look' ? 0 : t.clips.filter((x) => x.keep && x.file).length
+    const items = Math.round(this.keptStills(t).length + clips * 2)
+    if (more) {
+      const e = Math.max(1, Math.round(Number(more)))
+      const est = estimate({ items, epochs: e, gpu: g, detail: o.detail, where: o.where, precision: o.precision })
+      return { ...est, epochs: e, more: true, options: o, capped: !!(o.budget && est.dollars > o.budget) }
+    }
+    const e = Math.round(epochs || epochsFor(items, o))
+    const est = estimate({ items, epochs: e, gpu: g, detail: o.detail, where: o.where, precision: o.precision })
+    const presets = Object.fromEntries(
+      Object.keys(TRAIN_PRESETS).map((k) => {
+        const pe = epochsFor(items, { ...o, preset: k })
+        const x = estimate({ items, epochs: pe, gpu: g, detail: o.detail, where: o.where, precision: o.precision })
+        return [k, { epochs: pe, minutes: x.minutes, dollars: x.dollars }]
+      })
+    )
+    return { ...est, epochs: e, items, options: o, rank: rankOf(o), checkpoints: Math.ceil(e / Math.max(1, Math.round(e / o.checkpoints))), presets, capped: !!(o.budget && est.dollars > o.budget) }
   }
 
   // ---------- 3 train on Modal ----------
@@ -527,28 +668,53 @@ export class Trainings {
   }
   // Runs every step from the dataset to the end of training; resolves when the run is over. The run keeps
   // going on Modal if IV Studio closes (--detach); checkTraining() picks it up again from the volume's log.
-  async startTraining(id, { gpu = 'B200', epochs } = {}) {
-    if (this.runs.size) throw new Error('A character is already training. One at a time.')
-    if (!(await this.cloud.workspace())) throw new Error('Sign in to Modal on the Cloud page first (steps 1 and 2).')
+  // more: Train more, that many extra epochs on the last run, from its last saved state (same recipe and set).
+  async startTraining(id, { gpu, epochs, options, more } = {}) {
+    if (this.runs.size || this.localRunning()) throw new Error('A character is already training. One at a time.')
     const t = this.get(id)
-    const est = this.estimateFor(t, { gpu, epochs })
-    const runName = `${slug(t.name)}_${t.id}_${(t.train?.run || 0) + 1}`
-    this.setTrain(id, { unschedulable: null, appId: null, state: 'preparing', gpu, epochs: est.epochs, run: (t.train?.run || 0) + 1, name: runName, startedAt: now(), progress: null, error: null, estimate: est })
+    const where = trainOptions(more ? t.train?.options : options).where
+    if (more && t.train?.where && t.train.where !== where) throw new Error('Train more runs where the run was trained.')
+    if (where === 'modal' && !(await this.cloud.workspace())) throw new Error('Sign in to Modal on the Cloud page first (steps 1 and 2).')
+    if (where === 'local') await this.localReady()
+    if (where === 'runpod' && !this.runpod?.key?.()) throw new Error('Add your RunPod API key on the Cloud page first.')
+    let resume = null
+    if (more) {
+      if (!t.train?.name || !['done', 'stopped', 'failed'].includes(t.train.state)) throw new Error('Train more carries on from a finished or stopped run; train once first.')
+      resume = await this.lastState(id)
+      if (!resume) throw new Error('That run has no saved state to carry on from. Train again instead.')
+    }
+    // Train more keeps the recipe (the rank has to match the saved state); only the budget can change
+    const o = trainOptions(more ? { ...t.train.options, budget: options?.budget ?? t.train.options?.budget } : options)
+    const est = this.estimateFor(t, { gpu, epochs, options: o, more })
+    const total = more ? resume.epoch + est.epochs : est.epochs
+    const runName = more ? t.train.name : `${slug(t.name)}_${t.id}_${(t.train?.run || 0) + 1}`
+    const maxSeconds = budgetSeconds(o.budget, est.perHour)
+    if (where === 'local') gpu = 'local'
+    this.setTrain(id, { where, pid: null, unschedulable: null, appId: null, budgetHit: false, state: 'preparing', gpu: est.gpu, options: o, epochs: total, more: more ? { from: resume.epoch, extra: est.epochs } : null, run: more ? t.train.run : (t.train?.run || 0) + 1, name: runName, startedAt: now(), progress: null, error: null, estimate: est })
+    if (where === 'local') return this.runLocal(id, { o, total, est, runName, resume, more })
+    if (where === 'runpod') return this.runRunPod(id, { o, total, est, runName, resume, more, maxSeconds })
     const work = (async () => {
       this.active = id
       try {
-        const ds = await this.buildDataset(id)
-        if (ds.stills < 4 || ds.items < 8) throw new Error(`The set is too small to learn a face (${ds.stills} stills, ${ds.clips} clips). Keep at least 4 stills and 8 items in all.`)
         const root = path.join(this.folder(id), 'train')
         fs.mkdirSync(root, { recursive: true })
-        const saveEvery = Math.max(1, Math.round(est.epochs / 40))
-        fs.writeFileSync(path.join(root, 'train.sh'), trainScript({ name: runName, epochs: est.epochs, saveEvery }).replace(/\r\n/g, '\n'))
-        fs.writeFileSync(path.join(root, 'dataset.toml'), datasetToml(runName))
-        this.setTrain(id, { state: 'models', dataset: ds })
-        await this.modal(['run', 'train_app.py::fetch_models'])
-        this.setTrain(id, { state: 'uploading' })
-        await this.modal(['volume', 'put', VOLUME, ds.dir, `/datasets/${runName}`, '--force'])
-        for (const f of ['train.sh', 'dataset.toml']) await this.modal(['volume', 'put', VOLUME, path.join(root, f), `/train/${runName}/${f}`, '--force'])
+        const saveEvery = more ? t.train.saveEvery || Math.max(1, Math.round(total / o.checkpoints)) : Math.max(1, Math.round(est.epochs / o.checkpoints))
+        fs.writeFileSync(path.join(root, 'train.sh'), trainScript({ name: runName, epochs: total, saveEvery, options: o, resume: resume?.dir, maxSeconds }).replace(/\r\n/g, '\n'))
+        this.setTrain(id, { saveEvery })
+        if (more) {
+          // the set and its caches are already in storage
+          this.setTrain(id, { state: 'uploading' })
+          await this.modal(['volume', 'put', VOLUME, path.join(root, 'train.sh'), `/train/${runName}/train.sh`, '--force'])
+        } else {
+          const ds = await this.buildDataset(id, o)
+          if (ds.stills < 4 || ds.items < 8) throw new Error(`The set is too small to learn a face (${ds.stills} stills, ${ds.clips} clips). Keep at least 4 stills and 8 items in all.`)
+          fs.writeFileSync(path.join(root, 'dataset.toml'), datasetToml(runName, { detail: o.detail }))
+          this.setTrain(id, { state: 'models', dataset: ds })
+          await this.modal(['run', 'train_app.py::fetch_models'])
+          this.setTrain(id, { state: 'uploading' })
+          await this.modal(['volume', 'put', VOLUME, ds.dir, `/datasets/${runName}`, '--force'])
+          for (const f of ['train.sh', 'dataset.toml']) await this.modal(['volume', 'put', VOLUME, path.join(root, f), `/train/${runName}/${f}`, '--force'])
+        }
         this.setTrain(id, { state: 'training', trainingAt: now() })
         const watch = setInterval(() => this.checkScheduled(id).catch(() => {}), 3 * 60 * 1000)
         try {
@@ -572,6 +738,343 @@ export class Trainings {
     this.runs.set(id, work)
     return this.get(id)
   }
+  // ---------- 3 train on this PC (Fizgig, free) ----------
+  // Fizgig's own Python runs the same three commands as the cloud, from a small runner started on its own, so it
+  // keeps going if IV Studio closes; IV Studio follows its log (train.log) and finds it again after a restart.
+  fizgig() {
+    return findFizgig(readSettings().fizgigFolder || '')
+  }
+  // The five model files, from this PC's ComfyUI model folders.
+  async localFiles() {
+    let folders = []
+    try {
+      folders = await fetch(`${this.studio.comfy.url}/experiment/models`, { headers: this.studio.comfy.headers() }).then((r) => r.json())
+    } catch {
+      throw new Error('Start ComfyUI first: IV Studio finds the H3 training files through its model folders.')
+    }
+    const dirs = [...new Set(folders.filter((x) => ['diffusion_models', 'unet', 'text_encoders', 'clip', 'vae', 'loras'].includes(x.name)).flatMap((x) => x.folders || []))].filter((d) => fs.existsSync(d))
+    const want = new Map(Object.entries(MODEL_FILES).map(([k, n]) => [n, k]))
+    const found = {}
+    const walk = (dir, depth) => {
+      if (depth > 3 || want.size === Object.keys(found).length) return
+      let list = []
+      try {
+        list = fs.readdirSync(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const e of list) {
+        const p = path.join(dir, e.name)
+        if (e.isFile() && want.has(e.name) && !found[want.get(e.name)]) found[want.get(e.name)] = p
+        else if (e.isDirectory()) walk(p, depth + 1)
+      }
+    }
+    for (const d of dirs) walk(d, 0)
+    const missing = Object.entries(MODEL_FILES).filter(([k]) => !found[k]).map(([, n]) => n)
+    return { files: found, missing }
+  }
+  async localReady() {
+    if (!this.fizgig()) throw new Error('Fizgig isn’t on this PC. Install it (github.com/shootthesound/Fizgig), then pick its folder on the Train step, or train on Modal or RunPod.')
+    const { missing } = await this.localFiles()
+    if (missing.length) throw new Error(`These H3 training files aren’t in this PC’s ComfyUI: ${missing.join(', ')}. Get them on Setup, or train in the cloud.`)
+  }
+  localRunning() {
+    return [...this.localRuns.values()].some(Boolean)
+  }
+  localRoot(t) {
+    return path.join(this.folder(t.id), 'train', t.train.name)
+  }
+  async runLocal(id, { o, total, est, runName, resume, more }) {
+    const fiz = this.fizgig()
+    const { files } = await this.localFiles()
+    const t = this.get(id)
+    const root = path.join(this.folder(id), 'train', runName)
+    fs.mkdirSync(path.join(root, 'loras'), { recursive: true })
+    const fwd = (p) => p.replace(/\\/g, '/')
+    const saveEvery = more ? t.train.saveEvery || Math.max(1, Math.round(total / o.checkpoints)) : Math.max(1, Math.round(est.epochs / o.checkpoints))
+    this.setTrain(id, { saveEvery })
+    if (!more) {
+      const ds = await this.buildDataset(id, o)
+      if (ds.stills < 4 || ds.items < 8) {
+        this.setTrain(id, { state: 'failed', error: `The set is too small to learn a face (${ds.stills} stills, ${ds.clips} clips). Keep at least 4 stills and 8 items in all.` })
+        return this.get(id)
+      }
+      fs.writeFileSync(path.join(root, 'dataset.toml'), datasetToml(runName, { detail: o.detail, images: ds.dir, cache: path.join(root, 'cache') }))
+      this.setTrain(id, { dataset: ds })
+    }
+    const a = trainArgs({ name: runName, epochs: total, saveEvery, options: o, resume: resume?.dir, root: fwd(root), files: Object.fromEntries(Object.entries(files).map(([k, v]) => [k, fwd(v)])) })
+    const cmds = more ? [a.train] : [a.latents, a.text, a.train]
+    fs.writeFileSync(path.join(root, 'commands.json'), JSON.stringify(cmds, null, 1))
+    fs.writeFileSync(path.join(root, 'runner.py'), LOCAL_RUNNER)
+    const log = path.join(root, 'train.log')
+    fs.appendFileSync(log, `\n[local] ${now()} ${more ? `train more: ${est.epochs} epochs from ${resume.epoch}` : 'start'}\n`)
+    // room on the graphics card: ComfyUI's models and IV Studio's voice engine out first
+    await this.studio.comfy.freeMemory?.().catch(() => {})
+    await this.voices?.release?.().catch?.(() => {})
+    const p = spawn(fiz.python, [path.join(root, 'runner.py'), path.join(root, 'commands.json'), log, fiz.dir], { cwd: fiz.dir, detached: true, stdio: 'ignore', windowsHide: true, env: { ...process.env, PYTHONPATH: path.join(fiz.dir, 'src'), PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' } })
+    p.unref()
+    this.setTrain(id, { state: 'training', trainingAt: now(), pid: p.pid, logAt: fs.statSync(log).size - Buffer.byteLength('x'.repeat(0)) })
+    this.followLocal(id)
+    return this.get(id)
+  }
+  pidAlive(pid) {
+    if (!pid) return false
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch (e) {
+      return e.code === 'EPERM'
+    }
+  }
+  // Reads new lines of a local run's log every two seconds: progress, the end, or the runner gone.
+  followLocal(id) {
+    if (this.localRuns.get(id)) return
+    const t = this.get(id)
+    const log = path.join(this.localRoot(t), 'train.log')
+    let offset = 0
+    let rest = ''
+    const tick = () => {
+      const cur = this.get(id).train
+      let text = ''
+      try {
+        const size = fs.statSync(log).size
+        if (size > offset) {
+          const fd = fs.openSync(log, 'r')
+          const buf = Buffer.alloc(size - offset)
+          fs.readSync(fd, buf, 0, buf.length, offset)
+          fs.closeSync(fd)
+          offset = size
+          text = buf.toString('utf8')
+        }
+      } catch {}
+      if (text) {
+        const parts = (rest + text).split(/\r\n|\r|\n/)
+        rest = parts.pop()
+        this.active = id
+        for (const l of parts) if (l.trim()) this.line(l, this.onLog)
+      }
+      const done = /\[local\] TRAINING DONE/.test(text)
+      const failed = /\[local\] command failed/.test(text)
+      if (done || failed || !this.pidAlive(cur.pid)) {
+        clearInterval(timer)
+        this.localRuns.delete(id)
+        this.active = null
+        const all = fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : ''
+        const tail = all.slice(all.lastIndexOf('[local] ') - 1)
+        if (/TRAINING DONE/.test(tail)) this.setTrain(id, { state: 'done', finishedAt: now(), error: null, pid: null })
+        else if (this.get(id).train.state !== 'stopped') {
+          const why = (all.match(/(Error|error|Traceback)[^\n]*\n?[^\n]*/g) || []).pop()
+          this.setTrain(id, { state: 'failed', pid: null, error: `Training stopped${why ? `: ${why.trim().slice(0, 300)}` : ''}. The log is in the training folder.` })
+        }
+        this.listCheckpoints(id).catch(() => {})
+      }
+    }
+    // from the start of this run's part of the log (the marker written at start)
+    try {
+      const all = fs.readFileSync(log, 'utf8')
+      offset = Buffer.byteLength(all.slice(0, all.lastIndexOf('[local] ') - 1))
+    } catch {}
+    const timer = setInterval(tick, 2000)
+    this.localRuns.set(id, timer)
+    tick()
+  }
+
+  // ---------- 3 train on RunPod (the user's own account) ----------
+  // A pod from Fizgig's image with the iv-studio-train volume runs resources/cloud/runpod_train.py: IV Studio
+  // uploads the set and train.sh through it, starts the run and follows its log. The pod deletes itself half an
+  // hour after the run ends; the checkpoints stay on the volume, and a later download starts a small pod to serve them.
+  rp() {
+    if (!this.runpod) throw new Error('RunPod isn’t available here.')
+    return this.runpod
+  }
+  async trainVolume(gpu) {
+    const rp = this.rp()
+    const vols = RunPod.list(await rp.req('/network-volumes'), 'networkVolumes', 'items', 'data')
+    const have = vols.find((v) => v.name === VOLUME)
+    if (have) return have
+    const dc = await rp.pickDataCenter(gpu)
+    this.onLog?.(`Creating your ${RP_VOLUME_GB} GB training volume "${VOLUME}" in ${dc}…`)
+    return rp.req('/network-volumes', { method: 'POST', json: { name: VOLUME, size: RP_VOLUME_GB, dataCenter: dc } })
+  }
+  // mode 'train' (the chosen GPU, else the next free one in the volume's data center) or 'serve' (the cheapest, to hand over files)
+  async trainPod({ gpu, runName, mode = 'train' }) {
+    const rp = this.rp()
+    const vol = await this.trainVolume(gpu || RUNPOD_TRAIN_GPUS[0].id)
+    const token = (randomUUID() + randomUUID()).replace(/-/g, '')
+    const order = mode === 'serve' ? [...RENDER_GPUS].sort((a, b) => a.perHour - b.perHour).map((g) => g.id) : [gpu, ...RUNPOD_TRAIN_GPUS.map((g) => g.id).filter((x) => x !== gpu)]
+    const bundle = rp.bundle(['runpod_train.py'])
+    let last
+    for (const g of order) {
+      try {
+        const pod = await rp.req('/pods', {
+          method: 'POST',
+          json: {
+            name: `${RP_PREFIX}-${mode}-${Date.now().toString(36)}`,
+            image: RP_IMAGE,
+            cloud: 'SECURE',
+            gpu: { id: g, count: 1, minCudaVersion: '12.8' },
+            dataCenterIds: [vol.dataCenter],
+            disk: 60,
+            mounts: { network: [{ volumeId: vol.id, path: '/workspace' }] },
+            ports: ['8189/http'],
+            env: { IV_TOKEN: token, IV_RUN: runName, IV_MODE: mode, IV_IDLE_SECONDS: mode === 'serve' ? '300' : '1800', IV_BUNDLE: bundle },
+            entrypoint: ['bash', '-c'],
+            cmd: ['mkdir -p /opt/iv && echo "$IV_BUNDLE" | base64 -d | tar -xz -C /opt/iv && exec python3 /opt/iv/runpod_train.py']
+          }
+        })
+        if (mode === 'train' && g !== gpu) this.onLog?.(`${gpu} was taken in ${vol.dataCenter}; started a ${g} instead.`)
+        return { id: pod.id, url: RunPod.url(pod.id), token, gpu: g, perHour: pod.cost, dataCenter: vol.dataCenter, volumeId: vol.id, mode }
+      } catch (err) {
+        last = err
+        if (!(err.status >= 400 && err.status < 500 && /capacity|available|no (gpu|machine|instance)|stock|resources/i.test(err.message))) throw err
+      }
+    }
+    throw new Error(`No GPU for training is free in ${vol.dataCenter} right now. Try again in a few minutes. (${last?.message})`)
+  }
+  async podHealth(pod) {
+    try {
+      const r = await this.rp().fetch(`${pod.url}/iv/health`, { signal: AbortSignal.timeout(15000) })
+      if (!r.ok) return null
+      const h = await r.json()
+      return h?.gate === 'ok' ? h : null
+    } catch {
+      return null
+    }
+  }
+  async podCall(pod, route, { method = 'GET' } = {}) {
+    const r = await this.rp().fetch(`${pod.url}${route}`, { method, headers: { Authorization: `Bearer ${pod.token}` } })
+    if (!r.ok) throw new Error(`The training pod said ${r.status}: ${(await r.text()).slice(0, 200)}`)
+    return r.json()
+  }
+  async waitPod(pod, minutes = 20) {
+    const t0 = Date.now()
+    for (;;) {
+      const h = await this.podHealth(pod)
+      if (h) return h
+      if (Date.now() - t0 > minutes * 60000) throw new Error('The RunPod GPU took too long to start.')
+      await new Promise((r) => setTimeout(r, 5000))
+    }
+  }
+  async runRunPod(id, { o, total, est, runName, resume, more, maxSeconds }) {
+    const t = this.get(id)
+    const work = (async () => {
+      this.active = id
+      try {
+        const saveEvery = more ? t.train.saveEvery || Math.max(1, Math.round(total / o.checkpoints)) : Math.max(1, Math.round(est.epochs / o.checkpoints))
+        this.setTrain(id, { saveEvery })
+        let ds = null
+        if (!more) {
+          ds = await this.buildDataset(id, o)
+          if (ds.stills < 4 || ds.items < 8) throw new Error(`The set is too small to learn a face (${ds.stills} stills, ${ds.clips} clips). Keep at least 4 stills and 8 items in all.`)
+        }
+        const pod = await this.trainPod({ gpu: est.gpu, runName })
+        this.setTrain(id, { pod, gpu: pod.gpu, dataset: ds || t.train.dataset })
+        await this.waitPod(pod)
+        this.setTrain(id, { state: 'uploading' })
+        const local = path.join(this.folder(id), 'train', runName)
+        fs.mkdirSync(local, { recursive: true })
+        fs.writeFileSync(path.join(local, 'train.sh'), trainScript({ name: runName, epochs: total, saveEvery, options: o, resume: resume?.dir, maxSeconds, base: '/workspace' }).replace(/\r\n/g, '\n'))
+        const up = (file, rel) => this.rp().uploadModel(pod.url, pod.token, file, rel)
+        if (!more) {
+          fs.writeFileSync(path.join(local, 'dataset.toml'), datasetToml(runName, { detail: o.detail, images: `/workspace/datasets/${runName}`, cache: `/workspace/train/${runName}/cache` }))
+          for (const f of fs.readdirSync(ds.dir)) await up(path.join(ds.dir, f), `datasets/${runName}/${f}`)
+          await up(path.join(local, 'dataset.toml'), `train/${runName}/dataset.toml`)
+        }
+        await up(path.join(local, 'train.sh'), `train/${runName}/train.sh`)
+        await this.podCall(pod, '/iv/start', { method: 'POST' })
+        this.setTrain(id, { state: 'training', trainingAt: now() })
+        await this.followRunPod(id)
+      } catch (err) {
+        if (!['done', 'stopped'].includes(this.get(id).train?.state)) this.setTrain(id, { state: 'failed', error: err.message.split('\n').slice(-3).join(' ') })
+      } finally {
+        this.active = null
+        this.runs.delete(id)
+      }
+    })()
+    this.runs.set(id, work)
+    return this.get(id)
+  }
+  // Follows the pod: its stage, and the log (progress) from where it got to.
+  async followRunPod(id) {
+    let offset = 0
+    let rest = ''
+    let lost = 0
+    for (;;) {
+      const t = this.get(id)
+      const pod = t.train.pod
+      if (!pod || t.train.state === 'stopped') return
+      const h = await this.podHealth(pod)
+      if (!h) {
+        if (++lost > 36) throw new Error('Lost touch with the RunPod GPU. Open this character again to check on it.')
+      } else {
+        lost = 0
+        try {
+          const l = await this.podCall(pod, `/iv/log?offset=${offset}`)
+          offset = l.offset
+          const parts = (rest + l.text).split(/\r\n|\r|\n/)
+          rest = parts.pop()
+          this.active = id
+          for (const x of parts) if (x.trim()) this.line(x, this.onLog)
+        } catch {}
+        if (h.stage === 'setup' || h.stage === 'models') this.get(id).train.state !== 'models' && this.setTrain(id, { state: 'models', podDetail: h.detail })
+        else if (h.stage === 'training' && this.get(id).train.state !== 'training') this.setTrain(id, { state: 'training' })
+        if (h.stage === 'done') {
+          this.setTrain(id, { state: 'done', finishedAt: now(), error: null })
+          await this.listCheckpoints(id).catch(() => {})
+          return
+        }
+        if (h.stage === 'failed') throw new Error(h.detail || 'Training stopped with an error.')
+        if (h.stage === 'stopped') return this.setTrain(id, { state: 'stopped' })
+      }
+      await new Promise((r) => setTimeout(r, 5000))
+    }
+  }
+  async checkRunPod(id) {
+    const t = this.get(id)
+    if (this.runs.has(id) || !['preparing', 'models', 'uploading', 'training'].includes(t.train?.state) || !t.train.pod) return t
+    if (await this.podHealth(t.train.pod)) {
+      const work = this.followRunPod(id)
+        .catch((err) => this.setTrain(id, { state: 'failed', error: err.message }))
+        .finally(() => this.runs.delete(id))
+      this.runs.set(id, work)
+    }
+    return this.get(id)
+  }
+  async stopRunPod(id) {
+    const t = this.get(id)
+    const pod = t.train?.pod
+    this.setTrain(id, { state: 'stopped' })
+    if (pod) {
+      await this.podCall(pod, '/iv/stop', { method: 'POST' }).catch(() => {})
+      await this.rp().req(`/pods/${pod.id}`, { method: 'DELETE' }).catch(() => {})
+    }
+    return this.get(id)
+  }
+  // The training pod while it's up, else a small pod started just to hand over files (it removes itself).
+  async filePod(id) {
+    const t = this.get(id)
+    for (const p of [t.train?.pod, t.train?.filePod].filter(Boolean)) if (await this.podHealth(p)) return p
+    this.onLog?.('Starting a small RunPod GPU to fetch the checkpoints (a few cents; it removes itself)…')
+    const pod = await this.trainPod({ runName: t.train.name, mode: 'serve' })
+    this.setTrain(id, { filePod: pod })
+    await this.waitPod(pod)
+    return pod
+  }
+  async runpodList(id) {
+    const t = this.get(id)
+    const pod = await this.filePod(id)
+    return (await this.podCall(pod, `/iv/list?path=${encodeURIComponent(`train/${t.train.name}/loras`)}`)).names
+  }
+  async runpodDownload(id, rel, to) {
+    const t = this.get(id)
+    const pod = await this.filePod(id)
+    const r = await this.rp().fetch(`${pod.url}/iv/file?path=${encodeURIComponent(`train/${t.train.name}/${rel}`)}`, { headers: { Authorization: `Bearer ${pod.token}` } })
+    if (!r.ok || !r.body) throw new Error(`Downloading ${path.basename(rel)} failed (${r.status}).`)
+    const part = `${to}.part`
+    await pipeline(Readable.fromWeb(r.body), fs.createWriteStream(part))
+    fs.renameSync(part, to)
+  }
+
   // While a run shows no progress, Modal's app log says whether it is still waiting for a GPU it can't get.
   async checkScheduled(id) {
     const t = this.get(id).train
@@ -597,6 +1100,7 @@ export class Trainings {
     if (!id) return
     const app = /modal\.com\/apps\/[^/\s]+\/[^/\s]+\/(ap-\w+)/.exec(text)
     if (app && this.get(id).train?.state === 'training' && !this.get(id).train.appId) this.setTrain(id, { appId: app[1] })
+    if (/BUDGET REACHED/.test(text)) this.setTrain(id, { budgetHit: true })
     const m = /epoch (\d+)\/(\d+).*?step=(\d+)/.exec(text)
     const steps = /\|\s*(\d+)\/(\d+) \[/.exec(text)
     const stage = /Encoding dataset|latent cache/i.test(text) ? 'caching' : /stage text/i.test(text) ? 'captions' : null
@@ -615,6 +1119,12 @@ export class Trainings {
   // After a restart, or when the local client lost the stream: read the run's log from the volume.
   async checkTraining(id) {
     const t = this.get(id)
+    if (t.train?.where === 'local') {
+      if (t.train.state === 'training' && this.pidAlive(t.train.pid)) this.followLocal(id)
+      else if (t.train.state === 'training') this.followLocal(id) // finds the end in the log
+      return this.get(id)
+    }
+    if (t.train?.where === 'runpod') return this.checkRunPod(id)
     if (!t.train?.name || this.runs.has(id)) return t
     const tmp = path.join(this.folder(id), 'train', 'train.log')
     fs.rmSync(tmp, { force: true })
@@ -627,6 +1137,7 @@ export class Trainings {
     const last = [...log.matchAll(/epoch (\d+)\/(\d+).*?step=(\d+)/g)].pop()
     const patch = last ? { progress: { epoch: Number(last[1]), epochs: Number(last[2]), step: Number(last[3]), stage: 'training', at: now() } } : {}
     if (/TRAINING DONE/.test(log)) Object.assign(patch, { state: 'done', finishedAt: t.train.finishedAt || now(), error: null })
+    if (/BUDGET REACHED/.test(log)) patch.budgetHit = true
     else if (/command failed|Traceback/.test(log) && /\[modal\] finished/.test(log)) Object.assign(patch, { state: 'failed', error: 'Training stopped with an error; the log is in the training folder.' })
     this.setTrain(id, patch)
     if (patch.state === 'done') await this.listCheckpoints(id).catch(() => {})
@@ -634,14 +1145,67 @@ export class Trainings {
   }
   // Stops the training app on Modal (the GPU stops billing at once). Saved epochs stay in storage.
   async stopTraining(id) {
+    const tt = this.get(id).train
+    if (tt?.where === 'local') {
+      if (tt.pid) await new Promise((r) => spawn('taskkill', ['/PID', String(tt.pid), '/T', '/F'], { windowsHide: true }).on('close', r).on('error', r))
+      this.setTrain(id, { state: 'stopped', pid: null })
+      return this.get(id)
+    }
+    if (tt?.where === 'runpod') return this.stopRunPod(id)
     await this.modal(['app', 'stop', 'iv-studio-train', '--yes'])
     this.setTrain(id, { state: 'stopped' })
     return this.get(id)
   }
 
   // ---------- 4 pick ----------
+  async lastState(id) {
+    const t = this.get(id)
+    if (t.train?.where === 'local' || t.train?.where === 'runpod') {
+      const names = t.train.where === 'local' ? (fs.existsSync(path.join(this.localRoot(t), 'loras')) ? fs.readdirSync(path.join(this.localRoot(t), 'loras')) : []) : await this.runpodList(id)
+      return names.map((n) => ({ dir: n, m: /-(\d{6})-state$/.exec(n) })).filter((x) => x.m).map((x) => ({ dir: x.dir, epoch: Number(x.m[1]) })).sort((a, b) => b.epoch - a.epoch)[0] || null
+    }
+    const out = await this.modal(['volume', 'ls', VOLUME, `/train/${t.train.name}/loras`, '--json'])
+    const rows = JSON.parse(out.slice(out.indexOf('[')))
+    const states = rows
+      .map((r) => path.posix.basename(r.Filename || r.filename || r.path || ''))
+      .map((n) => ({ dir: n, m: /-(\d{6})-state$/.exec(n) }))
+      .filter((x) => x.m)
+      .map((x) => ({ dir: x.dir, epoch: Number(x.m[1]) }))
+      .sort((a, b) => b.epoch - a.epoch)
+    return states[0] || null
+  }
+  // Likeness of each tested checkpoint (InsightFace, three frames of its test against the picked face): the
+  // highest is marked best. A guide, not a verdict: watch them too.
+  async scoreCheckpoints(id) {
+    if (!this.shinobi) throw new Error('Likeness needs Shinobi’s engine.')
+    const v = await this.refresh(id)
+    if (!v.face?.file) throw new Error('This character has no picked face to compare with.')
+    const dir = path.join(this.folder(id), 'candidates')
+    const ref = await this.studio.localCopy(v.face.file, dir)
+    const items = []
+    for (const x of v.tests) {
+      const out = v.jobs[x.jobId]?.status === 'success' && v.jobs[x.jobId].outputs.find((o) => o.kind === 'preview' || /\.(mp4|webm|mov)$/i.test(o.filename || o.path || ''))
+      if (out) items.push({ epoch: x.epoch, file: await this.studio.localCopy(out, dir) })
+    }
+    if (!items.length) throw new Error('Render the tests first: the scores come from them.')
+    const scores = await this.shinobi.likeness(ref, items.map((i) => i.file))
+    const t = this.get(id)
+    scores.forEach((r, k) => {
+      const test = t.tests.find((x) => x.epoch === items[k].epoch)
+      if (test) test.score = r.score ?? null
+    })
+    const best = t.tests.filter((x) => x.score != null).sort((a, b) => b.score - a.score)[0]
+    t.bestEpoch = best ? best.epoch : null
+    t.scoredAt = now()
+    return this.write(t)
+  }
   async listCheckpoints(id) {
     const t = this.get(id)
+    if (t.train?.where === 'local' || t.train?.where === 'runpod') {
+      const names = t.train.where === 'local' ? (fs.existsSync(path.join(this.localRoot(t), 'loras')) ? fs.readdirSync(path.join(this.localRoot(t), 'loras')) : []) : await this.runpodList(id)
+      t.checkpoints = names.filter((f) => /-\d{6}\.safetensors$/.test(f)).map((f) => ({ file: f, epoch: Number(f.match(/-(\d{6})\.safetensors$/)[1]), lora: t.checkpoints?.find((c) => c.file === f)?.lora || null })).sort((a, b) => a.epoch - b.epoch)
+      return this.write(t)
+    }
     const out = await this.modal(['volume', 'ls', VOLUME, `/train/${t.train.name}/loras`, '--json'])
     const rows = JSON.parse(out.slice(out.indexOf('[')))
     const files = rows.map((r) => r.Filename || r.filename || r.path).filter((f) => /-\d{6}\.safetensors$/.test(f)).map((f) => path.posix.basename(f))
@@ -659,6 +1223,17 @@ export class Trainings {
     const t = this.get(id)
     const { dir, rel } = await this.loraDir(t)
     fs.mkdirSync(dir, { recursive: true })
+    if (t.train?.where === 'local' || t.train?.where === 'runpod') {
+      for (const c of t.checkpoints.filter((x) => epochs.includes(x.epoch))) {
+        const to = path.join(dir, c.file)
+        if (!fs.existsSync(to)) {
+          if (t.train.where === 'local') fs.copyFileSync(path.join(this.localRoot(t), 'loras', c.file), to)
+          else await this.runpodDownload(id, `loras/${c.file}`, to)
+        }
+        c.lora = `${rel}\\${c.file}`
+      }
+      return this.write(t)
+    }
     for (const c of t.checkpoints.filter((x) => epochs.includes(x.epoch))) {
       if (!fs.existsSync(path.join(dir, c.file))) await this.modal(['volume', 'get', VOLUME, `/train/${t.train.name}/loras/${c.file}`, path.join(dir, c.file), '--force'])
       c.lora = `${rel}\\${c.file}`
@@ -695,6 +1270,19 @@ export class Trainings {
     return this.write(t)
   }
 }
+
+// Runs Fizgig's commands one after another into the log; writes the end marker IV Studio looks for.
+const LOCAL_RUNNER = `import json, os, subprocess, sys
+cmds = json.load(open(sys.argv[1], encoding="utf-8"))
+log = open(sys.argv[2], "a", encoding="utf-8", buffering=1)
+for c in cmds:
+    log.write("$ " + " ".join(c) + "\\n")
+    code = subprocess.Popen([sys.executable] + c, cwd=sys.argv[3], stdout=log, stderr=subprocess.STDOUT).wait()
+    if code:
+        log.write(f"[local] command failed ({code})\\n")
+        sys.exit(code)
+log.write("[local] TRAINING DONE\\n")
+`
 
 function run(cmd, args) {
   return new Promise((resolve, reject) => {

@@ -130,6 +130,9 @@ contextBridge.exposeInMainWorld('ivstudio', {
     fetch: call('training:fetch'),
     test: call('training:test'),
     adopt: call('training:adopt'),
+    score: call('training:score'),
+    localCheck: call('training:localCheck'),
+    chooseFizgig: call('training:chooseFizgig'),
     onLog: on('training:log'),
     onChanged: on('training:changed')
   },
@@ -199,6 +202,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
     updates: { check: call('setup:updates:check'), run: call('setup:updates:run'), undo: call('setup:updates:undo'), installManager: call('setup:updates:installManager'), onProgress: on('setup:updates') }
   },
   comfy: { launcher: call('comfy:launcher'), chooseLauncher: call('comfy:chooseLauncher'), chooseFolder: call('comfy:chooseFolder'), start: call('comfy:start'), onState: on('comfy:state') },
+  hardware: { scan: call('hardware:scan'), apply: call('hardware:apply') },
+  samplers: call('h3:samplers'),
   h3Models: call('models:h3'),
   models: { status: call('models:status'), download: call('models:download'), cancel: call('models:cancel'), onUpdate: on('models:update') },
   voices: {
@@ -247,6 +252,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     prefs: call('loras:prefs'),
     onProgress: on('loras:progress')
   },
+  refmods: { list: call('refmods:list'), ready: call('refmods:ready'), make: call('refmods:make'), onStatus: on('refmods:status') },
   characters: { list: call('characters:list'), save: call('characters:save'), catalog: call('characters:catalog'), install: call('characters:install'), loras: call('characters:loras'), onProgress: on('characters:progress') },
   projects: { list: call('projects:list'), get: call('projects:get'), rename: call('projects:rename'), delete: call('projects:delete') },
   sequences: {

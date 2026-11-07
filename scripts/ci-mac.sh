@@ -24,7 +24,7 @@ BUNDLED_FFMPEG="$(find "$APP/Contents/Resources/app.asar.unpacked" -name ffmpeg 
 run ffmpeg-gpl bash -c "'$BUNDLED_FFMPEG' -hide_banner -version | tee /dev/stderr | grep -q -- '--enable-gpl' && ! '$BUNDLED_FFMPEG' -hide_banner -version | grep -q -- '--enable-nonfree'"
 
 # the parts that need no GPU and no ComfyUI
-for t in cast cutout directing editgen learn lint productions reel screenplay sizzle-cut staging timeline-tracks private-outputs comfylauncher ranking prompt-guide ollama-address nodepacks model-versions remake comfycloud image-families; do
+for t in cast cutout directing editgen news tours lint productions reel screenplay sizzle-cut staging timeline-tracks private-outputs comfylauncher ranking prompt-guide ollama-address nodepacks model-versions remake comfycloud image-families refmods hardware training-recipe training-runpod sampler-choice; do
   run "test-$t" node "test/$t.mjs"
 done
 python3 -m venv "$OUT/pyenv" && "$OUT/pyenv/bin/pip" install -q aiohttp

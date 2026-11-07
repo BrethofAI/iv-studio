@@ -3,23 +3,7 @@ import Hero from './Hero'
 import { LoraPicker, LoraThumb, loraTitle, useYours } from './Loras'
 import { fileUrl } from './edit/model'
 import { ask } from './Confirm'
-
-// Create makes a video (a shot, Create.jsx) or an image (below); this switch sits under Create's banner on
-// both. Its look is Settings | Setup's.
-export function CreateKind({ kind, onKind }) {
-  return (
-    <div className="section-switch settings-tabs" role="tablist" aria-label="Video or image">
-      {[
-        ['video', 'Video'],
-        ['image', 'Image']
-      ].map(([id, label]) => (
-        <button key={id} role="tab" aria-selected={kind === id} className={kind === id ? 'on' : ''} onClick={() => onKind(id)}>
-          {label}
-        </button>
-      ))}
-    </div>
-  )
-}
+import { AspectTiles, DropIcon, ImageModeIcon, StepHead } from './CreateKit'
 
 const I = () => window.ivstudio.images
 const MODES = [
@@ -56,7 +40,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
   const [more, setMore] = useState(false)
   const [yours, , reloadYours] = useYours()
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
-  // Learn's Try it can open Image on Generate or Edit
+  // an iv:go with a mode (App.jsx) can open Image on Generate or Edit
   useEffect(() => {
     const go = (e) => e.detail?.create === 'image' && e.detail.mode && set({ mode: e.detail.mode })
     window.addEventListener('iv:learn', go)
@@ -147,181 +131,234 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
   const [w, h] = sizeOf(form.aspect, form.megapixels)
   const editMode = form.mode === 'edit'
   const blocked = !fam || !form.model || (editMode && !form.refs.length)
+  const n = editMode ? { model: 2, refs: 3, prompt: 4, shape: 5 } : { model: 2, prompt: 3, shape: 4 }
+  const makeLabel = busy ? 'Starting…' : editMode ? `Edit${form.count > 1 ? ` · ${form.count} versions` : ''}` : `Make ${form.count} picture${form.count > 1 ? 's' : ''}`
+  const canMake = !(busy || blocked || !form.prompt.trim())
   return (
-    <div className="images-page">
-      <Hero art="create" title="Create" kicker="New image" />
+    <div className="images-page create-v2">
+      <Hero art="create" title="Create" kicker="New image" help="image" />
       {kindSwitch}
       {status?.remote && <p className="notice">Pictures render on this PC’s ComfyUI. Switch to “This PC” on the Cloud page to make them.</p>}
       {status?.error && <p className="notice">{status.error}</p>}
 
-      <section className="block">
-        <p className="mono label">01 · Mode</p>
-        <div className="mode-cards">
-          {MODES.map(([id, label, hint]) => (
-            <button key={id} className={`mode-card ${form.mode === id ? 'on' : ''}`} onClick={() => set({ mode: id })}>
-              <span className="mode-name">{label}</span>
-              <span className="dim small">{hint}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="block">
-        <p className="mono label">02 · Model</p>
-        <div className="row">
-          <span className="row-label">Family</span>
-          <div className="segmented wrap">
-            {families.map((f) => {
-              const off = !f.ready || (editMode && !f.edit)
-              const why = !f.models.length ? 'No checkpoints for it in ComfyUI.' : f.missing.length ? `Needs ${f.missing.join(', ')}.` : editMode && !f.edit ? f.editNote : f.note
-              return (
-                <button key={f.id} className={form.family === f.id ? 'on' : ''} disabled={off} title={why} onClick={() => set({ family: f.id, model: f.models[0], loras: [] })}>
-                  {f.label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-        {fam && (
-          <>
-            <div className="row">
-              <span className="row-label">Checkpoint</span>
-              <select value={form.model || ''} onChange={(e) => set({ model: e.target.value })}>
-                {fam.models.map((m) => (
-                  <option key={m} value={m}>
-                    {shortName(m)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <p className="small dim image-family-note">
-              {fam.note} <span className="mono">Licence: {fam.licence}</span>
-            </p>
-          </>
-        )}
-        <div className="row lora-tray-row">
-          <span className="row-label">LoRAs</span>
-          <div className="lora-tray">
-            {form.loras.map((l, i) => {
-              const info = loraInfo(l.name)
-              return (
-                <div key={l.name} className="lora-chip">
-                  <LoraThumb className="small" preview={info?.prefs?.picture ? { file: info.prefs.picture, type: 'image' } : info?.civitai?.preview} label={loraTitle(l.name)} mature={info?.civitai?.mature} />
-                  <div className="lora-chip-body">
-                    <span className="lora-chip-name" title={l.name}>
-                      {info?.civitai?.name || loraTitle(l.name)}
-                    </span>
-                    <div className="lora-chip-strength">
-                      <input type="range" min={0} max={1.5} step={0.05} value={l.strength} onChange={(e) => set({ loras: form.loras.map((x, j) => (j === i ? { ...x, strength: Number(e.target.value) } : x)) })} />
-                      <span className="mono small">{Number(l.strength).toFixed(2)}</span>
-                    </div>
-                  </div>
-                  <button className="lora-chip-x" title="Take it off" onClick={() => set({ loras: form.loras.filter((_, j) => j !== i) })}>
-                    ×
-                  </button>
-                </div>
-              )
-            })}
-            <button className="lora-add" disabled={!fam} onClick={() => setPicking(true)}>
-              + Add LoRA
-            </button>
-          </div>
-        </div>
-        {picking && <LoraPicker family={familyFilter} notify={notify} go={go} onClose={() => setPicking(false)} onPick={addLora} />}
-      </section>
-
-      {editMode && (
-        <section className="block">
-          <p className="mono label">03 · Picture to edit</p>
-          <div className="image-refs" onDragOver={(e) => e.preventDefault()} onDrop={drop}>
-            {form.refs.map((r, i) => (
-              <div key={r + i} className="image-ref">
-                <img src={fileUrl(r)} alt="" />
-                <span className="mono small">{form.refs.length > 1 ? `Picture ${i + 1}` : 'The picture'}</span>
-                <button className="lora-chip-x" title="Take it out" onClick={() => set({ refs: form.refs.filter((_, j) => j !== i) })}>
-                  ×
-                </button>
-              </div>
-            ))}
-            {form.refs.length < (fam?.maxRefs || 6) && (
-              <button className="image-ref add" onClick={async () => addRefs(await window.ivstudio.files.pick('picture'))}>
-                <span>+ Picture</span>
-                <span className="small dim">or drop one here</span>
-              </button>
-            )}
-          </div>
-          {(fam?.maxRefs || 0) > 1 && <p className="small dim">Add more pictures to bring things in from them, e.g. “put the jacket from picture 2 on her”.</p>}
-        </section>
-      )}
-
-      <section className="block">
-        <p className="mono label">{editMode ? '04' : '03'} · {editMode ? 'What to change' : 'Prompt'}</p>
-        <textarea className="prompt image-prompt" value={form.prompt} placeholder={editMode ? 'Say what to change, and what to keep. E.g. “Make it night, keep her face and pose.”' : 'Describe the picture: subject, place, light, style.'} onChange={(e) => set({ prompt: e.target.value })} />
-        <button className="link-btn small" onClick={() => setMore(!more)}>
-          {more ? '− Less' : '+ More: negative prompt, steps, CFG'}
-        </button>
-        {more && (
-          <div className="image-more">
-            <div className="row">
-              <span className="row-label">Negative</span>
-              <input value={form.negative} placeholder="What to keep out (used when CFG is above 1)" onChange={(e) => set({ negative: e.target.value })} />
-            </div>
-            <div className="row">
-              <span className="row-label">Steps</span>
-              <input type="number" min={1} max={100} value={form.steps} placeholder={fam ? `${fam.steps} (its own)` : ''} onChange={(e) => set({ steps: e.target.value })} />
-              <span className="row-label">CFG</span>
-              <input type="number" min={0} max={20} step={0.1} value={form.cfg} placeholder={fam ? `${fam.cfg} (its own)` : ''} onChange={(e) => set({ cfg: e.target.value })} />
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="block">
-        <p className="mono label">{editMode ? '05' : '04'} · Picture</p>
-        {!editMode && (
-          <div className="row">
-            <span className="row-label">Aspect</span>
-            <div className="segmented">
-              {ASPECTS.map((a) => (
-                <button key={a} className={form.aspect === a ? 'on' : ''} onClick={() => set({ aspect: a })}>
-                  {a}
+      <div className="create-layout">
+        <div className="create-steps">
+          <section className="create-step">
+            <StepHead n={1} title="What to make" sub="A new picture from words, or a picture you already have, changed by an instruction." />
+            <div className="mode-cards create-modes two">
+              {MODES.map(([id, label, hint]) => (
+                <button key={id} className={`mode-card ${form.mode === id ? 'on' : ''}`} onClick={() => set({ mode: id })}>
+                  <ImageModeIcon id={id} />
+                  <span className="mode-name">{label}</span>
+                  <span className="dim small">{hint}</span>
                 </button>
               ))}
             </div>
-          </div>
-        )}
-        <div className="row">
-          <span className="row-label">Size</span>
-          <div className="segmented">
-            {SIZES.map((m) => (
-              <button key={m} className={form.megapixels === m ? 'on' : ''} onClick={() => set({ megapixels: m })}>
-                {m} MP
+          </section>
+
+          <section className="create-step">
+            <StepHead n={n.model} title="The model" sub={editMode ? 'Only models that can edit are on.' : 'Your image models in ComfyUI. Each has its own look.'} />
+            <div className="family-cards" role="radiogroup" aria-label="Model family">
+              {families.map((f) => {
+                const off = !f.ready || (editMode && !f.edit)
+                const why = !f.models.length ? 'No checkpoints for it in ComfyUI.' : f.missing.length ? `Needs ${f.missing.join(', ')}.` : editMode && !f.edit ? f.editNote : f.note
+                return (
+                  <button key={f.id} role="radio" aria-checked={form.family === f.id} className={`family-card ${form.family === f.id ? 'on' : ''}`} disabled={off} title={why} onClick={() => set({ family: f.id, model: f.models[0], loras: [] })}>
+                    <span className="family-name">{f.label}</span>
+                    <span className="family-tags mono">
+                      {!f.ready ? 'not set up' : f.edit ? 'makes · edits' : 'makes'}
+                    </span>
+                  </button>
+                )
+              })}
+              {!status && <span className="dim small">Checking your image models…</span>}
+            </div>
+            {fam && (
+              <>
+                <div className="create-field">
+                  <span className="create-label mono">Checkpoint</span>
+                  <select value={form.model || ''} onChange={(e) => set({ model: e.target.value })}>
+                    {fam.models.map((m) => (
+                      <option key={m} value={m}>
+                        {shortName(m)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="small dim image-family-note">
+                  {fam.note} <span className="mono">Licence: {fam.licence}</span>
+                </p>
+              </>
+            )}
+            <div className="create-field">
+              <span className="create-label mono">LoRAs</span>
+              <div className="lora-tray">
+                {form.loras.map((l, i) => {
+                  const info = loraInfo(l.name)
+                  return (
+                    <div key={l.name} className="lora-chip">
+                      <LoraThumb className="small" preview={info?.prefs?.picture ? { file: info.prefs.picture, type: 'image' } : info?.civitai?.preview} label={loraTitle(l.name)} mature={info?.civitai?.mature} />
+                      <div className="lora-chip-body">
+                        <span className="lora-chip-name" title={l.name}>
+                          {info?.civitai?.name || loraTitle(l.name)}
+                        </span>
+                        <div className="lora-chip-strength">
+                          <input type="range" min={0} max={1.5} step={0.05} value={l.strength} onChange={(e) => set({ loras: form.loras.map((x, j) => (j === i ? { ...x, strength: Number(e.target.value) } : x)) })} />
+                          <span className="mono small">{Number(l.strength).toFixed(2)}</span>
+                        </div>
+                      </div>
+                      <button className="lora-chip-x" title="Take it off" onClick={() => set({ loras: form.loras.filter((_, j) => j !== i) })}>
+                        ×
+                      </button>
+                    </div>
+                  )
+                })}
+                <button className="lora-add" disabled={!fam} onClick={() => setPicking(true)}>
+                  + Add LoRA
+                </button>
+              </div>
+            </div>
+            {picking && <LoraPicker family={familyFilter} notify={notify} go={go} onClose={() => setPicking(false)} onPick={addLora} />}
+          </section>
+
+          {editMode && (
+            <section className="create-step">
+              <StepHead n={n.refs} title="The picture to edit" sub={(fam?.maxRefs || 0) > 1 ? 'Add more pictures to bring things in from them, e.g. “put the jacket from picture 2 on her”.' : 'The picture to change.'} />
+              <div className="image-refs create-drop" onDragOver={(e) => e.preventDefault()} onDrop={drop}>
+                {form.refs.map((r, i) => (
+                  <div key={r + i} className="image-ref">
+                    <img src={fileUrl(r)} alt="" />
+                    <span className="mono small">{form.refs.length > 1 ? `Picture ${i + 1}` : 'The picture'}</span>
+                    <button className="lora-chip-x" title="Take it out" onClick={() => set({ refs: form.refs.filter((_, j) => j !== i) })}>
+                      ×
+                    </button>
+                  </div>
+                ))}
+                {form.refs.length < (fam?.maxRefs || 6) && (
+                  <button className="image-ref add" onClick={async () => addRefs(await window.ivstudio.files.pick('picture'))}>
+                    <DropIcon />
+                    <span>+ Picture</span>
+                    <span className="small dim">or drop one here</span>
+                  </button>
+                )}
+              </div>
+            </section>
+          )}
+
+          <section className="create-step">
+            <StepHead n={n.prompt} title={editMode ? 'What to change' : 'What it shows'} sub={editMode ? 'Say what to change, and what to keep.' : 'Subject, place, light and style.'} />
+            <textarea className="prompt image-prompt" value={form.prompt} placeholder={editMode ? 'Make it night, keep her face and pose.' : 'An old farmer kneeling in a golden field at sunset, a 3D animated film still.'} onChange={(e) => set({ prompt: e.target.value })} aria-label={editMode ? 'What to change' : 'Prompt'} />
+            <div className={`more-settings ${more ? 'open' : ''}`}>
+              <button type="button" className="more-settings-toggle mono" onClick={() => setMore(!more)} aria-expanded={more}>
+                {more ? '−' : '+'} More: negative prompt, steps, CFG
+                <span className="dim">{[form.negative && 'negative', form.steps !== '' && `${form.steps} steps`, form.cfg !== '' && `CFG ${form.cfg}`].filter(Boolean).join(' · ')}</span>
               </button>
-            ))}
-          </div>
+              {more && (
+                <div className="more-settings-body">
+                  <div className="create-field">
+                    <span className="create-label mono">Negative</span>
+                    <input value={form.negative} placeholder="What to keep out (used when CFG is above 1)" onChange={(e) => set({ negative: e.target.value })} />
+                  </div>
+                  <div className="create-grid">
+                    <div className="create-field">
+                      <span className="create-label mono">Steps</span>
+                      <input type="number" min={1} max={100} value={form.steps} placeholder={fam ? `${fam.steps} (its own)` : ''} onChange={(e) => set({ steps: e.target.value })} />
+                    </div>
+                    <div className="create-field">
+                      <span className="create-label mono">CFG</span>
+                      <input type="number" min={0} max={20} step={0.1} value={form.cfg} placeholder={fam ? `${fam.cfg} (its own)` : ''} onChange={(e) => set({ cfg: e.target.value })} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="create-step">
+            <StepHead n={n.shape} title="Shape and size" sub={editMode ? 'An edit keeps the picture’s own shape.' : 'The shape, how big, and how many to make at once.'} />
+            {!editMode && <AspectTiles aspects={ASPECTS} value={form.aspect} onChange={(aspect) => set({ aspect })} />}
+            <div className="create-grid">
+              <div className="create-field">
+                <span className="create-label mono">Size</span>
+                <div className="segmented">
+                  {SIZES.map((m) => (
+                    <button key={m} className={form.megapixels === m ? 'on' : ''} onClick={() => set({ megapixels: m })}>
+                      {m} MP
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="create-field">
+                <span className="create-label mono">How many</span>
+                <div className="segmented">
+                  {[1, 2, 3, 4].map((k) => (
+                    <button key={k} className={form.count === k ? 'on' : ''} onClick={() => set({ count: k })}>
+                      {k}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="create-field">
+                <span className="create-label mono">Seed</span>
+                <div className="seed">
+                  <input type="number" min={0} value={form.seed} placeholder="Random" onChange={(e) => set({ seed: e.target.value })} aria-label="Seed" />
+                  <button className="seed-roll" onClick={() => set({ seed: String(Math.floor(Math.random() * 2 ** 31)) })} title="A new seed" aria-label="A new seed">
+                    ⟳
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
-        <div className="row">
-          <span className="row-label">How many</span>
-          <div className="segmented">
-            {[1, 2, 3, 4].map((n) => (
-              <button key={n} className={form.count === n ? 'on' : ''} onClick={() => set({ count: n })}>
-                {n}
-              </button>
-            ))}
+
+        {/* Your picture: its shape, what will be made, and the button. Pinned while the steps scroll. */}
+        <aside className="shot-card" aria-label="Your picture">
+          <div className="shot-card-head mono">
+            <span>Your picture</span>
+            <span className="dim">{editMode ? 'Edit' : 'Generate'}</span>
           </div>
-        </div>
-        <div className="row">
-          <span className="row-label">Seed</span>
-          <input type="number" min={0} value={form.seed} placeholder="Random" onChange={(e) => set({ seed: e.target.value })} />
-          <button className="btn btn-small" onClick={() => set({ seed: String(Math.floor(Math.random() * 2 ** 31)) })}>
-            🎲 New seed
+          <PictureFrame aspect={editMode ? null : form.aspect} picture={editMode ? form.refs[0] : null} count={form.count} />
+          <dl className="shot-facts">
+            <div>
+              <dt>Model</dt>
+              <dd>{fam ? `${fam.label} · ${shortName(form.model)}` : status ? 'None ready' : 'Checking…'}</dd>
+            </div>
+            {form.loras.length > 0 && (
+              <div>
+                <dt>LoRAs</dt>
+                <dd>{form.loras.map((l) => loraInfo(l.name)?.civitai?.name || loraTitle(l.name)).join(', ')}</dd>
+              </div>
+            )}
+            {editMode && (
+              <div>
+                <dt>Pictures</dt>
+                <dd>{form.refs.length ? `${form.refs.length}` : <span className="pink">none yet</span>}</dd>
+              </div>
+            )}
+            <div>
+              <dt>Size</dt>
+              <dd>{editMode ? `about ${form.megapixels} MP, its own shape` : `${w} × ${h}`}</dd>
+            </div>
+            <div>
+              <dt>Makes</dt>
+              <dd>
+                {form.count} · seed {form.seed === '' ? 'random' : form.seed}
+              </dd>
+            </div>
+          </dl>
+          <button className="btn btn-primary shot-card-go" disabled={!canMake} onClick={make}>
+            {makeLabel}
           </button>
-        </div>
-      </section>
+        </aside>
+      </div>
 
       {sets.length > 0 && (
-        <section className="block">
-          <p className="mono label">Your pictures</p>
+        <section className="audio-section image-gallery">
+          <div className="audio-section-head">
+            <h2>
+              Your pictures <span className="count">{sets.length}</span>
+            </h2>
+          </div>
           <div className="image-sets">
             {sets.map((s) => (
               <div key={s.id} className="image-set">
@@ -355,14 +392,14 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
         </section>
       )}
 
-      {/* Stays at the bottom of the window while the form scrolls: what will be made, and the button. */}
-      <section className="go-dock">
+      {/* Narrow windows: what will be made, and the button, as a bar at the bottom of the window. */}
+      <section className="go-dock create-dock">
         <div className="go-info">
           <span className="mono">{fam ? `${form.count} picture${form.count > 1 ? 's' : ''} · ${editMode ? `about ${form.megapixels} MP, the picture's shape` : `${w} × ${h}`} · ${fam.label}` : status ? 'No image model is ready' : 'Checking your image models…'}</span>
           {fam && <span className="mono dim">{shortName(form.model)}{form.loras.length ? ` · ${form.loras.length} LoRA${form.loras.length > 1 ? 's' : ''}` : ''}</span>}
         </div>
-        <button className="btn btn-primary" disabled={busy || blocked || !form.prompt.trim()} onClick={make}>
-          {busy ? 'Starting…' : editMode ? `Edit${form.count > 1 ? ` · ${form.count} versions` : ''}` : `Make ${form.count} picture${form.count > 1 ? 's' : ''}`}
+        <button className="btn btn-primary" disabled={!canMake} onClick={make}>
+          {makeLabel}
         </button>
       </section>
 
@@ -385,6 +422,22 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
           onAgain={() => (set({ mode: viewing.set.mode, family: viewing.set.family, model: viewing.set.model, prompt: viewing.set.prompt, negative: viewing.set.negative || '', loras: viewing.set.loras || [], aspect: viewing.set.aspect, megapixels: viewing.set.megapixels, count: viewing.set.count, seed: '', refs: viewing.set.refs || [] }), setViewing(null))}
         />
       )}
+    </div>
+  )
+}
+
+// The picture-to-be in its shape (or the picture being edited), with a stack for more than one.
+function PictureFrame({ aspect, picture, count }) {
+  // an edit keeps the picture's own shape: read it from the picture
+  const [own, setOwn] = useState(null)
+  useEffect(() => setOwn(null), [picture])
+  const [w, h] = own || (aspect || '1:1').split(':').map(Number)
+  return (
+    <div className="shot-frame-wrap">
+      <div className={`shot-frame ${count > 1 ? 'stacked' : ''}`} style={{ aspectRatio: `${w} / ${h}`, '--ar': w / h }}>
+        {picture ? <img src={fileUrl(picture)} alt="" onLoad={(e) => setOwn([e.target.naturalWidth, e.target.naturalHeight])} /> : <span className="shot-frame-empty mono">{aspect}</span>}
+        {count > 1 && <span className="shot-frame-len mono">× {count}</span>}
+      </div>
     </div>
   )
 }

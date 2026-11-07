@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { SetCard, SetField, Pill } from './SettingsKit'
+import { NEWS } from '../news'
 
 // IV Studio's own updates: the main process checks GitHub on launch and every six hours and downloads a
 // new version in the background. These show where it's at, and install it with one click.
@@ -39,7 +41,7 @@ export function UpdateButton({ notify }) {
 
 const when = (iso) => (iso ? new Date(iso).toLocaleString() : null)
 
-export function UpdateSettings({ notify }) {
+export function UpdateSettings({ notify, n }) {
   const u = useUpdate()
   const [checking, setChecking] = useState(false)
   if (!u) return null
@@ -61,30 +63,39 @@ export function UpdateSettings({ notify }) {
       setChecking(false)
     }
   }
+  const tone = { current: 'ok', ready: 'ok', available: 'warn', error: 'warn' }[u.status] || ''
+  const pill = { current: 'Up to date', ready: 'Ready to install', available: `${u.available} is out`, downloading: `Downloading ${Math.round(u.percent || 0)}%`, checking: 'Checking', error: 'Check failed', dev: 'Development copy' }[u.status]
+  const button =
+    u.status === 'ready' ? (
+      <button className="btn btn-small btn-primary" onClick={() => install(notify)}>
+        Restart to update
+      </button>
+    ) : u.status === 'available' ? (
+      <button className="btn btn-small btn-primary" onClick={() => install(notify)}>
+        Download {u.available}
+      </button>
+    ) : (
+      <button className="btn btn-small" disabled={u.status === 'dev' || u.status === 'downloading' || checking || u.status === 'checking'} onClick={check}>
+        {checking || u.status === 'checking' ? 'Checking…' : 'Check for updates'}
+      </button>
+    )
   return (
-    <section className="group">
-      <div className="group-head">
-        <h2>Updates</h2>
-        <p className="dim small">IV Studio {u.version}. {u.manual ? 'IV Studio tells you when a new version is out.' : 'New versions download in the background and install with one click.'}</p>
-      </div>
-      <div className="group-body">
-        <p className="small">{line}</p>
-        <div className="row-actions">
-          {u.status === 'ready' ? (
-            <button className="btn btn-small btn-primary" onClick={() => install(notify)}>
-              Restart to update
-            </button>
-          ) : u.status === 'available' ? (
-            <button className="btn btn-small btn-primary" onClick={() => install(notify)}>
-              Download {u.available}
-            </button>
-          ) : (
-            <button className="btn btn-small" disabled={u.status === 'dev' || u.status === 'downloading' || checking || u.status === 'checking'} onClick={check}>
-              {checking || u.status === 'checking' ? 'Checking…' : 'Check for updates'}
-            </button>
-          )}
+    <SetCard id="updates" n={n} title="Updates" sub={u.manual ? 'IV Studio tells you when a new version is out.' : 'New versions download in the background and install with one click.'} aside={pill && <Pill tone={tone}>{pill}</Pill>}>
+      <SetField label="This version" hint={line}>
+        <div className="set-inline">
+          <span className="set-big mono">v{u.version}</span>
+          {button}
         </div>
-      </div>
-    </section>
+      </SetField>
+      {NEWS.slice(0, 4).map((v) => (
+        <SetField key={v.version} label={v.version === u.version ? 'What’s new' : `In ${v.version}`} tag={v.version === u.version ? v.version : null}>
+          <ul className="set-news">
+            {v.items.map((n) => (
+              <li key={n.text}>{n.text}</li>
+            ))}
+          </ul>
+        </SetField>
+      ))}
+    </SetCard>
   )
 }

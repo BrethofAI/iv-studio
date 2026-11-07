@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fileUrl } from './edit/model'
+import { Step } from './FlowKit'
 
 // Replace's Remake engine (remake.js): swap people or change the scene. IV Studio paints a frame of each shot, the
 // person approves them, the writer writes the prompt, and Remake renders with the source's motion and soundtrack.
@@ -95,8 +96,7 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
       )}
 
       {kind === 'swap' ? (
-        <section className="block">
-          <p className="mono label">02 · Who goes in</p>
+        <Step n={2} title="Who goes in" sub="One or two people: your characters, or a picture of who should appear.">
           <div className="media-actions">
             <button className="btn btn-small" disabled={people.length >= 2} onClick={async () => { const [file] = await window.ivstudio.files.pick('picture'); if (file) addPerson({ picture: file, name: '' }) }}>
               + Picture
@@ -106,7 +106,6 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
                 {f.name}
               </button>
             ))}
-            <span className="small dim">one or two people</span>
           </div>
           {people.length > 0 && (
             <div className="media-tiles">
@@ -129,18 +128,14 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
               <input type="checkbox" checked={useLora} onChange={(e) => setUseLora(e.target.checked)} /> Also use {face.name}'s LoRA
             </label>
           )}
-        </section>
+        </Step>
       ) : (
-        <section className="block">
-          <p className="mono label">02 · What changes</p>
+        <Step n={2} title="What changes" sub="Say it in plain words. The people stay as they are; for new people use Swap people.">
           <textarea className="remake-ask" rows={2} value={ask} placeholder={'a snowy winter evening · remove the wind turbines · it’s a rainy neon city at night · the car is a bright red 1960s convertible'} onChange={(e) => setAsk(e.target.value)} />
-          <p className="small dim">Say it in plain words. The people stay as they are; for new people use Swap people.</p>
-        </section>
+        </Step>
       )}
 
-      <section className="block">
-        <p className="mono label">03 · The painted frames</p>
-        <p className="small dim">IV Studio paints a frame of each shot the way the result should look. They decide how it turns out, so check them: paint one again, use your own picture, or leave one out.</p>
+      <Step n={3} title="The painted frames" sub="IV Studio paints a frame of each shot the way the result should look. They decide how it turns out, so check them: paint one again, use your own picture, or leave one out.">
         <button className="btn" disabled={!ready || !!busy} onClick={paint}>
           {busy === 'Painting the frames' ? `Painting… ${Object.values(progress).filter((x) => x === 'painted').length}/${session?.keyframes?.length || '?'}` : session?.keyframes?.some((k) => k.painted) ? 'Paint them all again' : 'Paint the frames'}
         </button>
@@ -173,11 +168,10 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
             ))}
           </div>
         )}
-      </section>
+      </Step>
 
       {painted.length > 0 && (
-        <section className="block">
-          <p className="mono label">04 · Remake it</p>
+        <Step n={4} title="Remake it" sub="Each take takes a few minutes; they show under Runs when done.">
           <div className="row">
             <span className="row-label">Takes</span>
             <div className="segmented">
@@ -206,7 +200,7 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
               {busy === 'Starting' ? (session.prompt ? 'Starting…' : 'Writing the prompt…') : kind === 'swap' ? 'Swap them' : 'Change it'}
             </button>
           </div>
-        </section>
+        </Step>
       )}
       {busy && busy !== 'Painting the frames' && busy !== 'Starting' && <p className="small dim">{busy}…</p>}
       {credit && <p className="small dim">{credit}.</p>}

@@ -18,6 +18,7 @@ import { comfyPlace, installPacks, missingPacks } from './nodepacks.js'
 import { checkUpdates, copySnapshot, MANAGER_PACK, packFolders, readRecord, reenable, restart, undo, update, writeRecord } from './comfyupdate.js'
 import { comfyUp, isDesktopLauncher, isLocalUrl } from './comfylauncher.js'
 
+const SHOT_BOILERPLATE = [/^there is no (?:writing|text|lettering)/i, /^no (?:signs|text|labels|captions|writing|lettering)\b/i, /^(?:one|a single) (?:continuous|unbroken)\b/i, /^(?:filmed|shot) (?:on|with)\b/i, /^the camera\b/i, /^(?:handheld|static|locked[- ]off)\b/i]
 // A new shot's name from its prompt: the first words of [Shot 1] (not "subject_definitions" or the frames line),
 // without the style opener, with {char} as the character's first name.
 export function shotName(prompt, character) {
@@ -26,6 +27,11 @@ export function shotName(prompt, character) {
   const first = text.match(/(?:^|\n|description:)\s*\[Shot 1\]\s*([^\n]+)/)?.[1] ?? text.replace(/^[a-z_]+:\s*/gim, '')
   let s = first.replace(/\{char\}/g, character?.name?.split(/\s+/)[0] || 'Someone').replace(/<[^>]+>|\s*\(S\d+\)/g, '').replace(/\s+/g, ' ').trim()
   for (let i = 0; i < 4; i++) s = s.replace(/^(?:3d\s+)?(?:live-action|cinematic|realistic|photorealistic|animated|documentary|film(?:ic)?|natural)[^,.;]*[,.;]\s*/i, '')
+  // then the first sentence that says what happens, past the house rules ("There is no writing…", "One continuous
+  // take", "Filmed on a smartphone", a sentence only about the camera)
+  const sentences = s.split(/(?<=[.!?])\s+/).filter(Boolean)
+  const said = sentences.find((x) => !SHOT_BOILERPLATE.some((rx) => rx.test(x)))
+  if (said) s = said
   s = s.charAt(0).toUpperCase() + s.slice(1)
   return s.length > 40 ? `${s.slice(0, 40).replace(/\s+\S*$/, '')}…` : s || 'Untitled shot'
 }
@@ -494,6 +500,9 @@ export class Studio {
       }
       const enhanced = (e) => (e?.engine === 'dlss' ? `DLSS 5 ${e.scale}×` : `SeedVR2 ${e?.resolution || ''}p`)
       for (const j of jobs) {
+        // what was asked for (a finish or an enhance asks through its run), for the Library's filters
+        const up = (x) => jobs.find((y) => y.id === x?.parent)
+        const req = j.plan?.request || up(j)?.plan?.request || up(up(j))?.plan?.request || {}
         for (const o of j.outputs || []) {
           if (!['final', 'preview'].includes(o.kind)) continue
           // a finish whose cached latent was dropped renders its preview again: the run already shows that take
@@ -504,7 +513,7 @@ export class Studio {
           const run = runRaw || 0
           const name = o.kind !== 'final' ? `Preview ${o.candidate}` : j.kind === 'enhance' ? `${fin?.name || 'Final'} · ${enhanced(j.plan?.enhance)}` : fin?.name || 'Final'
           const variant = `${run ? `Run ${run} · ` : ''}${name}`
-          items.push({ key: `${j.id}:${o.kind}:${o.candidate || ''}`, label: `${p.name} · ${variant.toLowerCase()}`, group: p.tool === 'replace' ? 'Replace' : p.sequenceId ? 'Sequence shots' : 'Shots', at: j.finishedAt || j.createdAt, file: { path: o.path, url: o.url, filename: o.filename }, set: p.sequenceId ? `sequence:${p.sequenceId}` : `project:${p.id}`, setName: p.name.replace(/ \(sequence\)$/, ''), variant: p.sequenceId ? `Shot ${variant.toLowerCase()}` : variant, rank: (o.kind === 'final' ? 0 : 10 + (o.candidate || 0)) + (run ? (runs.size - run) * 100 : 0), projectId: p.sequenceId ? null : p.id, sequenceId: p.sequenceId || null })
+          items.push({ key: `${j.id}:${o.kind}:${o.candidate || ''}`, label: `${p.name} · ${variant.toLowerCase()}`, group: p.tool === 'replace' ? 'Replace' : p.sequenceId ? 'Sequence shots' : 'Shots', at: j.finishedAt || j.createdAt, file: { path: o.path, url: o.url, filename: o.filename }, set: p.sequenceId ? `sequence:${p.sequenceId}` : `project:${p.id}`, setName: p.name.replace(/ \(sequence\)$/, ''), variant: p.sequenceId ? `Shot ${variant.toLowerCase()}` : variant, rank: (o.kind === 'final' ? 0 : 10 + (o.candidate || 0)) + (run ? (runs.size - run) * 100 : 0), projectId: p.sequenceId ? null : p.id, sequenceId: p.sequenceId || null, mode: req.mode || null, character: req.character || null, aspect: req.aspect || null })
         }
       }
     }

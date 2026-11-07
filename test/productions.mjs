@@ -124,6 +124,8 @@ ok('a new shot is named from its first shot, not its field names', () => {
   const ref = ['subject_definitions:', '<Subject 1> is {char} (S1).', '', 'retention_analysis:', '<Subject 1> (appears in [Shot 1]): fully_preserved - x', '', 'detailed_description:', '[Shot 1] Live-action, cinematic. Full shot of {char} (S1) on a rooftop at dusk with water towers.'].join('\n')
   assert.equal(shotName(ref, { name: 'Tess Marlow' }), 'Full shot of Tess on a rooftop at dusk…')
   assert.equal(shotName('integrated_multimodal_description: [Shot 1] A dog runs.', null), 'A dog runs.')
+  // the house rules ("There is no writing…", "One continuous take") are skipped
+  assert.equal(shotName('integrated_multimodal_description: [Shot 1] One continuous take. There is no writing anywhere in the picture. {char} sits behind the wheel in a grey hoodie.', { name: 'Theo Lindqvist' }), 'Theo sits behind the wheel in a grey…')
 })
 ok('a sketch drawn before the shot changed is set aside until it is redrawn', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ivs-prod-'))

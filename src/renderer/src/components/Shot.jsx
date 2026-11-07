@@ -8,6 +8,7 @@ import { lintPrompt } from '../../../service/lint'
 
 const DONE = ['success', 'error', 'cancelled']
 const FINAL_MP = [1, 1.5, 2]
+const MODE_NAME = { text: 'Text', reference: 'References', frames: 'First / last frame', continue: 'Continue' }
 
 export function Progress({ job }) {
   if (!job || DONE.includes(job.status)) return null
@@ -93,6 +94,14 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote }) {
   const FPS = caps?.fps || [0, 30, 50, 60, 120]
   const dlss = caps?.dlss !== false
   const [opts, setOpts] = useState({ megapixels: 2, upscale2x: false, fps: 0, audio: 'pass', enhancer: 'dlss', enhanceResolution: 1080 })
+  // the defaults Check my PC chose for this computer
+  useEffect(() => {
+    window.ivstudio.settings.get().then((s) => {
+      const p = s.shotPrefs
+      if (!p) return
+      setOpts((o) => ({ ...o, megapixels: p.finalMp || o.megapixels, enhancer: p.enhancer === 'dlss' && !dlss ? 'seedvr2' : p.enhancer || o.enhancer, enhanceResolution: p.enhanceResolution || o.enhanceResolution }))
+    }, () => {})
+  }, [])
   const seedvr2 = opts.enhancer === 'seedvr2'
   const [size, setSize] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -120,7 +129,12 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote }) {
 
   return (
     <div className="finish-panel">
-      <p className="mono label">Finish candidate {candidate}</p>
+      <div className="finish-head">
+        <span className="finish-kicker mono">Finish</span>
+        <h3>Take {candidate}</h3>
+        <span className="dim small">Rendered again at full size from this take, then cleaned up and sharpened.</span>
+      </div>
+      <div className="finish-grid">
       {!single && (
         <div className="row">
           <span className="row-label">Final size</span>
@@ -203,6 +217,7 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote }) {
           </div>
         </div>
       )}
+      </div>
       <div className="finish-go">
         <span className="mono">{size ? `${size.width} × ${size.height} · ${size.fps} fps${single ? ' · single pass' : ''}` : '…'}</span>
         <button className="btn btn-primary" disabled={busy} onClick={go}>
@@ -303,14 +318,14 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
   if (!project) return null
 
   return (
-    <div className="shot">
-      <Hero art="shots" back={{ label: 'All shots', onClick: () => go('library') }} kicker={`Shot · ${runs.length} run${runs.length === 1 ? '' : 's'}`}>
+    <div className="shot shot-v2">
+      <Hero art="shots" help="shot" back={{ label: 'All shots', onClick: () => go('library') }} kicker={`Shot · ${runs.length} run${runs.length === 1 ? '' : 's'}`}>
         <input className="shot-name" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name !== project.name && window.ivstudio.projects.rename(projectId, name)} />
       </Hero>
       <div className="shot-actions">
         {runs[0] && editRun ? (
-          <button className="btn btn-small" onClick={() => editRun(runs[0], project)}>
-            Edit the latest and run again
+          <button className="btn btn-primary" onClick={() => editRun(runs[0], project)}>
+            ↻ Edit the latest and run again
           </button>
         ) : (
           <button className="btn btn-small" onClick={() => go('create')}>
@@ -342,19 +357,25 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
         const notes = findings.filter((f) => f.level !== 'info').length
         const takeOf = (key, url, label) => ({ key: `${run.id}:${key}`, url: media(url), label: `Run ${runs.length - i} · ${label}`, prompt: written })
         return (
-          <section key={run.id} className="run">
+          <section key={run.id} className="run run-card">
             <div className="run-head">
-              <h2>Run {runs.length - i}</h2>
-              <span className="mono dim">
-                {req.mode} · {run.plan.resolved?.width}×{run.plan.resolved?.height} · {run.plan.resolved?.seconds} s · seed {req.seed}
-                {run.seconds ? ` · ${run.seconds} s render` : ''}
+              <span className="run-badge">
+                <span className="mono">Run</span>
+                <span className="run-n">{String(runs.length - i).padStart(2, '0')}</span>
               </span>
-              {changes.length > 0 && <span className="run-changes mono small">changed: {changes.join(' · ')}</span>}
+              <span className="run-chips mono">
+                {[MODE_NAME[req.mode] || req.mode, `${run.plan.resolved?.width}×${run.plan.resolved?.height}`, `${run.plan.resolved?.seconds} s`, `seed ${req.seed}`, ch?.name, run.seconds && `${run.seconds} s render`]
+                  .filter(Boolean)
+                  .map((c) => (
+                    <span key={c}>{c}</span>
+                  ))}
+              </span>
               {editRun && (
-                <button className="link-btn mono small run-edit" onClick={() => editRun(run, project)}>
+                <button className="btn btn-small run-edit" onClick={() => editRun(run, project)}>
                   Edit and run again
                 </button>
               )}
+              {changes.length > 0 && <span className="run-changes mono small">Changed: {changes.join(' · ')}</span>}
             </div>
             <Progress job={run} />
             {run.status === 'error' && <p className="notice">{run.error}</p>}
@@ -401,7 +422,10 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                     )}
                     <video src={media(o.url)} data-take={`${run.id}:${o.candidate}`} controls loop preload="metadata" />
                     <figcaption>
-                      <span className="mono">#{o.candidate} · seed {o.seed}</span>
+                      <span className="take-id">
+                        <span className="take-n">Take {o.candidate}</span>
+                        <span className="mono small dim">seed {o.seed}</span>
+                      </span>
                       {!remote && (
                         <button className="link-btn mono small" disabled={!!reviewing[`${run.id}:${o.candidate}`]} onClick={() => review(run, o.candidate)}>
                           {reviewing[`${run.id}:${o.candidate}`] ? 'Reviewing…' : 'Review'}
@@ -410,8 +434,8 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                       <button className={`link-btn mono small ${isMarked(`${run.id}:${o.candidate}`) ? 'pink' : ''}`} onClick={() => mark(takeOf(o.candidate, o.url, `#${o.candidate} · seed ${o.seed}`))}>
                         {isMarked(`${run.id}:${o.candidate}`) ? 'Marked' : 'Compare'}
                       </button>
-                      <button className="btn btn-small" onClick={() => pick(run, o.candidate)}>
-                        {picked[run.id] === o.candidate ? 'Picked' : 'Pick'}
+                      <button className={`btn btn-small take-pick ${picked[run.id] === o.candidate ? 'btn-primary' : ''}`} onClick={() => pick(run, o.candidate)}>
+                        {picked[run.id] === o.candidate ? '✓ Picked' : 'Pick'}
                       </button>
                     </figcaption>
                   </figure>
@@ -428,12 +452,17 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
             {finishesOf(run.id).map((f) => {
               const final = f.outputs.find((o) => o.kind === 'final')
               return (
-                <div key={f.id} className="final">
+                <div key={f.id} className="final final-card">
                   <div className="final-head">
-                    <span className="mono pink">Final · candidate {f.plan.finish?.candidate}</span>
-                    <span className="mono dim">
-                      {f.plan.resolved?.finishWidth ? `${f.plan.resolved.finishWidth}×${f.plan.resolved.finishHeight}, SeedVR2 to ` : ''}{f.plan.resolved?.width}×{f.plan.resolved?.height} · {f.plan.resolved?.fps} fps{f.seconds ? ` · ${f.seconds} s render` : ''}
+                    <span className="final-badge mono">★ Final · take {f.plan.finish?.candidate}</span>
+                    <span className="run-chips mono">
+                      {[f.plan.resolved?.finishWidth && `${f.plan.resolved.finishWidth}×${f.plan.resolved.finishHeight}, SeedVR2 to`, `${f.plan.resolved?.width}×${f.plan.resolved?.height}`, `${f.plan.resolved?.fps} fps`, f.seconds && `${f.seconds} s render`]
+                        .filter(Boolean)
+                        .map((c) => (
+                          <span key={c}>{c}</span>
+                        ))}
                     </span>
+                    <span className="final-actions">
                     {final?.path && (
                       <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(final).catch((err) => notify(err.message))}>
                         {remote ? 'Download' : 'Show in folder'}
@@ -449,6 +478,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                         {reviewing[`${f.id}:0`] ? 'Reviewing…' : 'Review'}
                       </button>
                     )}
+                    </span>
                   </div>
                   <Progress job={f} />
                   {f.status === 'error' && <p className="notice">{f.error}</p>}
@@ -456,7 +486,8 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                   {f.reviews?.final && <ReviewCard review={f.reviews.final} title="Review of the final" videoKey={`${f.id}:final`} before={written} onRun={(p) => editRun?.(run, project, p)} />}
                   {final?.path && !remote && (
                     <div className="enhance-row">
-                      <span className="mono dim small">Enhance:</span>
+                      <span className="enhance-label mono">Enhance</span>
+                      <span className="dim small enhance-sub">a sharper copy beside this one</span>
                       {caps?.dlss !== false &&
                         [1, 2].map((scale) => (
                           <button key={`d${scale}`} className="btn btn-small" disabled={!!enhancing[f.id]} onClick={() => enhance(f, { engine: 'dlss', scale })}>
@@ -477,7 +508,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                       return (
                         <div key={e.id} className="final enhanced">
                           <div className="final-head">
-                            <span className="mono pink">Enhanced · {e.plan?.enhance?.engine === 'dlss' ? `DLSS 5 ${e.plan.enhance.scale}×` : `SeedVR2 ${e.plan?.enhance?.resolution}p`}</span>
+                            <span className="final-badge mono enhanced-badge">Enhanced · {e.plan?.enhance?.engine === 'dlss' ? `DLSS 5 ${e.plan.enhance.scale}×` : `SeedVR2 ${e.plan?.enhance?.resolution}p`}</span>
                             <span className="mono dim">{e.seconds ? `${e.seconds} s render` : ''}</span>
                             {out?.path && (
                               <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(out).catch((err) => notify(err.message))}>

@@ -3,6 +3,7 @@ import { media } from '../media'
 import Hero from './Hero'
 import { fileUrl } from './edit/model'
 import Loading from './Loading'
+import { dayGroup, groupBy, WHEN, inWhen, Chips, Near, useMore, Groups, FilterPanel } from './ShelfKit'
 
 // Everything made in IV Studio in one place: shot, sequence and Replace renders, Edit exports, pictures
 // (Create -> Image), songs and voice lines. The takes of one shot (its previews and finals), of one sequence or of one edit are a single
@@ -189,7 +190,9 @@ export function Tile({ set, onOpen }) {
     <button className={`lib-item lib-tile ${c.type !== 'video' && c.type !== 'image' ? 'lib-sound' : ''}`} onClick={onOpen} onMouseEnter={() => ref.current?.play?.().catch(() => {})} onMouseLeave={() => ref.current?.pause?.()}>
       {c.type === 'video' ? (
         <div className="tile-media">
-          <video ref={ref} src={`${src(c.file)}#t=0.3`} muted loop playsInline preload="metadata" />
+          <Near className="shelf-near">
+            <video ref={ref} src={`${src(c.file)}#t=0.3`} muted loop playsInline preload="metadata" />
+          </Near>
           <span className="lib-play" aria-hidden="true">
             ▶
           </span>
@@ -212,7 +215,21 @@ export function Tile({ set, onOpen }) {
   )
 }
 
+const MODES = [
+  ['text', 'Text'],
+  ['reference', 'References'],
+  ['frames', 'Frames'],
+  ['continue', 'Continue']
+]
+const SORTS = [
+  ['new', 'Newest'],
+  ['old', 'Oldest'],
+  ['name', 'Name'],
+  ['versions', 'Most versions']
+]
+
 export default function MediaLibrary(ctx) {
+  const characters = ctx.characters || []
   const [items, setItems] = useState(null)
   const [edits, setEdits] = useState([])
   const [open, setOpen] = useState(null) // [set index, version index]
@@ -224,6 +241,12 @@ export default function MediaLibrary(ctx) {
     }
   })
   const [q, setQ] = useState('')
+  const [period, setPeriod] = useState('any')
+  const [from, setFrom] = useState('all')
+  const [mode, setMode] = useState('all')
+  const [who, setWho] = useState('all')
+  const [shape, setShape] = useState('all')
+  const [sort, setSort] = useState('new')
   useEffect(() => {
     window.ivstudio.library.all().then(setItems, (err) => (ctx.notify(err.message), setItems([])))
     window.ivstudio.edits.list().then(setEdits, () => {})
@@ -235,11 +258,41 @@ export default function MediaLibrary(ctx) {
     } catch {}
   }
   const allSets = useMemo(() => toSets(items || []), [items])
-  const count = (f) => allSets.filter((s) => f === 'all' || s.type === f).length
+  const now = Date.now()
+  // who's in a shot: one of your characters, nobody, or a character that's since gone
+  const whoOf = (set) => {
+    const c = set.cover.character
+    return !c ? null : c === 'none' || characters.some((x) => x.id === c) ? c : 'other'
+  }
+  const nameOf = (id) => (id === 'none' ? 'Nobody' : id === 'other' ? 'Someone else' : characters.find((c) => c.id === id)?.name?.split(' ')[0] || id)
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean)
+  // each filter's own test, so a row's counts show what the other filters leave
+  const tests = {
+    type: (x) => filter === 'all' || x.type === filter,
+    period: (x) => inWhen(period, x.at, now),
+    from: (x) => from === 'all' || x.group === from,
+    mode: (x) => mode === 'all' || x.cover.mode === mode,
+    who: (x) => who === 'all' || whoOf(x) === who,
+    shape: (x) => shape === 'all' || x.cover.aspect === shape,
+    q: (x) => words.every((w) => `${x.name} ${x.group} ${x.items.map((i) => `${i.label} ${i.detail || ''}`).join(' ')}`.toLowerCase().includes(w))
+  }
+  const passing = (except) => allSets.filter((x) => Object.entries(tests).every(([k, t]) => k === except || t(x)))
+  const count = (except, fn) => passing(except).filter(fn).length
+  const key = `${q}|${filter}|${period}|${from}|${mode}|${who}|${shape}|${sort}`
   const sets = useMemo(() => {
-    const words = q.toLowerCase().split(/\s+/).filter(Boolean)
-    return allSets.filter((s) => (filter === 'all' || s.type === filter) && words.every((w) => `${s.name} ${s.group} ${s.items.map((i) => `${i.label} ${i.detail || ''}`).join(' ')}`.toLowerCase().includes(w)))
-  }, [allSets, filter, q])
+    let list = passing()
+    if (sort === 'old') list = [...list].reverse()
+    if (sort === 'name') list = [...list].sort((x, y) => x.name.localeCompare(y.name))
+    if (sort === 'versions') list = [...list].sort((x, y) => y.items.length - x.items.length)
+    return list.map((x, i) => ({ ...x, idx: i }))
+  }, [allSets, key])
+  const groups = sort === 'new' || sort === 'old' ? groupBy(sets, (x) => dayGroup(x.at, now)) : [[sort === 'name' ? 'A to Z' : 'Most versions first', sets]]
+  const [limit, more] = useMore(sets.length, 36, key)
+  const sources = [...new Set(allSets.map((x) => x.group))]
+  const people = [...new Set(allSets.map(whoOf).filter(Boolean))]
+  const shapes = [...new Set(allSets.map((x) => x.cover.aspect).filter(Boolean))]
+  const clear = () => (setPeriod('any'), setFrom('all'), setMode('all'), setWho('all'), setShape('all'))
+  const active = [period !== 'any' && WHEN.find(([w]) => w === period)[1], from !== 'all' && from, mode !== 'all' && MODES.find(([m]) => m === mode)?.[1], who !== 'all' && nameOf(who), shape !== 'all' && shape].filter(Boolean)
 
   return (
     <div className="media-library">
@@ -248,23 +301,54 @@ export default function MediaLibrary(ctx) {
         Every video, song and line in one place.
         <span className="lede-small dim">A shot's previews and finals, a sequence's takes and an edit's exports are one tile. Click it to watch every version and step through them.</span>
       </p>
-      <div className="lib-bar">
-        <div className="segmented">
-          {FILTERS.map(([id, label]) => (
-            <button key={id} className={filter === id ? 'on' : ''} onClick={() => pick(id)}>
-              {label} <span className="dim">{items ? count(id) : ''}</span>
-            </button>
-          ))}
+      <div className="shelf-tools">
+        <div className="shelf-bar">
+          <div className="segmented" role="tablist" aria-label="What">
+            {FILTERS.map(([id, label]) => (
+              <button key={id} role="tab" aria-selected={filter === id} className={filter === id ? 'on' : ''} onClick={() => pick(id)}>
+                {label} <span className="dim">{items ? count('type', (x) => id === 'all' || x.type === id) : ''}</span>
+              </button>
+            ))}
+          </div>
+          <input className="list-search" type="search" value={q} placeholder="Search everything" onChange={(e) => setQ(e.target.value)} aria-label="Search the Library" />
+          <label className="shelf-sort mono">
+            Sort
+            <select value={sort} onChange={(e) => setSort(e.target.value)}>
+              {SORTS.map(([id, label]) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-        <input className="lib-search" value={q} placeholder="Search" onChange={(e) => setQ(e.target.value)} />
+        {allSets.length > 0 && (
+          <FilterPanel id="library" total={allSets.length} shown={sets.length} onClear={clear} active={active}>
+            <Chips label="When" value={period} onChange={setPeriod} options={WHEN.map(([id, label]) => [id, label, id === 'any' ? undefined : count('period', (x) => inWhen(id, x.at, now))])} />
+            {sources.length > 1 && <Chips label="From" value={from} onChange={setFrom} options={[['all', 'Anywhere'], ...sources.map((g) => [g, g, count('from', (x) => x.group === g)])]} />}
+            {allSets.some((x) => x.cover.mode) && <Chips label="Kind" value={mode} onChange={setMode} options={[['all', 'Any'], ...MODES.map(([id, label]) => [id, label, count('mode', (x) => x.cover.mode === id)])]} />}
+            {people.length > 1 && <Chips label="Who" value={who} onChange={setWho} options={[['all', 'Anyone'], ...people.map((id) => [id, nameOf(id), count('who', (x) => whoOf(x) === id)])]} />}
+            {shapes.length > 1 && <Chips label="Shape" value={shape} onChange={setShape} options={[['all', 'Any'], ...shapes.map((x) => [x, x, count('shape', (y) => y.cover.aspect === x)])]} />}
+          </FilterPanel>
+        )}
       </div>
       {items === null && <Loading label="Loading your library" />}
-      {items && sets.length === 0 && <p className="dim">{items.length ? 'Nothing matches.' : 'Nothing made yet. Make a shot on Create, or a song on Audio > Music.'}</p>}
-      <div className="lib-grid">
-        {sets.map((s, i) => (
-          <Tile key={s.key} set={s} onOpen={() => setOpen([i, 0])} />
-        ))}
-      </div>
+      {items && sets.length === 0 && (
+        <p className="dim">
+          {items.length ? (
+            <>
+              Nothing matches.{' '}
+              <button className="link-btn" onClick={() => (clear(), setQ(''), pick('all'))}>
+                Show everything
+              </button>
+            </>
+          ) : (
+            'Nothing made yet. Make a shot on Create, or a song on Audio > Music.'
+          )}
+        </p>
+      )}
+      <Groups groups={groups} limit={limit} gridClass="lib-grid" render={(x) => <Tile key={x.key} set={x} onOpen={() => setOpen([x.idx, 0])} />} />
+      {more}
       {open && sets[open[0]] && <Viewer sets={sets} at={open} setAt={setOpen} onClose={() => setOpen(null)} edits={edits} {...ctx} />}
     </div>
   )

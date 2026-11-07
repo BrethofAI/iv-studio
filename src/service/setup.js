@@ -105,8 +105,15 @@ export async function checkSetup({ comfy, template, manifest, characters, chosen
   }
 
   const loras = comboOptions(info, 'LoraLoaderModelOnly', 'lora_name') || []
+  const refmodNames = comboOptions(info, 'MiniMaxH3RefModsLoader', 'mod_1') || []
   for (const c of characters) {
-    const ok = loras.some((l) => l.replace(/\\/g, '/') === c.lora.replace(/\\/g, '/'))
+    // a RefMod character (refmods.js) needs its RefMod; any other its LoRA
+    if (!c.lora && c.refmod) {
+      const has = refmodNames.includes(c.refmod)
+      items.push({ id: `character:${c.id}`, label: `Character: ${c.name}`, status: has ? 'ok' : 'warn', detail: has ? `RefMod ${c.refmod}` : `RefMod not found: ${c.refmod}`, kind: 'character' })
+      continue
+    }
+    const ok = loras.some((l) => l.replace(/\\/g, '/') === String(c.lora || '').replace(/\\/g, '/'))
     items.push({ id: `character:${c.id}`, label: `Character: ${c.name}`, status: ok ? 'ok' : 'warn', detail: ok ? c.lora : `LoRA not found: ${c.lora}`, kind: 'character' })
   }
 

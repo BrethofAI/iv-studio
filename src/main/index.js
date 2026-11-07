@@ -8,6 +8,8 @@ import { EXTRA_BIN, harnessStatus } from '../service/harness'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
 import { RunPod, GPUS as RUNPOD_GPUS } from '../service/runpod'
+import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
+import { comboOptions } from '../service/setup'
 import { comfyUp, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launcherFor, launchersIn, waitUp } from '../service/comfylauncher'
 import { randomBytes } from 'node:crypto'
 import { Edits, FORMATS, LOUDNESS } from '../service/edits'
@@ -27,7 +29,7 @@ import { Studio } from '../service/studio'
 import { Ranker } from '../service/ranking'
 import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
-import { SCENES, TALKS, TRAIN_GPUS, Trainings } from '../service/training'
+import { findFizgig, LOCAL_TRAIN, RUNPOD_TRAIN_GPUS, SCENES, TALKS, TRAIN_DEFAULTS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
 import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS, MAX_CHARACTERS, DEFAULT_TONE, OPENJUTSU } from '../service/replace'
@@ -35,6 +37,7 @@ import { CREDIT as REMAKE_CREDIT, Remake } from '../service/remake'
 import { Voices } from '../service/voices'
 import { ACE_KEYS, Music, MUSIC_DEFAULTS, MUSIC_ENGINES } from '../service/music'
 import { Images } from '../service/images'
+import { RefMods } from '../service/refmods'
 import { Civitai, CIVITAI_SITES, LORA_SORTS, LORA_TAGS } from '../service/civitai'
 import { Comfy } from '../service/comfy'
 import { checkKey as checkComfyCloudKey, COMFY_CLOUD, summarise as summariseComfyCloud } from '../service/comfycloud'
@@ -544,7 +547,26 @@ app.whenReady().then(() => {
     onChange: (id) => send('training:changed', { id }),
     voices
   })
-  handle('training:meta', () => ({ gpus: TRAIN_GPUS, scenes: SCENES, talks: TALKS }))
+  handle('training:meta', () => ({ gpus: TRAIN_GPUS, gpusBy: { modal: TRAIN_GPUS, runpod: RUNPOD_TRAIN_GPUS, local: [LOCAL_TRAIN] }, scenes: SCENES, talks: TALKS, trainDefaults: TRAIN_DEFAULTS }))
+  // training on this PC: Fizgig's folder and the five H3 files
+  handle('training:localCheck', async () => {
+    const fiz = findFizgig(readSettings(BASE).fizgigFolder || '')
+    let missing = null
+    try {
+      missing = (await trainings.localFiles()).missing
+    } catch (err) {
+      return { fizgig: fiz?.dir || null, missing: null, error: err.message }
+    }
+    return { fizgig: fiz?.dir || null, missing }
+  })
+  handle('training:chooseFizgig', async () => {
+    const r = await dialog.showOpenDialog(win, { title: 'Fizgig’s folder', properties: ['openDirectory'] })
+    if (r.canceled || !r.filePaths[0]) return null
+    const fiz = findFizgig(r.filePaths[0])
+    if (!fiz) throw new Error('That folder has no Fizgig in it (with its venv). Pick the folder you cloned Fizgig into.')
+    writeSettings({ fizgigFolder: fiz.dir }, BASE)
+    return fiz.dir
+  })
 
   // ---------- Website sizzle: a web address in, a promo film out (captured site, storyboard, pieces, Shinobi) ----------
   const sizzles = new Sizzles({ dataDir: DATA, studio, music, voices, trainings, shinobi, onLog: (line) => send('sizzle:log', line) })
@@ -592,6 +614,7 @@ app.whenReady().then(() => {
   handle('training:fetch', (id, epochs) => trainings.fetchCheckpoints(id, epochs))
   handle('training:test', (id, opts) => trainings.testCheckpoints(id, opts))
   handle('training:adopt', (id, epoch) => trainings.adopt(id, epoch))
+  handle('training:score', (id) => trainings.scoreCheckpoints(id))
 
   handle('media:probe', (file) => mediaTools.probe(file))
   handle('media:prepare', (opts) => mediaTools.prepare(opts))
@@ -803,9 +826,9 @@ app.whenReady().then(() => {
       const find = (kind, rel) => roots(kind).map((d) => path.join(d, rel)).find((p) => fs.existsSync(p))
       const done = []
       for (const c of studio.characters()) {
-        const lora = find('loras', c.lora)
+        const lora = c.lora && find('loras', c.lora)
         if (lora) await cloud.uploadModel(lora, `loras/${c.lora.replace(/\\/g, '/')}`), done.push(c.lora)
-        for (const r of [c.voiceRefmod, c.visualRefmod].filter(Boolean)) {
+        for (const r of [c.refmod, c.voiceRefmod, c.visualRefmod].filter(Boolean)) {
           const file = find('refmods', `${r}.safetensors`)
           if (file) await cloud.uploadModel(file, `refmods/${r}.safetensors`), done.push(r)
         }
@@ -816,6 +839,8 @@ app.whenReady().then(() => {
   )
   // ---------- cloud on RunPod (the user's own account; runpod.js) ----------
   const runpod = new RunPod({ resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), key: () => unseal(readSettings(BASE).runpodKey), onLog: (line) => send('cloud:log', line) })
+  // character training on RunPod uses the same account
+  if (trainings) trainings.runpod = runpod
   const saveRunpod = (patch) => writeSettings({ runpod: { ...(readSettings(BASE).runpod || {}), ...patch } }, BASE)
   const runpodToken = () => unseal(readSettings(BASE).runpodToken)
   handle('cloud:runpodKey', async (key) => {
@@ -859,9 +884,9 @@ app.whenReady().then(() => {
     const find = (kind, rel) => roots(kind).map((d) => path.join(d, rel)).find((p) => fs.existsSync(p))
     const files = []
     for (const c of studio.characters()) {
-      const lora = find('loras', c.lora)
+      const lora = c.lora && find('loras', c.lora)
       if (lora) files.push({ file: lora, remote: `loras/${c.lora.replace(/\\/g, '/')}`, name: c.lora })
-      for (const r of [c.voiceRefmod, c.visualRefmod].filter(Boolean)) {
+      for (const r of [c.refmod, c.voiceRefmod, c.visualRefmod].filter(Boolean)) {
         const file = find('refmods', `${r}.safetensors`)
         if (file) files.push({ file, remote: `refmods/${r}.safetensors`, name: r })
       }
@@ -970,6 +995,56 @@ app.whenReady().then(() => {
     return s
   })
   handle('setup:check', () => studio.checkSetup())
+  // Create → Advanced: the samplers and schedulers this ComfyUI offers
+  handle('h3:samplers', async () => {
+    const [k, b] = await Promise.all([studio.comfy.objectInfo('KSamplerSelect'), studio.comfy.objectInfo('BasicScheduler')])
+    return { samplers: comboOptions(k, 'KSamplerSelect', 'sampler_name') || [], schedulers: comboOptions(b, 'BasicScheduler', 'scheduler') || [] }
+  })
+  // Check my PC (the welcome wizard): this computer's parts, what's installed, and what to set up for it
+  handle('hardware:scan', async () => {
+    const s = readSettings(BASE)
+    const local = s.target !== 'cloud' && isLocalUrl(s.comfyUrl)
+    const [gpuInfo, ollama, running] = await Promise.all([app.getGPUInfo('complete').catch(() => null), ollamaStatus().catch(() => null), local ? comfyUp(s.comfyUrl).catch(() => false) : false])
+    const setup = running ? await studio.checkSetup().catch(() => null) : null
+    let modelsFolder = null
+    if (running) {
+      try {
+        const paths = await studio.comfy.req('/internal/folder_paths', { timeout: 5000 })
+        modelsFolder = (paths.diffusion_models || paths.checkpoints || []).map((p) => (Array.isArray(p) ? p[0] : p)).find((p) => p && fs.existsSync(p)) || null
+      } catch {}
+    }
+    const launchers = findLaunchers()
+    const comfyFolder = modelsFolder || s.comfyFolder || (launchers[0] ? path.dirname(launchers[0].path) : '')
+    const harness = harnessStatus()
+    const ids = new Set(MODEL_GROUPS.flatMap((g) => g.ids))
+    const installs = {
+      comfyRunning: !!running,
+      comfyFound: !!(running || s.comfyFolder || launchers.length),
+      ollama: !!(ollama?.running || ollama?.installed),
+      claude: !!harness.claude.installed,
+      codex: !!harness.codex.installed,
+      voices: !!voices?.engine?.installed?.(),
+      cloud: !!(s.cloud || s.runpod),
+      modelsKnown: !!setup,
+      modelsPresent: (setup?.items || []).filter((i) => i.kind === 'model' && i.status === 'ok').map((i) => i.model),
+      modelSizes: Object.fromEntries((studio.manifest?.models || []).filter((m) => ids.has(m.id)).map((m) => [m.id, m.size || 0]))
+    }
+    const scan = await scanHardware({ electronGpu: gpuInfo, installs, comfyFolder })
+    // testing: IV_STUDIO_FAKE_HARDWARE=<json file> swaps in made-up parts ({ gpus, ram, os, installs }) to see other tiers
+    if (process.env.IV_STUDIO_FAKE_HARDWARE) {
+      const fake = JSON.parse(fs.readFileSync(process.env.IV_STUDIO_FAKE_HARDWARE, 'utf8'))
+      Object.assign(scan, fake, { installs: { ...scan.installs, ...(fake.installs || {}) } })
+    }
+    return { scan, rec: recommend(scan), promptEngine: s.promptEngine, onboarded: s.onboarded }
+  })
+  // what the wizard chose: the shot defaults and the writer, and that it's been done (so it doesn't open again)
+  handle('hardware:apply', ({ shotPrefs, promptEngine, hardware } = {}) => {
+    const patch = { onboarded: new Date().toISOString() }
+    if (shotPrefs) patch.shotPrefs = shotPrefs
+    if (hardware) patch.hardware = hardware
+    if (promptEngine && ['local', 'claude', 'codex'].includes(promptEngine)) patch.promptEngine = promptEngine
+    return publicSettings(writeSettings(patch, BASE))
+  })
   handle('setup:installNodes', () => studio.installNodePacks({ folder: readSettings(BASE).comfyFolder || null, onProgress: (u) => send('setup:nodes', u) }))
 
   // ---------- starting ComfyUI (comfylauncher.js) ----------
@@ -1055,13 +1130,23 @@ app.whenReady().then(() => {
   handle('characters:catalog', () => catalog.list())
   handle('characters:install', (id) => catalog.install(id, (cid, p) => send('characters:progress', { id: cid, progress: p })))
   handle('characters:loras', () => studio.loraNames())
+  // RefMod characters: list the refmods folder, check this ComfyUI can make one, and make one (refmods.js)
+  const refmodMaker = new RefMods({ studio, dataDir: DATA })
+  handle('refmods:list', () => refmodMaker.list())
+  handle('refmods:ready', () => refmodMaker.ready())
+  handle('refmods:make', async (opts) => {
+    await voices.release()
+    return refmodMaker.make({ ...opts, onStatus: (s) => send('refmods:status', s) })
+  })
   handle('characters:save', (list) => studio.saveCharacters(list))
   handle('projects:list', () =>
     studio.listProjects().filter((p) => !p.sequenceId && !p.trainingId && !p.tool).map((p) => {
       const jobs = studio.listJobs(p.id)
       const finals = jobs.flatMap((j) => j.outputs.filter((o) => o.kind === 'final'))
       const previews = jobs.flatMap((j) => j.outputs.filter((o) => o.kind === 'preview'))
-      return { ...p, jobCount: jobs.length, cover: (finals.at(-1) || previews.at(-1))?.url || null, finals: finals.length, running: jobs.some((j) => !['success', 'error', 'cancelled'].includes(j.status)) }
+      // the latest run's request, for Shots' filters (kind of shot, who's in it, its shape)
+      const req = [...jobs].reverse().find((j) => j.plan?.request)?.plan.request || {}
+      return { ...p, jobCount: jobs.length, cover: (finals.at(-1) || previews.at(-1))?.url || null, finals: finals.length, running: jobs.some((j) => !['success', 'error', 'cancelled'].includes(j.status)), mode: req.mode || null, character: req.character || 'none', aspect: req.aspect || null }
     })
   )
   handle('sequences:list', () => studio.listSequences())
@@ -1183,7 +1268,7 @@ app.whenReady().then(() => {
     shell.showItemInFolder(p)
     return p
   })
-  // Learn's guide: the bundled PDF (resources/guide), copied to the data folder first so it opens from a normal
+  // The guide: the bundled PDF (resources/guide), copied to the data folder first so it opens from a normal
   // path (an AppImage's resources live in a temporary mount), then opened in the PC's PDF viewer.
   handle('learn:openGuide', async () => {
     const src = path.join(resourcesDir(path.join(app.getAppPath(), 'resources')), 'guide', 'IV Studio Guide.pdf')

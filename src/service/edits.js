@@ -52,6 +52,14 @@ export function filterScriptFlag(ffmpeg) {
 
 export const editLength = (e) => e.clips.reduce((m, c) => Math.max(m, clipEnd(c)), 0)
 
+// An edit's picture for the list: the first video or picture on a video track (earliest first), if its file is there.
+function coverOf(e) {
+  const clip = [...(e.clips || [])].filter((c) => String(c.track || '').startsWith('V') && e.media?.[c.media]).sort((a, b) => a.start - b.start).find((c) => ['video', 'picture', 'image'].includes(e.media[c.media].kind) || /\.(mp4|mov|webm|m4v|png|jpe?g|webp)$/i.test(e.media[c.media].path || ''))
+  const m = clip && e.media[clip.media]
+  if (!m?.path || !fs.existsSync(m.path)) return null
+  return { path: m.path, kind: /\.(png|jpe?g|webp)$/i.test(m.path) ? 'picture' : 'video', at: clip.in || 0 }
+}
+
 export class Edits {
   constructor({ dataDir, ffmpeg, ffprobe, fontFile }) {
     this.dir = path.join(dataDir, 'edits')
@@ -70,7 +78,7 @@ export class Edits {
       .map((f) => readJson(path.join(this.dir, f), null))
       .filter(Boolean)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map((e) => ({ id: e.id, name: e.name, clips: e.clips.length, seconds: +editLength(e).toFixed(1), format: e.settings.format, updatedAt: e.updatedAt, exports: e.exports?.length || 0 }))
+      .map((e) => ({ id: e.id, name: e.name, clips: e.clips.length, seconds: +editLength(e).toFixed(1), format: e.settings.format, updatedAt: e.updatedAt, exports: e.exports?.length || 0, cover: coverOf(e) }))
   }
   get(id) {
     const e = readJson(this.file(id), null)

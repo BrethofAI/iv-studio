@@ -112,7 +112,7 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
 
   return (
     <div className="setup">
-      <Hero art="settings" title="Settings" kicker="Infinite Variance" />
+      <Hero art="settings" title="Settings" kicker="Infinite Variance" help="setup" />
       <SettingsTabs tab="setup" go={go} setup={setup} />
       <p className="lede">
         IV Studio drives your own ComfyUI. This checks it has everything the workflow needs.

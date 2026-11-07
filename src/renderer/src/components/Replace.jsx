@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import Hero from './Hero'
+import Stage from './Stage'
+import { Step, Choices, DropZone } from './FlowKit'
 import { MediaEditor, MediaTile } from './MediaEditor'
 import { fileUrl } from './edit/model'
 import { media } from '../media'
@@ -25,7 +26,7 @@ const OBJECT_MODES = [
 ]
 const DONE = ['success', 'error', 'cancelled']
 
-export default function Replace({ notify, characters, replaceSeed }) {
+export default function Replace({ notify, characters, replaceSeed, go }) {
   const [meta, setMeta] = useState(null)
   const [oldEngine, setOldEngine] = useState(() => {
     try {
@@ -138,25 +139,17 @@ export default function Replace({ notify, characters, replaceSeed }) {
   const can = !!video && check?.ready && (!needsPictures || pictures.length > 0) && (mode !== 'object' || (obj.target && (obj.mode === 'remove' || obj.changeTo || pictures.length)))
 
   return (
-    <div className="replace">
-      <Hero art="replace" title="Replace" kicker="Swap who's in the shot" />
-      <p className="lede">
-        Put your character into any video, or change the scene around them.
-        {oldEngine ? (
-          <span className="lede-small dim">The old engine: only the person or thing you choose is redrawn by H3, clip by clip. SAM 3.1 tracks them and Qwen3-VL writes the prompts.</span>
-        ) : (
-          <span className="lede-small dim">The camera, cuts, motion and soundtrack stay. IV Studio paints a frame of each shot the way it should look, you check them, and Viggle Remake on MiniMax H3 redraws the video to match.</span>
-        )}
-      </p>
+    <div className="replace create-v2 flow-page">
+      <Stage effect="morph" art="replace" title="Replace" kicker="Swap who's in the shot" back={go && { label: 'Workflows', onClick: () => go('workflows') }}>
+        <Choices label="What to change" className="replace-modes" value={mode} onChange={(id) => (setMode(id), setPictures([]), setCharacterId(''))} options={oldEngine ? MODES : REMAKE_MODES} />
+        <p className="stage-note small">
+          {oldEngine
+            ? 'The old engine: only the person or thing you choose is redrawn by H3, clip by clip. SAM 3.1 tracks them and Qwen3-VL writes the prompts.'
+            : 'The camera, cuts, motion and soundtrack stay. IV Studio paints a frame of each shot the way it should look, you check them, and Viggle Remake on MiniMax H3 redraws the video to match.'}
+        </p>
+      </Stage>
 
-      <div className="mode-cards replace-modes">
-        {(oldEngine ? MODES : REMAKE_MODES).map(([id, name, about]) => (
-          <button key={id} className={`mode-card ${mode === id ? 'on' : ''}`} onClick={() => (setMode(id), setPictures([]), setCharacterId(''))}>
-            <span className="mode-name">{name}</span>
-            <span className="dim small">{about}</span>
-          </button>
-        ))}
-      </div>
+      <div className="create-steps">
 
       {!remake && check && !check.ready && (
         <section className="group replace-missing">
@@ -183,25 +176,31 @@ export default function Replace({ notify, characters, replaceSeed }) {
         </section>
       )}
 
-      <section className="block">
-        <p className="mono label">01 · The video</p>
-        {video ? (
-          <div className="voice-control">
-            <MediaTile item={video} label="Source" onEdit={() => setEditing(true)} onRemove={() => setVideo(null)} />
-            <span className="small dim">{video.section?.length ? `The clip from your edit: ${video.section.start.toFixed(2)}–${(video.section.start + video.section.length).toFixed(2)} s of it. ` : ''}{remake ? 'Click it to trim or crop. Up to 14 s at a time; the soundtrack stays.' : 'Click it to trim or crop. It needs a soundtrack; longer videos run in several H3 clips.'}</span>
-          </div>
-        ) : (
-          <button className="btn btn-small" onClick={pickVideo}>
-            + Source video
-          </button>
-        )}
-      </section>
+      <Step n={1} title="The video" sub={remake ? 'Up to 14 s at a time; the soundtrack stays. Click it to trim or crop.' : 'It needs a soundtrack; longer videos run in several H3 clips. Click it to trim or crop.'}>
+        <DropZone
+          filled={!!video}
+          empty="Drop the video to change here"
+          onFiles={async ([file]) => setVideo({ kind: 'video', path: file, info: await window.ivstudio.media.probe(file).catch(() => null) })}
+        >
+          {video ? (
+            <div className="voice-control">
+              <MediaTile item={video} label="Source" onEdit={() => setEditing(true)} onRemove={() => setVideo(null)} />
+              {video.section?.length ? <span className="small dim">The clip from your edit: {video.section.start.toFixed(2)}–{(video.section.start + video.section.length).toFixed(2)} s of it.</span> : null}
+            </div>
+          ) : (
+            <div className="media-actions">
+              <button className="btn btn-small" onClick={pickVideo}>
+                + Source video
+              </button>
+            </div>
+          )}
+        </DropZone>
+      </Step>
 
       {remake && <RemakeFlow kind={mode} video={video} notify={notify} onStarted={loadHistory} />}
 
       {!remake && mode === 'object' && (
-        <section className="block">
-          <p className="mono label">02 · What changes</p>
+        <Step n={2} title="What changes">
           <div className="segmented">
             {OBJECT_MODES.map(([id, label]) => (
               <button key={id} className={obj.mode === id ? 'on' : ''} onClick={() => setObj({ ...obj, mode: id })}>
@@ -225,12 +224,11 @@ export default function Replace({ notify, characters, replaceSeed }) {
               <input value={obj.changeTo} placeholder="optional: what fills the space" onChange={(e) => setObj({ ...obj, changeTo: e.target.value })} />
             </div>
           )}
-        </section>
+        </Step>
       )}
 
       {mode === 'finish' && (
-        <section className="block">
-          <p className="mono label">02 · Finish</p>
+        <Step n={2} title="Finish">
           <div className="segmented">
             <button className={finish === 'faces' ? 'on' : ''} onClick={() => setFinish('faces')}>
               Fix faces
@@ -261,12 +259,11 @@ export default function Replace({ notify, characters, replaceSeed }) {
               </div>
             </>
           )}
-        </section>
+        </Step>
       )}
 
       {!remake && showPictures && (
-        <section className="block">
-          <p className="mono label">{mode === 'finish' ? '03 · The face' : mode === 'object' ? '03 · Or show it (optional)' : '02 · Who goes in'}</p>
+        <Step n={mode === 'finish' || mode === 'object' ? 3 : 2} title={mode === 'finish' ? 'The face' : mode === 'object' ? 'Or show it (optional)' : 'Who goes in'}>
           <div className="media-actions">
             <button className="btn btn-small" onClick={addPicture}>
               + Picture
@@ -311,7 +308,7 @@ export default function Replace({ notify, characters, replaceSeed }) {
               <input type="checkbox" checked={run.onePass} onChange={(e) => setRun({ ...run, onePass: e.target.checked })} /> One pass per person (better likeness, about twice as long)
             </label>
           )}
-        </section>
+        </Step>
       )}
 
       {!remake && mode !== 'finish' && (
@@ -383,8 +380,7 @@ export default function Replace({ notify, characters, replaceSeed }) {
       )}
 
       {history.length > 0 && (
-        <section className="block">
-          <p className="mono label">Runs</p>
+        <Step title="Runs" sub="Every replace you've run, newest first. Send one to Edit or show it in its folder.">
           <div className="char-clips">
             {history.map((j) => {
               const fin = j.outputs?.find((o) => o.kind === 'final')
@@ -412,12 +408,13 @@ export default function Replace({ notify, characters, replaceSeed }) {
               )
             })}
           </div>
-        </section>
+        </Step>
       )}
+      </div>
 
-      <p className="small dim">Only replace people with characters you made, or with someone's consent.</p>
+      <p className="small dim replace-foot">Only replace people with characters you made, or with someone's consent.</p>
       <label className="me-snap small dim">
-        <input type="checkbox" checked={oldEngine} onChange={(e) => switchEngine(e.target.checked)} /> Use the old engine (OpenJutsu masks, for comparison; it goes in a later version)
+        <input type="checkbox" checked={oldEngine} onChange={(e) => switchEngine(e.target.checked)} /> Use the old engine (masks, for comparison; it goes in a later version)
       </label>
 
       {editing && video && <MediaEditor item={video} hint="Keep the part to swap. Each H3 clip is up to 15 s; longer parts run as several clips." onApply={(v) => (setVideo({ ...v, section: null }), setEditing(false))} onClose={() => setEditing(false)} notify={notify} />}

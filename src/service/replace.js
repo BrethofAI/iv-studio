@@ -149,7 +149,8 @@ export class Replace {
       g = pruneColor(this.graph('color'), { detail: settings.detail ?? -0.2, tone: settings.tone === null ? null : { ...DEFAULT_TONE, ...(settings.tone || {}) } })
     }
     if (!['mask', 'colours'].includes(mode)) {
-      const extra = character ? [{ name: character.lora, strength: character.strength ?? 0.8 }] : []
+      // a RefMod character has no LoRA: Replace paints from its picture alone
+      const extra = character?.lora ? [{ name: character.lora, strength: character.strength ?? 0.8 }] : []
       applyModel(g, await this.models(extra))
     }
     // the source: the part of the video to use (VHS cuts the soundtrack to match)

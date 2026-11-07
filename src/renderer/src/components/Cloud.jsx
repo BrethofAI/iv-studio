@@ -158,6 +158,7 @@ function RunPodSteps({ st, busy, run, notify, refresh, links }) {
                 Settings → API Keys
               </button>{' '}
               (read/write). IV Studio uses it only to make your storage volume and to start and stop your own pods.
+              {links?.runpodSignup && <span className="cloud-support"> New accounts made through this link get a one-time RunPod credit of $5 to $500 after adding their first $10, and it supports IV Studio at no extra cost to you.</span>}
             </p>
           </>
         )}
@@ -313,6 +314,12 @@ export default function Cloud({ notify, recheck, setup, info }) {
       if (s.cloud?.idleSeconds) setIdle(s.cloud.idleSeconds)
     })
 
+  // the cloud wizard changed things
+  useEffect(() => {
+    const again = () => refresh()
+    window.addEventListener('iv:cloud-changed', again)
+    return () => window.removeEventListener('iv:cloud-changed', again)
+  }, [])
   useEffect(() => {
     refresh()
     return window.ivstudio.cloud.onLog((line) => setLog((l) => [...l.slice(-400), line]))
@@ -367,6 +374,12 @@ export default function Cloud({ notify, recheck, setup, info }) {
         No strong graphics card? Render on a cloud GPU instead.
         <span className="lede-small dim">Pick a cloud service below and set it up once; then switch between this PC and the cloud whenever you like.</span>
       </p>
+      <div className="cloud-guided">
+        <button className="btn btn-primary" onClick={() => window.dispatchEvent(new CustomEvent('iv:cloud-wizard'))}>
+          Guided setup →
+        </button>
+        <span className="small dim">A few steps: pick a service, connect it, choose a GPU, set it up, switch it on.</span>
+      </div>
 
       <section className="cloud-control">
         <div className="cloud-control-head">

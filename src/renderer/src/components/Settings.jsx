@@ -1,12 +1,28 @@
 import { useEffect, useState } from 'react'
 import StartComfy from './StartComfy'
 import { UpdateSettings } from './Update'
-import Hero from './Hero'
+import Hero, { ART } from './Hero'
 import { ask } from './Confirm'
 import { setUnblurred } from './Loras'
+import { SetCard, SetField, SetSwitch, Pill, SetPath, SetCode } from './SettingsKit'
+import { startTour } from '../tours'
 
 const WRITER_MODEL = 'huihui_ai/qwen3-vl-abliterated:8b-instruct'
 const GB = (b) => `${(b / 1e9).toFixed(1)} GB`
+const open = (url) => window.ivstudio.links.open(url)
+
+// The page's topics, in order: the index on the left and each card's number come from here.
+const SECTIONS = [
+  ['pc', 'Your PC'],
+  ['comfy', 'ComfyUI'],
+  ['folders', 'Folders'],
+  ['models', 'Models'],
+  ['writer', 'Prompt writer'],
+  ['civitai', 'Civitai'],
+  ['agents', 'Agents'],
+  ['updates', 'Updates'],
+  ['about', 'About']
+]
 
 const WORKFLOWS = [
   ['text', 'Text', 'fl2va'],
@@ -19,193 +35,148 @@ const WORKFLOWS = [
 const short = (n) => n.split(/[\\/]/).pop().replace(/\.safetensors$/, '')
 const kindOf = (n) => (/fl2va/i.test(n) ? 'fl2va' : /ref2va|omniref/i.test(n) ? 'ref2va' : null)
 
-// Which H3 model each workflow runs: fine-tunes differ (realism, animation, speed).
-function ModelSettings({ settings, setSettings, notify }) {
-  const [info, setInfo] = useState(null)
+// The welcome wizard's scan, and a way back into it.
+function PcCard({ n, settings }) {
+  const hw = settings.hardware
+  const check = () => window.dispatchEvent(new CustomEvent('iv:welcome'))
+  return (
+    <SetCard
+      id="pc"
+      n={n}
+      title="Your PC"
+      sub="What this computer can do, and the defaults that suit it."
+      aside={
+        <button className="btn btn-small" onClick={check}>
+          {hw ? 'Check again' : 'Check my PC'}
+        </button>
+      }
+    >
+      <div className="set-pc">
+        {ART['pc-card'] && <div className="set-pc-art" style={{ backgroundImage: `url("${ART['pc-card']}")` }} aria-hidden="true" />}
+        {hw ? (
+          <div className="set-pc-sum">
+            <strong>{hw.title}</strong>
+            <div className="set-chips">
+              {hw.gpu && <span className="set-chip mono">{hw.gpu}</span>}
+              {hw.ram && <span className="set-chip mono">{hw.ram} RAM</span>}
+              {hw.at && <span className="set-chip mono dim">Checked {new Date(hw.at).toLocaleDateString()}</span>}
+            </div>
+          </div>
+        ) : (
+          <div className="set-pc-sum">
+            <strong>Not checked yet</strong>
+            <p className="small dim">A one-minute look at your graphics card, memory and drives, then the settings that suit them.</p>
+          </div>
+        )}
+      </div>
+    </SetCard>
+  )
+}
+
+// The ComfyUI IV Studio renders on, and how IV Studio starts it: the person's own launcher (found or picked).
+function ComfyCard({ n, settings, setSettings, notify, recheck, comfyUp }) {
+  const [url, setUrl] = useState(settings.comfyUrl)
+  const [l, setL] = useState(null)
+  useEffect(() => setUrl(settings.comfyUrl), [settings.comfyUrl])
   useEffect(() => {
-    window.ivstudio.h3Models().then(setInfo).catch((err) => setInfo({ error: err.message }))
-  }, [])
-  const choices = settings.models || {}
-  async function choose(id, name) {
+    window.ivstudio.comfy.launcher().then(setL).catch(() => {})
+  }, [settings.comfyUrl, settings.comfyLauncher])
+  async function saveUrl() {
     try {
-      setSettings(await window.ivstudio.settings.set({ models: { ...choices, [id]: name || undefined } }))
+      setSettings(await window.ivstudio.settings.set({ comfyUrl: url.trim() }))
+      recheck()
     } catch (err) {
       notify(err.message)
     }
   }
+  const set = async (patch) => setSettings(await window.ivstudio.settings.set(patch))
+  async function choose() {
+    if (await window.ivstudio.comfy.chooseLauncher()) setSettings(await window.ivstudio.settings.get())
+  }
+  async function chooseFolder() {
+    try {
+      if (await window.ivstudio.comfy.chooseFolder()) setSettings(await window.ivstudio.settings.get())
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  const linux = navigator.userAgent.includes('Linux')
+  const inFolder = l?.inFolder?.some((f) => f.path === l.using)
   return (
-    <section className="group">
-      <div className="group-head">
-        <h2>Models</h2>
-        <p className="dim small">The main H3 model each workflow runs. Fine-tunes lean towards realism, animation or speed.</p>
-      </div>
-      <div className="group-body">
-        {info?.error && <p className="small pink">ComfyUI didn't answer: {info.error}</p>}
-        {info?.models &&
-          WORKFLOWS.map(([id, label, want]) => {
-            const value = choices[id] || ''
-            const picked = value || info.defaults[id]
-            const kind = kindOf(picked)
-            return (
-              <div key={id} className="row">
-                <span className="row-label">{label}</span>
-                <div className="model-pick">
-                  <select value={value} onChange={(e) => choose(id, e.target.value)}>
-                    <option value="">Default · {short(info.defaults[id])}</option>
-                    {info.models.map((m) => (
-                      <option key={m} value={m}>
-                        {short(m)}
-                        {kindOf(m) ? ` · ${kindOf(m)}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {kind && kind !== want && <span className="small pink">This workflow expects a {want} model.</span>}
-                </div>
-              </div>
-            )
-          })}
-        <p className="small dim">
-          Text, First / last frame and Continue use an fl2va-type model (it lands on exact frames). References and Sequences use a ref2va-type model (it follows reference pictures and keeps a voice across shots). A cloud ComfyUI only lists the models in its own storage.
-        </p>
-      </div>
-    </section>
-  )
-}
-
-// The person's own Claude Code or Codex as the writer: whether it's on this PC, and which of its models writes.
-const HARNESS = {
-  claude: { name: 'Claude Code', maker: 'Anthropic', login: 'Claude', get: 'https://claude.com/claude-code', key: 'claudeModel' },
-  codex: { name: 'Codex', maker: 'OpenAI', login: 'ChatGPT', get: 'https://openai.com/codex', key: 'codexModel' }
-}
-function HarnessWriter({ engine, settings, harness, save }) {
-  const h = HARNESS[engine]
-  if (!harness) return null
-  if (!harness.installed)
-    return (
-      <p className="small pink">
-        {h.name} isn't installed on this PC.{' '}
-        <button className="link-btn" onClick={() => window.ivstudio.links.open(h.get)}>
-          Get {h.name}
-        </button>
-      </p>
-    )
-  return (
-    <>
-      <p className="small dim">
-        Your own {h.name} on this PC writes the prompt, on your {h.login} login and plan. It runs with no tools except reading your reference pictures, and nothing is saved there. Your idea and reference pictures go to {h.maker} to write it. It
-        doesn't use this PC's GPU, so it's as quick while ComfyUI renders.
-      </p>
-      <div className="row">
-        <span className="row-label">Model</span>
-        <select value={settings[h.key] || ''} onChange={(e) => save({ [h.key]: e.target.value })}>
-          {harness.models.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-            </option>
-          ))}
-        </select>
-      </div>
-    </>
-  )
-}
-
-// Where Ollama is: empty means OLLAMA_HOST or this PC (prompter.js). An Ollama in another container or on another
-// PC is only reached, never started.
-function OllamaAddress({ settings, status, save }) {
-  const [addr, setAddr] = useState(settings.ollamaUrl || '')
-  useEffect(() => setAddr(settings.ollamaUrl || ''), [settings.ollamaUrl])
-  const changed = addr.trim() !== (settings.ollamaUrl || '')
-  return (
-    <>
-      <div className="row">
-        <span className="row-label">Ollama address</span>
-        <div className="key-form">
-          <input value={addr} placeholder={status?.url || 'http://127.0.0.1:11434'} onChange={(e) => setAddr(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && changed && save({ ollamaUrl: addr })} />
-          <button className="btn btn-small" disabled={!changed} onClick={() => save({ ollamaUrl: addr })}>
+    <SetCard
+      id="comfy"
+      n={n}
+      title="ComfyUI"
+      sub="The ComfyUI IV Studio renders on, and how it starts."
+      aside={comfyUp ? <Pill tone="ok">Ready</Pill> : <Pill tone="warn">Not running</Pill>}
+    >
+      <SetField label="Address" hint="Where ComfyUI answers. On this PC it's usually http://127.0.0.1:8188.">
+        <div className="set-inline grow">
+          <input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && url.trim() !== settings.comfyUrl && saveUrl()} />
+          <button className="btn btn-small" disabled={url.trim() === settings.comfyUrl} onClick={saveUrl}>
             Save
           </button>
         </div>
-      </div>
-      <p className="small dim">
-        Leave it empty for Ollama on this PC (or OLLAMA_HOST). For Ollama in another container or on another PC, enter its address, like 192.168.1.20:11434.
-        {status && !status.local && (status.running ? ' Connected.' : ` Not answering at ${status.url}.`)}
-      </p>
-    </>
-  )
-}
-
-// Prompt writer: which engine writes prompts, the free local model, and the Comfy.org key for Context IR.
-// Civitai: the person's own API key (for downloading LoRAs) and the opt-in for mature LoRAs.
-function CivitaiSettings({ settings, setSettings, notify }) {
-  const [key, setKey] = useState('')
-  async function saveKey(k) {
-    try {
-      setSettings(await window.ivstudio.settings.setCivitaiKey(k))
-      setKey('')
-    } catch (err) {
-      notify(err.message)
-    }
-  }
-  async function mature(on) {
-    if (on && !(await ask({ title: 'Show mature LoRAs?', message: 'Only if you are 18 or over. LoRAs then come from civitai.red, Civitai’s unrestricted address, and adult LoRAs and previews can appear (previews stay blurred until you click them). LoRAs of real people and anything involving minors are never shown.', confirm: 'I’m 18 or over, show them' }))) return
-    // turning mature off also puts the blur back
-    const s = await window.ivstudio.settings.set(on ? { civitaiMature: true } : { civitaiMature: false, civitaiUnblur: false })
-    setSettings(s)
-    setUnblurred(s.civitaiMature && s.civitaiUnblur)
-  }
-  async function unblur(on) {
-    const s = await window.ivstudio.settings.set({ civitaiUnblur: on })
-    setSettings(s)
-    setUnblurred(s.civitaiMature && s.civitaiUnblur)
-  }
-  return (
-    <section className="group">
-      <div className="group-head">
-        <h2>Civitai</h2>
-        <p className="dim small">Where the LoRAs page finds LoRAs to download.</p>
-      </div>
-      <div className="group-body">
-        {settings.hasCivitaiKey ? (
-          <p className="small">
-            A Civitai API key is saved (encrypted on this PC).{' '}
-            <button className="link-btn" onClick={() => saveKey('')}>
-              Remove it
-            </button>
-          </p>
-        ) : (
-          <>
-            <div className="key-form">
-              <input type="password" value={key} placeholder="Civitai API key" onChange={(e) => setKey(e.target.value)} autoComplete="off" />
-              <button className="btn btn-small" disabled={!key.trim()} onClick={() => saveKey(key)}>
-                Save
+      </SetField>
+      {l && !l.local && (
+        <SetField label="Starting it">
+          <p className="small dim set-plain">IV Studio can start ComfyUI only when it runs on this PC.</p>
+        </SetField>
+      )}
+      {l?.local && (
+        <>
+          <SetField label="ComfyUI folder">
+            <div className="set-inline grow">
+              <SetPath path={l.folder} />
+              <button className="btn btn-small" onClick={chooseFolder}>
+                Choose folder…
               </button>
             </div>
-            <p className="small dim">
-              Searching works without one; downloading needs it. It’s free: on{' '}
-              <button className="link-btn" onClick={() => window.ivstudio.links.open('https://civitai.com/user/account')}>
-                civitai.com
-              </button>{' '}
-              open Account settings, then API keys, and add one. The key stays on this PC.
-            </p>
-          </>
-        )}
-        <label className="consent">
-          <input type="checkbox" checked={!!settings.civitaiMature} onChange={(e) => mature(e.target.checked)} />
-          <span>Show mature LoRAs (18+). Off by default.</span>
-        </label>
-        {settings.civitaiMature && (
-          <label className="consent">
-            <input type="checkbox" checked={!!settings.civitaiUnblur} onChange={(e) => unblur(e.target.checked)} />
-            <span>Show mature previews without the blur. Off by default.</span>
-          </label>
-        )}
-      </div>
-    </section>
+          </SetField>
+          {l.folder && l.inFolder.length > 0 && (
+            <SetField label="Start file">
+              <select value={inFolder ? l.using : ''} onChange={(e) => set({ comfyLauncher: e.target.value })}>
+                {!inFolder && <option value="">(another launcher, below)</option>}
+                {l.inFolder.map((f) => (
+                  <option key={f.path} value={f.path}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </SetField>
+          )}
+          <SetField label="Start it with" hint={linux ? 'A .sh script beside ComfyUI, or its main.py with its own venv’s Python. Its output goes to comfyui.log in IV Studio’s data folder.' : 'The same shortcut or .bat you’d double-click, so ComfyUI starts with your own settings in its own window.'}>
+            <div className="set-inline grow">
+              <SetPath path={l.using} empty="No launcher found" />
+              <button className="btn btn-small" onClick={choose}>
+                Choose…
+              </button>
+              {!comfyUp && <StartComfy notify={notify} recheck={recheck} />}
+            </div>
+            {!l.chosen && !l.folder && l.found.length > 1 && (
+              <div className="set-found">
+                <span className="mono small dim">Also found</span>
+                {l.found.slice(1, 5).map((f) => (
+                  <button key={f.path} className="set-chip mono" title={`Use ${f.path}`} onClick={() => set({ comfyLauncher: f.path })}>
+                    {f.path}
+                  </button>
+                ))}
+              </div>
+            )}
+          </SetField>
+          <SetField label="On open" hint="ComfyUI keeps running after IV Studio closes.">
+            <SetSwitch checked={settings.comfyAutoStart !== false} onChange={(on) => set({ comfyAutoStart: on })}>
+              Start ComfyUI when IV Studio opens, if it isn’t running already
+            </SetSwitch>
+          </SetField>
+        </>
+      )}
+    </SetCard>
   )
 }
 
-// Folders: where in ComfyUI's output folder renders save, normally and in Incognito.
-function FolderSettings({ settings, setSettings, notify, incognito }) {
+// Where in ComfyUI's output folder renders save, normally and in Incognito.
+function FolderCard({ n, settings, setSettings, notify, incognito }) {
   const [normal, setNormal] = useState(settings.outputFolder || '')
   const [hidden, setHidden] = useState(settings.privateFolder || '')
   const changed = normal.trim() !== (settings.outputFolder || '') || hidden.trim() !== (settings.privateFolder || '')
@@ -220,45 +191,107 @@ function FolderSettings({ settings, setSettings, notify, incognito }) {
       notify(err.message)
     }
   }
+  const enter = (e) => e.key === 'Enter' && changed && save()
   return (
-    <section className="group">
-      <div className="group-head">
-        <h2>Folders</h2>
-        <p className="dim small">Where in ComfyUI’s output folder renders save. The next render uses them; renders already made stay where they are.</p>
-      </div>
-      <div className="group-body">
-        <label className="folder-row">
-          <span>Normal renders</span>
-          <span className="mono dim">output\</span>
-          <input value={normal} placeholder="straight into output" onChange={(e) => setNormal(e.target.value)} />
-        </label>
-        <label className="folder-row">
-          <span>Incognito renders</span>
-          <span className="mono dim">output\</span>
-          <input value={hidden} placeholder="IV Private" onChange={(e) => setHidden(e.target.value)} />
-        </label>
-        <p className="small dim">
-          Incognito’s pictures, videos and sounds you add also go into input\{hidden.trim() || 'IV Private'}. Use a folder name, or a path such as
-          Studio\Private; it always stays inside ComfyUI’s folders.{incognito ? ' You’re in Incognito now.' : ''}
-        </p>
-        <button className="btn btn-small" disabled={!changed} onClick={save}>
-          Save folders
-        </button>
-      </div>
-    </section>
+    <SetCard
+      id="folders"
+      n={n}
+      title="Folders"
+      sub="Where in ComfyUI’s output folder renders save. Renders already made stay where they are."
+      aside={incognito ? <Pill tone="warn">In Incognito now</Pill> : null}
+      foot={`Use a folder name, or a path such as Studio\\Private; it always stays inside ComfyUI’s folders. Pictures, videos and sounds you add in Incognito go into input\\${hidden.trim() || 'IV Private'}.`}
+    >
+      <SetField label="Normal renders">
+        <div className="set-prefixed">
+          <span className="mono">output\</span>
+          <input value={normal} placeholder="straight into output" onChange={(e) => setNormal(e.target.value)} onKeyDown={enter} />
+        </div>
+      </SetField>
+      <SetField label="Incognito renders">
+        <div className="set-prefixed">
+          <span className="mono">output\</span>
+          <input value={hidden} placeholder="IV Private" onChange={(e) => setHidden(e.target.value)} onKeyDown={enter} />
+        </div>
+      </SetField>
+      {changed && (
+        <div className="set-actions">
+          <button className="link-btn" onClick={() => (setNormal(settings.outputFolder || ''), setHidden(settings.privateFolder || ''))}>
+            Undo
+          </button>
+          <button className="btn btn-small btn-primary" onClick={save}>
+            Save folders
+          </button>
+        </div>
+      )}
+    </SetCard>
   )
 }
 
-function WriterSettings({ settings, setSettings, notify }) {
+// Which H3 model each workflow runs: fine-tunes differ (realism, animation, speed).
+function ModelCard({ n, settings, setSettings, notify }) {
+  const [info, setInfo] = useState(null)
+  useEffect(() => {
+    window.ivstudio.h3Models().then(setInfo).catch((err) => setInfo({ error: err.message }))
+  }, [])
+  const choices = settings.models || {}
+  async function choose(id, name) {
+    try {
+      setSettings(await window.ivstudio.settings.set({ models: { ...choices, [id]: name || undefined } }))
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  const custom = WORKFLOWS.filter(([id]) => choices[id]).length
+  return (
+    <SetCard
+      id="models"
+      n={n}
+      title="Models"
+      sub="The main H3 model each workflow runs. Fine-tunes lean towards realism, animation or speed."
+      aside={info?.models ? <Pill>{custom ? `${custom} changed` : 'All defaults'}</Pill> : null}
+      foot="fl2va models land on exact frames; ref2va models follow reference pictures and keep a voice across shots. A cloud ComfyUI only lists the models in its own storage."
+    >
+      {info?.error && <p className="small pink set-plain">ComfyUI didn't answer: {info.error}</p>}
+      {!info && <p className="small dim set-plain">Asking ComfyUI…</p>}
+      {info?.models &&
+        WORKFLOWS.map(([id, label, want]) => {
+          const value = choices[id] || ''
+          const kind = kindOf(value || info.defaults[id])
+          return (
+            <SetField key={id} label={label} tag={want} warn={kind && kind !== want ? `This workflow expects a ${want} model.` : null}>
+              <select className={value ? 'set-changed' : ''} value={value} onChange={(e) => choose(id, e.target.value)}>
+                <option value="">Default · {short(info.defaults[id])}</option>
+                {info.models.map((m) => (
+                  <option key={m} value={m}>
+                    {short(m)}
+                    {kindOf(m) ? ` · ${kindOf(m)}` : ''}
+                  </option>
+                ))}
+              </select>
+            </SetField>
+          )
+        })}
+    </SetCard>
+  )
+}
+
+// The person's own Claude Code or Codex as the writer: whether it's on this PC, and which of its models writes.
+const HARNESS = {
+  claude: { name: 'Claude Code', maker: 'Anthropic', login: 'Claude', get: 'https://claude.com/claude-code', key: 'claudeModel' },
+  codex: { name: 'Codex', maker: 'OpenAI', login: 'ChatGPT', get: 'https://openai.com/codex', key: 'codexModel' }
+}
+
+function WriterCard({ n, settings, setSettings, notify }) {
   const [status, setStatus] = useState(null)
   const [key, setKey] = useState('')
   const [pull, setPull] = useState(null)
+  const [addr, setAddr] = useState(settings.ollamaUrl || '')
   const refresh = () => window.ivstudio.prompts.status().then(setStatus).catch(() => setStatus(null))
-
   useEffect(() => {
     refresh()
     return window.ivstudio.prompts.onPull((ev) => setPull(ev))
   }, [])
+  useEffect(() => setAddr(settings.ollamaUrl || ''), [settings.ollamaUrl])
 
   const save = async (patch) => {
     try {
@@ -293,74 +326,104 @@ function WriterSettings({ settings, setSettings, notify }) {
   const models = status?.models || []
   const hasModel = models.some((m) => m.name === settings.ollamaModel)
   const pct = pull?.total ? Math.floor((pull.completed / pull.total) * 100) : null
+  const addrChanged = addr.trim() !== (settings.ollamaUrl || '')
+  const missing = (id) => (id === 'local' ? status && !status.installed : id === 'contextir' ? !settings.hasComfyKey : status && !status.harnesses?.[id]?.installed)
+  const ENGINES = [
+    ['local', 'Local', 'Free · your own Ollama', 'Not installed'],
+    ['claude', 'Claude Code', 'Your Claude plan', 'Not installed'],
+    ['codex', 'Codex', 'Your ChatGPT plan', 'Not installed'],
+    ['contextir', 'Context IR', 'MiniMax · paid per prompt', 'Needs a key']
+  ]
+  const h = HARNESS[engine]
+  const harness = status?.harnesses?.[engine]
 
   return (
-    <section className="group">
-      <div className="group-head">
-        <h2>Prompt writer</h2>
-        <p className="dim small">Writes the H3 prompt from your idea in plain words (✦ Write it for me).</p>
-      </div>
-      <div className="group-body">
-        <div className="segmented">
-          <button className={engine === 'local' ? 'on' : ''} onClick={() => save({ promptEngine: 'local' })}>
-            Local · free
-          </button>
-          <button className={engine === 'claude' ? 'on' : ''} onClick={() => save({ promptEngine: 'claude' })}>
-            Claude Code
-          </button>
-          <button className={engine === 'codex' ? 'on' : ''} onClick={() => save({ promptEngine: 'codex' })}>
-            Codex
-          </button>
-          <button className={engine === 'contextir' ? 'on' : ''} onClick={() => save({ promptEngine: 'contextir' })}>
-            MiniMax Context IR
-          </button>
-        </div>
-
-        {engine !== 'contextir' && (
-          <p className="small dim">
-            It follows MiniMax's own H3 prompt guide, which IV Studio downloads from MiniMax the first time it writes, under the{' '}
-            <button className="link-btn" onClick={() => window.ivstudio.links.open('https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE')}>
+    <SetCard
+      id="writer"
+      n={n}
+      title="Prompt writer"
+      sub="Writes the H3 prompt from your idea in plain words (✦ Write it for me)."
+      foot={
+        engine !== 'contextir' && (
+          <>
+            It follows MiniMax's own H3 prompt guide, downloaded from MiniMax the first time it writes, under the{' '}
+            <button className="link-btn" onClick={() => open('https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE')}>
               MiniMax H3 Community License
             </button>
             .
-          </p>
-        )}
+          </>
+        )
+      }
+    >
+      <div className="set-engines" role="radiogroup" aria-label="Prompt writer">
+        {ENGINES.map(([id, name, line, off]) => (
+          <button key={id} role="radio" aria-checked={engine === id} className={`set-engine ${engine === id ? 'on' : ''}`} onClick={() => save({ promptEngine: id })}>
+            <span className="set-engine-name">{name}</span>
+            <span className="small dim">{line}</span>
+            {missing(id) && <span className="set-engine-off mono">{off}</span>}
+          </button>
+        ))}
+      </div>
 
-        {engine === 'claude' || engine === 'codex' ? (
-          <HarnessWriter engine={engine} settings={settings} harness={status?.harnesses?.[engine]} save={save} />
-        ) : engine === 'local' ? (
-          <>
-            <p className="small dim">
-              A model in your own Ollama, with IV Studio's H3 rules. Private and free. It loads only while writing, then frees the GPU for rendering.
-            </p>
-            <OllamaAddress settings={settings} status={status} save={save} />
-            {!status ? null : !status.installed ? (
-              <p className="small pink">
+      {h && harness && !harness.installed && (
+        <SetField label={h.name}>
+          <p className="small pink set-plain">
+            {h.name} isn't installed on this PC.{' '}
+            <button className="link-btn" onClick={() => open(h.get)}>
+              Get {h.name}
+            </button>
+          </p>
+        </SetField>
+      )}
+      {h && harness?.installed && (
+        <SetField label="Model" hint={`Your own ${h.name} writes on your ${h.login} login and plan, with no tools except reading your reference pictures; your idea and pictures go to ${h.maker}. It doesn't use this PC's GPU, so it's as quick while ComfyUI renders.`}>
+          <select value={settings[h.key] || ''} onChange={(e) => save({ [h.key]: e.target.value })}>
+            {harness.models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </SetField>
+      )}
+
+      {engine === 'local' && (
+        <>
+          <SetField label="Ollama address" hint={`Empty means Ollama on this PC (or OLLAMA_HOST). For another container or PC, enter its address, like 192.168.1.20:11434.${status && !status.local ? (status.running ? ' Connected.' : ` Not answering at ${status.url}.`) : ''}`}>
+            <div className="set-inline grow">
+              <input value={addr} placeholder={status?.url || 'http://127.0.0.1:11434'} onChange={(e) => setAddr(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addrChanged && save({ ollamaUrl: addr })} />
+              <button className="btn btn-small" disabled={!addrChanged} onClick={() => save({ ollamaUrl: addr })}>
+                Save
+              </button>
+            </div>
+          </SetField>
+          {status && !status.installed ? (
+            <SetField label="Model">
+              <p className="small pink set-plain">
                 Ollama isn't installed.{' '}
-                <button className="link-btn" onClick={() => window.ivstudio.links.open('https://ollama.com/download')}>
+                <button className="link-btn" onClick={() => open('https://ollama.com/download')}>
                   Get Ollama
                 </button>
               </p>
-            ) : (
-              <>
-                <div className="row">
-                  <span className="row-label">Model</span>
-                  {models.length ? (
-                    <select value={hasModel ? settings.ollamaModel : ''} onChange={(e) => save({ ollamaModel: e.target.value })}>
-                      {!hasModel && <option value="">Choose a model</option>}
-                      {models.map((m) => (
-                        <option key={m.name} value={m.name}>
-                          {m.name} · {GB(m.size)}
-                          {m.vision ? ' · sees pictures' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className="small dim">{status.running ? 'No models yet.' : 'Ollama starts when you first write a prompt.'}</span>
-                  )}
-                </div>
+            </SetField>
+          ) : (
+            status && (
+              <SetField label="Model" hint="It loads only while writing, then frees the GPU for rendering. Private and free.">
+                {models.length ? (
+                  <select value={hasModel ? settings.ollamaModel : ''} onChange={(e) => save({ ollamaModel: e.target.value })}>
+                    {!hasModel && <option value="">Choose a model</option>}
+                    {models.map((m) => (
+                      <option key={m.name} value={m.name}>
+                        {m.name} · {GB(m.size)}
+                        {m.vision ? ' · sees pictures' : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="small dim set-plain">{status.running ? 'No models yet.' : 'Ollama starts when you first write a prompt.'}</p>
+                )}
                 {!models.some((m) => m.name === WRITER_MODEL) && (
-                  <div className="dl">
+                  <div className="dl set-dl">
                     {pull ? (
                       <>
                         <div className="bar">
@@ -370,72 +433,119 @@ function WriterSettings({ settings, setSettings, notify }) {
                       </>
                     ) : (
                       <button className="btn btn-small" onClick={() => install(WRITER_MODEL)}>
-                        Install the recommended writer ({WRITER_MODEL}, about 6 GB)
+                        Install the recommended writer (about 6 GB)
                       </button>
                     )}
                   </div>
                 )}
-              </>
-            )}
-          </>
-        ) : (
-          <>
-            <p className="small dim">
-              MiniMax's own prompt rewriter: it writes in the exact format H3 was trained on and looks at your reference media. Paid through your Comfy.org account, {status?.contextIrPrice || 'a few cents a prompt'}. It runs through ComfyUI.
-            </p>
-            {settings.hasComfyKey ? (
-              <p className="small">
-                A Comfy.org API key is saved (encrypted on this PC).{' '}
-                <button className="link-btn" onClick={() => saveKey('')}>
-                  Remove it
+              </SetField>
+            )
+          )}
+        </>
+      )}
+
+      {engine === 'contextir' && (
+        <SetField
+          label="Comfy.org key"
+          hint={`MiniMax's own prompt rewriter, in the exact format H3 was trained on; it looks at your reference media. Paid through your Comfy.org account, ${status?.contextIrPrice || 'a few cents a prompt'}, and runs through ComfyUI.`}
+        >
+          {settings.hasComfyKey ? (
+            <div className="set-inline">
+              <Pill tone="ok">Saved · encrypted on this PC</Pill>
+              <button className="link-btn" onClick={() => saveKey('')}>
+                Remove
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="set-inline grow">
+                <input type="password" value={key} placeholder="comfyui-…" onChange={(e) => setKey(e.target.value)} autoComplete="off" />
+                <button className="btn btn-small" disabled={!key.trim()} onClick={() => saveKey(key)}>
+                  Save
                 </button>
+              </div>
+              <p className="set-hint">
+                Make one at{' '}
+                <button className="link-btn" onClick={() => open('https://platform.comfy.org/login')}>
+                  platform.comfy.org
+                </button>{' '}
+                and add credits there. The key stays on this PC.
               </p>
-            ) : (
-              <>
-                <div className="key-form">
-                  <input type="password" value={key} placeholder="Comfy.org API key (comfyui-…)" onChange={(e) => setKey(e.target.value)} autoComplete="off" />
-                  <button className="btn btn-small" disabled={!key.trim()} onClick={() => saveKey(key)}>
-                    Save
-                  </button>
-                </div>
-                <p className="small dim">
-                  Create one at{' '}
-                  <button className="link-btn" onClick={() => window.ivstudio.links.open('https://platform.comfy.org/login')}>
-                    platform.comfy.org
-                  </button>{' '}
-                  and add credits there. The key stays on this PC.
-                </p>
-              </>
-            )}
-          </>
-        )}
-      </div>
-    </section>
+            </>
+          )}
+        </SetField>
+      )}
+    </SetCard>
   )
 }
 
-// A block of text with a Copy button.
-function Copyable({ text, label = 'Copy' }) {
-  const [copied, setCopied] = useState(false)
+// Civitai: the person's own API key (for downloading LoRAs) and the opt-in for mature LoRAs.
+function CivitaiCard({ n, settings, setSettings, notify }) {
+  const [key, setKey] = useState('')
+  async function saveKey(k) {
+    try {
+      setSettings(await window.ivstudio.settings.setCivitaiKey(k))
+      setKey('')
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  async function mature(on) {
+    if (on && !(await ask({ title: 'Show mature LoRAs?', message: 'Only if you are 18 or over. LoRAs then come from civitai.red, Civitai’s unrestricted address, and adult LoRAs and previews can appear (previews stay blurred until you click them). LoRAs of real people and anything involving minors are never shown.', confirm: 'I’m 18 or over, show them' }))) return
+    // turning mature off also puts the blur back
+    const s = await window.ivstudio.settings.set(on ? { civitaiMature: true } : { civitaiMature: false, civitaiUnblur: false })
+    setSettings(s)
+    setUnblurred(s.civitaiMature && s.civitaiUnblur)
+  }
+  async function unblur(on) {
+    const s = await window.ivstudio.settings.set({ civitaiUnblur: on })
+    setSettings(s)
+    setUnblurred(s.civitaiMature && s.civitaiUnblur)
+  }
   return (
-    <div className="copyable">
-      <pre className="code">{text}</pre>
-      <button
-        className="btn btn-small"
-        onClick={() => {
-          navigator.clipboard.writeText(text)
-          setCopied(true)
-          setTimeout(() => setCopied(false), 1500)
-        }}
-      >
-        {copied ? 'Copied' : label}
-      </button>
-    </div>
+    <SetCard id="civitai" n={n} title="Civitai" sub="Where the LoRAs page finds LoRAs to download.">
+      <SetField label="API key">
+        {settings.hasCivitaiKey ? (
+          <div className="set-inline">
+            <Pill tone="ok">Saved · encrypted on this PC</Pill>
+            <button className="link-btn" onClick={() => saveKey('')}>
+              Remove
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="set-inline grow">
+              <input type="password" value={key} placeholder="Civitai API key" onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && key.trim() && saveKey(key)} autoComplete="off" />
+              <button className="btn btn-small" disabled={!key.trim()} onClick={() => saveKey(key)}>
+                Save
+              </button>
+            </div>
+            <p className="set-hint">
+              Searching works without one; downloading needs it. It’s free: on{' '}
+              <button className="link-btn" onClick={() => open('https://civitai.com/user/account')}>
+                civitai.com
+              </button>{' '}
+              open Account settings, then API keys. The key stays on this PC.
+            </p>
+          </>
+        )}
+      </SetField>
+      <SetField label="Mature LoRAs" hint="18+ only. LoRAs of real people and anything involving minors are never shown.">
+        <SetSwitch checked={settings.civitaiMature} onChange={mature}>
+          Show mature LoRAs
+        </SetSwitch>
+        {settings.civitaiMature && (
+          <SetSwitch checked={settings.civitaiUnblur} onChange={unblur}>
+            Show their previews without the blur
+          </SetSwitch>
+        )}
+      </SetField>
+    </SetCard>
   )
 }
 
 // Agents (MCP): a message to paste into any agent, the manual commands, and the Claude Code skill.
-function AgentSettings({ mcp, notify }) {
+function AgentCard({ n, mcp, notify }) {
   const [agents, setAgents] = useState(null)
   const [client, setClient] = useState('claude')
   const refresh = () => window.ivstudio.agents.info().then(setAgents)
@@ -457,19 +567,14 @@ function AgentSettings({ mcp, notify }) {
       notify(err.message)
     }
   }
+  const skill = !agents.skillInstalled ? null : agents.skillCurrent ? 'ok' : 'warn'
   return (
-    <section className="group">
-      <div className="group-head">
-        <h2>Agents (MCP)</h2>
-        <p className="dim small">Claude Code, Codex and other agents can render, sequence and edit in IV Studio, with the same projects and results you see here.</p>
-      </div>
-      <div className="group-body">
-        <p className="mono label">Paste into your agent</p>
-        <p className="small dim">One message: your agent adds IV Studio, reads its guide and checks your setup.</p>
-        <Copyable text={agents.paste} label="Copy message" />
-
-        <p className="mono label">Or add it yourself</p>
-        <div className="segmented">
+    <SetCard id="agents" n={n} title="Agents" sub="Claude Code, Codex and other agents can render, sequence and edit in IV Studio, with the same projects and results you see here." aside={<Pill>MCP</Pill>}>
+      <SetField label="Easiest" hint="One message: your agent adds IV Studio, reads its guide and checks your setup.">
+        <SetCode text={agents.paste} label="Copy message" tall />
+      </SetField>
+      <SetField label="Add it yourself">
+        <div className="segmented set-seg">
           {[
             ['claude', 'Claude Code'],
             ['codex', 'Codex'],
@@ -480,24 +585,61 @@ function AgentSettings({ mcp, notify }) {
             </button>
           ))}
         </div>
-        <Copyable text={manual[client]} label="Copy command" />
-
-        <p className="mono label">Claude Code skill</p>
-        <p className="small dim">
-          Teaches Claude Code IV Studio's workflow (shots, H3 prompts, sequences, timeline edits and the house rules) so it picks the right tools without being told. The server also hands every agent a short version, and the full guide through get_guide.
-        </p>
-        <div className="row-actions">
-          <button className="btn btn-small" onClick={installSkill}>
-            {!agents.skillInstalled ? 'Add the skill to Claude Code' : agents.skillCurrent ? 'Skill added ✓' : 'Update the skill'}
-          </button>
-          <button className="link-btn mono" onClick={() => window.ivstudio.links.open('https://github.com/hollisorg/iv-studio/blob/main/skills/iv-studio/SKILL.md')}>
-            View it on GitHub ↗
+        <SetCode text={manual[client]} label="Copy" />
+      </SetField>
+      <SetField label="Claude Code skill" hint="Teaches Claude Code IV Studio's workflow (shots, H3 prompts, sequences, edits and the house rules) so it picks the right tools without being told.">
+        <div className="set-inline">
+          {skill && <Pill tone={skill}>{skill === 'ok' ? 'Added' : 'Out of date'}</Pill>}
+          {skill !== 'ok' && (
+            <button className="btn btn-small" onClick={installSkill}>
+              {skill ? 'Update the skill' : 'Add the skill to Claude Code'}
+            </button>
+          )}
+          <button className="link-btn mono small" onClick={() => open('https://github.com/hollisorg/iv-studio/blob/main/skills/iv-studio/SKILL.md')}>
+            View on GitHub ↗
           </button>
         </div>
-        {agents.skillInstalled && <p className="mono small dim">{agents.skillFile}</p>}
-        <p className="dim small">Tools for setup, shots, sequences, prompt writing, references, renders, timeline editing, character training, models and characters.</p>
-      </div>
-    </section>
+        {agents.skillInstalled && <SetPath path={agents.skillFile} />}
+      </SetField>
+    </SetCard>
+  )
+}
+
+function AboutCard({ n, info }) {
+  return (
+    <SetCard id="about" n={n} title="About">
+      <SetField label="IV Studio">
+        <div className="set-inline">
+          <span className="set-big mono">v{info?.version}</span>
+          <button className="link-btn mono small" onClick={() => open('https://github.com/hollisorg/iv-studio')}>
+            GitHub ↗
+          </button>
+          <button className="link-btn mono small" onClick={() => open('https://infinitevariance.ai')}>
+            infinitevariance.ai ↗
+          </button>
+          <button className="link-btn mono small" onClick={() => window.ivstudio.learn.openGuide().catch(() => {})}>
+            The guide (PDF) ↗
+          </button>
+        </div>
+      </SetField>
+      <SetField label="Tour" hint="A two-minute walk round IV Studio, page by page. Each page also has its own How it works button.">
+        <div className="set-inline">
+          <button className="btn btn-small" onClick={() => startTour('full')}>
+            Take the full tour
+          </button>
+        </div>
+      </SetField>
+      <SetField label="Data folder" hint="Your shots, edits, characters, voices and settings.">
+        <div className="set-inline grow">
+          <SetPath path={info?.dataDir} />
+          {info?.dataDir && (
+            <button className="btn btn-small" onClick={() => window.ivstudio.files.reveal(info.dataDir)}>
+              Show
+            </button>
+          )}
+        </div>
+      </SetField>
+    </SetCard>
   )
 }
 
@@ -519,162 +661,82 @@ export function SettingsTabs({ tab, go, setup }) {
   )
 }
 
-// How IV Studio starts ComfyUI: the person's own launcher (found or picked) and whether to start it on open.
-function ComfyLauncher({ settings, setSettings, notify, recheck, comfyUp }) {
-  const [l, setL] = useState(null)
-  const load = () => window.ivstudio.comfy.launcher().then(setL).catch(() => {})
-  useEffect(() => {
-    load()
-  }, [settings.comfyUrl, settings.comfyLauncher])
-  async function choose() {
-    const file = await window.ivstudio.comfy.chooseLauncher()
-    if (file) setSettings(await window.ivstudio.settings.get())
-  }
-  async function useFound(file) {
-    setSettings(await window.ivstudio.settings.set({ comfyLauncher: file }))
-  }
-  async function chooseFolder() {
-    try {
-      if (await window.ivstudio.comfy.chooseFolder()) setSettings(await window.ivstudio.settings.get())
-    } catch (err) {
-      notify(err.message)
-    }
-  }
-  async function autoStart(on) {
-    setSettings(await window.ivstudio.settings.set({ comfyAutoStart: on }))
-  }
-  if (!l) return null
-  if (!l.local) return <p className="small dim">IV Studio can start ComfyUI only when it runs on this PC.</p>
-  return (
-    <div className="comfy-launcher">
-      <div className="row">
-        <span className="row-label">ComfyUI folder</span>
-        <span className="launcher-path small" title={l.folder || ''}>{l.folder || 'Not set'}</span>
-        <button className="btn btn-small" onClick={chooseFolder}>
-          Choose folder…
-        </button>
-      </div>
-      {l.folder && l.inFolder.length > 0 && (
-        <div className="row">
-          <span className="row-label">Start file</span>
-          <select value={l.inFolder.some((f) => f.path === l.using) ? l.using : ''} onChange={(e) => useFound(e.target.value)}>
-            {!l.inFolder.some((f) => f.path === l.using) && <option value="">(another launcher, below)</option>}
-            {l.inFolder.map((f) => (
-              <option key={f.path} value={f.path}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-      <div className="row">
-        <span className="row-label">Start it with</span>
-        <span className="launcher-path small" title={l.using || ''}>{l.using || 'No launcher found'}</span>
-        <button className="btn btn-small" onClick={choose}>
-          Choose…
-        </button>
-        {!comfyUp && <StartComfy notify={notify} recheck={recheck} />}
-      </div>
-      {!l.chosen && !l.folder && l.found.length > 1 && (
-        <p className="small dim">
-          Found on this PC:{' '}
-          {l.found.slice(1, 5).map((f, i) => (
-            <span key={f.path}>
-              {i > 0 && ' · '}
-              <button className="link-btn mono" title={f.path} onClick={() => useFound(f.path)}>
-                {f.path}
-              </button>
-            </span>
-          ))}
-        </p>
-      )}
-      <label className="consent">
-        <input type="checkbox" checked={settings.comfyAutoStart !== false} onChange={(e) => autoStart(e.target.checked)} />
-        Start ComfyUI when IV Studio opens, if it isn’t running already
-      </label>
-      <p className="small dim">
-        {navigator.userAgent.includes('Linux')
-          ? 'A .sh script beside ComfyUI, or its main.py run with its own venv’s Python, so ComfyUI starts with your own settings and keeps running after IV Studio closes. Its output goes to comfyui.log in IV Studio’s data folder.'
-          : 'The same shortcut or .bat you’d double-click, so ComfyUI starts with your own settings in its own window, and keeps running after IV Studio closes.'}
-      </p>
-    </div>
-  )
+// The page's own scroll box (the routed page scrolls, not the window).
+function scroller(el) {
+  let s = el
+  while (s && !/(auto|scroll)/.test(getComputedStyle(s).overflowY)) s = s.parentElement
+  return s
 }
 
 export default function Settings({ info, recheck, notify, go, setup }) {
   const [settings, setSettings] = useState(null)
-  const [url, setUrl] = useState('')
+  const [active, setActive] = useState('pc')
 
   useEffect(() => {
-    window.ivstudio.settings.get().then((s) => {
-      setSettings(s)
-      setUrl(s.comfyUrl)
-    })
+    const load = () => window.ivstudio.settings.get().then(setSettings)
+    load()
+    // the welcome wizard (Check my PC) changed the writer or the PC summary
+    window.addEventListener('iv:settings', load)
+    return () => window.removeEventListener('iv:settings', load)
   }, [])
 
-  async function saveUrl() {
-    try {
-      setSettings(await window.ivstudio.settings.set({ comfyUrl: url.trim() }))
-      recheck()
-    } catch (err) {
-      notify(err.message)
+  // the index follows the card at the top of the page
+  const ready = !!settings
+  useEffect(() => {
+    const root = document.querySelector('.settings-v2')
+    const sc = root && scroller(root)
+    if (!sc) return
+    const on = () => {
+      const cards = [...root.querySelectorAll('.set-card')]
+      if (!cards.length) return
+      const line = sc.getBoundingClientRect().top + sc.clientHeight * 0.3
+      let cur = cards[0].dataset.set
+      for (const c of cards) if (c.getBoundingClientRect().top <= line) cur = c.dataset.set
+      if (sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 4) cur = cards[cards.length - 1].dataset.set
+      setActive(cur)
     }
-  }
+    sc.addEventListener('scroll', on, { passive: true })
+    const t = setTimeout(on, 300)
+    return () => (sc.removeEventListener('scroll', on), clearTimeout(t))
+  }, [ready])
 
   if (!settings) return null
+  const comfyUp = setup?.items?.some((i) => i.id === 'comfyui' && i.status === 'ok')
+  const shown = SECTIONS.filter(([id]) => id !== 'agents' || info?.mcp)
+  const n = (id) => shown.findIndex(([s]) => s === id) + 1
+  const jump = (id) => {
+    setActive(id)
+    document.getElementById(`set-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+  const common = { settings, setSettings, notify }
+
   return (
-    <div className="settings">
+    <div className="settings settings-v2">
       <Hero art="settings" title="Settings" kicker="Infinite Variance" />
       <SettingsTabs tab="settings" go={go} setup={setup} />
 
-      <section className="group">
-        <div className="group-head">
-          <h2>ComfyUI</h2>
-          <p className="dim small">The ComfyUI IV Studio renders on.</p>
-        </div>
-        <div className="group-body">
-          <div className="key-form">
-            <input value={url} onChange={(e) => setUrl(e.target.value)} />
-            <button className="btn btn-small" disabled={url.trim() === settings.comfyUrl} onClick={saveUrl}>
-              Save
+      <div className="set-layout">
+        <nav className="set-nav" aria-label="Settings sections">
+          {shown.map(([id, label], i) => (
+            <button key={id} className={active === id ? 'on' : ''} aria-current={active === id ? 'true' : undefined} onClick={() => jump(id)}>
+              <span className="mono">{String(i + 1).padStart(2, '0')}</span>
+              {label}
             </button>
-          </div>
-          <ComfyLauncher settings={settings} setSettings={setSettings} notify={notify} recheck={recheck} comfyUp={setup?.items?.some((i) => i.id === 'comfyui' && i.status === 'ok')} />
+          ))}
+        </nav>
+
+        <div className="set-cards">
+          <PcCard n={n('pc')} settings={settings} />
+          <ComfyCard n={n('comfy')} {...common} recheck={recheck} comfyUp={comfyUp} />
+          <FolderCard n={n('folders')} {...common} incognito={!!info?.incognito} />
+          <ModelCard n={n('models')} {...common} />
+          <WriterCard n={n('writer')} {...common} />
+          <CivitaiCard n={n('civitai')} {...common} />
+          <AgentCard n={n('agents')} mcp={info?.mcp} notify={notify} />
+          <UpdateSettings n={n('updates')} notify={notify} />
+          <AboutCard n={n('about')} info={info} />
         </div>
-      </section>
-
-      <FolderSettings settings={settings} setSettings={setSettings} notify={notify} incognito={!!info?.incognito} />
-
-      <ModelSettings settings={settings} setSettings={setSettings} notify={notify} />
-
-      <WriterSettings settings={settings} setSettings={setSettings} notify={notify} />
-
-      <CivitaiSettings settings={settings} setSettings={setSettings} notify={notify} />
-
-      <section className="group">
-        <div className="group-head">
-          <h2>Characters</h2>
-          <p className="dim small">Your characters, ready-made ones and training now live on their own page.</p>
-        </div>
-        <div className="group-body">
-          <button className="btn btn-small" onClick={() => go('characters')}>
-            Open Characters
-          </button>
-        </div>
-      </section>
-
-      <AgentSettings mcp={info?.mcp} notify={notify} />
-
-      <UpdateSettings notify={notify} />
-
-      <section className="group">
-        <div className="group-head">
-          <h2>About</h2>
-        </div>
-        <div className="group-body">
-          <p className="small dim">IV Studio {info?.version}. Data: {info?.dataDir}</p>
-        </div>
-      </section>
+      </div>
     </div>
   )
 }

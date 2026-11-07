@@ -6,6 +6,13 @@ import { LoraPicker, LoraThumb, loraTitle, useYours } from './Loras'
 import Findings from './Findings'
 import { MentionBox, MentionNotes, PlaceDialog } from './Mentions'
 import { blocking, lintPrompt } from '../../../service/lint'
+import { fileUrl } from './edit/model'
+import { AspectGlyph, DropIcon, StepHead } from './CreateKit'
+import { pretty as refmodTitle, RefModIcon, RefModPicker } from './CharacterSources'
+
+// the preview pass's tested sampler and scheduler (plan.js DEFAULTS)
+const SAMPLER_DEFAULT = 'er_sde'
+const SCHEDULER_DEFAULT = 'beta'
 
 const MODES = [
   ['text', 'Text', 'Just the prompt.'],
@@ -59,6 +66,8 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     previews: 3,
     seed: 4242,
     steps: 8,
+    sampler: SAMPLER_DEFAULT,
+    scheduler: SCHEDULER_DEFAULT,
     media: [],
     overlapFrames: 22,
     voiceLine: null,
@@ -67,6 +76,26 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     extraLoras: []
   })
   const [advanced, setAdvanced] = useState(false)
+  const [pickingRefmod, setPickingRefmod] = useState(false)
+  // the samplers and schedulers this ComfyUI offers, read when Advanced first opens
+  const [samplers, setSamplers] = useState(null)
+  useEffect(() => {
+    if (advanced && !samplers) window.ivstudio.samplers().then(setSamplers, () => setSamplers({ samplers: [], schedulers: [] }))
+  }, [advanced])
+  // the defaults Check my PC chose for this computer (Settings → Your PC); a fresh form only
+  useEffect(() => {
+    window.ivstudio.settings.get().then((s) => {
+      const p = s.shotPrefs
+      if (!p) return
+      setForm((f) => (f.projectId || f.megapixels !== 0.4 || f.steps !== 8 ? f : { ...f, megapixels: p.previewMp || f.megapixels, steps: p.quality === 'draft' ? 4 : 8 }))
+    }, () => {})
+  }, [])
+  // faces: a character's own picture, else its ready-made picture from the catalog (as on Characters)
+  const [catalog, setCatalog] = useState([])
+  useEffect(() => {
+    window.ivstudio.characters.catalog?.().then(setCatalog, () => {})
+  }, [])
+  const faceOf = (c) => c?.picture || catalog.find((x) => x.id === c?.id)?.picture || null
   // @ mentions: the cast and places a prompt can name (cast.js), and the new-place dialog with what to do after it
   const [members, setMembers] = useState([])
   const [newPlace, setNewPlace] = useState(null)
@@ -77,7 +106,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const [planError, setPlanError] = useState(null)
   const [busy, setBusy] = useState(false)
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
-  // Learn's Try it can open Create on a mode
+  // an iv:go with a mode (App.jsx) can open Create on that mode
   useEffect(() => {
     const go = (e) => e.detail?.create === 'video' && e.detail.mode && set({ mode: e.detail.mode, media: [] })
     window.addEventListener('iv:learn', go)
@@ -170,6 +199,8 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
       previews: q.previews || f.previews,
       seed: q.seed ?? f.seed,
       steps: q.steps || f.steps,
+      sampler: q.sampler || SAMPLER_DEFAULT,
+      scheduler: q.scheduler || SCHEDULER_DEFAULT,
       overlapFrames: q.overlapFrames || f.overlapFrames,
       refmods: q.refmods || [],
       retention: q.retention ?? 1,
@@ -274,11 +305,17 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const [anyway, setAnyway] = useState(false)
   useEffect(() => setAnyway(false), [form.prompt])
   const r = plan?.resolved
-  const refmodsAvailable = setup?.refmods || []
   const blocked = setup && !setup.ready
 
+  // the step numbers: "What it builds on" only shows for modes that take media
+  const steps = form.mode === 'text' ? { who: 2, what: 3, shape: 4 } : { who: 2, media: 3, what: 4, shape: 5 }
+  const modeLabel = MODES.find(([id]) => id === form.mode)?.[1]
+  const counts = ['picture', 'video', 'audio'].map((k) => [k, form.media.filter((m) => m.kind === k).length]).filter(([, n]) => n)
+  const huntLabel = busy ? 'Starting…' : errors.length && !anyway ? `Fix ${errors.length} error${errors.length > 1 ? 's' : ''} first` : `Hunt ${r?.previews || ''} preview${r?.previews > 1 ? 's' : ''}`
+  const canHunt = !(busy || !form.prompt.trim() || !r || blocked || (errors.length > 0 && !anyway))
+
   return (
-    <div className="create">
+    <div className="create create-v2">
       <Hero art="create" title="Create" kicker="New shot" />
       {kindSwitch}
 
@@ -300,306 +337,450 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
         </p>
       )}
 
-      <section className="block">
-        <p className="mono label">01 · Mode</p>
-        <div className="mode-cards">
-          {MODES.map(([id, label, hint]) => (
-            <button key={id} className={`mode-card ${form.mode === id ? 'on' : ''}`} onClick={() => set({ mode: id, media: [] })}>
-              <span className="mode-name">{label}</span>
-              <span className="dim small">{hint}</span>
-            </button>
-          ))}
-        </div>
-        {form.mode !== 'text' && (
-          <p className="dim small mode-writer-hint">
-            ✦ Add your {form.mode === 'frames' ? 'frames' : form.mode === 'continue' ? 'video' : 'pictures and videos'} below first: <b>Write it for me</b> looks at {form.mode === 'continue' ? 'its last frame' : 'them'} and writes what it sees into the prompt.
-          </p>
-        )}
-      </section>
-
-      <section className="block">
-        <p className="mono label">02 · Who and what</p>
-        <div className="row">
-          <span className="row-label">Character</span>
-          <div className="segmented">
-            {characters.map((c) => (
-              <button key={c.id} className={form.character === c.id ? 'on' : ''} onClick={() => set({ character: c.id })}>
-                {c.name.split(' ')[0]}
-              </button>
-            ))}
-            <button className={form.character === 'none' ? 'on' : ''} onClick={() => set({ character: 'none' })}>
-              None
-            </button>
-          </div>
-        </div>
-        <div className="row">
-          <span className="row-label">Shot name</span>
-          <input className="shot-name-input" value={form.projectName} placeholder="e.g. Tess car rant (optional)" onChange={(e) => set({ projectName: e.target.value })} />
-        </div>
-        <div className="row lora-tray-row">
-          <span className="row-label">LoRAs</span>
-          <div className="lora-tray">
-            {form.extraLoras.map((l, i) => {
-              const info = loraInfo(l.name)
-              return (
-                <div key={l.name} className="lora-chip">
-                  <LoraThumb className="small" preview={info?.prefs?.picture ? { file: info.prefs.picture, type: 'image' } : info?.civitai?.preview} label={loraTitle(l.name)} mature={info?.civitai?.mature} />
-                  <div className="lora-chip-body">
-                    <span className="lora-chip-name" title={l.name}>
-                      {info?.civitai?.name || loraTitle(l.name)}
-                    </span>
-                    <div className="lora-chip-strength">
-                      <input type="range" min={0} max={1.5} step={0.05} value={l.strength} onChange={(e) => set({ extraLoras: form.extraLoras.map((x, j) => (j === i ? { ...x, strength: Number(e.target.value) } : x)) })} />
-                      <span className="mono small">{Number(l.strength).toFixed(2)}</span>
-                    </div>
-                  </div>
-                  <button className="lora-chip-x" title="Take it out of the shot" onClick={() => set({ extraLoras: form.extraLoras.filter((_, j) => j !== i) })}>
-                    ×
-                  </button>
-                </div>
-              )
-            })}
-            <button className="lora-add" onClick={() => setPicking(true)}>
-              + Add LoRA
-            </button>
-          </div>
-        </div>
-        {picking && <LoraPicker notify={notify} go={go} onClose={() => setPicking(false)} onPick={addLora} />}
-        {form.mode !== 'text' && (
-          <div className={`media ${dragOver ? 'drag-over' : ''}`} onDragOver={(e) => (e.preventDefault(), setDragOver(true))} onDragLeave={() => setDragOver(false)} onDrop={dropMedia}>
-            <div className="media-head">
-              <span className="row-label">{form.mode === 'frames' ? 'Frames' : form.mode === 'continue' ? 'Source video' : 'References'}</span>
-              <div className="media-actions">
-                {(form.mode === 'frames' || form.mode === 'reference') && (
-                  <button className="btn btn-small" onClick={() => addMedia('picture')}>
-                    + Picture
-                  </button>
-                )}
-                {(form.mode === 'continue' || form.mode === 'reference') && (
-                  <button className="btn btn-small" onClick={() => addMedia('video')}>
-                    + Video
-                  </button>
-                )}
-                {form.mode === 'reference' && (
-                  <button className="btn btn-small" onClick={() => addMedia('audio')}>
-                    + Audio
-                  </button>
-                )}
-              </div>
-            </div>
-            {form.media.length === 0 && <p className="dim small">{form.mode === 'frames' ? 'Add the first frame, and optionally a last frame, or drop pictures here. Pick an aspect ratio that matches them.' : form.mode === 'continue' ? 'Add the clip to continue, or drop it here. 24 fps works best.' : 'Add what the shot should keep: a place, an outfit, a voice. You can drop files here too.'}</p>}
-            {form.media.length > 0 && (
-              <div className="media-tiles">
-                {form.media.map((m, i) => (
-                  <MediaTile key={`${i}:${m.path}`} item={m} label={mediaLabel(m, i)} onEdit={() => setEditing(i)} onRemove={() => set({ media: form.media.filter((_, j) => j !== i) })} />
-                ))}
-              </div>
-            )}
-            {form.media.length > 0 && <p className="dim small">Click a reference to crop it or trim it. The original file isn't changed.</p>}
-            {form.mode === 'continue' && (
-              <div className="row">
-                <span className="row-label">Overlap frames</span>
-                <div className="segmented">
-                  {[5, 22, 39, 56].map((n) => (
-                    <button key={n} className={form.overlapFrames === n ? 'on' : ''} onClick={() => set({ overlapFrames: n })}>
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        <PromptWriter
-          context={{ mode: form.mode, seconds: form.seconds, aspect: form.aspect, character: form.character ?? 'none', media: form.media.map((m) => ({ kind: m.kind, file: m.path })) }}
-          current={form.prompt}
-          names={char ? [char.name, ...characters.filter((c) => c.id !== char.id).map((c) => c.name), 'Someone'] : ['Someone', ...characters.map((c) => c.name)]}
-          onPrevis={(clip) => {
-            // a previs is a video reference: References mode keeps the pictures (Text has none)
-            if (form.mode !== 'reference') set({ mode: 'reference', media: form.media.filter((m) => m.kind === 'picture') })
-            addFiles([{ kind: 'video', path: clip.file }])
-          }}
-          onWritten={(prompt) => set({ prompt })}
-          notify={notify}
-          go={go}
-        />
-        <div className="prompt-head">
-          <span className="row-label">
-            Prompt {char && <span className="dim small">· write <code>{'{char}'}</code> for {char.name.split(' ')[0]} ({char.trigger})</span>}
-          </span>
-          <button className="link-btn mono" onClick={() => set({ prompt: form.mode === 'reference' ? REF_TEMPLATE : TEMPLATE })}>
-            Insert template
-          </button>
-        </div>
-        <MentionBox
-          className="prompt"
-          rows={9}
-          value={form.prompt}
-          members={members}
-          onNewPlace={(then) => setNewPlace(() => then)}
-          placeholder="Describe the shot: clothes, place, camera, action and the lines. Never the face or voice; the character carries those. Type @ for your cast and places."
-          onChange={(prompt) => set({ prompt })}
-        />
-        <MentionNotes notes={plan?.notes} />
-        {form.prompt.trim() && <Findings findings={findings} onFix={(prompt) => set({ prompt })} />}
-        {newPlace && (
-          <PlaceDialog
-            notify={notify}
-            onClose={() => setNewPlace(null)}
-            onSaved={(place, list) => {
-              setMembers(list)
-              setNewPlace(null)
-              if (place) newPlace(place)
-            }}
-          />
-        )}
-
-        <div className="row voice-row">
-          <span className="row-label">Voice line</span>
-          <div className="voice-control">
-            {form.voiceLine ? (
-              <MediaTile item={form.voiceItem || { kind: 'audio', path: form.voiceLine }} label="Lip-sync" onEdit={() => setEditing('voice')} onRemove={() => set({ voiceLine: null, voiceItem: null })} />
-            ) : (
-              <>
-                {char?.voiceId && (
-                  <div className="speak-line">
-                    <input value={say} placeholder={`What ${char.name.split(' ')[0]} says`} onChange={(e) => setSay(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && say.trim() && !speaking && speakLine()} />
-                    <button className="btn btn-small btn-primary" disabled={!say.trim() || speaking} onClick={speakLine}>
-                      {speaking ? 'Speaking… (up to a minute the first time)' : 'Speak it'}
-                    </button>
-                  </div>
-                )}
-                <button className="btn btn-small" onClick={pickVoice}>
-                  + Recording to lip-sync
-                </button>
-              </>
-            )}
-            <span className="dim small">
-              {char?.voiceId ? `Optional. Speak a line in ${char.name.split(' ')[0]}'s voice, or add a recording; the words go into the prompt's dialogue.` : char ? `Optional. Write the same words in the prompt. Give ${char.name.split(' ')[0]} a voice under Audio › Voices to speak lines here.` : 'Optional. Write the same words in the prompt.'}
-            </span>
-          </div>
-        </div>
-      </section>
-
-      <section className="block">
-        <p className="mono label">03 · Video</p>
-        <div className="row">
-          <span className="row-label">Aspect</span>
-          <div className="segmented">
-            {ASPECTS.map((a) => (
-              <button key={a} className={form.aspect === a ? 'on' : ''} onClick={() => set({ aspect: a })}>
-                {a}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="row">
-          <span className="row-label">Length</span>
-          <div className="slider">
-            <input type="range" min={1} max={15} step={0.5} value={form.seconds} onChange={(e) => set({ seconds: Number(e.target.value) })} />
-            <span className="mono">{form.seconds} s</span>
-          </div>
-        </div>
-        <div className="row">
-          <span className="row-label">Preview size</span>
-          <div className="segmented">
-            {PREVIEW_MP.map((mp) => (
-              <button key={mp} className={form.megapixels === mp ? 'on' : ''} onClick={() => set({ megapixels: mp })}>
-                {mp} MP
-              </button>
-            ))}
-          </div>
-        </div>
-        {form.mode !== 'continue' && (
-          <div className="row">
-            <span className="row-label">Previews</span>
-            <div className="segmented">
-              {[1, 2, 3].map((n) => (
-                <button key={n} className={form.previews === n ? 'on' : ''} onClick={() => set({ previews: n })}>
-                  {n}
+      <div className="create-layout">
+        <div className="create-steps">
+          <section className="create-step">
+            <StepHead n={1} title="What kind of shot" sub="How H3 starts: from words, from your pictures and clips, from a first frame, or carrying a video on." />
+            <div className="mode-cards create-modes">
+              {MODES.map(([id, label, hint]) => (
+                <button key={id} className={`mode-card ${form.mode === id ? 'on' : ''}`} onClick={() => set({ mode: id, media: [] })}>
+                  <ModeIcon id={id} />
+                  <span className="mode-name">{label}</span>
+                  <span className="dim small">{hint}</span>
                 </button>
               ))}
             </div>
-          </div>
-        )}
-        <div className="row">
-          <span className="row-label">Quality</span>
-          <div className="segmented">
-            {QUALITY.map(([steps, label]) => (
-              <button key={steps} className={form.steps === steps ? 'on' : ''} onClick={() => set({ steps })}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <span className="dim small">{QUALITY.find(([s]) => s === form.steps)?.[2] || `${form.steps} steps (set under Advanced)`}</span>
-        </div>
-        <div className="row">
-          <span className="row-label">Seed</span>
-          <div className="seed">
-            <input type="number" value={form.seed} onChange={(e) => set({ seed: Math.max(0, Number(e.target.value) || 0) })} />
-            <button className="btn btn-small" onClick={() => set({ seed: Math.floor(Math.random() * 1e9) })}>
-              🎲 New seed
-            </button>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      <section className="block">
-        <button className="link-btn mono advanced-toggle" onClick={() => setAdvanced(!advanced)}>
-          {advanced ? '− Hide advanced' : '+ Advanced: steps, extra LoRAs, RefMods'}
-        </button>
-        {advanced && (
-          <div className="advanced">
-            <div className="row">
-              <span className="row-label">Steps</span>
-              <input type="number" min={4} max={20} value={form.steps} onChange={(e) => set({ steps: Number(e.target.value) || 8 })} />
+          <section className="create-step">
+            <StepHead n={steps.who} title="Who's in it" sub="A character keeps the same face and voice in every shot. LoRAs add a look, a style or a move; RefMods bring a saved look, voice or place." />
+            <div className="cast-picker" role="radiogroup" aria-label="Character">
+              {characters.map((c) => (
+                <button key={c.id} role="radio" aria-checked={form.character === c.id} className={`cast-chip ${form.character === c.id ? 'on' : ''}`} onClick={() => set({ character: c.id })}>
+                  <span className="cast-chip-face">{faceOf(c) ? <img src={fileUrl(faceOf(c))} alt="" /> : c.name.slice(0, 1)}</span>
+                  <span className="cast-chip-name">{c.name.split(' ')[0]}</span>
+                </button>
+              ))}
+              <button role="radio" aria-checked={form.character === 'none'} className={`cast-chip none ${form.character === 'none' ? 'on' : ''}`} onClick={() => set({ character: 'none' })}>
+                <span className="cast-chip-face">∅</span>
+                <span className="cast-chip-name">Nobody</span>
+              </button>
             </div>
-            <div className="row">
-              <span className="row-label">RefMods</span>
-              <div>
-                <div className="chips">
-                  {form.refmods.map((m, i) => (
-                    <span key={i} className="chip">
-                      {m.name}
-                      <input className="mini" type="number" min={0} max={1} step={0.1} value={m.strength} onChange={(e) => set({ refmods: form.refmods.map((x, j) => (j === i ? { ...x, strength: Number(e.target.value) } : x)) })} />
-                      <button onClick={() => set({ refmods: form.refmods.filter((_, j) => j !== i) })}>×</button>
+            <div className="create-field">
+              <span className="create-label mono">LoRAs</span>
+              <div className="lora-tray">
+                {form.extraLoras.map((l, i) => {
+                  const info = loraInfo(l.name)
+                  return (
+                    <div key={l.name} className="lora-chip">
+                      <LoraThumb className="small" preview={info?.prefs?.picture ? { file: info.prefs.picture, type: 'image' } : info?.civitai?.preview} label={loraTitle(l.name)} mature={info?.civitai?.mature} />
+                      <div className="lora-chip-body">
+                        <span className="lora-chip-name" title={l.name}>
+                          {info?.civitai?.name || loraTitle(l.name)}
+                        </span>
+                        <div className="lora-chip-strength">
+                          <input type="range" min={0} max={1.5} step={0.05} value={l.strength} onChange={(e) => set({ extraLoras: form.extraLoras.map((x, j) => (j === i ? { ...x, strength: Number(e.target.value) } : x)) })} />
+                          <span className="mono small">{Number(l.strength).toFixed(2)}</span>
+                        </div>
+                      </div>
+                      <button className="lora-chip-x" title="Take it out of the shot" onClick={() => set({ extraLoras: form.extraLoras.filter((_, j) => j !== i) })}>
+                        ×
+                      </button>
+                    </div>
+                  )
+                })}
+                <button className="lora-add" onClick={() => setPicking(true)}>
+                  + Add LoRA
+                </button>
+              </div>
+            </div>
+            {picking && <LoraPicker notify={notify} go={go} onClose={() => setPicking(false)} onPick={addLora} />}
+            <div className="create-field">
+              <span className="create-label mono">RefMods</span>
+              <div className="lora-tray refmod-tray">
+                {form.refmods.map((m, i) => (
+                  <div key={m.name} className="lora-chip refmod-chip">
+                    <span className="refmod-chip-icon" aria-hidden="true">
+                      <RefModIcon />
+                    </span>
+                    <div className="lora-chip-body">
+                      <span className="lora-chip-name" title={m.name}>
+                        {refmodTitle(m.name)}
+                      </span>
+                      <div className="lora-chip-strength">
+                        <input type="range" min={0} max={1} step={0.05} value={m.strength} aria-label={`${refmodTitle(m.name)} strength`} onChange={(e) => set({ refmods: form.refmods.map((x, j) => (j === i ? { ...x, strength: Number(e.target.value) } : x)) })} />
+                        <span className="mono small">{Number(m.strength).toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <button className="lora-chip-x" title="Take it out of the shot" onClick={() => set({ refmods: form.refmods.filter((_, j) => j !== i) })}>
+                      ×
+                    </button>
+                  </div>
+                ))}
+                {form.refmods.length < 8 && (
+                  <button className="lora-add" onClick={() => setPickingRefmod(true)}>
+                    + Add RefMod
+                  </button>
+                )}
+              </div>
+              {form.refmods.length > 0 && (
+                <div className="create-field inline refmod-retention">
+                  <span className="create-label mono">Retention</span>
+                  <div className="segmented">
+                    {[
+                      [1, 'Full'],
+                      [0.7, 'Partial'],
+                      [0.4, 'Style']
+                    ].map(([v, l]) => (
+                      <button key={v} className={form.retention === v ? 'on' : ''} onClick={() => set({ retention: v })}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <span className="dim small">Saved references: a character's look or voice, a place, a style. Best with References mode.</span>
+            </div>
+            {pickingRefmod && (
+              <RefModPicker
+                onClose={() => setPickingRefmod(false)}
+                onPick={({ name }) => {
+                  if (!form.refmods.some((m) => m.name === name)) set({ refmods: [...form.refmods, { name, strength: 1, copies: 1 }].slice(0, 8) })
+                  setPickingRefmod(false)
+                }}
+              />
+            )}
+          </section>
+
+          {form.mode !== 'text' && (
+            <section className="create-step">
+              <StepHead
+                n={steps.media}
+                title={form.mode === 'frames' ? 'The frames' : form.mode === 'continue' ? 'The video to carry on' : 'What it builds on'}
+                sub={form.mode === 'frames' ? 'The first frame, and a last frame if the clip should land on one.' : form.mode === 'continue' ? 'The clip to continue. 24 fps works best.' : 'A place, an outfit, a voice: name them in the prompt as <Picture 1>, <Video 1>, <Audio 1>.'}
+              />
+              <div className={`media create-drop ${dragOver ? 'drag-over' : ''} ${form.media.length ? 'filled' : ''}`} onDragOver={(e) => (e.preventDefault(), setDragOver(true))} onDragLeave={() => setDragOver(false)} onDrop={dropMedia}>
+                {form.media.length > 0 ? (
+                  <div className="media-tiles">
+                    {form.media.map((m, i) => (
+                      <MediaTile key={`${i}:${m.path}`} item={m} label={mediaLabel(m, i)} onEdit={() => setEditing(i)} onRemove={() => set({ media: form.media.filter((_, j) => j !== i) })} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="create-drop-empty">
+                    <DropIcon />
+                    <span>Drop {form.mode === 'frames' ? 'pictures' : form.mode === 'continue' ? 'a clip' : 'pictures, clips or sound'} here</span>
+                  </div>
+                )}
+                <div className="media-actions">
+                  {(form.mode === 'frames' || form.mode === 'reference') && (
+                    <button className="btn btn-small" onClick={() => addMedia('picture')}>
+                      + Picture
+                    </button>
+                  )}
+                  {(form.mode === 'continue' || form.mode === 'reference') && (
+                    <button className="btn btn-small" onClick={() => addMedia('video')}>
+                      + Video
+                    </button>
+                  )}
+                  {form.mode === 'reference' && (
+                    <button className="btn btn-small" onClick={() => addMedia('audio')}>
+                      + Audio
+                    </button>
+                  )}
+                  {form.media.length > 0 && <span className="dim small">Click one to crop or trim it; the original isn't changed.</span>}
+                </div>
+              </div>
+              {form.mode === 'continue' && (
+                <div className="create-field inline">
+                  <span className="create-label mono">Overlap frames</span>
+                  <div className="segmented">
+                    {[5, 22, 39, 56].map((n) => (
+                      <button key={n} className={form.overlapFrames === n ? 'on' : ''} onClick={() => set({ overlapFrames: n })}>
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="dim small mode-writer-hint">
+                ✦ Add them first: <b>Write it for me</b> looks at {form.mode === 'continue' ? 'the last frame' : 'them'} and writes what it sees into the prompt.
+              </p>
+            </section>
+          )}
+
+          <section className="create-step">
+            <StepHead n={steps.what} title="What happens" sub="Clothes, place, camera, action and the lines. Never the face or voice: the character carries those." />
+            <PromptWriter
+              context={{ mode: form.mode, seconds: form.seconds, aspect: form.aspect, character: form.character ?? 'none', media: form.media.map((m) => ({ kind: m.kind, file: m.path })) }}
+              current={form.prompt}
+              names={char ? [char.name, ...characters.filter((c) => c.id !== char.id).map((c) => c.name), 'Someone'] : ['Someone', ...characters.map((c) => c.name)]}
+              onPrevis={(clip) => {
+                // a previs is a video reference: References mode keeps the pictures (Text has none)
+                if (form.mode !== 'reference') set({ mode: 'reference', media: form.media.filter((m) => m.kind === 'picture') })
+                addFiles([{ kind: 'video', path: clip.file }])
+              }}
+              onWritten={(prompt) => set({ prompt })}
+              notify={notify}
+              go={go}
+            />
+            <div className="prompt-head">
+              <span className="create-label mono">
+                Prompt {char && <span className="dim">· write <code>{'{char}'}</code> for {char.name.split(' ')[0]}</span>}
+              </span>
+              <button className="link-btn mono" onClick={() => set({ prompt: form.mode === 'reference' ? REF_TEMPLATE : TEMPLATE })}>
+                Insert template
+              </button>
+            </div>
+            <MentionBox
+              className="prompt"
+              rows={9}
+              value={form.prompt}
+              members={members}
+              onNewPlace={(then) => setNewPlace(() => then)}
+              placeholder="Describe the shot: clothes, place, camera, action and the lines. Type @ for your cast and places."
+              onChange={(prompt) => set({ prompt })}
+            />
+            <MentionNotes notes={plan?.notes} />
+            {form.prompt.trim() && <Findings findings={findings} onFix={(prompt) => set({ prompt })} />}
+            {newPlace && (
+              <PlaceDialog
+                notify={notify}
+                onClose={() => setNewPlace(null)}
+                onSaved={(place, list) => {
+                  setMembers(list)
+                  setNewPlace(null)
+                  if (place) newPlace(place)
+                }}
+              />
+            )}
+
+            <div className="create-voice">
+              <div className="create-voice-head">
+                <span className="create-label mono">Voice line</span>
+                <span className="dim small">
+                  {char?.voiceId ? `Optional. Speak a line in ${char.name.split(' ')[0]}'s voice, or add a recording; the words go into the prompt.` : char ? `Optional. Give ${char.name.split(' ')[0]} a voice under Audio › Voices to speak lines here.` : 'Optional. A recording H3 lip-syncs to; write the same words in the prompt.'}
+                </span>
+              </div>
+              <div className="voice-control">
+                {form.voiceLine ? (
+                  <MediaTile item={form.voiceItem || { kind: 'audio', path: form.voiceLine }} label="Lip-sync" onEdit={() => setEditing('voice')} onRemove={() => set({ voiceLine: null, voiceItem: null })} />
+                ) : (
+                  <>
+                    {char?.voiceId && (
+                      <div className="speak-line">
+                        <input value={say} placeholder={`What ${char.name.split(' ')[0]} says`} onChange={(e) => setSay(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && say.trim() && !speaking && speakLine()} />
+                        <button className="btn btn-small btn-primary" disabled={!say.trim() || speaking} onClick={speakLine}>
+                          {speaking ? 'Speaking… (up to a minute the first time)' : 'Speak it'}
+                        </button>
+                      </div>
+                    )}
+                    <button className="btn btn-small" onClick={pickVoice}>
+                      + Recording to lip-sync
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="create-step">
+            <StepHead n={steps.shape} title="Shape and size" sub="The previews are small and quick; the one you pick is finished at full size." />
+            <div className="aspect-tiles" role="radiogroup" aria-label="Aspect ratio">
+              {ASPECTS.map((a) => (
+                <button key={a} role="radio" aria-checked={form.aspect === a} className={`aspect-tile ${form.aspect === a ? 'on' : ''}`} onClick={() => set({ aspect: a })}>
+                  <AspectGlyph a={a} />
+                  <span className="mono">{a}</span>
+                </button>
+              ))}
+            </div>
+            <div className="create-field">
+              <span className="create-label mono">
+                Length <span className="create-value">{form.seconds} s</span>
+              </span>
+              <div className="length-slider">
+                <input type="range" min={1} max={15} step={0.5} value={form.seconds} onChange={(e) => set({ seconds: Number(e.target.value) })} aria-label="Length in seconds" />
+                <div className="length-marks mono" aria-hidden="true">
+                  {[1, 5, 10, 15].map((s) => (
+                    <span key={s} style={{ left: `${((s - 1) / 14) * 100}%` }}>
+                      {s}s
                     </span>
                   ))}
                 </div>
-                <select value="" onChange={(e) => e.target.value && set({ refmods: [...form.refmods, { name: e.target.value, strength: 1, copies: 1 }].slice(0, 8) })}>
-                  <option value="">+ Add a RefMod…</option>
-                  {refmodsAvailable.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-                {form.refmods.length > 0 && (
-                  <div className="row tight">
-                    <span className="row-label">Retention</span>
-                    <div className="segmented">
-                      {[
-                        [1, 'Full'],
-                        [0.7, 'Partial'],
-                        [0.4, 'Style']
-                      ].map(([v, l]) => (
-                        <button key={v} className={form.retention === v ? 'on' : ''} onClick={() => set({ retention: v })}>
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <p className="dim small">Saved references: a character's look or voice, a place, a style. Best with References mode.</p>
               </div>
             </div>
-          </div>
-        )}
-      </section>
+            <div className="create-grid">
+              <div className="create-field">
+                <span className="create-label mono">Preview size</span>
+                <div className="segmented">
+                  {PREVIEW_MP.map((mp) => (
+                    <button key={mp} className={form.megapixels === mp ? 'on' : ''} onClick={() => set({ megapixels: mp })}>
+                      {mp} MP
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {form.mode !== 'continue' && (
+                <div className="create-field">
+                  <span className="create-label mono">Previews</span>
+                  <div className="segmented">
+                    {[1, 2, 3].map((n) => (
+                      <button key={n} className={form.previews === n ? 'on' : ''} onClick={() => set({ previews: n })}>
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="create-field">
+                <span className="create-label mono">Quality</span>
+                <div className="segmented">
+                  {QUALITY.map(([steps, label]) => (
+                    <button key={steps} className={form.steps === steps ? 'on' : ''} onClick={() => set({ steps })} title={QUALITY.find(([s]) => s === steps)?.[2]}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <span className="dim small">{QUALITY.find(([s]) => s === form.steps)?.[2] || `${form.steps} steps (set under Advanced)`}</span>
+              </div>
+              <div className="create-field">
+                <span className="create-label mono">Seed</span>
+                <div className="seed">
+                  <input type="number" value={form.seed} onChange={(e) => set({ seed: Math.max(0, Number(e.target.value) || 0) })} aria-label="Seed" />
+                  <button className="seed-roll" onClick={() => set({ seed: Math.floor(Math.random() * 1e9) })} title="A new seed" aria-label="A new seed">
+                    ⟳
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="create-field">
+              <span className="create-label mono">
+                Shot name <span className="dim">· optional</span>
+              </span>
+              <input className="shot-name-input" value={form.projectName} placeholder="e.g. Tess car rant" onChange={(e) => set({ projectName: e.target.value })} />
+            </div>
 
-      {/* Stays at the bottom of the window while the form scrolls: what will render, and the button. */}
-      <section className="go-dock">
+            <div className={`more-settings ${advanced ? 'open' : ''}`}>
+              <button type="button" className="more-settings-toggle mono" onClick={() => setAdvanced(!advanced)} aria-expanded={advanced}>
+                {advanced ? '−' : '+'} Advanced: steps, sampler, scheduler
+                <span className="dim">{[form.steps !== 8 && form.steps !== 4 && `${form.steps} steps`, form.sampler !== SAMPLER_DEFAULT && form.sampler, form.scheduler !== SCHEDULER_DEFAULT && form.scheduler].filter(Boolean).join(' · ')}</span>
+              </button>
+              {advanced && (
+                <div className="more-settings-body adv-grid">
+                  <div className="create-field inline">
+                    <span className="create-label mono">Steps</span>
+                    <input className="mini" type="number" min={4} max={20} value={form.steps} onChange={(e) => set({ steps: Number(e.target.value) || 8 })} />
+                  </div>
+                  <div className="create-field inline">
+                    <span className="create-label mono">Sampler</span>
+                    <select value={form.sampler} onChange={(e) => set({ sampler: e.target.value })} aria-label="Sampler">
+                      {[...new Set([form.sampler, ...(samplers?.samplers || [])])].map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                          {n === SAMPLER_DEFAULT ? ' (default)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="create-field inline">
+                    <span className="create-label mono">Scheduler</span>
+                    <select value={form.scheduler} onChange={(e) => set({ scheduler: e.target.value })} aria-label="Scheduler">
+                      {[...new Set([form.scheduler, ...(samplers?.schedulers || [])])].map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                          {n === SCHEDULER_DEFAULT ? ' (default)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="dim small adv-note">
+                    For the previews. {samplers && !samplers.samplers.length ? 'Start ComfyUI to see every choice. ' : ''}er_sde with beta is what IV Studio is tuned on; the full-size finish keeps its own refine settings.
+                    {(form.sampler !== SAMPLER_DEFAULT || form.scheduler !== SCHEDULER_DEFAULT) && (
+                      <>
+                        {' '}
+                        <button className="link-btn" onClick={() => set({ sampler: SAMPLER_DEFAULT, scheduler: SCHEDULER_DEFAULT })}>
+                          Back to the defaults
+                        </button>
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+
+        {/* Your shot: the frame in its shape, what will render, and the button. Pinned while the steps scroll. */}
+        <aside className="shot-card" aria-label="Your shot">
+          <div className="shot-card-head mono">
+            <span>Your shot</span>
+            <span className="dim">{modeLabel}</span>
+          </div>
+          <ShotFrame aspect={form.aspect} media={form.media} mode={form.mode} char={char} face={faceOf(char)} seconds={form.seconds} />
+          <div className="shot-time" aria-hidden="true">
+            {Array.from({ length: 15 }, (_, i) => (
+              <span key={i} className={i < Math.ceil(form.seconds) ? 'on' : ''} />
+            ))}
+          </div>
+          <dl className="shot-facts">
+            <div>
+              <dt>Who</dt>
+              <dd>{char ? char.name : 'Nobody in particular'}</dd>
+            </div>
+            {form.extraLoras.length > 0 && (
+              <div>
+                <dt>LoRAs</dt>
+                <dd>{form.extraLoras.map((l) => loraInfo(l.name)?.civitai?.name || loraTitle(l.name)).join(', ')}</dd>
+              </div>
+            )}
+            {form.mode !== 'text' && (
+              <div>
+                <dt>{form.mode === 'frames' ? 'Frames' : form.mode === 'continue' ? 'Source' : 'References'}</dt>
+                <dd>{counts.length || form.refmods.length ? [...counts, ...(form.refmods.length ? [['RefMod', form.refmods.length]] : [])].map(([k, n]) => `${n} ${k}${n > 1 ? 's' : ''}`).join(', ') : <span className="pink">none yet</span>}</dd>
+              </div>
+            )}
+            <div>
+              <dt>Voice line</dt>
+              <dd>{form.voiceLine ? base(form.voiceLine) : 'None'}</dd>
+            </div>
+            {r ? (
+              <>
+                <div>
+                  <dt>Previews</dt>
+                  <dd>
+                    {r.previews} × {r.width}×{r.height} · {r.seconds} s
+                  </dd>
+                </div>
+                <div>
+                  <dt>Finish</dt>
+                  <dd>
+                    2 MP → {plan.finish.width}×{plan.finish.height}
+                  </dd>
+                </div>
+              </>
+            ) : null}
+            <div>
+              <dt>Quality</dt>
+              <dd>
+                {QUALITY.find(([s]) => s === form.steps)?.[1] || `${form.steps} steps`} · seed {form.seed}
+              </dd>
+            </div>
+          </dl>
+          {!r && planError && <p className="shot-card-error small">{planError}</p>}
+          {plan?.mode && plan.mode !== form.mode && <p className="dim small">Renders in References mode, for the @ pictures.</p>}
+          {errors.length > 0 && !anyway && (
+            <button className="link-btn mono small go-anyway" onClick={() => setAnyway(true)}>
+              Render anyway
+            </button>
+          )}
+          <button className="btn btn-primary shot-card-go" disabled={!canHunt} onClick={hunt}>
+            {huntLabel}
+          </button>
+        </aside>
+      </div>
+
+      {/* Narrow windows: the same, as a bar at the bottom of the window. */}
+      <section className="go-dock create-dock">
         <div className="go-info">
           {r ? (
             <>
@@ -620,11 +801,76 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             Render anyway
           </button>
         )}
-        <button className="btn btn-primary" disabled={busy || !form.prompt.trim() || !r || blocked || (errors.length > 0 && !anyway)} onClick={hunt}>
-          {busy ? 'Starting…' : errors.length && !anyway ? `Fix ${errors.length} error${errors.length > 1 ? 's' : ''} first` : `Hunt ${r?.previews || ''} preview${r?.previews > 1 ? 's' : ''}`}
+        <button className="btn btn-primary" disabled={!canHunt} onClick={hunt}>
+          {huntLabel}
         </button>
       </section>
       {editItem && <MediaEditor item={editItem} shotAspect={form.aspect} hint={editing === 'voice' ? 'Keep just the line to lip-sync. Write the same words in the prompt.' : editHint[form.mode]} onApply={applyEdit} onClose={() => setEditing(null)} notify={notify} />}
+    </div>
+  )
+}
+
+// Line icons for the four modes.
+function ModeIcon({ id }) {
+  const p = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' }
+  return (
+    <svg className="mode-icon" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
+      {id === 'text' && (
+        <g {...p}>
+          <path d="M7 9h18M16 9v15M11 24h10" />
+        </g>
+      )}
+      {id === 'reference' && (
+        <g {...p}>
+          <rect x="5" y="8" width="15" height="12" rx="1.5" />
+          <rect x="12" y="13" width="15" height="12" rx="1.5" />
+          <circle cx="17" cy="18" r="1.6" />
+          <path d="M13 24l4-3.5 3 2.5 3-2 3 3" />
+        </g>
+      )}
+      {id === 'frames' && (
+        <g {...p}>
+          <rect x="4" y="10" width="9" height="12" rx="1" />
+          <rect x="19" y="10" width="9" height="12" rx="1" />
+          <path d="M14.5 16h3M16 14.5l1.5 1.5-1.5 1.5" />
+        </g>
+      )}
+      {id === 'continue' && (
+        <g {...p}>
+          <rect x="4" y="9" width="14" height="14" rx="1.5" />
+          <path d="M7 9v14M15 9v14" />
+          <path d="M21 16h7M25 13l3 3-3 3" />
+        </g>
+      )}
+    </svg>
+  )
+}
+
+// The shot in its shape, with what it starts from inside: the first frame or picture, the source clip, or the
+// character's face; the shape changes as the aspect does.
+function ShotFrame({ aspect, media, mode, char, face, seconds }) {
+  const [w, h] = aspect.split(':').map(Number)
+  const pic = media.find((m) => m.kind === 'picture')
+  const vid = media.find((m) => m.kind === 'video')
+  const src = pic ? fileUrl(pic.path) : null
+  return (
+    <div className="shot-frame-wrap">
+      <div className="shot-frame" style={{ aspectRatio: `${w} / ${h}`, '--ar': w / h }}>
+        {src ? (
+          <img src={src} alt="" />
+        ) : vid ? (
+          <video src={`${fileUrl(vid.path)}#t=1`} muted preload="metadata" />
+        ) : face ? (
+          <img className="face" src={fileUrl(face)} alt="" />
+        ) : (
+          <span className="shot-frame-empty mono">{aspect}</span>
+        )}
+        {(() => {
+          const tag = mode === 'frames' && pic ? 'First frame' : mode === 'continue' && vid ? 'Carries on' : char ? char.name.split(' ')[0] : null
+          return tag && <span className="shot-frame-tag mono">{tag}</span>
+        })()}
+        <span className="shot-frame-len mono">{seconds} s</span>
+      </div>
     </div>
   )
 }
