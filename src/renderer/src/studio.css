@@ -7365,3 +7365,698 @@ button.nav-update:hover {
     background: var(--line-strong);
   }
 }
+
+/* ---------- the audio side: Voices, Lines and Music (AudioKit.jsx) ---------- */
+.audio-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 22px;
+}
+.audio-page textarea,
+.audio-page input,
+.audio-page select {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+.audio-page > .lede {
+  margin-bottom: 0;
+}
+/* the voice engine's status, one slim strip */
+.engine-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  background: var(--ink-2);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.engine-strip .dim {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+.engine-strip .engine-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6ee7a8;
+  box-shadow: 0 0 8px rgba(110, 231, 168, 0.6);
+}
+.engine-strip.off {
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 18px;
+  border-color: var(--red);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: inherit;
+}
+.engine-strip.off p {
+  margin: 0 0 4px;
+}
+.engine-strip.off .btn {
+  flex: none;
+}
+/* a card that makes something (New line, New song, New voice) */
+.audio-card {
+  border: 1px solid var(--line-strong);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 120px), var(--ink-2);
+}
+.audio-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.audio-card-head h2,
+.audio-section-head h2 {
+  margin: 0;
+  font: 800 26px/1 var(--display);
+  color: var(--cream);
+  text-transform: uppercase;
+}
+.audio-card-body {
+  display: grid;
+  gap: 16px;
+  padding: 18px 20px 20px;
+}
+.audio-card-body > p {
+  margin: 0;
+}
+.audio-empty {
+  margin: 0;
+  padding: 18px 20px;
+}
+/* labelled fields: the label sits over its box, with an optional action on the right */
+.field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.field-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pink);
+}
+.field-label .dim {
+  letter-spacing: 0.06em;
+  text-transform: none;
+}
+.field-action {
+  margin-left: auto;
+  text-transform: none;
+}
+.field-hint {
+  line-height: 1.5;
+}
+.field-off {
+  margin: 0;
+  padding: 14px;
+  border: 1px dashed var(--line);
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+}
+.field textarea,
+.field input:not([type="checkbox"]):not(.mini),
+.field select {
+  width: 100%;
+}
+.composer-text {
+  width: 100%;
+  font-size: 17px;
+  line-height: 1.5;
+  min-height: 110px;
+}
+.composer-foot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.composer-foot > .btn-primary {
+  margin-left: auto;
+}
+.composer-foot.end {
+  justify-content: flex-end;
+}
+.seed-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--paper-dim);
+}
+.seed-field input.mini {
+  width: 84px;
+}
+.seed-roll {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--paper-dim);
+  font-size: 15px;
+  cursor: pointer;
+}
+.seed-roll:hover {
+  color: var(--pink);
+  border-color: var(--pink);
+}
+/* choosing a voice: faces and names in a row */
+.voice-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.voice-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 14px 5px 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--paper-dim);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.voice-chip:hover {
+  color: var(--paper);
+  border-color: var(--line-strong);
+}
+.voice-chip.on {
+  color: var(--paper);
+  border-color: var(--red);
+  background: rgba(244, 72, 89, 0.12);
+}
+.voice-chip-name {
+  display: grid;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.15;
+}
+.voice-chip-name .dim {
+  font-size: 11px;
+}
+.voice-avatar {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, #f47b8a, var(--red) 55%, #7a1c2a);
+  color: var(--ink);
+  font: 800 1em/1 var(--display);
+}
+.voice-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* lists of sounds */
+.audio-section {
+  display: grid;
+  gap: 12px;
+}
+.audio-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.audio-section-head .count {
+  margin-left: 6px;
+  font: 500 13px/1 var(--mono);
+  color: var(--pink);
+  vertical-align: middle;
+}
+.list-search {
+  width: min(280px, 50%);
+}
+.track-list {
+  display: grid;
+  border: 1px solid var(--line);
+}
+.track {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 20px;
+  align-items: center;
+  padding: 14px 16px;
+  border-top: 1px solid var(--line);
+  transition: background 0.15s;
+}
+.track:first-child {
+  border-top: 0;
+}
+.track:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+.track-main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.track-title {
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--paper);
+}
+.track-title.clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  cursor: pointer;
+}
+.track-sub {
+  font-size: 13px;
+  color: var(--paper-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-dim);
+}
+.track-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: center;
+}
+.track-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  color: var(--paper-dim);
+}
+.track-status.failed {
+  color: var(--red);
+}
+.track-progress {
+  position: relative;
+  flex: 1;
+  max-width: 360px;
+  height: 4px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.1);
+}
+.track-progress span {
+  display: block;
+  height: 100%;
+  background: var(--red);
+  transition: width 0.4s ease;
+}
+.track-progress span.indeterminate {
+  width: 30% !important;
+  animation: track-progress-run 1.2s ease-in-out infinite;
+}
+@keyframes track-progress-run {
+  from { transform: translateX(-100%) }
+  to { transform: translateX(340%) }
+}
+.song-name {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: 700 19px/1.15 var(--display);
+  color: var(--cream);
+}
+.song-name:hover,
+.song-name:focus {
+  outline: none;
+  box-shadow: inset 0 -1px 0 var(--line-strong);
+}
+/* the player: play button, waveform, time */
+.player {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+.player-btn {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--paper);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.player-btn:hover:not(:disabled) {
+  border-color: var(--red);
+  color: var(--red);
+}
+.player.on .player-btn {
+  border-color: var(--red);
+  background: var(--red);
+  color: var(--ink);
+}
+.player-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.wave {
+  position: relative;
+  height: 32px;
+  cursor: pointer;
+  touch-action: none;
+}
+.wave:focus-visible {
+  outline: 1px solid var(--pink);
+  outline-offset: 3px;
+}
+.wave-bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  /* gaps scale with the width, so 96 bars fit a narrow card too */
+  gap: 0.35%;
+}
+.wave-bars span {
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 1px;
+  background: rgba(241, 237, 229, 0.26);
+}
+.wave.pending .wave-bars span {
+  background: rgba(241, 237, 229, 0.1);
+}
+.wave-played span {
+  background: var(--red);
+}
+.player-time {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--paper-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* the "more" menus */
+.more-menu {
+  position: relative;
+}
+.more-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--paper-dim);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.more-btn:hover,
+.more-btn[aria-expanded="true"] {
+  color: var(--paper);
+  border-color: var(--line-strong);
+}
+.more-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  min-width: 220px;
+  max-width: 320px;
+  display: grid;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--ink-2);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  animation: more-in 0.12s ease-out;
+}
+@keyframes more-in {
+  from { opacity: 0; transform: translateY(-4px) }
+}
+.more-list button {
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--paper);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.more-list button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+.more-list button.danger {
+  color: var(--red);
+}
+.more-divider {
+  margin: 4px 4px 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--paper-dim);
+}
+.more-divider:first-child {
+  margin-top: 0;
+  padding-top: 4px;
+  border-top: 0;
+}
+/* Voices: one card per voice */
+.voice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+.voice-tile {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: var(--ink-2);
+  transition: border-color 0.15s;
+}
+.voice-tile:hover {
+  border-color: var(--line-strong);
+}
+.voice-tile-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+.voice-tile-names {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.voice-name {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: 700 20px/1.1 var(--display);
+  color: var(--cream);
+}
+.voice-name:hover,
+.voice-name:focus {
+  outline: none;
+  box-shadow: inset 0 -1px 0 var(--line-strong);
+}
+.voice-desc {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.voice-owner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.voice-owner .mono {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+.take-list {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+}
+/* a big "choose a file" target */
+.drop-pick {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 26px;
+  border: 1px dashed var(--line-strong);
+  background: transparent;
+  color: var(--paper);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.drop-pick:hover {
+  border-color: var(--red);
+  background: rgba(244, 72, 89, 0.06);
+}
+.drop-pick-plus {
+  font: 800 30px/1 var(--display);
+  color: var(--red);
+}
+/* Music: engines as cards, the switch for instrumental, and the folded settings */
+.engine-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+.engine-card {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--paper-dim);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.engine-card:hover {
+  border-color: var(--line-strong);
+  color: var(--paper);
+}
+.engine-card.on {
+  border-color: var(--red);
+  background: rgba(244, 72, 89, 0.1);
+  color: var(--paper);
+}
+.engine-card-name {
+  font: 700 19px/1.1 var(--display);
+  color: var(--cream);
+}
+.switch-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--paper-dim);
+  cursor: pointer;
+}
+.switch-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.switch-toggle .switch-track {
+  position: relative;
+  width: 26px;
+  height: 14px;
+  border: 1px solid var(--line-strong);
+}
+.switch-toggle .switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  background: var(--paper-dim);
+  transition: transform 0.15s;
+}
+.switch-toggle:has(input:checked) {
+  color: var(--paper);
+}
+.switch-toggle:has(input:checked) .switch-track {
+  background: var(--red);
+  border-color: var(--red);
+}
+.switch-toggle:has(input:checked) .switch-knob {
+  transform: translateX(12px);
+  background: var(--ink);
+}
+.switch-toggle:has(input:focus-visible) .switch-track {
+  outline: 1px solid var(--pink);
+  outline-offset: 2px;
+}
+.more-settings {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.more-settings-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border: 0;
+  background: transparent;
+  color: var(--paper);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.more-settings-toggle .dim {
+  margin-left: auto;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+.more-settings-body {
+  display: grid;
+  gap: 16px;
+  padding: 4px 0 18px;
+}
+.audio-page .music-length {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+/* narrow: actions go under the sound */
+@media (max-width: 760px) {
+  .track {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .track-actions {
+    justify-content: flex-start;
+  }
+  .engine-strip.off {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
