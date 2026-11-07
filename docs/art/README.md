@@ -41,6 +41,25 @@ Incognito still shows the closed eye on every page.
 - The app copies are 1400 × 737 WebP (quality 86), the eye's own size. Raw outputs are in ComfyUI's
   `output\IV-Studio\page-art\`. `page-art-banners.jpg` shows every page's banner in the app.
 
+## Every page banner redrawn with Codex (2026-11-06)
+
+Matthew found the Edit scissors (both finger loops on one side, no single pivot) and the Projects director's chair
+(broken legs, floating megaphone) badly drawn, then asked for every page banner to be redrawn the same way, because
+the Codex versions looked much better. The Flux banners above are replaced; the dashboard eye and the closed eye are
+unchanged.
+
+- ChatGPT image generation through the Codex CLI (`~/.claude/skills/chapter-flow-site/scripts/codex-images.ps1`),
+  one job per page, no text in the pictures.
+- References: each page's own Flux banner (for its background and placement) plus the approved new Edit scissors
+  (for the subject's finish). The prompt keeps the background swirls and asks for the subject "drawn correctly and
+  believably, every part in the right place", centred at about a third of the height.
+- Edit and Projects had three variants each; A was picked for both. The other 15 pages were drawn once and all
+  passed a close-up check. Known nits: the record player's cartridge carries a tiny "89" and its feet, like the tip
+  of the Cloud lightning bolt, sit slightly below the banner's visible band.
+- The app copies are 1400 x 737 WebP (quality 86), resized from the 1672 x 941 masters and cropped to the middle.
+  The masters, the prompts (`jobs.json`, `jobs-15-pages.json`), the old Flux banners and the review sheets are in
+  `D:\H3Characters\_art\page-banners-20261106\`, outside the repo.
+
 ## The Workflows cards (2026-11-06)
 
 Matthew asked for each card on the Workflows page to have its own picture behind its text, faded, in the banners' style.
