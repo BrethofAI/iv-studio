@@ -30,11 +30,12 @@ export async function getBalance(key, { base = COMFY_API, timeout = 15000, fetch
   return shape(await res.json().catch(() => ({})), false)
 }
 
-// Comfy.org gives each figure twice, in cents and in millionths of a dollar ("_micros"), with currency "usd"
-// (seen 2026-11-08: amount, effective_balance, prepaid_balance, cloud_credit_balance, pending_charges).
-// The micros are used; the cents stand in when an answer has only those.
+// Comfy.org gives each figure twice, as "_cents" and "_micros", with currency "usd" (amount, effective_balance,
+// prepaid_balance, cloud_credit_balance, pending_charges). Despite the name, "_micros" holds cents too: a $10
+// top-up answered amount_cents 1000 and amount_micros 1000 (2026-11-08), and ComfyUI's own window passes the
+// micros figure to its cents formatter. So both are read as cents, _cents first.
 function shape(b, none) {
-  const fig = (name) => (Number.isFinite(b[`${name}_micros`]) ? b[`${name}_micros`] / 1e6 : Number.isFinite(b[`${name}_cents`]) ? b[`${name}_cents`] / 100 : null)
+  const fig = (name) => (Number.isFinite(b[`${name}_cents`]) ? b[`${name}_cents`] / 100 : Number.isFinite(b[`${name}_micros`]) ? b[`${name}_micros`] / 100 : null)
   const usd = fig('effective_balance') ?? fig('amount') ?? 0
   return {
     usd,

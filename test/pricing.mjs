@@ -144,11 +144,14 @@ const server = http.createServer((req, res) => {
     const key = req.headers['x-api-key']
     if (!key) return send(401, { message: 'No Authorization header found' })
     if (key === 'new') return send(404, { message: 'customer not found' })
-    if (!['good', 'cents', 'zero'].includes(key)) return send(401, { message: 'Invalid Comfy API key' })
+    if (!['good', 'cents', 'zero', 'micros'].includes(key)) return send(401, { message: 'Invalid Comfy API key' })
     if (key === 'cents') return send(200, { amount_cents: 450, effective_balance_cents: 425, pending_charges_cents: 25, currency: 'usd' })
     // the shape Comfy.org answered with on 2026-11-08 (an account with nothing on it)
     if (key === 'zero') return send(200, { amount_cents: 0, amount_micros: 0, cloud_credit_balance_cents: 0, cloud_credit_balance_micros: 0, currency: 'usd', effective_balance_cents: 0, effective_balance_micros: 0, pending_charges_cents: 0, pending_charges_micros: 0, prepaid_balance_cents: 0, prepaid_balance_micros: 0 })
-    return send(200, { amount_micros: 12_500_000, effective_balance_micros: 12_000_000, prepaid_balance_micros: 10_000_000, cloud_credit_balance_micros: 2_000_000, pending_charges_micros: 500_000, currency: 'usd' })
+    // only the _micros fields, which (like the _cents ones) hold cents
+    if (key === 'micros') return send(200, { amount_micros: 1250, effective_balance_micros: 1200, currency: 'usd' })
+    // what Comfy.org answered after a $10 top-up on 2026-11-08
+    return send(200, { amount_cents: 1000, amount_micros: 1000, cloud_credit_balance_cents: 0, cloud_credit_balance_micros: 0, currency: 'usd', effective_balance_cents: 1000, effective_balance_micros: 1000, pending_charges_cents: 50, pending_charges_micros: 50, prepaid_balance_cents: 1000, prepaid_balance_micros: 1000 })
   }
   send(404, {})
 })
@@ -188,13 +191,15 @@ await ok('balance: no key, a fake key and a key with no purchases yet', async ()
   assert.equal(none.newCustomer, true)
 })
 
-await ok('balance: micros (or cents) become dollars and credits; the effective balance wins; an empty account reads 0', async () => {
+await ok('balance: Comfy.org figures are cents (its _micros too): $10 is 2,110 credits; the effective balance wins; an empty account reads 0', async () => {
   const b = await getBalance('good', { base })
-  assert.equal(b.usd, 12)
-  assert.equal(b.credits, 2532)
+  assert.equal(b.usd, 10)
+  assert.equal(b.credits, 2110)
   assert.equal(b.prepaidUsd, 10)
-  assert.equal(b.cloudUsd, 2)
+  assert.equal(b.cloudUsd, 0)
   assert.equal(b.pendingUsd, 0.5)
+  const m = await getBalance('micros', { base })
+  assert.equal(m.usd, 12)
   assert.equal(b.fields.currency, 'usd')
   const c = await getBalance('cents', { base })
   assert.equal(c.usd, 4.25)
