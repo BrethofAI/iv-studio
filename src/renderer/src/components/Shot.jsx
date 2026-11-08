@@ -39,7 +39,7 @@ const DLSS_STYLES = ['Default', 'Natural', 'Cinematic']
 function DlssLook({ strength, style, onChange, label = 'DLSS strength' }) {
   return (
     <>
-      <Strength label={label} value={strength} min={0} max={2} step={0.1} def={0.8} onChange={(v) => onChange({ dlssStrength: v })} format={(v) => v.toFixed(1)} hint={strength < 0.5 ? 'Light cleanup: keeps the most texture (and noise).' : strength > 1.2 ? 'Strong cleanup: smoother skin and surfaces; fine detail can go.' : 'Balanced: IV Studio’s tested setting is 0.8.'} />
+      <Strength label={label} value={strength} min={0} max={2} step={0.1} def={0.8} onChange={(v) => onChange({ dlssStrength: v })} format={(v) => v.toFixed(1)} hint={strength < 0.5 ? 'Gentle: closest to the take, little added texture.' : strength > 1.2 ? 'Strong: more contrast and skin texture; it can look gritty.' : 'Balanced: IV Studio’s tested setting is 0.8.'} />
       <div className="row">
         <span className="row-label">DLSS style</span>
         <div className="segmented">
@@ -53,9 +53,9 @@ function DlssLook({ strength, style, onChange, label = 'DLSS strength' }) {
     </>
   )
 }
-const SEEDVR2_PLAIN = (v) => (v === 0 ? 'Brings back what is there, nothing made up.' : v < 0.2 ? 'Adds a little new detail.' : 'Adds lots of new detail: sharper, but it can stray from your take.')
+const SEEDVR2_PLAIN = (v) => (v === 0 ? 'Brings back what is there, nothing made up.' : v < 0.2 ? 'Lets it redraw a little more.' : 'Lets it redraw more: smoother skin, but faces can change.')
 const H3_PLAIN = (v) => (v <= 0.1 ? 'A light redraw: a bit more detail, faces change a little.' : v <= 0.2 ? 'A stronger redraw: more detail, faces change more.' : 'A heavy redraw: lots changes, faces too.')
-const SEEDVR2_HINT = (v) => (v === 0 ? 'Restores what is there, faithfully (the default).' : v < 0.2 ? 'A little invented detail on top.' : 'More invented detail: sharper, but it can drift from the take.')
+const SEEDVR2_HINT = (v) => (v === 0 ? 'Restores what is there, faithfully (the default).' : v < 0.2 ? 'A little more redrawing.' : 'More redrawing: smoother skin, but faces can drift from the take.')
 const H3_HINT = (v) => (v <= 0.1 ? 'The lightest H3 pass: adds detail, faces shift a little.' : v <= 0.2 ? 'More of H3’s detail; faces change more.' : 'Strong: H3 redraws a lot, faces change (0.4 is H3’s own finish).')
 // What a finish is called on its card and in Compare: H3's own, or how a Seedance take was finished
 export function finalLabel(f) {
@@ -206,7 +206,7 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
         : 'The take becomes the shot’s final now. Enhance (DLSS 5 or SeedVR2) can still run on it afterwards.'
   const enginePlain = {
     seedvr2: 'Makes it bigger and adds back fine detail, keeping the faces, movement and sound. The cleanest result; about 4 minutes for a 5-second shot.',
-    dlss: 'Makes it bigger fast (about 15 seconds), keeping the faces, movement and sound. Skin can look a little grainy; more strength smooths it.',
+    dlss: 'Makes it bigger fast (about 15 seconds), keeping the faces, movement and sound. It adds some skin texture; less strength keeps it gentler.',
     h3: 'The video model draws it again at full size, keeping the movement and sound, then quick sharpen tidies it. Faces change a little. About 3 minutes.',
     h3seedvr2: 'The video model draws it again at full size, keeping the movement and sound, then detail restore adds back fine detail. Faces change a little. About 7 minutes.'
   }[opts.engine]
@@ -214,7 +214,7 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
     opts.engine === 'seedvr2'
       ? 'Restores detail and upscales, keeping Seedance’s faces, motion and sound. The cleanest; about 4 minutes for 5 s at 1080p.'
       : opts.engine === 'dlss'
-        ? 'Upscales, keeping Seedance’s faces, motion and sound. The quickest, about 15 s; it can add a little skin texture (more strength smooths it).'
+        ? 'Upscales, keeping Seedance’s faces, motion and sound. The quickest, about 15 s; it adds some skin texture (lower strength stays closer to the take).'
         : opts.engine === 'h3seedvr2'
           ? 'H3 renders it again at full size, keeping Seedance’s motion and sound, then SeedVR2 restores detail. H3’s look with SeedVR2’s clean finish; faces shift a little. About 7 minutes.'
           : 'H3 renders it again at full size, keeping Seedance’s motion and sound, then DLSS 5 cleans it up. More of H3’s look; faces shift a little. About 3 minutes.'

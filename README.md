@@ -362,8 +362,9 @@ stays against the right edge.
      NVIDIA card. **Enhance** runs either one again on a finished shot.
 
    Picking a take opens the Finish settings over the page. DLSS 5 has a **strength** (its noise reduction:
-   lower keeps more texture, higher smooths skin) and a look (Default, Natural, Cinematic); SeedVR2 has
-   **extra detail** (0 restores faithfully, more invents detail). Every final and enhanced copy sits in one
+   higher adds contrast and skin texture, lower stays closest to the take) and a look (Default, Natural,
+   Cinematic); SeedVR2 has **extra detail** (0 restores faithfully; more redraws more, smoothing skin and
+   changing faces a little). Every final and enhanced copy sits in one
    **Finished versions** card. **Compare** plays up to four takes, finals or copies in sync: side by side, as a
    wipe or in a grid, zoomed in on the same spot, with frame-by-frame stepping.
 4. **Shots.** Every shot keeps its runs, previews and finals. **Show in folder** opens the file. The Shots page

@@ -33,10 +33,10 @@ Apps that show MCP prompts also list them as slash commands (in Claude Code, `/m
 5. Look at the candidates: `grab_frame` with `file` and a time shows you a frame of any output.
 6. `finish_candidate` with the best one (2 MP pass + DLSS, optional RTX 2x and frame generation).
    It reuses the preview's saved latent, so the picked performance stays the same. Poll `get_job`.
-   `dlssStrength` (0-2, default 0.8; lower keeps more texture, higher smooths skin) and `dlssStyle`
+   `dlssStrength` (0-2, default 0.8; higher adds contrast and skin texture, lower stays closest to the take) and `dlssStyle`
    (Default, Natural, Cinematic) set DLSS 5's look. `enhance_final` makes a sharper copy of any final later:
    `engine: "dlss"` with `scale`, `strength`, `style`, or `engine: "seedvr2"` with `resolution` and `detail`
-   (0 restores faithfully; 0.1-0.3 invents more detail and can drift from the take).
+   (0 restores faithfully; 0.1-0.3 redraws more, smoothing skin and changing faces a little).
 
 Speed presets (`get_speeds`): `quality` (0.4 MP, 8 steps, 3 takes, 2 MP finish), `balanced` (0.4 MP, 8 steps,
 2 takes, 1 MP finish + RTX 2x), `fast` (0.3 MP, 4 steps, 2 takes, 1 MP + 2x) and `low` (Low memory: 0.3 MP,
