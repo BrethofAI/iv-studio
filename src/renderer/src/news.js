@@ -2,6 +2,13 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.0.1',
+    items: [
+      { text: 'A ComfyUI that is busy loading a model or rendering is no longer taken for one that isn’t running: Setup says it’s busy, checks again by itself, and never offers to start a second ComfyUI.' },
+      { text: 'Install missing node packs only asks you to start ComfyUI when it really isn’t running. If ComfyUI answers on another port (the ComfyUI Desktop app uses 8000), Setup offers a button to use that address.' }
+    ]
+  },
+  {
     version: '1.0.0',
     items: [
       { text: 'IV Studio 1.0. Every page has a How it works button that walks you through its real controls, and a full tour shows the whole app in two minutes (Settings, About takes it again).' },
