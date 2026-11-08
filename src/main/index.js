@@ -91,7 +91,7 @@ const TEST_COPY = !!process.env.IV_STUDIO_USER_DATA
 // A moved data folder that isn't there (its drive unplugged) is asked about first thing (below); until then
 // this run reads the default folder and writes nothing.
 const BASE = LOCATION.missing ? LOCATION.defaultDir : LOCATION.dir
-// the writer's Ollama: Settings â†’ Prompt writer â†’ Ollama address (prompter.js)
+// the writer's Ollama: Settings → Prompt writer → Ollama address (prompter.js)
 setOllamaSource(() => readSettings(BASE).ollamaUrl)
 const INCOGNITO = !!readSettings(BASE).incognito
 const DATA = INCOGNITO ? incognitoDir(BASE) : BASE
@@ -334,8 +334,8 @@ function missingDataFolder() {
   const r = dialog.showMessageBoxSync({
     type: 'warning',
     title: 'IV Studio',
-    message: 'IV Studio canâ€™t find its data folder',
-    detail: `Your projects, voices and settings were moved to\n${LOCATION.dir}\nbut that folder isnâ€™t there. If itâ€™s on a drive that isnâ€™t plugged in, connect it and press Try again.\n\nUse the default folder opens IV Studio with the data in ${LOCATION.defaultDir} for now; your moved data isnâ€™t touched.`,
+    message: 'IV Studio can’t find its data folder',
+    detail: `Your projects, voices and settings were moved to\n${LOCATION.dir}\nbut that folder isn’t there. If it’s on a drive that isn’t plugged in, connect it and press Try again.\n\nUse the default folder opens IV Studio with the data in ${LOCATION.defaultDir} for now; your moved data isn’t touched.`,
     buttons: ['Try again', 'Use the default folder', 'Quit'],
     defaultId: 0,
     cancelId: 2,
@@ -392,7 +392,7 @@ app.whenReady().then(() => {
     ffprobe: unpacked(ffmpegStatic.ffprobePath),
     fontFile: path.join(resourcesDir(path.join(app.getAppPath(), 'resources')), 'fonts', 'BarlowCondensed-SemiBold.ttf')
   })
-  // Reel: pictures and a song cut to the beat, as an edit (Workflows â†’ Reel).
+  // Reel: pictures and a song cut to the beat, as an edit (Workflows → Reel).
   const reels = new Reels({ dataDir: DATA, edits })
   handle('reels:make', (opts) => reels.make(opts))
   // Cut-outs: keep only who or what you name, see-through elsewhere (SAM 3.1 on this PC's ComfyUI).
@@ -481,10 +481,10 @@ app.whenReady().then(() => {
   handle('library:all', () => {
     const items = studio.library().map((i) => ({ ...i, type: 'video' }))
     for (const e of edits.list()) {
-      for (const x of edits.get(e.id).exports || []) if (x.file && fs.existsSync(x.file)) items.push({ key: `export:${x.file}`, type: 'video', group: 'Edit exports', label: `${e.name} Â· ${x.format || ''} ${x.fps || ''} fps`.trim(), at: x.at, file: { path: x.file }, set: `edit:${e.id}`, setName: e.name, variant: `${x.format || 'Export'} Â· ${x.fps || ''} fps`, rank: 0, editId: e.id })
+      for (const x of edits.get(e.id).exports || []) if (x.file && fs.existsSync(x.file)) items.push({ key: `export:${x.file}`, type: 'video', group: 'Edit exports', label: `${e.name} · ${x.format || ''} ${x.fps || ''} fps`.trim(), at: x.at, file: { path: x.file }, set: `edit:${e.id}`, setName: e.name, variant: `${x.format || 'Export'} · ${x.fps || ''} fps`, rank: 0, editId: e.id })
     }
-    for (const s of music.all()) if (s.file && fs.existsSync(s.file)) items.push({ key: `music:${s.id}`, type: 'music', group: 'Music', label: s.name, detail: `${s.engine === 'minimax' ? 'MiniMax Music 3' : 'ACE-Step 1.5'}${s.instrumental ? ' Â· instrumental' : ''}`, duration: s.duration, at: s.finishedAt || s.createdAt, file: { path: s.file }, set: `music:${s.id}`, setName: s.name, variant: 'Song', rank: 0 })
-    for (const r of images.all()) (r.files || []).forEach((f, i) => fs.existsSync(f) && items.push({ key: `image:${r.id}:${i}`, type: 'image', group: 'Images', label: r.name, detail: `${r.familyLabel} Â· ${r.mode === 'edit' ? 'edit' : 'generate'}`, at: r.finishedAt || r.createdAt, file: { path: f }, set: `image:${r.id}`, setName: r.name, variant: `Picture ${i + 1}`, rank: i, imageId: r.id }))
+    for (const s of music.all()) if (s.file && fs.existsSync(s.file)) items.push({ key: `music:${s.id}`, type: 'music', group: 'Music', label: s.name, detail: `${s.engine === 'minimax' ? 'MiniMax Music 3' : 'ACE-Step 1.5'}${s.instrumental ? ' · instrumental' : ''}`, duration: s.duration, at: s.finishedAt || s.createdAt, file: { path: s.file }, set: `music:${s.id}`, setName: s.name, variant: 'Song', rank: 0 })
+    for (const r of images.all()) (r.files || []).forEach((f, i) => fs.existsSync(f) && items.push({ key: `image:${r.id}:${i}`, type: 'image', group: 'Images', label: r.name, detail: `${r.familyLabel} · ${r.mode === 'edit' ? 'edit' : 'generate'}`, at: r.finishedAt || r.createdAt, file: { path: f }, set: `image:${r.id}`, setName: r.name, variant: `Picture ${i + 1}`, rank: i, imageId: r.id }))
     for (const l of voices.lines()) if (fs.existsSync(l.file)) items.push({ key: `line:${l.id}`, type: 'voice', group: 'Voice lines', label: l.text, detail: l.voice, duration: l.duration, at: l.createdAt, file: { path: l.file }, set: `line:${l.id}`, setName: l.text, variant: `Seed ${l.seed}`, rank: 0 })
     return items.sort((a, b) => String(b.at).localeCompare(String(a.at)))
   })
@@ -590,7 +590,7 @@ app.whenReady().then(() => {
     return { fizgig: fiz?.dir || null, missing }
   })
   handle('training:chooseFizgig', async () => {
-    const r = await dialog.showOpenDialog(win, { title: 'Fizgigâ€™s folder', properties: ['openDirectory'] })
+    const r = await dialog.showOpenDialog(win, { title: 'Fizgig’s folder', properties: ['openDirectory'] })
     if (r.canceled || !r.filePaths[0]) return null
     const fiz = findFizgig(r.filePaths[0])
     if (!fiz) throw new Error('That folder has no Fizgig in it (with its venv). Pick the folder you cloned Fizgig into.')
@@ -893,7 +893,7 @@ app.whenReady().then(() => {
       if (current?.stage === 'ready') return r.url
       let url = current ? r.url : (await runpod.pods())[0]?.url
       if (!url) {
-        send('cloud:log', 'Starting a cloud GPU on RunPodâ€¦')
+        send('cloud:log', 'Starting a cloud GPU on RunPod…')
         const pod = await runpod.createPod({ gpu: r.gpu || RUNPOD_GPUS[0].id, volume: { id: r.volumeId, dataCenter: r.dataCenter }, token: runpodToken(), idleSeconds: r.idleSeconds || 300 })
         url = pod.url
         saveRunpod({ url, podId: pod.id, podGpu: pod.gpu })
@@ -931,11 +931,11 @@ app.whenReady().then(() => {
       if (s.target === 'cloud') throw new Error('Switch rendering to My PC first.')
       await runpod.stopAll()
       const known = s.runpod?.volumeId ? { id: s.runpod.volumeId, dataCenter: s.runpod.dataCenter } : null
-      if (!known) send('cloud:log', 'Finding a data center with network storage and a free GPUâ€¦')
+      if (!known) send('cloud:log', 'Finding a data center with network storage and a free GPU…')
       const volume = known || (await runpod.ensureVolume(await runpod.pickDataCenter(gpu)))
       writeSettings({ runpodToken: seal(randomBytes(24).toString('base64url')) }, BASE)
       saveRunpod({ gpu, idleSeconds, volumeId: volume.id, dataCenter: volume.dataCenter, url: null, podId: null })
-      send('cloud:log', `Starting a pod in ${volume.dataCenter}. The first time, it installs ComfyUI and downloads the H3 models onto your volume (20â€“40 minutes).`)
+      send('cloud:log', `Starting a pod in ${volume.dataCenter}. The first time, it installs ComfyUI and downloads the H3 models onto your volume (20–40 minutes).`)
       const url = await wakeRunpod()
       saveRunpod({ modelsAt: new Date().toISOString(), setUpAt: new Date().toISOString() })
       const done = []
@@ -965,7 +965,7 @@ app.whenReady().then(() => {
     if (provider() === 'runpod') {
       const running = s.runpodKey ? await runpod.pods() : []
       const gpu = RUNPOD_GPUS.find((g) => g.id === (running[0]?.gpu || s.runpod?.gpu)) || RUNPOD_GPUS[0]
-      return { gpu: gpu.label.split(' Â· ')[0], perHour: running[0]?.perHour || gpu.perHour, running: running.map((p) => ({ id: p.id, startedAt: Date.parse(p.startedAt) })) }
+      return { gpu: gpu.label.split(' · ')[0], perHour: running[0]?.perHour || gpu.perHour, running: running.map((p) => ({ id: p.id, startedAt: Date.parse(p.startedAt) })) }
     }
     const gpu = GPUS.find((g) => g.id === s.cloud?.gpu) || GPUS[0]
     const running = cloud.toolkitReady() ? await cloud.containers() : []
@@ -1014,7 +1014,7 @@ app.whenReady().then(() => {
       try {
         safe.ollamaUrl = normalizeOllamaUrl(safe.ollamaUrl)
       } catch {
-        throw new Error('That isnâ€™t an address. Use host:port, like 192.168.1.20:11434 or http://ollama:11434.')
+        throw new Error('That isn’t an address. Use host:port, like 192.168.1.20:11434 or http://ollama:11434.')
       }
     }
     const s = publicSettings(writeSettings(safe, BASE))
@@ -1025,7 +1025,7 @@ app.whenReady().then(() => {
     return s
   })
   handle('setup:check', () => studio.checkSetup())
-  // Create â†’ Advanced: the samplers and schedulers this ComfyUI offers
+  // Create → Advanced: the samplers and schedulers this ComfyUI offers
   handle('h3:samplers', async () => {
     const [k, b] = await Promise.all([studio.comfy.objectInfo('KSamplerSelect'), studio.comfy.objectInfo('BasicScheduler')])
     return { samplers: comboOptions(k, 'KSamplerSelect', 'sampler_name') || [], schedulers: comboOptions(b, 'BasicScheduler', 'scheduler') || [] }
@@ -1086,10 +1086,10 @@ app.whenReady().then(() => {
   const startComfy = () =>
     (comfyStarting ||= (async () => {
       const s = readSettings(BASE)
-      if (!isLocalUrl(s.comfyUrl)) throw new Error('ComfyUI isnâ€™t on this PC (Settings â†’ ComfyUI), so IV Studio canâ€™t start it.')
+      if (!isLocalUrl(s.comfyUrl)) throw new Error('ComfyUI isn’t on this PC (Settings → ComfyUI), so IV Studio can’t start it.')
       if (await comfyUp(s.comfyUrl)) return { seconds: 0, already: true }
       const file = launcherOf(s)
-      if (!file) throw new Error('No ComfyUI launcher found. Pick one in Settings â†’ ComfyUI.')
+      if (!file) throw new Error('No ComfyUI launcher found. Pick one in Settings → ComfyUI.')
       send('comfy:state', { state: 'starting', detail: path.basename(file) })
       try {
         launchComfy(file, { logFile: path.join(DATA, 'comfyui.log') })
@@ -1123,13 +1123,13 @@ app.whenReady().then(() => {
     const r = await dialog.showOpenDialog(win, { title: 'Your ComfyUI folder', properties: ['openDirectory'] })
     if (r.canceled || !r.filePaths[0]) return null
     const dir = r.filePaths[0]
-    if (!isComfyFolder(dir)) throw new Error(process.platform === 'win32' ? 'That folder doesnâ€™t look like ComfyUI. Pick the folder that holds ComfyUI (its main.py, or run_nvidia_gpu.bat and the ComfyUI folder), or ComfyUI.exeâ€™s folder.' : 'That folder doesnâ€™t look like ComfyUI. Pick the folder that holds its main.py.')
+    if (!isComfyFolder(dir)) throw new Error(process.platform === 'win32' ? 'That folder doesn’t look like ComfyUI. Pick the folder that holds ComfyUI (its main.py, or run_nvidia_gpu.bat and the ComfyUI folder), or ComfyUI.exe’s folder.' : 'That folder doesn’t look like ComfyUI. Pick the folder that holds its main.py.')
     writeSettings({ comfyFolder: dir, comfyLauncher: '' }, BASE)
     return dir
   })
   handle('comfy:start', () => startComfy())
 
-  // ---------- the data folder (Settings â†’ Data folder; datafolder.js) ----------
+  // ---------- the data folder (Settings → Data folder; datafolder.js) ----------
   // Moves IV Studio's own data (not ComfyUI's models or renders, which live in ComfyUI) to another folder:
   // copy, check, point the default folder at it, restart. The window hears data:progress
   // ({ phase: 'counting' | 'copying' | 'copied' | 'checking' | 'checked' | 'done', done, total, file }).
@@ -1137,10 +1137,10 @@ app.whenReady().then(() => {
   const canMove = () => !PORTABLE && LOCATION.source !== 'env' && !LOCATION.missing
   const whyNot = () =>
     PORTABLE
-      ? 'This is the portable copy: its data folder is the â€œdataâ€ folder beside IV Studio.exe. Move the whole IV Studio folder to move it.'
+      ? 'This is the portable copy: its data folder is the “data” folder beside IV Studio.exe. Move the whole IV Studio folder to move it.'
       : LOCATION.source === 'env'
-        ? 'IV_STUDIO_DATA sets the data folder on this PC, so it canâ€™t be moved from here.'
-        : 'The data folder canâ€™t be moved from this copy.'
+        ? 'IV_STUDIO_DATA sets the data folder on this PC, so it can’t be moved from here.'
+        : 'The data folder can’t be moved from this copy.'
   const target = (picked) => chooseTarget(picked, { from: BASE, defaultDir: LOCATION.defaultDir })
   handle('data:info', () => ({
     dir: BASE,
@@ -1160,7 +1160,7 @@ app.whenReady().then(() => {
   })
   handle('data:choose', async () => {
     if (!canMove()) throw new Error(whyNot())
-    const r = await dialog.showOpenDialog(win, { title: 'Move IV Studioâ€™s data toâ€¦', properties: ['openDirectory', 'createDirectory'] })
+    const r = await dialog.showOpenDialog(win, { title: 'Move IV Studio’s data to…', properties: ['openDirectory', 'createDirectory'] })
     if (r.canceled || !r.filePaths[0]) return null
     const to = target(r.filePaths[0])
     return { to, free: freeBytes(to) }
@@ -1376,7 +1376,7 @@ app.whenReady().then(() => {
       fs.copyFileSync(src, dest)
     }
     const err = await shell.openPath(dest)
-    if (err) throw new Error(`Couldnâ€™t open the guide: ${err}`)
+    if (err) throw new Error(`Couldn’t open the guide: ${err}`)
     return dest
   })
   handle('links:open', (url) => {
@@ -1427,7 +1427,7 @@ app.whenReady().then(() => {
     return { on: !!on, restarting: true }
   })
   createWindow()
-  // Start ComfyUI when IV Studio opens (Settings â†’ ComfyUI), only for a ComfyUI on this PC that isn't up yet.
+  // Start ComfyUI when IV Studio opens (Settings → ComfyUI), only for a ComfyUI on this PC that isn't up yet.
   const boot = readSettings(BASE)
   if (boot.comfyAutoStart !== false && boot.target !== 'cloud' && isLocalUrl(boot.comfyUrl) && (!TEST_COPY || process.env.IV_STUDIO_COMFY_AUTOSTART === '1'))
     comfyUp(boot.comfyUrl).then((up) => up || startComfy().catch(() => {}))
