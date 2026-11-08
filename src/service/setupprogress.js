@@ -1,0 +1,199 @@
+// Cloud setup progress: the steps a Modal or RunPod setup goes through, which one is running, how far it is and
+// about how long is left, for the window's progress view (SetupProgress.jsx) and the title-bar pill. It's fed by
+// the setup's own output: Modal's log lines (fromLine) and the RunPod pod's boot health (fromHealth). Pure: the
+// clock is passed in, so test/setup-progress.mjs can drive it.
+
+// secs: a typical first-time duration, used for the overall bar and the time left until a step reports its own
+// percentage. typical: the same, in words, shown beside the step.
+export const SETUP_PLANS = {
+  modal: [
+    { id: 'token', label: 'Connect your Modal workspace', typical: 'a few seconds', secs: 10 },
+    { id: 'image', label: 'Build the cloud image', typical: '10–15 min the first time, seconds after that', secs: 720 },
+    { id: 'models', label: 'Download the H3 models into your cloud storage', typical: 'about 60 GB, 5–15 min the first time', secs: 600 },
+    { id: 'characters', label: 'Upload your characters', typical: 'a minute or less', secs: 30 }
+  ],
+  runpod: [
+    { id: 'storage', label: 'Make your cloud storage', typical: 'about a minute', secs: 60 },
+    { id: 'pod', label: 'Start a cloud GPU', typical: '1–3 min', secs: 120 },
+    { id: 'install', label: 'Install ComfyUI and its add-ons', typical: '5–10 min, first time only', secs: 600 },
+    { id: 'models', label: 'Download the H3 models onto your storage', typical: '15–25 min, first time only', secs: 1200 },
+    { id: 'start', label: 'Start ComfyUI', typical: 'a minute or two', secs: 90 },
+    { id: 'characters', label: 'Upload your characters', typical: 'a minute or less', secs: 30 }
+  ]
+}
+
+const short = (s, n = 110) => (s.length > n ? s.slice(0, n - 1) + '…' : s)
+
+export class SetupProgress {
+  // models: [{ id, label, size }] the setup downloads (Modal), for a byte-weighted percentage
+  constructor(provider, { now = Date.now, onChange = () => {}, models = [] } = {}) {
+    this.provider = provider
+    this.now = now
+    this.onChange = onChange
+    this.models = models
+    this.finishedModels = new Set()
+    this.startedAt = now()
+    this.finishedAt = null
+    this.ok = null
+    this.error = null
+    this.steps = (SETUP_PLANS[provider] || []).map((s) => ({ ...s, status: 'waiting', startedAt: null, doneAt: null, percent: null, detail: '' }))
+  }
+
+  step(id) {
+    return this.steps.find((s) => s.id === id)
+  }
+  // starts a step; every step before it that was still waiting or running counts as done
+  start(id, detail = '') {
+    const at = this.steps.findIndex((s) => s.id === id)
+    if (at < 0) return
+    const t = this.now()
+    for (const s of this.steps.slice(0, at)) if (s.status === 'waiting' || s.status === 'running') Object.assign(s, { status: 'done', doneAt: t, startedAt: s.startedAt || t })
+    const s = this.steps[at]
+    if (s.status !== 'running') Object.assign(s, { status: 'running', startedAt: t, percent: null })
+    if (detail) s.detail = short(detail)
+    this.changed()
+  }
+  update(id, { percent, detail } = {}) {
+    const s = this.step(id)
+    if (!s) return
+    if (s.status === 'waiting') this.start(id)
+    if (percent != null) s.percent = Math.max(0, Math.min(100, Math.round(percent)))
+    if (detail) s.detail = short(detail)
+    this.changed()
+  }
+  done(id, detail) {
+    const s = this.step(id)
+    if (!s) return
+    if (s.status === 'waiting') this.start(id)
+    Object.assign(s, { status: 'done', doneAt: this.now(), percent: 100, ...(detail ? { detail: short(detail) } : {}) })
+    this.changed()
+  }
+  skip(id, detail = '') {
+    const s = this.step(id)
+    if (s && s.status === 'waiting') Object.assign(s, { status: 'skipped', detail: short(detail) })
+    this.changed()
+  }
+  finish() {
+    const t = this.now()
+    for (const s of this.steps) if (s.status === 'waiting' || s.status === 'running') Object.assign(s, { status: 'done', doneAt: t, startedAt: s.startedAt || t, percent: s.status === 'running' ? 100 : s.percent })
+    Object.assign(this, { ok: true, finishedAt: t })
+    this.changed()
+  }
+  fail(err) {
+    const s = this.steps.find((x) => x.status === 'running')
+    if (s) s.status = 'failed'
+    Object.assign(this, { ok: false, error: String(err?.message || err), finishedAt: this.now() })
+    this.changed()
+  }
+  changed() {
+    this.onChange(this.snapshot())
+  }
+
+  // Modal's output, as IV Studio's cloud.js logs it
+  fromLine(raw) {
+    const line = String(raw || '').trim()
+    if (!line) return
+    if (/^Saving the access token/i.test(line)) return this.start('token')
+    if (/^Building the cloud image/i.test(line)) return this.start('image', 'Building the image Modal runs ComfyUI in')
+    if (/^Downloading the H3 models/i.test(line)) return this.start('models', 'Checking which models your storage already has')
+    let m
+    if ((m = line.match(/^(have|done) (.+?)( \(checksum verified\))?$/))) {
+      this.finishedModels.add(m[2])
+      return this.update('models', { percent: this.modelPercent(), detail: `${m[2]} ${m[1] === 'have' ? 'is already there' : 'downloaded'}` })
+    }
+    if ((m = line.match(/^downloading (.+)$/))) return this.update('models', { percent: this.modelPercent(), detail: `Downloading ${m[1]}` })
+    if ((m = line.match(/^progress (\S+) (\d+)% of (\d+)$/))) {
+      const model = this.models.find((x) => x.id === m[1])
+      return this.update('models', { percent: this.modelPercent(m[1], Number(m[2])), detail: `Downloading ${model?.label || m[1]}, ${m[2]}%` })
+    }
+    if (/^models ready:/i.test(line)) return this.done('models', line.replace(/^models ready:\s*/i, 'Models ready: '))
+    if ((m = line.match(/^Uploading (.+?)…?$/))) return this.update('characters', { detail: `Uploading ${m[1]}` })
+    // anything else while the image builds: show it as the step's latest news (Modal's build steps)
+    const run = this.steps.find((s) => s.status === 'running')
+    if (run?.id === 'image' && !/^[│┃|╭╰─]/.test(line)) this.update('image', { detail: line })
+  }
+  // the share of the model bytes on the volume: finished models, plus the one downloading at `pct`
+  modelPercent(currentId, pct = 0) {
+    const total = this.models.reduce((s, m) => s + (m.size || 0), 0)
+    if (!total) return null
+    const finished = this.models.filter((m) => this.finishedModels.has(m.label)).reduce((s, m) => s + (m.size || 0), 0)
+    const cur = currentId && !this.models.some((m) => m.id === currentId && this.finishedModels.has(m.label)) ? (this.models.find((m) => m.id === currentId)?.size || 0) * (pct / 100) : 0
+    return ((finished + cur) / total) * 100
+  }
+
+  // the RunPod pod's boot, as its gate reports it (runpod_boot.py status())
+  fromHealth(h) {
+    if (!h) return this.update('pod', { detail: 'Waiting for the pod to boot' })
+    const detail = h.detail ? h.detail[0].toUpperCase() + h.detail.slice(1) : ''
+    if (h.stage === 'booting') return this.update('pod', { detail: detail || 'The pod is booting' })
+    if (h.stage === 'installing') {
+      const n = String(h.detail || '').match(/node pack (\d+) of (\d+)/)
+      return this.update('install', { detail, percent: n ? (Number(n[1]) / Number(n[2])) * 100 : null })
+    }
+    if (h.stage === 'models') {
+      const pct = h.total ? (((h.done || 0) + (h.percent || 0) / 100) / h.total) * 100 : h.percent
+      return this.update('models', { detail, percent: pct })
+    }
+    if (h.stage === 'starting') return this.update('start', { detail })
+    if (h.stage === 'ready') return this.done('start', 'ComfyUI is ready')
+  }
+
+  // 0..1 across the plan, weighted by each step's typical time
+  overall() {
+    const live = this.steps.filter((s) => s.status !== 'skipped')
+    const total = live.reduce((a, s) => a + s.secs, 0) || 1
+    const t = this.now()
+    let got = 0
+    for (const s of live) {
+      if (s.status === 'done') got += s.secs
+      else if (s.status === 'running' || s.status === 'failed') got += s.secs * (s.percent != null ? s.percent / 100 : Math.min(0.9, (t - s.startedAt) / 1000 / s.secs))
+    }
+    return this.ok ? 1 : Math.min(0.99, got / total)
+  }
+  // about how many seconds are left: a running step from its own percentage when it has one, else its typical time
+  remaining() {
+    if (this.finishedAt) return 0
+    const t = this.now()
+    let left = 0
+    for (const s of this.steps) {
+      if (s.status === 'waiting') left += s.secs
+      else if (s.status === 'running') {
+        const spent = (t - s.startedAt) / 1000
+        left += s.percent > 3 ? (spent * (100 - s.percent)) / s.percent : Math.max(s.secs - spent, Math.min(60, s.secs * 0.2))
+      }
+    }
+    return Math.round(left)
+  }
+  snapshot() {
+    const t = this.now()
+    return {
+      provider: this.provider,
+      startedAt: this.startedAt,
+      finishedAt: this.finishedAt,
+      elapsed: Math.round(((this.finishedAt || t) - this.startedAt) / 1000),
+      remaining: this.remaining(),
+      overall: Math.round(this.overall() * 1000) / 10,
+      ok: this.ok,
+      error: this.error,
+      steps: this.steps.map(({ id, label, typical, status, startedAt, doneAt, percent, detail }) => ({ id, label, typical, status, percent, detail, seconds: startedAt ? Math.round(((doneAt || t) - startedAt) / 1000) : null }))
+    }
+  }
+}
+
+// "12:04", "1:02:30"
+export function clock(secs) {
+  const s = Math.max(0, Math.round(secs || 0))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const r = String(s % 60).padStart(2, '0')
+  return h ? `${h}:${String(m).padStart(2, '0')}:${r}` : `${m}:${r}`
+}
+// "about 25 minutes", "about a minute", "less than a minute"
+export function about(secs) {
+  if (secs < 45) return 'less than a minute'
+  const m = Math.round(secs / 60)
+  if (m <= 1) return 'about a minute'
+  if (m < 90) return `about ${m} minutes`
+  const h = Math.round((secs / 3600) * 2) / 2
+  return `about ${h} hour${h === 1 ? '' : 's'}`
+}

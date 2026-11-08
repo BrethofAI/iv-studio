@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import SetupProgress, { useSetupProgress } from './SetupProgress'
 import ModalAccount from './ModalAccount'
 import Hero from './Hero'
 import { ask } from './Confirm'
@@ -308,6 +309,7 @@ export default function Cloud({ notify, recheck, setup, info }) {
   const [wake, setWake] = useState(null)
   const logEl = useRef(null)
 
+  const progress = useSetupProgress(st?.setup)
   const refresh = () =>
     window.ivstudio.cloud.status().then((s) => {
       setSt(s)
@@ -342,11 +344,8 @@ export default function Cloud({ notify, recheck, setup, info }) {
   }
 
   async function setUp() {
-    await run('Setting up', async () => {
-      await window.ivstudio.cloud.deploy({ gpu, idleSeconds: idle })
-      await window.ivstudio.cloud.fetchModels()
-      await window.ivstudio.cloud.uploadCharacters()
-    })
+    setLog([])
+    await run('Setting up', () => window.ivstudio.cloud.setUp({ gpu, idleSeconds: idle }))
   }
 
   async function use(target) {
@@ -489,10 +488,14 @@ export default function Cloud({ notify, recheck, setup, info }) {
         </>
       )}
 
-      {(log.length > 0 || busy) && (
-        <pre className="code cloud-log" ref={logEl}>
-          {log.join('\n') || 'Starting…'}
-        </pre>
+      {progress && progress.provider === (st.provider || 'modal') && (!progress.finishedAt || Date.now() - progress.finishedAt < 30 * 60 * 1000) ? (
+        <SetupProgress progress={progress} log={log} />
+      ) : (
+        (log.length > 0 || busy) && (
+          <pre className="code cloud-log" ref={logEl}>
+            {log.join('\n') || 'Starting…'}
+          </pre>
+        )
       )}
 
       <section className="group">
