@@ -6,6 +6,8 @@ import { ask } from './Confirm'
 import { setUnblurred } from './Loras'
 import { SetCard, SetField, SetSwitch, Pill, SetPath, SetCode } from './SettingsKit'
 import { startTour } from '../tours'
+import { SpeedCards } from './Speed'
+import { savedSpeed } from '../../../service/speed'
 
 const WRITER_MODEL = 'huihui_ai/qwen3-vl-abliterated:8b-instruct'
 const GB = (b) => `${(b / 1e9).toFixed(1)} GB`
@@ -37,8 +39,16 @@ const short = (n) => n.split(/[\\/]/).pop().replace(/\.safetensors$/, '')
 const kindOf = (n) => (/fl2va/i.test(n) ? 'fl2va' : /ref2va|omniref/i.test(n) ? 'ref2va' : null)
 
 // The welcome wizard's scan, and a way back into it.
-function PcCard({ n, settings }) {
+function PcCard({ n, settings, setSettings, notify }) {
   const hw = settings.hardware
+  const speed = savedSpeed(settings)
+  async function pickSpeed(id) {
+    try {
+      setSettings(await window.ivstudio.settings.set({ speed: id }))
+    } catch (err) {
+      notify(err.message)
+    }
+  }
   const check = () => window.dispatchEvent(new CustomEvent('iv:welcome'))
   return (
     <SetCard
@@ -70,6 +80,9 @@ function PcCard({ n, settings }) {
           </div>
         )}
       </div>
+      <SetField label="Speed" hint="How Create starts each shot: preview size, steps and takes, and the finish. Smaller cards need the quicker presets; any shot can still change it.">
+        <SpeedCards value={speed} onPick={pickSpeed} recommended={settings.shotPrefs?.speed} />
+      </SetField>
     </SetCard>
   )
 }
@@ -855,7 +868,7 @@ export default function Settings({ info, recheck, notify, go, setup }) {
         </nav>
 
         <div className="set-cards">
-          <PcCard n={n('pc')} settings={settings} />
+          <PcCard n={n('pc')} {...common} />
           <ComfyCard n={n('comfy')} {...common} recheck={recheck} comfyUp={comfyUp} comfyBusy={comfyBusy} />
           <FolderCard n={n('folders')} {...common} incognito={!!info?.incognito} />
           <DataCard n={n('data')} notify={notify} />

@@ -10,6 +10,7 @@ import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
 import { RunPod, GPUS as RUNPOD_GPUS } from '../service/runpod'
 import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
+import { isSpeed } from '../service/speed'
 import { comboOptions } from '../service/setup'
 import { comfyUp, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launcherFor, launchersIn, waitUp } from '../service/comfylauncher'
 import { randomBytes } from 'node:crypto'
@@ -1105,6 +1106,8 @@ app.whenReady().then(() => {
   handle('hardware:apply', ({ shotPrefs, promptEngine, hardware } = {}) => {
     const patch = { onboarded: new Date().toISOString() }
     if (shotPrefs) patch.shotPrefs = shotPrefs
+    // the speed preset (speed.js) the wizard picked; Settings → Your PC can change it afterwards
+    if (shotPrefs?.speed && isSpeed(shotPrefs.speed)) patch.speed = shotPrefs.speed
     if (hardware) patch.hardware = hardware
     if (promptEngine && ['local', 'claude', 'codex'].includes(promptEngine)) patch.promptEngine = promptEngine
     return publicSettings(writeSettings(patch, BASE))

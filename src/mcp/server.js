@@ -26,6 +26,7 @@ import { Reels } from '../service/reel'
 import { Cutouts } from '../service/cutout'
 import { Reframes } from '../service/reframe'
 import { MediaTools } from '../service/media'
+import { applyFinishSpeed, applySpeed, savedSpeed, SPEED_IDS, SPEEDS } from '../service/speed'
 import { comfyFolders, contentDir, dataLocation, readSettings, resourcesDir, writerOf, writeSettings } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
@@ -96,16 +97,18 @@ const media = z
   .array(z.object({ kind: z.enum(['picture', 'video', 'audio']), file: z.string().describe('Absolute local path (uploaded to ComfyUI) or a name already in ComfyUI input') }))
   .optional()
   .describe('frames mode: 1-2 pictures (first, last). reference mode: pictures, videos, audio, named <Picture 1>, <Video 1>, <Audio 1> in the prompt. continue mode: 1 video.')
+const SPEED_HELP = SPEED_IDS.map((id) => `${id}: ${SPEEDS[id].say}`).join(' ')
 const request = {
   mode: z.enum(Object.keys(MODES)).default('text').describe('text, frames (first/last frame), reference (ref2va), continue (extend a video)'),
   prompt: z.string().describe('H3 prompt. Write {char} where the character trigger word goes, e.g. "{char} (S1) says: <d>[English] Hi.</d>"'),
   character: z.string().default('tess').describe('Character preset id from list_characters, or "none"'),
   aspect: z.enum(Object.keys(ASPECTS)).default('16:9'),
-  megapixels: z.number().min(0.1).max(2.5).default(0.4).describe('Preview size. 0.4 is the tested default.'),
+  speed: z.enum(SPEED_IDS).optional().describe(`Speed preset (get_speeds): sets megapixels, steps and previews when you leave them out, and the finish later. Default: the one saved in Settings → Your PC. ${SPEED_HELP}`),
+  megapixels: z.number().min(0.1).max(2.5).optional().describe('Preview size; default from the speed preset (Quality 0.4).'),
   seconds: z.number().min(1).max(15).default(5),
-  previews: z.number().int().min(1).max(3).default(3),
+  previews: z.number().int().min(1).max(3).optional().describe('How many takes; default from the speed preset (Quality 3)'),
   seed: z.number().int().min(0).default(4242).describe('Previews use seed, seed+1000, seed+2000'),
-  steps: z.number().int().min(4).max(20).default(8),
+  steps: z.number().int().min(4).max(20).optional().describe('Default from the speed preset: 8, or 4 on Fast and Low memory'),
   sampler: z.string().optional().describe('Preview sampler (list_samplers); default er_sde'),
   scheduler: z.string().optional().describe('Preview scheduler (list_samplers); default beta'),
   media,
@@ -117,8 +120,9 @@ const request = {
 }
 const finish = {
   candidate: z.number().int().min(1).max(3).default(1),
-  megapixels: z.number().min(0.5).max(4).default(2),
-  upscale2x: z.boolean().default(false).describe('RTX 2x after DLSS (2 MP -> about 4K)'),
+  speed: z.enum(SPEED_IDS).optional().describe("Speed preset for the finish's size and 2x; default: the shot's own preset, else the saved one"),
+  megapixels: z.number().min(0.5).max(4).optional().describe('The pass size; default from the speed preset (Quality 2, the others 1)'),
+  upscale2x: z.boolean().optional().describe('RTX 2x after DLSS (2 MP -> about 4K); default from the speed preset (on for Balanced, Fast, Low memory)'),
   fps: z.number().int().default(0).describe(`Frame generation: ${FRAME_GEN_FPS.join(', ')} (0 = off)`),
   audio: z.enum(['pass', 'preview', 'voice']).default('pass').describe('Final sound: the 2 MP pass, the picked preview (keeps a cloned voice), or the voice line itself'),
   rerollSeed: z.number().int().optional(),
@@ -164,7 +168,11 @@ tool('update_comfy', "Update this PC's ComfyUI through ComfyUI-Manager: saves a 
 tool('undo_comfy_update', "Undo the last update_comfy (or the Setup screen's Update everything): restores the snapshot it saved and restarts ComfyUI. Afterwards it switches back on any pack ComfyUI-Manager's restore switched off (plain folders a snapshot can't track, IV Studio's own pack among them) and restarts again; reenabled lists them. If ComfyUI isn't running, the snapshot is set to restore at its next start (startNeeded: true): start ComfyUI, then call this again to finish.", {}, () => studio.undoComfyUpdate({ folder: readSettings(BASE).comfyFolder || null }))
 tool('list_characters', 'Character presets (LoRA, strength, trigger word).', {}, () => studio.characters())
 tool('list_projects', 'Projects in the IV Studio library, newest first.', {}, () => studio.listProjects())
-tool('plan_render', 'Validate a request and resolve size, frames, duration, seeds and the finished size, without rendering.', { ...request, finish: z.object(finish).partial().optional() }, ({ finish: f, ...r }) => studio.planRender(r, f || {}))
+tool('plan_render', 'Validate a request and resolve size, frames, duration, seeds and the finished size, without rendering.', { ...request, finish: z.object(finish).partial().optional() }, ({ finish: f, ...r }) => {
+  const req = applySpeed(r, savedSpeed(readSettings(BASE)))
+  return studio.planRender(req, applyFinishSpeed(f || {}, req.speed))
+})
+tool('get_speeds', "The speed presets (Quality, Balanced, Fast, Low memory): what each sets for previews and the finish, what it trades, rough times measured on an RTX 4090, and which one is saved in Settings → Your PC (Check my PC picks it from the graphics card). Pass speed to generate_previews, plan_render or finish_candidate to use another.", {}, () => ({ saved: savedSpeed(readSettings(BASE)), speeds: SPEED_IDS.map((id) => ({ id, ...SPEEDS[id] })) }))
 // The prompt checker (src/service/lint.js) for a request: its context is the request's own mode, length and media.
 const checkRequest = (r) => {
   const ch = r.character && r.character !== 'none' ? studio.characters().find((c) => c.id === r.character) : null
@@ -178,9 +186,9 @@ tool('generate_previews', 'Start preview candidates. Returns a job at once; foll
   const errors = blocking(checkRequest(args))
   if (errors.length && !force) throw new Error(`The prompt checker found ${errors.length} error${errors.length > 1 ? 's' : ''}: ${errors.map((f) => f.message).join(' | ')} Fix the prompt (check_prompt gives fixes), or pass force: true.`)
   if (readSettings(BASE).target !== 'cloud') await voices.release()
-  return studio.generatePreviews(args)
+  return studio.generatePreviews(applySpeed(args, savedSpeed(readSettings(BASE))))
 })
-tool('finish_candidate', "Finish one preview candidate (2 MP pass, then DLSS 5 with optional RTX 2x and frame generation, or SeedVR2 with enhancer seedvr2) from its recorded settings. Reuses the candidate's saved latent.", { jobId: z.string().describe('The previews job id'), ...finish }, (args) => studio.finishCandidate(args))
+tool('finish_candidate', "Finish one preview candidate (2 MP pass, then DLSS 5 with optional RTX 2x and frame generation, or SeedVR2 with enhancer seedvr2) from its recorded settings. Reuses the candidate's saved latent.", { jobId: z.string().describe('The previews job id'), ...finish }, (args) => studio.finishCandidate({ ...args, fallbackSpeed: savedSpeed(readSettings(BASE)) }))
 const sequenceFields = {
   name: z.string().optional(),
   method: z.enum(['take', 'shots']).optional().describe('take: every shot in one seamless render. shots: hunt and finish shot by shot, each continuing from the last.'),

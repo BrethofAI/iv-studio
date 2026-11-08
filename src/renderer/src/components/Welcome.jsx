@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { finishFor, previewFor, SPEED_IDS, SPEEDS } from '../../../service/speed'
 import { createPortal } from 'react-dom'
 import Hero from './Hero'
 import { StepHead } from './CreateKit'
@@ -363,6 +364,12 @@ function Seg({ value, options, onChange, label }) {
   )
 }
 
+// a speed preset's values in the shape Check my PC saves (shotPrefs)
+function prefsForSpeed(id) {
+  const p = previewFor(id)
+  return { speed: id, previewMp: p.megapixels, quality: p.steps === 4 ? 'draft' : 'standard', finalMp: finishFor(id).megapixels }
+}
+
 function Way({ rec, way, setWay, prefs, setPrefs, writer, setWriter, installs, scan }) {
   const set = (p) => setPrefs((x) => ({ ...x, ...p }))
   const dlssOk = scan.os?.platform === 'win32' && (scan.gpus || []).some((g) => g.vendor === 'nvidia')
@@ -384,9 +391,8 @@ function Way({ rec, way, setWay, prefs, setPrefs, writer, setWriter, installs, s
       <section className="block create-step">
         <StepHead title="Defaults for your shots" sub="Set to suit this PC. Every shot can still change them." />
         <div className="wel-segs">
-          <Seg label="Previews" value={prefs.previewMp} onChange={(v) => set({ previewMp: v })} options={[[0.4, '0.4 MP'], [0.6, '0.6 MP'], [1, '1 MP']]} />
-          <Seg label="Preview quality" value={prefs.quality} onChange={(v) => set({ quality: v })} options={[['draft', 'Draft · quicker'], ['standard', 'Standard']]} />
-          <Seg label="Finals" value={prefs.finalMp} onChange={(v) => set({ finalMp: v })} options={[[1, '1 MP'], [1.5, '1.5 MP'], [2, '2 MP']]} />
+          <Seg label="Speed" value={prefs.speed} onChange={(v) => set(prefsForSpeed(v))} options={SPEED_IDS.map((id) => [id, `${SPEEDS[id].label}${rec.prefs.speed === id ? ' · suits this PC' : ''}`])} />
+          {SPEEDS[prefs.speed] && <p className="dim small wel-speed">{SPEEDS[prefs.speed].say} {SPEEDS[prefs.speed].trade}</p>}
           <Seg label="Enhancer" value={prefs.enhancer} onChange={(v) => set({ enhancer: v })} options={[['dlss', 'DLSS 5', !dlssOk && 'Needs an NVIDIA RTX card on Windows'], ['seedvr2', 'SeedVR2']]} />
           <Seg
             label="Prompt writer"
@@ -482,8 +488,9 @@ function Done({ rec, way, prefs, writer, started, onTour }) {
   const w = WAYS.find(([id]) => id === way)
   const lines = [
     ['Renders', w ? w[2] : way],
+    ['Speed', SPEEDS[prefs.speed]?.label || 'Quality'],
     ['Previews', `${prefs.previewMp} MP · ${prefs.quality === 'draft' ? 'Draft' : 'Standard'}`],
-    ['Finals', `${prefs.finalMp} MP with ${prefs.enhancer === 'dlss' ? 'DLSS 5' : 'SeedVR2'}`],
+    ['Finals', `${prefs.finalMp} MP${SPEEDS[prefs.speed]?.upscale2x ? ' + 2x' : ''} with ${prefs.enhancer === 'dlss' ? 'DLSS 5' : 'SeedVR2'}`],
     ['Prompt writer', WRITERS[writer]],
     ['Downloads', started ? `${gbs(started.bytes)} on the way` : way === 'cloud' ? 'In the cloud' : rec.downloads.some((g) => g.recommended) ? 'Not started' : 'All here']
   ]

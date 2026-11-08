@@ -34,6 +34,13 @@ Apps that show MCP prompts also list them as slash commands (in Claude Code, `/m
 6. `finish_candidate` with the best one (2 MP pass + DLSS, optional RTX 2x and frame generation).
    It reuses the preview's saved latent, so the picked performance stays the same. Poll `get_job`.
 
+Speed presets (`get_speeds`): `quality` (0.4 MP, 8 steps, 3 takes, 2 MP finish), `balanced` (0.4 MP, 8 steps,
+2 takes, 1 MP finish + RTX 2x), `fast` (0.3 MP, 4 steps, 2 takes, 1 MP + 2x) and `low` (Low memory: 0.3 MP,
+4 steps, 1 take, never a pass above 1 MP). Leave `megapixels`, `steps` and `previews` out and the person's saved
+preset (Check my PC picks it from their graphics card) fills them; the finish then follows the shot's preset too.
+On a card under 22 GB, keep to the saved preset: the 2 MP finish streams most of H3 from memory and is the
+slowest step. On a 4090: Quality about 3 min to hunt and 3 min to finish, Low memory about 40 s and 2 min.
+
 Modes: `text` (prompt only), `reference` (pictures, videos or audio named `<Picture 1>`,
 `<Video 1>`, `<Audio 1>` in the prompt), `frames` (first and optional last frame), `continue`
 (extend a video from its last frames). `voiceLine` lip-syncs the previews to a recording.
@@ -90,7 +97,8 @@ writing a prompt yourself; `write_prompt` already follows it.
   looking like the picked character, no freezing, sharpness against the others. `get_job` shows `ranking` (each
   take's parts, score and reasons, the best marked when it stands out). `rank_takes` ranks a run now, and with
   `picked` records the person's choice, which shifts the weights towards what they keep picking.
-- **Quality.** `steps: 4` is Draft (quicker previews); 8 is the default. The finish is the same either way.
+- **Quality.** `steps: 4` is Draft (quicker previews); 8 is the default. The finish is the same either way. The
+  speed presets (`get_speeds`) set steps, size and takes together.
 - **Enhancer.** A finish's `enhancer` is `dlss` (the default: DLSS 5 in the finish, with the optional RTX 2x and
   frame generation) or `seedvr2` (the finish skips DLSS, then SeedVR2 restores detail to a short side of
   `enhanceResolution`, 1080, 1440 or 2160, at 24 fps; slower). The SeedVR2 step is its own job, started by itself

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { finishFor, savedSpeed, SPEEDS } from '../../../service/speed'
 import { media } from '../media'
 import Hero from './Hero'
 import Findings from './Findings'
@@ -94,15 +95,18 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote }) {
   const FPS = caps?.fps || [0, 30, 50, 60, 120]
   const dlss = caps?.dlss !== false
   const [opts, setOpts] = useState({ megapixels: 2, upscale2x: false, fps: 0, audio: 'pass', enhancer: 'dlss', enhanceResolution: 1080 })
-  // the defaults Check my PC chose for this computer
+  // the shot's speed preset (else the saved one) sets the finish size and the 2x; Check my PC chose the enhancer
   useEffect(() => {
     window.ivstudio.settings.get().then((s) => {
-      const p = s.shotPrefs
-      if (!p) return
-      setOpts((o) => ({ ...o, megapixels: p.finalMp || o.megapixels, enhancer: p.enhancer === 'dlss' && !dlss ? 'seedvr2' : p.enhancer || o.enhancer, enhanceResolution: p.enhanceResolution || o.enhanceResolution }))
+      const id = job.plan.request?.speed || savedSpeed(s)
+      setShotSpeed(id)
+      const f = finishFor(id, { upscale2x: caps?.upscale2x !== false })
+      const p = s.shotPrefs || {}
+      setOpts((o) => ({ ...o, ...f, enhancer: p.enhancer === 'dlss' && !dlss ? 'seedvr2' : p.enhancer || o.enhancer, enhanceResolution: p.enhanceResolution || o.enhanceResolution }))
     }, () => {})
   }, [])
   const seedvr2 = opts.enhancer === 'seedvr2'
+  const [shotSpeed, setShotSpeed] = useState(job.plan.request?.speed || null)
   const [size, setSize] = useState(null)
   const [busy, setBusy] = useState(false)
   const set = (patch) => setOpts((o) => ({ ...o, ...patch }))
@@ -145,6 +149,7 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote }) {
               </button>
             ))}
           </div>
+          {shotSpeed && <span className="dim small finish-speed">Started from the {SPEEDS[shotSpeed].label} speed preset.{opts.megapixels >= 2 ? ' A 2 MP pass is the slowest step on cards under 22 GB.' : ''}</span>}
         </div>
       )}
       {dlss && !remote && (

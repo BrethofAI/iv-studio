@@ -49,6 +49,7 @@ export const TOURS = {
       { at: '.create-step:has(.create-drop)', title: 'What it builds on', text: 'Drop pictures or a video here. Add them before writing the prompt, so the writer can see them.' },
       { at: 'step:What happens', title: 'What happens', text: 'Say your idea in plain words and press Write my prompt. Type @ to bring in a character or a saved place. The checker below flags problems and its Fix button mends most of them.' },
       { at: 'step:Shape and size', title: 'Shape and size', text: 'The frame shape, the length, how many previews and their quality. Draft is about twice as fast for trying ideas.' },
+      { at: '.speed-row', title: 'Speed', text: 'Presets that trade picture size and steps for time and memory. Fast and Low memory suit smaller graphics cards. Changing the size, steps or takes by hand shows Custom.' },
       { at: ['.shot-card', '.create-dock'], title: 'Your shot', text: 'A summary of what you set up. Hunt renders the previews; you then pick the best one and finish it at full size.' }
     ]
   },
@@ -101,7 +102,7 @@ export const TOURS = {
       { at: '.run-head', title: 'A run', text: 'Each run shows how it was made: mode, size, length, seed, character and render time. Its own Edit and run again starts from it.' },
       { at: '.candidates', title: 'The takes', text: 'Watch each take. A score marks the strongest. Review names what is off and suggests one fix; Compare plays two side by side.' },
       { at: '.take-pick', title: 'Pick one', text: 'Pick the take you like. Picking also teaches the scoring your taste.' },
-      { at: '.finish-panel', title: 'Finish it', text: 'Render the picked take at full size, with the enhancer, frame rate and sound you want.' },
+      { at: '.finish-panel', title: 'Finish it', text: 'Render the picked take at full size, with the enhancer, frame rate and sound you want. It starts from the shot’s speed preset: 1 MP plus the 2x upscale is much quicker than a 2 MP pass.' },
       { at: '.final-card, .final', title: 'The final', text: 'The finished shot. Enhance makes a sharper copy beside it, any time later.' }
     ]
   },
@@ -261,6 +262,7 @@ export const TOURS = {
       { at: '.settings-tabs', title: 'Settings and Setup', text: 'Settings is how IV Studio works for you. Setup checks what ComfyUI has and downloads what it needs.' },
       { at: '.set-nav', title: 'Jump around', text: 'Every topic in one list. Click one to jump to it.' },
       { at: '#set-pc', title: 'Your PC', text: 'What your computer can do. Check again re-runs the scan and its recommended defaults.' },
+      { at: '.speed-cards', title: 'Speed', text: 'How each new shot starts: Quality, Balanced, Fast or Low memory. The one that suits this PC is marked. Times are from an RTX 4090; smaller cards take longer.' },
       { at: '#set-comfy', title: 'ComfyUI', text: 'Where ComfyUI is, and whether IV Studio starts it for you when it opens.' },
       { at: '#set-writer', title: 'Prompt writer', text: 'Who writes your prompts: a free local model, your own Claude Code or Codex, or MiniMax’s paid rewriter.' },
       { at: '#set-agents', title: 'Agents', text: 'Connect Claude Code, Codex or any MCP agent, so it can make shots and edits in IV Studio with you.' }

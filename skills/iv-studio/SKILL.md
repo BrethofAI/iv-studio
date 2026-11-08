@@ -39,6 +39,13 @@ Apps that show MCP prompts also list them as slash commands (in Claude Code, `/m
 6. `finish_candidate` with the best one (2 MP pass + DLSS, optional RTX 2x and frame generation).
    It reuses the preview's saved latent, so the picked performance stays the same. Poll `get_job`.
 
+Speed presets (`get_speeds`): `quality` (0.4 MP, 8 steps, 3 takes, 2 MP finish), `balanced` (0.4 MP, 8 steps,
+2 takes, 1 MP finish + RTX 2x), `fast` (0.3 MP, 4 steps, 2 takes, 1 MP + 2x) and `low` (Low memory: 0.3 MP,
+4 steps, 1 take, never a pass above 1 MP). Leave `megapixels`, `steps` and `previews` out and the person's saved
+preset (Check my PC picks it from their graphics card) fills them; the finish then follows the shot's preset too.
+On a card under 22 GB, keep to the saved preset: the 2 MP finish streams most of H3 from memory and is the
+slowest step. On a 4090: Quality about 3 min to hunt and 3 min to finish, Low memory about 40 s and 2 min.
+
 Modes: `text` (prompt only), `reference` (pictures, videos or audio named `<Picture 1>`,
 `<Video 1>`, `<Audio 1>` in the prompt), `frames` (first and optional last frame), `continue`
 (extend a video from its last frames). `voiceLine` lip-syncs the previews to a recording.
@@ -95,7 +102,8 @@ writing a prompt yourself; `write_prompt` already follows it.
   looking like the picked character, no freezing, sharpness against the others. `get_job` shows `ranking` (each
   take's parts, score and reasons, the best marked when it stands out). `rank_takes` ranks a run now, and with
   `picked` records the person's choice, which shifts the weights towards what they keep picking.
-- **Quality.** `steps: 4` is Draft (quicker previews); 8 is the default. The finish is the same either way.
+- **Quality.** `steps: 4` is Draft (quicker previews); 8 is the default. The finish is the same either way. The
+  speed presets (`get_speeds`) set steps, size and takes together.
 - **Enhancer.** A finish's `enhancer` is `dlss` (the default: DLSS 5 in the finish, with the optional RTX 2x and
   frame generation) or `seedvr2` (the finish skips DLSS, then SeedVR2 restores detail to a short side of
   `enhanceResolution`, 1080, 1440 or 2160, at 24 fps; slower). The SeedVR2 step is its own job, started by itself
@@ -300,6 +308,12 @@ IV Studio makes songs and instrumentals on this PC's ComfyUI, free. Two engines:
 5. A reel: `make_reel` with pictures (or clips) in order and a song's `file` cuts them to its beat, a whole
    number of beats each (pace calm, normal or fast) with slow moves on the pictures, as a new edit. It finds
    the beat itself and keeps the cuts on the song's bars; check the BPM it returns, then `export_edit`.
+6. A remix: `remix_music` with a sound file (`source`) or a finished song (`songId`), 5 s to 5 minutes, and
+   the new style as `caption`. ACE-Step redraws the song; `strength` is how much: 0.5 subtle (the same song
+   with a new sound), 0.65 remix (the default: same shape, clearly restyled), 0.8 reimagine (a loose take).
+   It reads the tempo and guesses the key itself (`read_song` shows them first); pass `bpm` or `key` when the
+   person knows better. It works best on instrumentals; singing can come back garbled. Only remix music the
+   person has the rights to. Poll `get_music`; the song's `remix` says what it came from.
 
 ## Shinobi: edits you cut as an agent
 
@@ -368,6 +382,43 @@ camera, cuts, motion and soundtrack.
 `replace_video` is the old engine (OpenJutsu masks): use it for faces and colours.
 Only put invented characters, or people who agreed, into a video.
 
+## Rebuild: take a video apart and rebuild it
+
+When the person has a short video (up to 2 minutes) they made or may rework, and wants it made again on this
+PC: the same cuts, pacing and captions, with the AI shots re-rendered by H3 and, if they ask, a person,
+product or setting swapped. Ask whether it's theirs first. For someone else's video, describe its format in
+words instead and don't rebuild it. Free and local throughout: never use the paid writer.
+1. `rebuild_read` {file, rights: true}. Pass rights only once the person confirms. It finds the cuts and
+   gives every shot its first, middle and last frame, a contact sheet, the times captions come and go
+   (`bandTop`, `bandBottom`), the tempo, loudness and pauses, and the words when the voice engine is set up.
+   It returns a sheet of every shot.
+2. Look at each shot (`view_rebuild_shot`) and say what it is with `save_rebuild_reading`: `kind` (ai_video,
+   live, code_graphics, screen, still, film_clip, or `unsure` when you can't tell; never guess), `why`, a
+   concrete English `description` (subject, clothes, place, framing, the motion start to end), every caption
+   word for word with `from`/`to` in seconds into the shot and `where`, plus stickers, camera and light.
+   (`writer: true` on `rebuild_read` has the writer from Settings do this; check what it says.)
+3. Write the plan with `save_rebuild_plan`, one route per shot. Defaults: ai_video shots are `h3`, stills are
+   `still`, everything else (unsure included) is `keep`. `own` puts in the person's own clip, and `replace`
+   keeps the shot here for the Replace page. An `h3` prompt opens with the frames line its `h3` field calls
+   for: first and last frame (`useLast`), or the first frame only for shots under about 4.1 s. Those render
+   5.17 s, H3's trained minimum, and the cut keeps their first `trimTo` seconds, so write the action to
+   start at once. The prompt also says "There is no writing anywhere in the picture.", because H3 copies any
+   writing it sees. `check_prompt` with mode frames first. Shots over about 18 s can't be one take, so keep
+   them. Show the person the plan: which shots render and about 3-5 GPU minutes each. Wait for their OK,
+   then `approve_rebuild_plan`.
+4. `make_rebuild_frames` paints the writing out of each H3 shot's frames, and the swap in, with this PC's
+   picture editor (both ends one seed). Shots with no writing and no swap keep their frames. LOOK at the
+   before/after pictures it returns, show the person, and wait for their OK: `approve_rebuild_frames`.
+   (`only` repaints chosen shots.)
+5. `make_rebuild_shots` renders two previews per H3 shot (three with a swap). Poll `get_rebuild`. When a
+   take says `pick`, look at its previews (`grab_frame` at the start, middle and end) and pass
+   `picks: [{index, candidate}]` to `make_rebuild_shots`. Each pick is finished at 1 MP. Render again rather
+   than settle.
+6. `rebuild_first_cut` builds an Edit: each shot in its slot on V1 (new takes retimed to fit, their own
+   sound muted), kept shots as the original footage, stills with a slow push, captions as titles on T1, and
+   the original sound on A1 as a guide. Then work on it with the Edit tools. Tell the person the guide
+   sound must be replaced before they publish, and which shots are still the original footage.
+
 ## Train a new character
 
 The Characters page (and these tools) turn an invented person into a character preset:
@@ -411,5 +462,6 @@ a switch until it's restarted (reconnect the iv-studio MCP). Don't mention or mo
   else's song lyrics.
 - Characters must be invented, or real people who agreed to it. Don't make a real person say or do
   things without their consent.
+- Rebuild only video the person made or may rework; the reference's sound is a guide.
 - The MCP server renders on the local ComfyUI, even when the app window is set to the cloud.
 - Report what you made with its file path, so the person can open it.

@@ -65,7 +65,9 @@ export const DEFAULTS = {
   voiceLine: null,
   refmods: [],
   retention: 1,
-  extraLoras: []
+  extraLoras: [],
+  // the speed preset the shot was made with (speed.js), kept so its finish starts from the preset's finish
+  speed: null
 }
 
 // request: see DEFAULTS. characters: [{id, name, lora, strength, trigger}]. Returns the plan or throws.
