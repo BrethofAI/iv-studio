@@ -140,7 +140,7 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify }) {
                   As it is, free
                 </button>
               </div>
-              <span className="dim small">{way === 'seedance' ? `Seedance renders this draft again at 1080p, on your Comfy.org credits: ${price?.label || '…'}.` : 'The 480p take becomes the final now. Then use Enhance (DLSS 5 or SeedVR2) on it, on this PC.'}</span>
+              <span className="dim small">{way === 'seedance' ? `Seedance renders this draft again at 1080p, on your Comfy.org credits. ComfyUI prices it as ${price?.label || '…'}${price?.likelyUsd ? `; at this length it is likely about $${price.likelyUsd.toFixed(2)} (the 1080p rate)` : ''}. You agree to the top of the range.` : 'The 480p take becomes the final now. Then use Enhance (DLSS 5 or SeedVR2) on it, on this PC.'}</span>
             </div>
           </div>
         </div>

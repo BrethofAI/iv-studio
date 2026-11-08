@@ -431,7 +431,16 @@ export class Studio {
     const source = this.getJob(jobId)
     if (source.plan?.engine !== SEEDANCE || !source.plan.resolved.draft || way !== 'seedance') return { paid: false, label: 'Free', min: 0, max: 0, nodes: [], unknown: [] }
     const graph = finalGraph('x', null, 'price')
-    return priceGraph(graph, await infoFor(this.comfy, graph))
+    const price = await priceGraph(graph, await infoFor(this.comfy, graph))
+    // ComfyUI prices Draft to Final as one flat range (any length); a 1080p Seedance 2.5 take of this draft's length
+    // and shape is the likely figure, shown beside it (the OK still has to cover the top of ComfyUI's range)
+    try {
+      const { request, resolved } = source.plan
+      const like = { t: { class_type: SEEDANCE_NODES.text, inputs: { model: 'Seedance 2.5', 'model.resolution': '1080p', 'model.ratio': request.aspect, 'model.duration': resolved.seconds, 'model.generate_audio': request.audio !== false } } }
+      const likely = await priceGraph(like, await infoFor(this.comfy, like))
+      if (likely.paid && !likely.unknown.length) price.likelyUsd = likely.max
+    } catch {}
+    return price
   }
 
   async seedancePreviews(input) {
@@ -440,7 +449,8 @@ export class Studio {
     const key = this.partnerKey?.()
     if (!key) throw new Error('Seedance runs on your Comfy.org credits: add your Comfy.org API key in Settings → Comfy account.')
     const character = this.characters().find((c) => c.id === plan.request.character)
-    const project = projectId ? this.getProject(projectId) : this.createProject(projectName || shotName(plan.request.prompt, character))
+    // named from the prompt as written (the role lines IV Studio adds in front would name every shot "@image1 defines…")
+    const project = projectId ? this.getProject(projectId) : this.createProject(projectName || shotName(String(asked.prompt || '').replace(/@(image|video|audio)\d+/gi, ''), character))
     const run = project.jobs.length + 1
     const name = `${slug(project.name)}_${project.id}_r${run}`
     const { graph } = await this.seedanceBuild(plan, name)
@@ -1181,7 +1191,7 @@ export class Studio {
   publicJob(job) {
     const { previewPlan, ...rest } = job
     // the request goes out whole: the shot page shows its prompt in full
-    return { ...rest, plan: { resolved: job.plan?.resolved, request: job.plan?.request, finish: job.plan?.finish, asked: job.plan?.asked, enhance: job.plan?.enhance } }
+    return { ...rest, plan: { resolved: job.plan?.resolved, request: job.plan?.request, finish: job.plan?.finish, asked: job.plan?.asked, enhance: job.plan?.enhance, engine: job.plan?.engine, refs: job.plan?.refs } }
   }
 
   listJobs(projectId) {
