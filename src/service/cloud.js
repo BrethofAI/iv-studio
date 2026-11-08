@@ -23,6 +23,11 @@ export const UV = { version: '0.13.0', ...(UV_BUILDS[process.platform === 'darwi
 // A venv keeps its programs in Scripts\ (Windows) or bin/.
 export const venvBin = (venv, name) => path.join(venv, WIN ? 'Scripts' : 'bin', WIN ? `${name}.exe` : name)
 export const MODAL_VERSION = '1.6.2'
+// The image builder IV Studio's cloud image is made and tested with. Modal gives new workspaces its newest builder
+// (2026.10 in November 2026), which this client can't use ("This version of the modal client supports the following
+// image builder versions..."), so every Modal command asks for this one (MODAL_IMAGE_BUILDER_VERSION wins over
+// the workspace's setting).
+export const IMAGE_BUILDER = '2025.06'
 export const APP_NAME = 'iv-studio'
 // Modal's list prices (modal.com/pricing, 2026-10-28), per hour, billed by the second.
 export const GPUS = [
@@ -205,7 +210,8 @@ export class Cloud {
   exec(cmd, args, { cwd, env = {}, quiet = false, secret = false, onSpawn, onText } = {}) {
     return new Promise((resolve, reject) => {
       if (cwd) fs.mkdirSync(cwd, { recursive: true })
-      const p = spawn(cmd, args, { cwd, env: { ...process.env, ...env }, windowsHide: true })
+      const builder = cmd === this.modalExe ? { MODAL_IMAGE_BUILDER_VERSION: IMAGE_BUILDER } : {}
+      const p = spawn(cmd, args, { cwd, env: { ...process.env, ...builder, ...env }, windowsHide: true })
       onSpawn?.(p)
       let out = ''
       const take = (buf) => {
