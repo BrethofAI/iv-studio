@@ -3,7 +3,7 @@ import { media } from '../media'
 import { Progress } from './Shot'
 import Hero from './Hero'
 import Stage from './Stage'
-import { ToolShelf, ShelfTile, Step, Choices } from './FlowKit'
+import { ToolShelf, ShelfTile, Step, Choices, WorkflowNeeds } from './FlowKit'
 import { AspectTiles } from './CreateKit'
 import TileDelete from './TileDelete'
 import PromptWriter, { StoryWriter } from './PromptWriter'
@@ -53,6 +53,7 @@ export function SequenceList({ openSequence, notify, go }) {
           </button>
         </div>
         <p className="stage-note small">Write the shots, render them as one seamless take or shot by shot, redo any stretch, then render out the final.</p>
+        <WorkflowNeeds page="sequences" />
       </Stage>
 
       <ToolShelf label="Your sequences" count={shown.length} q={q} setQ={setQ} empty="No sequences yet. Name one in the bar above.">

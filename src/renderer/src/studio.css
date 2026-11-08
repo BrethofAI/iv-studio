@@ -11509,6 +11509,161 @@ button.set-chip:hover {
   color: var(--paper);
   text-shadow: 0 1px 12px rgba(0, 0, 0, 0.9);
 }
+/* what a workflow needs (workflows.js): on its card and under its banner's note */
+.workflow-needs {
+  color: var(--paper);
+}
+.workflow-needs .mono {
+  margin-right: 6px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.stage-needs {
+  margin: 6px 0 0;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.9);
+}
+
+/* Rebuild (Rebuild.jsx) */
+.rb-start {
+  flex-wrap: wrap;
+}
+.rb-start input {
+  flex: 1 1 260px;
+}
+.rb-file {
+  align-self: center;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--paper);
+}
+.rb-rights {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 6px;
+  color: var(--paper);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.9);
+  cursor: pointer;
+}
+/* the storyboard strip: one tile per shot, as wide as the shot is long */
+.rb-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.rb-tile {
+  flex: 1 1 0;
+  min-width: 120px;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 6px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--line-strong);
+}
+.rb-tile.route-h3 {
+  border-top-color: var(--red);
+}
+.rb-tile.route-still {
+  border-top-color: var(--cream);
+}
+.rb-tile.route-own,
+.rb-tile.route-replace {
+  border-top-style: dashed;
+  border-top-color: var(--pink);
+}
+.rb-tile img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+}
+.rb-tile figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.rb-chip {
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  color: var(--paper);
+  white-space: nowrap;
+}
+.rb-chip.route {
+  border-color: var(--red);
+}
+.rb-chip.route.suggested {
+  border-style: dashed;
+  opacity: 0.8;
+}
+.rb-chip.done {
+  border-color: var(--pink);
+  color: var(--pink);
+}
+.rb-plan {
+  display: grid;
+  gap: 6px;
+}
+.rb-plan-row {
+  display: grid;
+  grid-template-columns: 28px auto 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
+.rb-frames,
+.rb-takes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.rb-frame,
+.rb-take {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.rb-frame-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.rb-frame-pair img,
+.rb-take video,
+.rb-previews video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+  background: #000;
+}
+.rb-wait {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  border: 1px dashed var(--line-strong);
+  color: var(--paper);
+}
+.rb-previews {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px;
+}
+.rb-previews figure {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+.rb-previews figure.on video {
+  outline: 2px solid var(--red);
+}
 .stage-bar .mode-cards {
   text-align: left;
 }
@@ -11702,8 +11857,31 @@ button.set-chip:hover {
 .stage-fire {
   min-height: 470px;
 }
+/* Read-only progress (Sizzle, Rebuild): each step's name sits beside its circle, so the connector is a line that
+   fills the gap between one step's name and the next circle, at the circles' height, whatever the step count. */
 .wizard-steps.flow-progress {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+}
+.flow-progress li {
+  display: flex;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 0;
+}
+.flow-progress li:first-child {
+  flex: 0 0 auto;
+}
+.wizard-steps.flow-progress li + li::before {
+  position: static;
+  flex: 1 1 auto;
+  min-width: 16px;
+  margin: 0 14px;
+  height: 2px;
+}
+.flow-progress-in {
+  white-space: nowrap;
 }
 .flow-page .sz-status {
   text-transform: none;

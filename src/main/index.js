@@ -35,6 +35,9 @@ import { Shinobi } from '../service/shinobi'
 import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS, MAX_CHARACTERS, DEFAULT_TONE, OPENJUTSU } from '../service/replace'
 import { CREDIT as REMAKE_CREDIT, Remake } from '../service/remake'
+import { lintPrompt } from '../service/lint'
+import { Reader } from '../service/reader'
+import { Rebuilds } from '../service/rebuild'
 import { Voices } from '../service/voices'
 import { ACE_KEYS, monoDecoder, Music, MUSIC_DEFAULTS, MUSIC_ENGINES, REMIX } from '../service/music'
 import { Images } from '../service/images'
@@ -544,6 +547,28 @@ app.whenReady().then(() => {
   // Remake (remake.js): Replace's engine for swapping people and changing the scene
   remake = new Remake({ studio, images, faces: shinobi, dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe, writer: () => writerOf(readSettings(BASE)) })
   replace.remake = remake
+  // Rebuild (rebuild.js): a video read into shots and remade. The agent tools (MCP) drive the plan; this page starts
+  // one, shows where it is and gives the person's OKs. Built the way the MCP server builds it.
+  const rebuilds = new Rebuilds({ dataDir: DATA, reader: new Reader({ ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe, run: (a) => edits.run(a), runErr: (a) => edits.runErr(a), beatsOf: (f) => reels.beatsOf(f), voices }), studio, images, remake, edits, writer: () => writerOf(readSettings(BASE)), lint: lintPrompt, onLog: (line) => send('rebuild:log', line) })
+  const rebuildView = async (id) => {
+    const r = rebuilds.get(id)
+    return rebuilds.view(['rendering', 'ready'].includes(r.status) ? await rebuilds.refresh(id) : r)
+  }
+  handle('rebuild:list', () => rebuilds.list())
+  handle('rebuild:get', (id) => rebuildView(id))
+  handle('rebuild:pickVideo', async () => {
+    const r = await dialog.showOpenDialog(win, { title: 'A video to rebuild', properties: ['openFile'], filters: [{ name: 'Video', extensions: ['mp4', 'mov', 'm4v', 'webm', 'mkv'] }] })
+    return r.canceled ? null : r.filePaths[0]
+  })
+  handle('rebuild:read', async (opts) => rebuilds.view(await rebuilds.read(opts)))
+  handle('rebuild:readWithWriter', async (id) => rebuilds.view(await rebuilds.readWithWriter(id)))
+  handle('rebuild:approvePlan', (id) => rebuilds.view(rebuilds.approvePlan(id)))
+  handle('rebuild:makeFrames', async (id) => rebuilds.view(await rebuilds.makeFrames(id)))
+  handle('rebuild:approveFrames', (id) => rebuilds.view(rebuilds.approveFrames(id)))
+  handle('rebuild:makeShots', async (id) => rebuilds.view(await rebuilds.makeShots(id)))
+  handle('rebuild:pick', (id, index, candidate) => rebuilds.view(rebuilds.pick(id, index, candidate)))
+  handle('rebuild:firstCut', (id) => rebuilds.firstCut(id))
+  handle('rebuild:delete', (id) => rebuilds.remove(id))
   const presetOf = (id) => (id ? studio.characters().find((c) => c.id === id) || null : null)
   handle('remake:meta', () => ({ credit: REMAKE_CREDIT }))
   handle('remake:check', (kind) => remake.check(kind))

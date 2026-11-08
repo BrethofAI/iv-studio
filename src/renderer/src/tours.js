@@ -194,6 +194,24 @@ export const TOURS = {
       { at: '.tool-shelf', title: 'Your sizzles', text: 'Each tile shows how far it got. Open one to carry on.' }
     ]
   },
+  rebuild: {
+    title: 'Rebuild',
+    steps: [
+      { title: 'A video, taken apart and rebuilt', text: 'Bring a video you made, up to 2 minutes. IV Studio reads it shot by shot and makes it again: the same cuts, pacing and captions, the AI shots rendered fresh with H3, and anything you ask changed.' },
+      { at: '.stage-panel', title: 'Start here', text: 'Choose the video, say what should change if anything, tick that it’s yours to rework, and read it. It takes seconds.' },
+      { at: '.stage-needs', title: 'What it needs', text: 'Claude Code or Codex, connected to IV Studio in Settings → Agents. Your agent says what each shot is and writes the plan.' },
+      { at: '.tool-shelf', title: 'Your rebuilds', text: 'Each tile shows how far it got. Open one to carry on.' }
+    ]
+  },
+  'rebuild-project': {
+    title: 'A rebuild',
+    steps: [
+      { at: '.flow-progress', title: 'Where it’s at', text: 'Read, plan, frames, shots, cut.' },
+      { at: 'step:The shots', title: 'The shots', text: 'Every shot at its own length, with what it is and how it will be made.' },
+      { at: 'step:The plan', title: 'The plan', text: 'Your agent writes it. Nothing renders until you approve it here.' },
+      { at: 'step:Your agent', title: 'Your agent', text: 'Copy this into Claude Code or Codex. It changes as the rebuild moves on.' }
+    ]
+  },
   'sizzle-project': {
     title: 'A sizzle',
     steps: [
@@ -292,7 +310,7 @@ export const TOURS = {
 }
 
 // the page each banner art belongs to, when the page doesn't name its own tour
-export const TOUR_FOR_ART = { create: 'create', shots: 'shots', projects: 'projects', edit: 'edits', characters: 'characters', voices: 'voices', lines: 'lines', music: 'music', workflows: 'workflows', sequences: 'sequences', shinobi: 'shinobi', replace: 'replace', sizzle: 'sizzle', loras: 'loras', library: 'library', settings: 'settings', cloud: 'cloud' }
+export const TOUR_FOR_ART = { create: 'create', shots: 'shots', projects: 'projects', edit: 'edits', characters: 'characters', voices: 'voices', lines: 'lines', music: 'music', workflows: 'workflows', sequences: 'sequences', shinobi: 'shinobi', replace: 'replace', sizzle: 'sizzle', rebuild: 'rebuild', loras: 'loras', library: 'library', settings: 'settings', cloud: 'cloud' }
 
 const SEEN = 'iv.toursSeen'
 export function toursSeen() {

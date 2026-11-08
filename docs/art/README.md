@@ -89,3 +89,18 @@ Matthew asked for an onboarding wizard that checks the PC, themed like the other
   Ready keep the eye. All three were drawn once and passed a close-up check.
 - The app copies are 1400 x 737 WebP (quality 86), cropped to the middle of the 1672 x 941 masters. Masters, the
   prompts (`jobs.json`) and the sheet are in `D:\H3Characters\_art\welcome-20261106\`, outside the repo.
+
+## Rebuild's banner and card (2026-11-08)
+
+Rebuild joined the Workflows page as its sixth card, with its own page banner, as its design asked
+(`docs/superpowers/specs/2026-11-08-rebuild-workflow-design.md`).
+
+- ChatGPT image generation through the Codex CLI (`codex-images.ps1`), no text in the pictures.
+- Subject: a strip of film whose frames have come apart and float in a loose arc, the last ones snapping back into
+  the strip. Banner references: the Workflows and Sequences banners. Card references: the Shinobi card and the
+  Sequences banner, with the card prompt the other five used.
+- Two of each were drawn; banner A and card A were picked (banner B read as a plain wavy strip). Both passed a
+  close-up check.
+- The app copies: `assets/pages/rebuild.webp` (1400 x 737, WebP quality 86, from the 1672 x 941 master) and
+  `assets/workflows/rebuild.webp` (800 x 533, quality 80). Masters, prompts (`jobs.json`) and the review sheet
+  are in `D:\H3Characters\_art\rebuild-20261108\`, outside the repo.

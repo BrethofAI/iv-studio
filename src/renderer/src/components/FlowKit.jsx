@@ -1,10 +1,22 @@
 import { useState } from 'react'
 import Hero from './Hero'
 import { StepHead, DropIcon } from './CreateKit'
+import { NEEDS } from '../workflows'
 
 // The Workflows tools (Sequences, Replace, Reel, Shinobi, Sizzle) in Create's style: numbered step cards, choice
 // cards, a drop zone and, where a tool has one main action, a pinned summary card (a bar at the bottom of narrow
 // windows). The page wraps itself in .create-v2 so Create's layout and pieces apply.
+
+// What a tool needs beyond IV Studio (workflows.js), under its banner's note, the same words as on its card.
+export function WorkflowNeeds({ page }) {
+  const needs = NEEDS[page]
+  if (!needs?.length) return null
+  return (
+    <p className="workflow-needs stage-needs small">
+      <span className="mono pink">Needs</span> {needs.join(' · ')}
+    </p>
+  )
+}
 
 // The banner, with the way back to Workflows (or to the tool's own list).
 export function FlowHero({ go, back, ...props }) {

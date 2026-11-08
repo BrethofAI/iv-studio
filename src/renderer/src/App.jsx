@@ -32,6 +32,7 @@ import Welcome from './components/Welcome'
 import CloudWizard from './components/CloudWizard'
 import { UpdateButton } from './components/Update'
 import { SizzleList, SizzleProject } from './components/Sizzle'
+import { RebuildList, RebuildProject } from './components/Rebuild'
 
 // The sidebar's two halves, switched at its foot (Visual | Audio; the visual half's id is still 'video').
 // Characters and Settings are in both; the Library (everything made, page 'media') sits above the switch and
@@ -57,7 +58,7 @@ const SECTIONS = {
     ['settings', 'Settings']
   ]
 }
-const SUBPAGES = { settings: ['setup'], library: ['shot'], projects: ['project'], edits: ['edit'], characters: ['character'], workflows: ['sequences', 'sequence', 'shinobi', 'shinobi-film', 'replace', 'reel', 'sizzle', 'sizzle-project'] }
+const SUBPAGES = { settings: ['setup'], library: ['shot'], projects: ['project'], edits: ['edit'], characters: ['character'], workflows: ['sequences', 'sequence', 'shinobi', 'shinobi-film', 'replace', 'reel', 'sizzle', 'sizzle-project', 'rebuild', 'rebuild-project'] }
 const savedSection = () => {
   try {
     return localStorage.getItem('iv.section') === 'audio' ? 'audio' : 'video'
@@ -158,6 +159,12 @@ export default function App() {
     setSizzleId(id)
     switchSection('video')
     setPage('sizzle-project')
+  }
+  const [rebuildId, setRebuildId] = useState(null)
+  const openRebuild = (id) => {
+    setRebuildId(id)
+    switchSection('video')
+    setPage('rebuild-project')
   }
 
   const openCharacter = (id) => {
@@ -301,7 +308,7 @@ export default function App() {
     window.addEventListener('iv:cloud-wizard', cloud)
     return () => (window.removeEventListener('iv:welcome', open), window.removeEventListener('iv:cloud-wizard', cloud))
   }, [])
-  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, editRun, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle, remakeClip, replaceSeed }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, editRun, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle, openRebuild,remakeClip, replaceSeed }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
   // ComfyUI on this PC isn't there: the title bar offers to start it (not when it's running but busy)
   const comfyDown = !setup?.remote && setup?.items?.some((i) => i.id === 'comfyui' && i.status !== 'ok' && !i.busy)
@@ -407,6 +414,8 @@ export default function App() {
         {page === 'shinobi' && <ShinobiList {...ctx} />}
         {page === 'sizzle' && <SizzleList {...ctx} />}
         {page === 'sizzle-project' && sizzleId && <SizzleProject key={sizzleId} sizzleId={sizzleId} {...ctx} />}
+        {page === 'rebuild' && <RebuildList {...ctx} />}
+        {page === 'rebuild-project' && rebuildId && <RebuildProject key={rebuildId} rebuildId={rebuildId} {...ctx} />}
         {page === 'shinobi-film' && shinobiId && <ShinobiProject key={shinobiId} projectId={shinobiId} {...ctx} />}
         {page === 'characters' && <CharacterList {...ctx} startShotWith={startShotWith} />}
         {page === 'character' && trainingId && <CharacterTrainer key={trainingId} trainingId={trainingId} {...ctx} />}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fileUrl } from './edit/model'
 import { AspectTiles } from './CreateKit'
-import { Step, Choices, DropZone, Summary, SummaryDock, SummaryFrame, StageDrop } from './FlowKit'
+import { Step, Choices, DropZone, Summary, SummaryDock, SummaryFrame, StageDrop, WorkflowNeeds } from './FlowKit'
 import Stage from './Stage'
 
 // Reel: pictures (and clips) plus a song, cut to the song's beat with slow camera moves, as an edit
@@ -91,6 +91,7 @@ export default function Reel({ notify, openEdit, go }) {
           </button>
         </StageDrop>
         <p className="stage-note small">It lands in Edit as an ordinary edit: trim, reorder, add titles and export it there.</p>
+        <WorkflowNeeds page="reel" />
       </Stage>
 
       <div className="create-layout">

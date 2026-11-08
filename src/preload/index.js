@@ -83,6 +83,21 @@ contextBridge.exposeInMainWorld('ivstudio', {
     delete: call('sizzle:delete'),
     onLog: on('sizzle:log')
   },
+  rebuild: {
+    list: call('rebuild:list'),
+    get: call('rebuild:get'),
+    pickVideo: call('rebuild:pickVideo'),
+    read: call('rebuild:read'),
+    readWithWriter: call('rebuild:readWithWriter'),
+    approvePlan: call('rebuild:approvePlan'),
+    makeFrames: call('rebuild:makeFrames'),
+    approveFrames: call('rebuild:approveFrames'),
+    makeShots: call('rebuild:makeShots'),
+    pick: call('rebuild:pick'),
+    firstCut: call('rebuild:firstCut'),
+    delete: call('rebuild:delete'),
+    onLog: on('rebuild:log')
+  },
   shinobi: {
     status: call('shinobi:status'),
     install: call('shinobi:install'),

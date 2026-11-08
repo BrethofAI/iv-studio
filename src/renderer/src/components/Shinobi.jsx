@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Hero from './Hero'
 import Stage from './Stage'
-import { ToolShelf, ShelfTile, Step, Choices, Summary, SummaryDock, SummaryFrame } from './FlowKit'
+import { ToolShelf, ShelfTile, Step, Choices, Summary, SummaryDock, SummaryFrame, WorkflowNeeds } from './FlowKit'
 import { AspectTiles } from './CreateKit'
 import { SetCode } from './SettingsKit'
 import TileDelete from './TileDelete'
@@ -70,6 +70,7 @@ export function ShinobiList({ openShinobi, notify, go }) {
             <p className="stage-note small">{st.browser ? `It renders with ${base(st.browser).replace('.exe', '')} and IV Studio's own ffmpeg, at a fixed version in IV Studio's own folder. Nothing else on your PC changes.` : 'Shinobi needs Microsoft Edge or Google Chrome to draw frames.'}</p>
           </>
         )}
+        <WorkflowNeeds page="shinobi" />
       </Stage>
       {busy && log.length > 0 && <pre className="code cloud-log">{log.join('\n')}</pre>}
 

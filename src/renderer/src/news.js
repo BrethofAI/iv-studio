@@ -8,7 +8,8 @@ export const NEWS = [
       { text: 'Sequences take LoRAs: add up to four in Look and size and every shot uses them, in one take, retakes and shot by shot.' },
       { text: 'Edit and run again on a sequence’s shot now opens that shot in its sequence, so the new render stays part of it. Renders that came loose before can be put back with Use as shot N.' },
       { text: 'Move IV Studio’s data folder to another drive in Settings → Data folder. There’s also a portable Windows zip that keeps everything in a folder beside IV Studio.exe.' },
-      { text: 'Agents can rebuild a video: read it into shots, plan how each is remade, render the H3 ones and cut a first version in Edit (the Rebuild tools).' }
+      { text: 'Rebuild, a new workflow: bring a video you made and IV Studio reads it shot by shot. Your agent (Claude Code or Codex) plans how each shot is remade, you approve the plan and the frames, H3 renders the new shots, and a first cut lands in Edit.' },
+      { text: 'Every workflow now says what it needs, on its card and on its page.' }
     ]
   },
   {

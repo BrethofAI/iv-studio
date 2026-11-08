@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import Hero from './Hero'
 import Stage from './Stage'
-import { ToolShelf, ShelfTile, Step } from './FlowKit'
+import { ToolShelf, ShelfTile, Step, WorkflowNeeds } from './FlowKit'
 import { SetCode } from './SettingsKit'
 import TileDelete from './TileDelete'
 import { fileUrl } from './edit/model'
@@ -74,6 +74,7 @@ export function SizzleList({ notify, openSizzle, go }) {
           </button>
         </div>
         <p className="stage-note small">{busy || 'IV Studio captures the site, your agent writes a storyboard, you approve it, and the shots, music and voice-over are made on this PC.'}</p>
+        <WorkflowNeeds page="sizzle" />
       </Stage>
 
       <ToolShelf label="Your sizzles" count={shown.length} q={q} setQ={setQ} empty="None yet. Put a web address in the bar above.">
