@@ -21,7 +21,23 @@ export const SEQUENCE_DEFAULTS = {
   shotSeconds: 10,
   steps: 8,
   seed: 4242,
-  voiceRef: null
+  voiceRef: null,
+  loras: [] // extra LoRAs for every shot: [{name, strength}], after the character's
+}
+
+export const MAX_SEQUENCE_LORAS = 4
+// A sequence's extra LoRAs as saved: named, strength -2..2 (default 0.8), no repeats, at most MAX_SEQUENCE_LORAS.
+export function cleanSequenceLoras(loras) {
+  const seen = new Set()
+  const out = []
+  for (const l of Array.isArray(loras) ? loras : []) {
+    const name = typeof l?.name === 'string' ? l.name.trim() : ''
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    const n = Number(l.strength)
+    out.push({ name, strength: Number.isFinite(n) ? Math.min(2, Math.max(-2, Math.round(n * 100) / 100)) : 0.8, ...(l.title && { title: String(l.title) }) })
+  }
+  return out.slice(0, MAX_SEQUENCE_LORAS)
 }
 
 // Node ids the studio reads outputs from.
@@ -30,9 +46,9 @@ export const SAVES = { master: 'save', final: 'final' }
 const fill = (text, character) => (character ? text.replaceAll('{char}', character.trigger) : text)
 
 // Loaders shared by every sequence graph: ref2va (it carries identity and voice across a chain),
-// the turbo LoRA, then the character LoRA.
+// the turbo LoRA, the character LoRA, then the sequence's extra LoRAs.
 // unet: the model chosen for this workflow in Settings, else the template's ref2va.
-function loaders(template, character, unet) {
+function loaders(template, character, unet, extra = []) {
   const g = {
     unet: { class_type: 'UNETLoader', inputs: { unet_name: unet || template['301'].inputs.unet_name, weight_dtype: 'default' } },
     clip: { class_type: 'CLIPLoader', inputs: { ...template['2'].inputs } },
@@ -46,6 +62,10 @@ function loaders(template, character, unet) {
     g.char = { class_type: 'LoraLoaderModelOnly', inputs: { model, lora_name: character.lora, strength_model: character.strength ?? 0.8 } }
     model = ['char', 0]
   }
+  cleanSequenceLoras(extra).forEach((l, k) => {
+    g[`lora${k + 1}`] = { class_type: 'LoraLoaderModelOnly', inputs: { model, lora_name: l.name, strength_model: l.strength } }
+    model = [`lora${k + 1}`, 0]
+  })
   return { g, model }
 }
 
@@ -69,7 +89,7 @@ export function validateSequence(seq, characters) {
 
 // The whole sequence as one continuous take.
 export function takeGraph({ template, seq, character, name, voiceRef, unet }) {
-  const { g, model } = loaders(template, character, unet)
+  const { g, model } = loaders(template, character, unet, seq.loras)
   const { width, height } = resolveSize(seq.aspect, seq.megapixels)
   const frames = resolveFrames(seq.shotSeconds)
   const sampler = {
@@ -101,7 +121,7 @@ export function takeGraph({ template, seq, character, name, voiceRef, unet }) {
 
 // Redo start..end seconds of a finished video. Everything outside the window is kept as it was.
 export function retakeGraph({ template, seq, character, name, sourcePath, prompt, start, end, mode, seed, unet }) {
-  const { g, model } = loaders(template, character, unet)
+  const { g, model } = loaders(template, character, unet, seq.loras)
   g.src = { class_type: 'VHS_LoadVideoPath', inputs: { video: sourcePath, force_rate: 24, custom_width: 0, custom_height: 0, frame_load_cap: 0, skip_first_frames: 0, select_every_nth: 1, format: 'AnimateDiff' } }
   g.sampler = { class_type: 'KSamplerSelect', inputs: { sampler_name: 'er_sde' } }
   g.sigmas = { class_type: 'BasicScheduler', inputs: { model, scheduler: 'beta', steps: seq.steps, denoise: 1 } }

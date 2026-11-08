@@ -228,8 +228,23 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote }) {
   )
 }
 
-export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps, remote, editRun, characters = [] }) {
+export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps, remote, editRun, openSequence, characters = [] }) {
   const [project, setProject] = useState(null)
+  // a sequence's shot-by-shot project: which shot each run is (sequences.runsOf), so edits go back through it
+  const [seqRuns, setSeqRuns] = useState(null)
+  const [linking, setLinking] = useState(null)
+  async function linkRun(run, index) {
+    setLinking(run.id)
+    try {
+      await window.ivstudio.sequences.linkRun(seqRuns.sequenceId, { jobId: run.id, index })
+      setSeqRuns(await window.ivstudio.sequences.runsOf(projectId))
+      notify(`That run is shot ${index + 1} of ${seqRuns.sequenceName} now. Pick and finish it there.`, 'info')
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setLinking(null)
+    }
+  }
   const [jobIds, setJobIds] = useState([])
   const [picked, setPicked] = useState({})
   const [name, setName] = useState('')
@@ -292,6 +307,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
     setProject(project)
     setName(project.name)
     setJobIds(jobs.map((j) => j.id))
+    setSeqRuns(project.sequenceId ? await window.ivstudio.sequences.runsOf(projectId).catch(() => null) : null)
     setJobs((all) => ({ ...all, ...Object.fromEntries(jobs.map((j) => [j.id, all[j.id] && !DONE.includes(j.status) ? all[j.id] : j])) }))
     const open = jobs.filter((j) => !DONE.includes(j.status)).map((j) => j.id)
     if (open.length) window.ivstudio.jobs.watch(open)
@@ -323,7 +339,11 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
         <input className="shot-name" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name !== project.name && window.ivstudio.projects.rename(projectId, name)} />
       </Hero>
       <div className="shot-actions">
-        {runs[0] && editRun ? (
+        {seqRuns ? (
+          <button className="btn btn-primary" onClick={() => openSequence?.(seqRuns.sequenceId)}>
+            Open {seqRuns.sequenceName}
+          </button>
+        ) : runs[0] && editRun ? (
           <button className="btn btn-primary" onClick={() => editRun(runs[0], project)}>
             ↻ Edit the latest and run again
           </button>
@@ -334,6 +354,11 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
         )}
         {marked.length === 1 && <span className="mono dim small">1 take marked: mark another to compare them</span>}
       </div>
+      {seqRuns && (
+        <p className="notice seq-runs-note">
+          These are the shot-by-shot renders of the sequence {seqRuns.sequenceName}. Edit, pick and finish them in the sequence, so every new render stays part of it.
+        </p>
+      )}
       {comparing && marked.length === 2 && (
         <CompareViewer
           a={marked[0]}
@@ -370,9 +395,20 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                     <span key={c}>{c}</span>
                   ))}
               </span>
+              {seqRuns?.runs[run.id]?.linked && <span className="mono small pink">Shot {seqRuns.runs[run.id].index + 1}</span>}
+              {seqRuns?.runs[run.id] && !seqRuns.runs[run.id].linked && (
+                <span className="mono small dim" title={seqRuns.runs[run.id].problem || ''}>
+                  Not in the sequence{seqRuns.runs[run.id].problem ? `: ${seqRuns.runs[run.id].problem}` : ''}
+                </span>
+              )}
+              {seqRuns?.runs[run.id] && !seqRuns.runs[run.id].linked && !seqRuns.runs[run.id].problem && (
+                <button className="btn btn-small" disabled={linking === run.id} onClick={() => linkRun(run, seqRuns.runs[run.id].index)}>
+                  {linking === run.id ? 'Linking…' : `Use as shot ${seqRuns.runs[run.id].index + 1}`}
+                </button>
+              )}
               {editRun && (
                 <button className="btn btn-small run-edit" onClick={() => editRun(run, project)}>
-                  Edit and run again
+                  {seqRuns ? 'Edit in the sequence' : 'Edit and run again'}
                 </button>
               )}
               {changes.length > 0 && <span className="run-changes mono small">Changed: {changes.join(' · ')}</span>}

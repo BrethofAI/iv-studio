@@ -12,7 +12,7 @@ import { planFinish, planPreviews } from './plan.js'
 import { adaptGraph, capabilities, withLivePreview } from './remote.js'
 import { Cast, resolveMentions } from './cast.js'
 import { contextIrGraph, fromContextIr, writeHarness, writeLocal, writeStoryLocal } from './prompter.js'
-import { renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
+import { cleanSequenceLoras, renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
 import { checkSetup, comboOptions, modelFileMap, whyUnreached } from './setup.js'
 import { comfyPlace, installPacks, missingPacks } from './nodepacks.js'
 import { checkUpdates, copySnapshot, MANAGER_PACK, packFolders, readRecord, reenable, restart, undo, update, writeRecord } from './comfyupdate.js'
@@ -652,8 +652,9 @@ export class Studio {
   // Edits name, settings and shots. Renders already made stay; shot-by-shot shots go stale when their inputs change.
   saveSequence(id, patch) {
     const s = this.getSequence(id)
-    const allowed = ['name', 'method', 'character', 'aspect', 'megapixels', 'shotSeconds', 'steps', 'seed', 'voiceRef', 'shots']
+    const allowed = ['name', 'method', 'character', 'aspect', 'megapixels', 'shotSeconds', 'steps', 'seed', 'voiceRef', 'shots', 'loras']
     for (const k of allowed) if (k in (patch || {})) s[k] = patch[k]
+    s.loras = cleanSequenceLoras(s.loras)
     s.shots = s.shots.map((sh) => ({ id: sh.id || randomUUID().slice(0, 6), prompt: sh.prompt || '', mode: sh.mode || 'text', media: sh.media || [] }))
     return this.writeSequence(s)
   }
@@ -706,7 +707,10 @@ export class Studio {
 
   shotKey(s, i, prevRaw) {
     const sh = s.shots[i]
-    return JSON.stringify([sh.prompt, sh.mode, sh.media, s.character, s.aspect, s.megapixels, s.shotSeconds, s.steps, i ? prevRaw : null])
+    const parts = [sh.prompt, sh.mode, sh.media, s.character, s.aspect, s.megapixels, s.shotSeconds, s.steps, i ? prevRaw : null]
+    // LoRAs only count once a sequence has some, so shots rendered before sequences had LoRAs stay fresh
+    if (s.loras?.length) parts.push(s.loras.map((l) => [l.name, l.strength]))
+    return JSON.stringify(parts)
   }
 
   sequenceCharacter(s) {
@@ -781,7 +785,7 @@ export class Studio {
     const prev = index > 0 ? view.shots[index - 1] : null
     if (prev && !prev.fresh) throw new Error(`Finish shot ${index} first; shot ${index + 1} continues from it.`)
     if (!s.projectId) s.projectId = this.createProject(`${s.name} (sequence)`, s.id).id
-    const base = { prompt: sh.prompt, character: s.character, aspect: s.aspect, seconds: s.shotSeconds, steps: s.steps, seed: seed ?? s.seed + index * 100 }
+    const base = { prompt: sh.prompt, character: s.character, aspect: s.aspect, seconds: s.shotSeconds, steps: s.steps, seed: seed ?? s.seed + index * 100, extraLoras: s.loras || [] }
     const request = prev
       ? { ...base, mode: 'continue', media: [{ kind: 'video', file: prev.raw.path }], megapixels: s.megapixels, overlapFrames: 22 }
       : { ...base, mode: sh.mode || 'text', media: sh.media || [], megapixels: 0.4, previews: 3 }
@@ -798,6 +802,88 @@ export class Studio {
     const j = await this.finishCandidate({ jobId: rec.previews, candidate, megapixels: Math.max(0.5, s.megapixels), audio: 'pass', fps: 0, upscale2x: false })
     rec.finish = j.id
     return this.sequenceJob(s, j)
+  }
+
+  // The shot-by-shot runs of a sequence live in its own project. For each of that project's preview runs: the shot
+  // it belongs to (linked), or the shot it could be linked to (a run made from the project's page with "Edit and run
+  // again" before those edits went through the sequence), or why it can't be.
+  sequenceRunsOf(projectId) {
+    const project = this.getProject(projectId)
+    if (!project.sequenceId) return null
+    let s
+    try {
+      s = this.getSequence(project.sequenceId)
+    } catch {
+      return null
+    }
+    const view = this.sequenceView(s.id)
+    const runs = {}
+    for (const jid of project.jobs) {
+      const j = readJson(this.jobFile(jid), null)
+      if (j?.kind !== 'previews') continue
+      const linked = s.shots.findIndex((sh) => s.shotJobs[sh.id]?.previews === jid)
+      if (linked >= 0) {
+        runs[jid] = { index: linked, linked: true }
+        continue
+      }
+      const req = j.plan?.request || {}
+      let index = -1
+      if (req.mode !== 'continue') index = 0
+      else {
+        const src = req.media?.[0]?.file
+        index = view.shots.findIndex((x, i) => i > 0 && view.shots[i - 1].fresh && view.shots[i - 1].raw?.path === src)
+      }
+      const problem = index < 0 ? 'It continues from a shot that has changed since, so it no longer fits the sequence.' : this.shotRunMismatch(s, index, j)
+      runs[jid] = { index, linked: false, ...(problem && { problem }) }
+    }
+    return { sequenceId: s.id, sequenceName: s.name, method: s.method, runs }
+  }
+
+  // Why a preview run can't stand as shot `index` of a sequence (its settings differ), or null.
+  shotRunMismatch(s, index, j) {
+    if (j.status !== 'success') return 'It has not finished rendering.'
+    const req = j.plan?.request || {}
+    const diff = []
+    if ((req.character || 'none') !== (s.character || 'none')) diff.push('character')
+    if (req.aspect !== s.aspect) diff.push('frame shape')
+    if (Number(req.seconds) !== Number(s.shotSeconds)) diff.push('shot length')
+    if (Number(req.steps) !== Number(s.steps)) diff.push('steps')
+    if (index > 0 && req.mode !== 'continue') diff.push('mode (later shots continue the one before)')
+    if (index === 0 && req.mode === 'continue') diff.push('mode (the first shot starts fresh)')
+    if (index > 0 && Number(req.megapixels) !== Number(s.megapixels)) diff.push('size')
+    if (JSON.stringify((req.extraLoras || []).map((l) => [l.name, l.strength])) !== JSON.stringify((s.loras || []).map((l) => [l.name, l.strength]))) diff.push('LoRAs')
+    return diff.length ? `Its ${diff.join(', ')} differ${diff.length === 1 ? 's' : ''} from the sequence's.` : null
+  }
+
+  // Makes a preview run of the sequence's project shot `index`: the shot takes the run's prompt (and, for shot 1,
+  // its mode and pictures), and the run's latest good finish, if any, becomes the shot's finish.
+  linkShotRun(id, { jobId, index }) {
+    const s = this.getSequence(id)
+    const sh = s.shots[index]
+    if (!sh) throw new Error(`No shot ${index + 1}.`)
+    const j = readJson(this.jobFile(jobId), null)
+    if (!j || j.kind !== 'previews' || !s.projectId || j.projectId !== s.projectId) throw new Error("That run isn't one of this sequence's.")
+    const view = this.sequenceView(id)
+    const req = j.plan?.request || {}
+    if (index > 0) {
+      const prev = view.shots[index - 1]
+      if (!prev.fresh || prev.raw?.path !== req.media?.[0]?.file) throw new Error(`That run doesn't continue from shot ${index}'s current video.`)
+    }
+    const problem = this.shotRunMismatch(s, index, j)
+    if (problem) throw new Error(`That run can't be shot ${index + 1}. ${problem}`)
+    const asked = j.plan?.asked || {}
+    sh.prompt = asked.prompt ?? req.prompt
+    if (index === 0) {
+      sh.mode = asked.mode || req.mode || 'text'
+      sh.media = (asked.media || req.media || []).map((m) => ({ kind: m.kind, file: m.file || m.path }))
+    }
+    const rawKind = index === 0 ? 'before_dlss' : 'continued_before_dlss'
+    const finishes = this.getProject(s.projectId)
+      .jobs.map((fid) => readJson(this.jobFile(fid), null))
+      .filter((f) => f?.kind === 'finish' && f.parent === jobId && f.status === 'success' && f.outputs?.some((o) => o.kind === rawKind))
+    s.shotJobs[sh.id] = { previews: jobId, finish: finishes.at(-1)?.id || null, key: this.shotKey(s, index, index > 0 ? view.shots[index - 1].raw.path : null) }
+    this.writeSequence(s)
+    return this.sequenceView(id)
   }
 
   // ---------- jobs ----------

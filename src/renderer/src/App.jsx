@@ -95,6 +95,7 @@ export default function App() {
   const [runForCreate, setRunForCreate] = useState(null)
   const [projectId, setProjectId] = useState(null)
   const [sequenceId, setSequenceId] = useState(null)
+  const [sequenceFocus, setSequenceFocus] = useState(null)
   const [productionId, setProductionId] = useState(null) // the open Project
   const [editId, setEditId] = useState(null)
   const [trainingId, setTrainingId] = useState(null)
@@ -183,7 +184,9 @@ export default function App() {
     switchSection('video')
     setPage('project')
   }
-  const openSequence = (id) => {
+  // focus: { runId, prompt } — open on the shot a run belongs to, optionally with a revised prompt to edit
+  const openSequence = (id, focus = null) => {
+    setSequenceFocus(focus)
     setSequenceId(id)
     switchSection('video')
     setPage('sequence')
@@ -239,7 +242,9 @@ export default function App() {
     setPage('create')
   }
   // prompt: a revised prompt (a take review's) to start from instead of the run's own
+  // A run of a sequence's shot-by-shot project is edited in the sequence, so the new render stays that shot's.
   const editRun = (run, project, prompt) => {
+    if (project.sequenceId) return openSequence(project.sequenceId, { runId: run.id, prompt: prompt || null })
     setRunForCreate({ request: run.plan.request, asked: prompt ? { ...(run.plan.asked || {}), prompt } : run.plan.asked, projectId: project.id, projectName: project.name })
     pickCreateKind('video')
     switchSection('video')
@@ -393,7 +398,7 @@ export default function App() {
         {page === 'projects' && <ProjectsList {...ctx} />}
         {page === 'project' && productionId && <ProjectPage key={productionId} productionId={productionId} {...ctx} />}
         {page === 'sequences' && <SequenceList {...ctx} />}
-        {page === 'sequence' && sequenceId && <SequenceEditor key={sequenceId} sequenceId={sequenceId} {...ctx} />}
+        {page === 'sequence' && sequenceId && <SequenceEditor key={sequenceId} sequenceId={sequenceId} {...ctx} shotFocus={sequenceFocus} clearShotFocus={() => setSequenceFocus(null)} />}
         {page === 'edits' && <EditList {...ctx} />}
         {page === 'edit' && editId && <EditEditor key={editId} editId={editId} {...ctx} />}
         {page === 'workflows' && <Workflows {...ctx} />}

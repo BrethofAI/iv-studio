@@ -143,7 +143,7 @@ export const TOURS = {
     steps: [
       { at: 'step:How it renders', title: 'How it renders', text: 'One take renders every shot together, seamless but all or nothing. Shot by shot lets you pick each shot in turn.' },
       { at: 'step:The shots', title: 'The shots', text: 'Write each shot, or let the writer draft them all from a story. Describe the place the same way in every shot so they join cleanly.' },
-      { at: 'step:Look and size', title: 'Look and size', text: 'Who plays it, the frame shape, the size and each shot’s length.' },
+      { at: 'step:Look and size', title: 'Look and size', text: 'Who plays it, any LoRAs for every shot, the frame shape, the size and each shot’s length.' },
       { at: 'step:Render', title: 'Render', text: 'Shows the length and a rough time before you start.' },
       { at: 'step:Versions', title: 'Versions', text: 'Every take lands here. Retake redoes a stretch; Render out makes the final with clean-up and upscaling.' }
     ]

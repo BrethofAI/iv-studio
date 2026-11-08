@@ -7,6 +7,9 @@ import { ToolShelf, ShelfTile, Step, Choices } from './FlowKit'
 import { AspectTiles } from './CreateKit'
 import TileDelete from './TileDelete'
 import PromptWriter, { StoryWriter } from './PromptWriter'
+import { LoraPicker, LoraThumb, loraTitle, useYours } from './Loras'
+
+const MAX_LORAS = 4 // sequence.js MAX_SEQUENCE_LORAS
 
 const DONE = ['success', 'error', 'cancelled']
 const ASPECTS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9']
@@ -84,10 +87,10 @@ function Seg({ value, options, onChange, format = (v) => v }) {
   )
 }
 
-function ShotCard({ shot, i, count, onChange, onMove, onDuplicate, onDelete, writer }) {
+function ShotCard({ shot, i, count, onChange, onMove, onDuplicate, onDelete, writer, focused }) {
   const [writing, setWriting] = useState(false)
   return (
-    <div className="seq-shot">
+    <div id={`seq-shot-${shot.id}`} className={`seq-shot ${focused ? 'focused' : ''}`}>
       <div className="seq-shot-head">
         <span className="seq-shot-no">Shot {i + 1}</span>
         <div className="seq-shot-tools">
@@ -280,11 +283,16 @@ function ShotRow({ seqId, i, shot, state, live, onStart, notify, flush }) {
   )
 }
 
-export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live, caps, remote }) {
+// shotFocus: { runId, prompt } from a shot-by-shot run's "Edit and run again": open on that run's shot (with the
+// revised prompt, if any) so the edit renders through the sequence and stays that shot's.
+export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live, caps, remote, shotFocus, clearShotFocus }) {
   const [seq, setSeq] = useState(null)
   const [view, setView] = useState(null)
   const [panel, setPanel] = useState(null) // {kind: 'retake'|'out', versionId}
   const [busy, setBusy] = useState(false)
+  const [picking, setPicking] = useState(false)
+  const [focused, setFocused] = useState(null) // the id of the shot a run's edit opened on
+  const [yours, , reloadYours] = useYours()
   const saveTimer = useRef(null)
   const pendingSave = useRef(null)
 
@@ -334,6 +342,46 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live,
     const next = [...shots]
     ;[next[i], next[i + d]] = [next[i + d], next[i]]
     edit({ shots: next })
+  }
+
+  useEffect(() => {
+    if (!shotFocus || !seq || !view) return
+    clearShotFocus?.()
+    ;(async () => {
+      const info = view.sequence.projectId ? await window.ivstudio.sequences.runsOf(view.sequence.projectId).catch(() => null) : null
+      const r = info?.runs?.[shotFocus.runId]
+      const i = r?.index ?? -1
+      if (i < 0 || !shots[i]) return notify(r?.problem ? `That run no longer fits this sequence. ${r.problem}` : "Couldn't tell which shot that run was. Edit the shot here and render it again.", 'info')
+      if (shotFocus.prompt) setShot(i, { prompt: shotFocus.prompt })
+      setFocused(shots[i].id)
+      requestAnimationFrame(() => document.getElementById(`seq-shot-${shots[i].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }))
+      const next = seq.method === 'shots' ? `render shot ${i + 1} again under Render` : 'render the take again'
+      notify(`Shot ${i + 1}${shotFocus.prompt ? ' has the revised prompt' : ''}. Change it here, then ${next}, so the new render stays part of the sequence.`, 'info')
+    })()
+  }, [shotFocus, seq, view])
+
+  // Extra LoRAs for every shot, after the character's. Adding one puts its trigger words at the start of each
+  // written shot that lacks them (as Create does), unless that LoRA's auto-trigger is off.
+  const loras = seq?.loras || []
+  const loraInfo = (name) => yours?.find((x) => x.name === name)
+  function addLora({ name, words = [], title }) {
+    setPicking(false)
+    if (loras.some((l) => l.name === name)) return notify(`${title || loraTitle(name)} is already in the sequence.`, 'info')
+    if (loras.length >= MAX_LORAS) return notify(`A sequence takes up to ${MAX_LORAS} LoRAs. Take one out first.`, 'info')
+    const info = loraInfo(name)
+    const strength = info?.prefs?.strength ?? 1
+    const auto = info?.prefs?.autoTrigger !== false
+    const add = auto ? words.filter(Boolean) : []
+    let changed = 0
+    const nextShots = shots.map((s) => {
+      const missing = add.filter((w) => !s.prompt.includes(w))
+      if (!s.prompt.trim() || !missing.length) return s
+      changed++
+      return { ...s, prompt: `${missing.join(', ')}. ${s.prompt}` }
+    })
+    edit({ loras: [...loras, { name, strength, ...(title && { title }) }], ...(changed && { shots: nextShots }) })
+    notify(changed ? `Added ${title || loraTitle(name)} and its trigger words (${add.join(', ')}) to ${changed} shot${changed === 1 ? '' : 's'}.` : `Added ${title || loraTitle(name)} to every shot.`, 'info')
+    reloadYours()
   }
 
   async function act(fn) {
@@ -404,6 +452,7 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live,
             onDuplicate={() => edit({ shots: [...shots.slice(0, i + 1), { ...s, id: newId() }, ...shots.slice(i + 1)] })}
             onDelete={() => edit({ shots: shots.filter((_, j) => j !== i) })}
             writer={{ notify, go, context: { mode: 'text', seconds: seq.shotSeconds, aspect: seq.aspect, character: seq.character, sequence: true, previous: i > 0 ? shots[i - 1].prompt : null } }}
+            focused={focused === s.id}
           />
         ))}
         <button className="btn btn-small seq-add" disabled={shots.length >= 8} onClick={() => edit({ shots: [...shots, { id: newId(), prompt: '', mode: 'text', media: [] }] })}>
@@ -411,11 +460,42 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live,
         </button>
       </Step>
 
-      <Step n={3} title="Look and size" sub="Who plays it, the frame, the size and each shot's length.">
+      <Step n={3} title="Look and size" sub="Who plays it, its LoRAs, the frame, the size and each shot's length.">
         <div className="row">
           <span className="row-label">Character</span>
           <Seg value={seq.character} options={[...characters.map((c) => [c.id, c.name.split(' ')[0]]), ['none', 'None']]} onChange={(character) => edit({ character })} />
         </div>
+        <div className="row seq-loras">
+          <span className="row-label">LoRAs</span>
+          <div className="lora-tray">
+            {loras.map((l, i) => {
+              const info = loraInfo(l.name)
+              return (
+                <div key={l.name} className="lora-chip">
+                  <LoraThumb className="small" preview={info?.prefs?.picture ? { file: info.prefs.picture, type: 'image' } : info?.civitai?.preview} label={loraTitle(l.name)} mature={info?.civitai?.mature} />
+                  <div className="lora-chip-body">
+                    <span className="lora-chip-name" title={l.name}>
+                      {info?.civitai?.name || l.title || loraTitle(l.name)}
+                    </span>
+                    <div className="lora-chip-strength">
+                      <input type="range" min={0} max={1.5} step={0.05} value={l.strength} aria-label={`${loraTitle(l.name)} strength`} onChange={(e) => edit({ loras: loras.map((x, j) => (j === i ? { ...x, strength: Number(e.target.value) } : x)) })} />
+                      <span className="mono small">{Number(l.strength).toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <button className="lora-chip-x" title="Take it out of the sequence" aria-label={`Remove ${loraTitle(l.name)}`} onClick={() => edit({ loras: loras.filter((_, j) => j !== i) })}>
+                    ×
+                  </button>
+                </div>
+              )
+            })}
+            {loras.length < MAX_LORAS && (
+              <button className="lora-add" onClick={() => setPicking(true)}>
+                + Add LoRA
+              </button>
+            )}
+          </div>
+        </div>
+        {picking && <LoraPicker notify={notify} go={go} onClose={() => setPicking(false)} onPick={addLora} />}
         <AspectTiles aspects={ASPECTS} value={seq.aspect} onChange={(aspect) => edit({ aspect })} />
         <div className="row">
           <span className="row-label">Size</span>

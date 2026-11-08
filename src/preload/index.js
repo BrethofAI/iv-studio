@@ -265,7 +265,9 @@ contextBridge.exposeInMainWorld('ivstudio', {
     retake: call('sequences:retake'),
     renderOut: call('sequences:renderOut'),
     huntShot: call('sequences:huntShot'),
-    finishShot: call('sequences:finishShot')
+    finishShot: call('sequences:finishShot'),
+    runsOf: call('sequences:runsOf'),
+    linkRun: call('sequences:linkRun')
   },
   system: { stats: call('system:stats'), free: call('system:free') },
   rank: { job: call('rank:job'), learn: call('rank:learn') },

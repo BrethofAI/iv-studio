@@ -852,6 +852,13 @@ input.mini {
   background: var(--ink-2);
   border: 1px solid var(--line);
 }
+/* the shot a run's "Edit and run again" opened on */
+.seq-shot.focused {
+  border-color: var(--pink);
+}
+.seq-loras .lora-tray {
+  flex: 1;
+}
 .seq-shot-head,
 .seq-row-head {
   display: flex;
