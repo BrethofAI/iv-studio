@@ -9,6 +9,7 @@ import { lintSeedance, toSeedanceTags } from '../src/service/seedlint.js'
 import { priceGraph } from '../src/service/pricing.js'
 import { fillDefaults, missingInputs } from '../src/service/nodeschema.js'
 import { h3Frames, refineGraph } from '../src/service/h3refine.js'
+import { dlssLook } from '../src/service/studio.js'
 
 const info = JSON.parse(fs.readFileSync(new URL('./fixtures/partner-info.json', import.meta.url)))
 let n = 0
@@ -166,6 +167,22 @@ await ok('the free H3 finish: 121 frames pad to 124 and trim back, the 480p draf
   assert.equal(quiet.save.inputs.audio, undefined)
   assert.deepEqual(quiet.aenc.inputs.audio, ['quiet', 0])
   assert.equal(quiet.tail, undefined, '124 frames need no padding')
+})
+
+await ok('local upscaler strengths: DLSS 5 strength and style reach its node, H3 + SeedVR2 leaves DLSS out', async () => {
+  const template = JSON.parse(fs.readFileSync(new URL('../resources/workflows/iv_studio_api.json', import.meta.url)))
+  const src = { path: 'C:/t.mp4', width: 854, height: 480, frames: 121 }
+  const look = refineGraph(template, { source: src, prompt: 'x', name: 'x', denoise: 0.15, dlss: dlssLook({ strength: 1.4, style: 'Cinematic' }) }).graph
+  assert.equal(look.dlss.inputs['NR Intensity'], 1.4)
+  assert.equal(look.dlss.inputs['NR Style'], 'Cinematic')
+  assert.equal(look.sigmas.inputs.denoise, 0.15)
+  const plain = refineGraph(template, { source: src, prompt: 'x', name: 'x', dlss: dlssLook({}) }).graph
+  assert.ok(plain.dlss, 'no strength picked still runs DLSS 5 with its own settings')
+  const noDlss = refineGraph(template, { source: src, prompt: 'x', name: 'x', dlss: false }).graph
+  assert.equal(noDlss.dlss, undefined)
+  assert.equal(noDlss.out, undefined)
+  assert.deepEqual(dlssLook({ strength: 9, style: 'Weird' }), { 'NR Intensity': 2 })
+  assert.deepEqual(dlssLook({ strength: 0.5, style: 'Natural' }, true), { strength: 0.5, style: 'Natural' })
 })
 
 console.log(`\n${n} passed`)

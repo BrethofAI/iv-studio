@@ -9,12 +9,54 @@ import { lintPrompt } from '../../../service/lint'
 import { lintSeedance } from '../../../service/seedlint'
 
 const DONE = ['success', 'error', 'cancelled']
+// A local upscaler's strength: a slider with its value, the default marked, and a line saying what it does.
+function Strength({ label, value, min, max, step, def, onChange, hint, format = (v) => v.toFixed(2) }) {
+  return (
+    <div className="row">
+      <span className="row-label">{label}</span>
+      <div className="enhancer-pick strength-pick">
+        <div className="strength-slider">
+          <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} aria-label={label} />
+          <span className="mono strength-value">{format(value)}</span>
+          {Math.abs(value - def) > 1e-6 && (
+            <button className="link-btn mono small" onClick={() => onChange(def)}>
+              Default
+            </button>
+          )}
+        </div>
+        {hint && <span className="dim small">{hint}</span>}
+      </div>
+    </div>
+  )
+}
+const DLSS_STYLES = ['Default', 'Natural', 'Cinematic']
+// DLSS 5's strength (its noise reduction) and style, as two rows
+function DlssLook({ strength, style, onChange, label = 'DLSS strength' }) {
+  return (
+    <>
+      <Strength label={label} value={strength} min={0} max={2} step={0.1} def={0.8} onChange={(v) => onChange({ dlssStrength: v })} format={(v) => v.toFixed(1)} hint={strength < 0.5 ? 'Light cleanup: keeps the most texture (and noise).' : strength > 1.2 ? 'Strong cleanup: smoother skin and surfaces; fine detail can go.' : 'Balanced: IV Studio’s tested setting is 0.8.'} />
+      <div className="row">
+        <span className="row-label">DLSS style</span>
+        <div className="segmented">
+          {DLSS_STYLES.map((s) => (
+            <button key={s} className={style === s ? 'on' : ''} onClick={() => onChange({ dlssStyle: s })}>
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+const SEEDVR2_HINT = (v) => (v === 0 ? 'Restores what is there, faithfully (the default).' : v < 0.2 ? 'A little invented detail on top.' : 'More invented detail: sharper, but it can drift from the take.')
+const H3_HINT = (v) => (v <= 0.1 ? 'The lightest H3 pass: adds detail, faces shift a little.' : v <= 0.2 ? 'More of H3’s detail; faces change more.' : 'Strong: H3 redraws a lot, faces change (0.4 is H3’s own finish).')
 // What a finish is called on its card and in Compare: H3's own, or how a Seedance take was finished
 export function finalLabel(f) {
   const n = f.plan?.finish?.candidate
   const way = f.plan?.engine === 'seedance' ? f.plan.finish?.way : null
   if (way === 'seedance') return `Final · take ${n} · Seedance 1080p`
-  if (way === 'local' && f.plan.finish?.refiner === 'h3') return `Final · take ${n} · H3 ${f.plan.finish.strength || 'light'} + DLSS 5`
+  if (way === 'local' && f.plan.finish?.refiner === 'h3seedvr2') return `Final · take ${n} · H3 ${typeof f.plan.finish.strength === 'number' ? f.plan.finish.strength : f.plan.finish.strength || 'light'}, before SeedVR2`
+  if (way === 'local' && f.plan.finish?.refiner === 'h3') return `Final · take ${n} · H3 ${typeof f.plan.finish.strength === 'number' ? f.plan.finish.strength : f.plan.finish.strength || 'light'} + DLSS 5`
   if (way === 'local' || way === 'take') return `Final · take ${n} · as it came`
   return `Final · take ${n}`
 }
@@ -24,7 +66,11 @@ export function shortLabel(f, e = null) {
   if (e) return `Take ${n} · ${enhanceLabel(e)}`
   return finalLabel(f).replace(/^Final · take \d+/, `Take ${n} final`)
 }
-export const enhanceLabel = (e) => (e.plan?.enhance?.engine === 'dlss' ? `DLSS 5 ${e.plan.enhance.scale}×` : `SeedVR2 ${e.plan?.enhance?.resolution}p`)
+export const enhanceLabel = (e) => {
+  const en = e.plan?.enhance || {}
+  if (en.engine === 'dlss') return `DLSS 5 ${en.scale}×${en.strength != null && en.strength !== 0.8 ? ` · strength ${en.strength}` : ''}${en.style && en.style !== 'Default' ? ` · ${en.style}` : ''}`
+  return `SeedVR2 ${en.resolution}p${en.detail ? ` · detail ${en.detail}` : ''}`
+}
 const FINAL_MP = [1, 1.5, 2]
 const MODE_NAME = { text: 'Text', reference: 'References', frames: 'First / last frame', continue: 'Continue' }
 
@@ -117,7 +163,7 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
   const draft = !!job.plan.resolved?.draft
   // free on this PC first; paid Seedance 1080p is one click away (and asks before it spends)
   const [way, setWay] = useState(remote ? (draft ? 'seedance' : 'take') : 'local')
-  const [opts, setOpts] = useState({ engine: 'seedvr2', resolution: 1080, megapixels: 2, strength: 'light', upscale2x: false, useLora: false })
+  const [opts, setOpts] = useState({ engine: 'seedvr2', resolution: 1080, megapixels: 2, strength: 0.1, detail: 0, dlssStrength: 0.8, dlssStyle: 'Default', upscale2x: false, useLora: false })
   const set = (patch) => setOpts((o) => ({ ...o, ...patch }))
   const [price, setPrice] = useState(null)
   const [size, setSize] = useState(null)
@@ -149,12 +195,16 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
     way === 'seedance'
       ? `Seedance renders this draft again at 1080p, on your Comfy.org credits. ComfyUI prices it as ${price?.label || '…'}${price?.likelyUsd ? `; at this length it is likely about $${price.likelyUsd.toFixed(2)} (the 1080p rate)` : ''}. You agree to the top of the range.`
       : way === 'local'
-        ? opts.engine === 'seedvr2'
-          ? 'SeedVR2 restores detail and upscales it on your graphics card, keeping Seedance’s faces, motion and sound. The cleanest; free, about 4 minutes for 5 s at 1080p.'
-          : opts.engine === 'dlss'
-          ? 'DLSS 5 upscales it on your graphics card, keeping Seedance’s faces, motion and sound. The quickest (about 15 s), with a little added skin texture. Free.'
-          : 'H3 renders it again at full size on your graphics card, keeping Seedance’s motion and sound, then DLSS 5 cleans it up. More of H3’s look; faces shift a little. Free; about 3 minutes.'
+        ? 'Finished on your graphics card, free.'
         : 'The take becomes the shot’s final now. Enhance (DLSS 5 or SeedVR2) can still run on it afterwards.'
+  const engineNote =
+    opts.engine === 'seedvr2'
+      ? 'Restores detail and upscales, keeping Seedance’s faces, motion and sound. The cleanest; about 4 minutes for 5 s at 1080p.'
+      : opts.engine === 'dlss'
+        ? 'Upscales, keeping Seedance’s faces, motion and sound. The quickest, about 15 s; it can add a little skin texture (more strength smooths it).'
+        : opts.engine === 'h3seedvr2'
+          ? 'H3 renders it again at full size, keeping Seedance’s motion and sound, then SeedVR2 restores detail. H3’s look with SeedVR2’s clean finish; faces shift a little. About 7 minutes.'
+          : 'H3 renders it again at full size, keeping Seedance’s motion and sound, then DLSS 5 cleans it up. More of H3’s look; faces shift a little. About 3 minutes.'
   return (
     <div className="finish-panel">
       <div className="finish-head">
@@ -179,6 +229,7 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
         {way === 'local' && (
           <div className="row">
             <span className="row-label">With</span>
+            <div className="enhancer-pick">
             <div className="segmented">
               <button className={opts.engine === 'seedvr2' ? 'on' : ''} onClick={() => set({ engine: 'seedvr2' })}>
                 SeedVR2
@@ -189,10 +240,15 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
               <button className={opts.engine === 'h3' ? 'on' : ''} onClick={() => set({ engine: 'h3' })}>
                 H3 + DLSS 5
               </button>
+              <button className={opts.engine === 'h3seedvr2' ? 'on' : ''} onClick={() => set({ engine: 'h3seedvr2' })}>
+                H3 + SeedVR2
+              </button>
+            </div>
+            <span className="dim small">{engineNote}</span>
             </div>
           </div>
         )}
-        {way === 'local' && opts.engine !== 'h3' && (
+        {way === 'local' && (opts.engine === 'seedvr2' || opts.engine === 'dlss') && (
           <div className="row">
             <span className="row-label">Size</span>
             <div className="segmented">
@@ -204,10 +260,12 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
             </div>
           </div>
         )}
-        {way === 'local' && opts.engine === 'h3' && (
+        {way === 'local' && opts.engine === 'seedvr2' && <Strength label="Added detail" value={opts.detail} min={0} max={0.5} step={0.05} def={0} onChange={(v) => set({ detail: v })} hint={SEEDVR2_HINT(opts.detail)} />}
+        {way === 'local' && opts.engine === 'dlss' && <DlssLook strength={opts.dlssStrength} style={opts.dlssStyle} onChange={set} />}
+        {way === 'local' && (opts.engine === 'h3' || opts.engine === 'h3seedvr2') && (
           <>
             <div className="row">
-              <span className="row-label">Final size</span>
+              <span className="row-label">{opts.engine === 'h3' ? 'Final size' : 'H3 size'}</span>
               <div className="segmented">
                 {FINAL_MP.map((mp) => (
                   <button key={mp} className={opts.megapixels === mp ? 'on' : ''} onClick={() => set({ megapixels: mp })}>
@@ -216,31 +274,37 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
                 ))}
               </div>
             </div>
-            <div className="row">
-              <span className="row-label">Strength</span>
-              <div className="enhancer-pick">
-                <div className="segmented">
-                  <button className={opts.strength === 'light' ? 'on' : ''} onClick={() => set({ strength: 'light' })}>
-                    Light
-                  </button>
-                  <button className={opts.strength === 'medium' ? 'on' : ''} onClick={() => set({ strength: 'medium' })}>
-                    Medium
-                  </button>
+            <Strength label="H3 strength" value={opts.strength} min={0.05} max={0.5} step={0.05} def={0.1} onChange={(v) => set({ strength: v })} hint={H3_HINT(opts.strength)} />
+            {opts.engine === 'h3' ? (
+              <>
+                <DlssLook strength={opts.dlssStrength} style={opts.dlssStyle} onChange={set} label="Then DLSS" />
+                <div className="row">
+                  <span className="row-label">RTX upscale</span>
+                  <div className="segmented">
+                    <button className={!opts.upscale2x ? 'on' : ''} onClick={() => set({ upscale2x: false })}>
+                      Off
+                    </button>
+                    <button className={opts.upscale2x ? 'on' : ''} onClick={() => set({ upscale2x: true })}>
+                      2×
+                    </button>
+                  </div>
                 </div>
-                <span className="dim small">{opts.strength === 'light' ? 'The lightest H3 pass: adds detail, faces shift a little.' : 'More of H3’s detail; faces change more.'}</span>
-              </div>
-            </div>
-            <div className="row">
-              <span className="row-label">RTX upscale</span>
-              <div className="segmented">
-                <button className={!opts.upscale2x ? 'on' : ''} onClick={() => set({ upscale2x: false })}>
-                  Off
-                </button>
-                <button className={opts.upscale2x ? 'on' : ''} onClick={() => set({ upscale2x: true })}>
-                  2×
-                </button>
-              </div>
-            </div>
+              </>
+            ) : (
+              <>
+                <div className="row">
+                  <span className="row-label">SeedVR2 size</span>
+                  <div className="segmented">
+                    {[1080, 1440].map((r) => (
+                      <button key={r} className={opts.resolution === r ? 'on' : ''} onClick={() => set({ resolution: r })}>
+                        {r}p
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Strength label="SeedVR2 detail" value={opts.detail} min={0} max={0.5} step={0.05} def={0} onChange={(v) => set({ detail: v })} hint={SEEDVR2_HINT(opts.detail)} />
+              </>
+            )}
             {ch?.lora && (
               <div className="row">
                 <span className="row-label">{ch.name.split(' ')[0]}’s LoRA</span>
@@ -273,7 +337,7 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
 function FinishPanel({ job, candidate, onStart, notify, caps, remote }) {
   const FPS = caps?.fps || [0, 30, 50, 60, 120]
   const dlss = caps?.dlss !== false
-  const [opts, setOpts] = useState({ megapixels: 2, upscale2x: false, fps: 0, audio: 'pass', enhancer: 'dlss', enhanceResolution: 1080 })
+  const [opts, setOpts] = useState({ megapixels: 2, upscale2x: false, fps: 0, audio: 'pass', enhancer: 'dlss', enhanceResolution: 1080, dlssStrength: 0.8, dlssStyle: 'Default' })
   // the defaults Check my PC chose for this computer
   useEffect(() => {
     window.ivstudio.settings.get().then((s) => {
@@ -367,6 +431,7 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote }) {
               </button>
             </div>
           </div>
+          {dlss && !remote && <DlssLook strength={opts.dlssStrength} style={opts.dlssStyle} onChange={set} />}
           <div className="row">
             <span className="row-label">Frame rate</span>
             <div className="segmented">
@@ -427,6 +492,8 @@ function VersionsCard({ run, finishes, jobs, remote, caps, notify, marks, onMark
   const chipOf = (x) => `${takes.size > 1 ? `Take ${x.finish.plan?.finish?.candidate} · ` : ''}${x.kind === 'final' ? how(x.finish) : `→ ${enhanceLabel(x.job)}`}`
   const [chosen, setChosen] = useState(null)
   const [more, setMore] = useState(false)
+  const [look, setLook] = useState({ dlssStrength: 0.8, dlssStyle: 'Default', detail: 0 })
+  const setL = (patch) => setLook((l) => ({ ...l, ...patch }))
   // the newest version that has a video, unless one was chosen
   const v = list.find((x) => x.key === chosen) || [...ready].reverse()[0] || list[list.length - 1]
   if (!v) return null
@@ -496,19 +563,40 @@ function VersionsCard({ run, finishes, jobs, remote, caps, notify, marks, onMark
           )}
         </div>
         {more && v.kind === 'final' && v.out?.path && !remote && (
-          <div className="enhance-row">
-            <span className="dim small enhance-sub">A sharper copy, added beside this one:</span>
-            {caps?.dlss !== false &&
-              [1, 2].map((scale) => (
-                <button key={`d${scale}`} className="btn btn-small" disabled={!!enhancing[f.id]} onClick={() => (enhance(f, { engine: 'dlss', scale }), setMore(false))}>
-                  DLSS 5 · {scale}×
-                </button>
-              ))}
-            {[1080, 1440].map((r) => (
-              <button key={`s${r}`} className="btn btn-small" disabled={!!enhancing[f.id]} onClick={() => (enhance(f, { engine: 'seedvr2', resolution: r }), setMore(false))}>
-                SeedVR2 · {r}p
-              </button>
-            ))}
+          <div className="enhance-drawer">
+            <span className="dim small enhance-sub">A sharper copy, added beside this one. Set the strength, then pick the size.</span>
+            <div className="finish-grid enhance-grid">
+              {caps?.dlss !== false && (
+                <>
+                  <DlssLook strength={look.dlssStrength} style={look.dlssStyle} onChange={setL} />
+                  <div className="row">
+                    <span className="row-label">DLSS 5</span>
+                    <div className="enhancer-pick">
+                      <div className="segmented">
+                        {[1, 2].map((scale) => (
+                          <button key={`d${scale}`} disabled={!!enhancing[f.id]} onClick={() => (enhance(f, { engine: 'dlss', scale, strength: look.dlssStrength, style: look.dlssStyle }), setMore(false))}>
+                            Make {scale}×
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+              <Strength label="SeedVR2 detail" value={look.detail} min={0} max={0.5} step={0.05} def={0} onChange={(v) => setL({ detail: v })} hint={SEEDVR2_HINT(look.detail)} />
+              <div className="row">
+                <span className="row-label">SeedVR2</span>
+                <div className="enhancer-pick">
+                  <div className="segmented">
+                    {[1080, 1440].map((r) => (
+                      <button key={`s${r}`} disabled={!!enhancing[f.id]} onClick={() => (enhance(f, { engine: 'seedvr2', resolution: r, detail: look.detail }), setMore(false))}>
+                        Make {r}p
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
         {v.kind === 'final' && f.reviews?.final && <ReviewCard review={f.reviews.final} title="Review of the final" videoKey={`${f.id}:final`} before={written} onRun={(p) => editRun?.(run, project, p)} />}

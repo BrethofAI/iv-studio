@@ -165,6 +165,9 @@ export function planFinish(previewPlan, finish) {
   if (!single && f.audio === 'preview') groups.push('audio_preview')
   if (!single && f.audio === 'voice') groups.push('audio_voice')
   const values = { ...previewPlan.values, '504': f.megapixels, '511': f.upscale2x ? 2 : 1, '512': f.fps }
+  // DLSS 5's noise reduction (0-2) and style, when the finish asks for them
+  if (f.dlssStrength != null && Number.isFinite(Number(f.dlssStrength))) values['50.NR Intensity'] = Math.min(2, Math.max(0, Number(f.dlssStrength)))
+  if (['Default', 'Natural', 'Cinematic'].includes(f.dlssStyle)) values['50.NR Style'] = f.dlssStyle
   if (f.rerollSeed != null) values['505.seed'] = f.rerollSeed
   else values['505.seed'] = previewPlan.request.seed + 444
   const { width, height } = previewPlan.resolved

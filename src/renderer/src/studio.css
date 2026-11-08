@@ -12394,3 +12394,74 @@ button.set-chip:hover {
 .finish-modal-x:hover {
   color: var(--pink);
 }
+/* the Finish dialog: one setting per row (its name on the left, the choice beside it, a line of help under the
+   choice), so labels and buttons line up and no button text wraps */
+.finish-modal .finish-panel {
+  gap: 16px;
+  padding: 24px 28px 22px;
+}
+.finish-modal .finish-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+.finish-modal .finish-grid .row {
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 18px;
+}
+/* level with the middle of the buttons, not of the buttons and their help together */
+.finish-modal .finish-grid .row-label {
+  padding-top: 13px;
+}
+.finish-modal .enhancer-pick {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+}
+.finish-modal .enhancer-pick .dim {
+  max-width: 64ch;
+  line-height: 1.45;
+}
+.finish-modal .segmented button {
+  white-space: nowrap;
+}
+.finish-modal .finish-go {
+  margin-top: 4px;
+}
+
+/* strength sliders for the local upscalers (Finish dialog and the Enhance drawer) */
+.strength-slider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.strength-slider input[type='range'] {
+  width: min(320px, 50vw);
+  accent-color: var(--red);
+}
+.strength-value {
+  min-width: 34px;
+  color: var(--cream);
+}
+.enhance-drawer {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--ink-3);
+  border: 1px solid var(--line);
+}
+.enhance-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+.enhance-grid .row {
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 16px;
+}
+.enhance-grid .row-label {
+  padding-top: 10px;
+}
+.enhance-grid .segmented button {
+  white-space: nowrap;
+}

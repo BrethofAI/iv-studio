@@ -82,7 +82,7 @@ export function refineGraph(template, { source, prompt, character = null, trigge
   }
   if (silence) delete g.save.inputs.audio
   if (o.dlss) {
-    g.dlss = { class_type: 'DLSS5_Enhance_Video', inputs: { ...t('50'), 'Video Path': ['file', 0], Scale: o.upscale2x ? 2 : 1, 'Target FPS': 0, 'Filename Prefix': name, 'Output Directory': 'H3/final' } }
+    g.dlss = { class_type: 'DLSS5_Enhance_Video', inputs: { ...t('50'), 'Video Path': ['file', 0], Scale: o.upscale2x ? 2 : 1, 'Target FPS': 0, 'Filename Prefix': name, 'Output Directory': 'H3/final', ...(o.dlss || {}) } }
     g.out = { class_type: 'PreviewAny', inputs: { source: ['dlss', 0] } }
   }
   const scale = o.dlss && o.upscale2x ? 2 : 1

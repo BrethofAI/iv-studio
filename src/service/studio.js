@@ -60,6 +60,14 @@ const familyOf = (kind) => FAMILIES[kind] || (String(kind).startsWith('picture:'
 // 0.4 (H3's own finish strength) 0.12-0.27; DLSS 5 to 1080p (2.25x) 0.48-0.63 in 15 s, with a speckled skin
 // texture. So SeedVR2 is the free finish's default, DLSS 5 the quick one, and H3 stays light.
 export const REFINE_STRENGTH = { light: 0.1, medium: 0.2 }
+// DLSS 5's look: its noise-reduction intensity (0-2) and style, as node inputs (or, short, for a job's record)
+export const DLSS_STYLES = ['Default', 'Natural', 'Cinematic']
+export function dlssLook({ strength = null, style = null } = {}, record = false) {
+  const out = {}
+  if (strength != null && Number.isFinite(Number(strength))) out[record ? 'strength' : 'NR Intensity'] = Math.min(2, Math.max(0, Math.round(Number(strength) * 100) / 100))
+  if (style && DLSS_STYLES.includes(style)) out[record ? 'style' : 'NR Style'] = style
+  return out
+}
 export const MODEL_NODES = { text: '101', frames: '201', reference: '301', continue: '601' }
 
 const readJson = (file, fallback) => {
@@ -470,9 +478,14 @@ export class Studio {
     const { resolved, request } = source.plan
     const way = finish.way || (resolved.draft ? 'seedance' : 'take')
     if (way === 'seedance' && resolved.draft) return { ...sizeOf(FINAL_FROM_DRAFT.short, request.aspect), seconds: resolved.seconds, fps: 24, way, engine: SEEDANCE }
-    if (way === 'local' && finish.engine === 'h3') {
-      const r = refineGraph(this.template, { source: { path: 'x', width: resolved.width, height: resolved.height, frames: resolved.frames }, prompt: 'x', name: 'x', ...this.refineOptions(finish) }).resolved
-      return { ...r, way, engine: SEEDANCE, refiner: 'h3' }
+    if (way === 'local' && (finish.engine === 'h3' || finish.engine === 'h3seedvr2')) {
+      const then = finish.engine === 'h3seedvr2' ? 'seedvr2' : 'dlss'
+      const r = refineGraph(this.template, { source: { path: 'x', width: resolved.width, height: resolved.height, frames: resolved.frames }, prompt: 'x', name: 'x', ...this.refineOptions({ ...finish, then }) }).resolved
+      if (then === 'dlss') return { ...r, way, engine: SEEDANCE, refiner: 'h3' }
+      // H3's pass, then SeedVR2 to a short side of `resolution`
+      const short = [1080, 1440].includes(finish.resolution) ? finish.resolution : 1080
+      const k = short / Math.min(r.width, r.height)
+      return { ...r, width: Math.round((r.width * k) / 2) * 2, height: Math.round((r.height * k) / 2) * 2, h3Width: r.width, h3Height: r.height, way, engine: SEEDANCE, refiner: 'h3seedvr2' }
     }
     if (way === 'local') {
       // SeedVR2 to a short side of `resolution` (1080 or 1440)
@@ -494,7 +507,7 @@ export class Studio {
       delete final.candidate
       return this.recordJob({ kind: 'finish', projectId: source.projectId, name: source.name, parent: source.id, promptId: null, status: 'success', outputs: [final], plan: { engine: SEEDANCE, finish: { candidate, way: 'take' }, request: source.plan.request, resolved } })
     }
-    if (resolved.way === 'local' && finishOpts.engine === 'h3') return this.refineTake(source, take, { candidate, ...finishOpts })
+    if (resolved.way === 'local' && (finishOpts.engine === 'h3' || finishOpts.engine === 'h3seedvr2')) return this.refineTake(source, take, { candidate, ...finishOpts, then: finishOpts.engine === 'h3seedvr2' ? 'seedvr2' : 'dlss' })
     if (resolved.way === 'local') {
       // the free finish's default: the take becomes the final, and SeedVR2 (or, quicker, DLSS 5) brings it to 1080p
       // or 1440p on this PC
@@ -504,7 +517,7 @@ export class Studio {
       const short = Math.min(resolved.width, resolved.height)
       const job = this.recordJob({ kind: 'finish', projectId: source.projectId, name: source.name, parent: source.id, promptId: null, status: 'success', outputs: [final], plan: { engine: SEEDANCE, finish: { candidate, way: 'local', refiner: resolved.refiner, resolution: short }, request: source.plan.request, resolved: { width: source.plan.resolved.width, height: source.plan.resolved.height, seconds: resolved.seconds, fps: 24 } } })
       const takeShort = Math.min(source.plan.resolved.width, source.plan.resolved.height)
-      const enhance = resolved.refiner === 'dlss' ? await this.enhanceFinal({ jobId: job.id, engine: 'dlss', scale: Math.round((short / takeShort) * 100) / 100 }) : await this.enhanceFinal({ jobId: job.id, engine: 'seedvr2', resolution: short })
+      const enhance = resolved.refiner === 'dlss' ? await this.enhanceFinal({ jobId: job.id, engine: 'dlss', scale: Math.round((short / takeShort) * 100) / 100, strength: finishOpts.dlssStrength, style: finishOpts.dlssStyle }) : await this.enhanceFinal({ jobId: job.id, engine: 'seedvr2', resolution: short, detail: finishOpts.detail })
       return this.updateJob(job.id, { enhanceJob: enhance.id })
     }
     if (!take.draftTaskId) throw new Error("That take has no draft task id, so Seedance can't finish it. Use it as it is, or make it again.")
@@ -521,16 +534,20 @@ export class Studio {
   // The free finish on this PC for any take that isn't H3's own (h3refine.js): H3 refines it at the finish size at
   // a light strength, then DLSS 5. strength: 'light' keeps the face Seedance made; 'medium' adds more of H3's detail
   // and changes faces more. character: the shot's character LoRA joins the pass when asked (useLora).
-  refineOptions({ megapixels = REFINE_DEFAULTS.megapixels, strength = 'light', upscale2x = false } = {}) {
+  // strength: 'light', 'medium', or a number from 0.05 to 0.5. dlssStrength / dlssStyle: DLSS 5 after it.
+  // then: 'dlss' (DLSS 5 in the same graph) or 'seedvr2' (no DLSS; SeedVR2 runs as its own job once H3 is done)
+  refineOptions({ megapixels = REFINE_DEFAULTS.megapixels, strength = 'light', upscale2x = false, dlssStrength = null, dlssStyle = null, then = 'dlss' } = {}) {
     if (![1, 1.5, 2].includes(megapixels)) throw new Error('The finish size is 1, 1.5 or 2 MP.')
-    return { megapixels, denoise: REFINE_STRENGTH[strength] ?? REFINE_STRENGTH.light, upscale2x: !!upscale2x }
+    const denoise = typeof strength === 'number' ? Math.min(0.5, Math.max(0.05, strength)) : REFINE_STRENGTH[strength] ?? REFINE_STRENGTH.light
+    if (then === 'seedvr2') return { megapixels, denoise, upscale2x: false, dlss: false }
+    return { megapixels, denoise, upscale2x: !!upscale2x, dlss: dlssLook({ strength: dlssStrength, style: dlssStyle }) }
   }
 
-  async refineTake(source, take, { candidate, megapixels, strength, upscale2x, useLora = false } = {}) {
+  async refineTake(source, take, { candidate, megapixels, strength, upscale2x, useLora = false, dlssStrength = null, dlssStyle = null, then = 'dlss', resolution = 1080, detail = 0 } = {}) {
     if (this.comfy.remote) throw new Error('The free finish runs on this PC\'s ComfyUI (H3 and DLSS 5). Use Seedance 1080p, or keep the take as it is.')
     if (!take.path || !fs.existsSync(take.path)) throw new Error('That take isn\'t on this PC yet.')
     const caps = await this.capabilities()
-    if (!caps.dlss) throw new Error('The free finish needs DLSS 5 in ComfyUI (Settings → Setup).')
+    if (then === 'dlss' && !caps.dlss) throw new Error('The free finish needs DLSS 5 in ComfyUI (Settings → Setup).')
     const info = await probe(FFPROBE, take.path)
     const frames = Math.round((info.duration || source.plan.resolved.seconds) * (info.fps || 24))
     const request = source.plan.request
@@ -547,11 +564,12 @@ export class Studio {
       seed: (request.seed || 4242) + 444,
       unet: this.models?.text || null,
       silence,
-      ...this.refineOptions({ megapixels, strength, upscale2x })
+      ...this.refineOptions({ megapixels, strength, upscale2x, dlssStrength, dlssStyle, then })
     })
+    const seedvr2 = then === 'seedvr2' ? { enhancer: 'seedvr2', enhanceResolution: [1080, 1440].includes(resolution) ? resolution : 1080, ...(detail ? { enhanceDetail: Math.min(1, Math.max(0, Number(detail) || 0)) } : {}) } : {}
     await this.makeRoom('finish')
     const promptId = await this.comfy.submit(graph, { iv_studio: { kind: 'finish', project: source.projectId, engine: SEEDANCE } })
-    return this.recordJob({ kind: 'finish', projectId: source.projectId, name, parent: source.id, promptId, plan: { engine: SEEDANCE, finish: { candidate, way: 'local', megapixels, strength, upscale2x: !!upscale2x, useLora: !!(useLora && character?.lora) }, request, resolved: { ...resolved, way: 'local' } } })
+    return this.recordJob({ kind: 'finish', projectId: source.projectId, name, parent: source.id, promptId, plan: { engine: SEEDANCE, finish: { candidate, way: 'local', refiner: then === 'seedvr2' ? 'h3seedvr2' : 'h3', megapixels, strength, upscale2x: then === 'dlss' && !!upscale2x, useLora: !!(useLora && character?.lora), ...(then === 'dlss' && dlssStrength != null ? { dlssStrength } : {}), ...seedvr2 }, request, resolved: { ...resolved, way: 'local' } } })
   }
 
   // A silent WAV of `seconds`, for a take without sound (made once per length, in the data folder).
@@ -649,12 +667,15 @@ export class Studio {
   // to a short side of `resolution`, with its sound kept, as a new job of kind enhance in the same shot. On this PC
   // only: the cloud image has no SeedVR2.
   // engine dlss: DLSS 5 with the finish's own settings (noise reduction Default 0.8), at scale 1 or 2.
-  async enhanceFinal({ jobId, engine = 'seedvr2', resolution = 1080, scale = 1 }) {
+  // strength (DLSS 5): its noise reduction, 0-2 (the finish uses 0.8); style: Default, Natural or Cinematic.
+  // detail (SeedVR2): its latent noise, 0-1 (0 restores faithfully; more lets it invent detail).
+  async enhanceFinal({ jobId, engine = 'seedvr2', resolution = 1080, scale = 1, strength = null, style = null, detail = 0 }) {
     if (this.comfy.remote) throw new Error('Enhance runs on this PC\'s ComfyUI only.')
     const source = this.getJob(jobId)
     const out = source.outputs.find((o) => o.kind === 'final') || source.outputs.find((o) => o.kind === 'master')
     if (!out?.path || !fs.existsSync(out.path)) throw new Error('That render has no finished video on this PC to enhance.')
-    if (engine === 'dlss') return this.enhanceDlss(source, out, scale)
+    if (engine === 'dlss') return this.enhanceDlss(source, out, scale, { strength, style })
+    const noise = Math.min(1, Math.max(0, Number(detail) || 0))
     const info = await this.comfy.objectInfo('SeedVR2LoadDiTModel').catch(() => null)
     const dits = info?.SeedVR2LoadDiTModel?.input?.required?.model?.[1]?.options || info?.SeedVR2LoadDiTModel?.input?.required?.model?.[0] || []
     if (!info?.SeedVR2LoadDiTModel) throw new Error('SeedVR2 isn\'t installed in ComfyUI (ComfyUI-SeedVR2_VideoUpscaler).')
@@ -666,14 +687,14 @@ export class Studio {
       load: { class_type: 'VHS_LoadVideoPath', inputs: { video: out.path, force_rate: 0, custom_width: 0, custom_height: 0, frame_load_cap: 0, skip_first_frames: 0, select_every_nth: 1, format: 'AnimateDiff' } },
       dit: { class_type: 'SeedVR2LoadDiTModel', inputs: { model: dit, device: 'cuda:0', blocks_to_swap: swap, offload_device: 'cpu', cache_model: false, attention_mode: 'sdpa' } },
       vae: { class_type: 'SeedVR2LoadVAEModel', inputs: { model: 'ema_vae_fp16.safetensors', device: 'cuda:0', encode_tiled: true, decode_tiled: true, offload_device: 'cpu', cache_model: false } },
-      up: { class_type: 'SeedVR2VideoUpscaler', inputs: { image: ['load', 0], dit: ['dit', 0], vae: ['vae', 0], seed: 42, resolution, max_resolution: 0, batch_size: batch, uniform_batch_size: false, color_correction: 'lab', temporal_overlap: overlap, offload_device: 'cpu' } },
+      up: { class_type: 'SeedVR2VideoUpscaler', inputs: { image: ['load', 0], dit: ['dit', 0], vae: ['vae', 0], seed: 42, resolution, max_resolution: 0, batch_size: batch, uniform_batch_size: false, color_correction: 'lab', temporal_overlap: overlap, offload_device: 'cpu', ...(noise ? { latent_noise_scale: noise } : {}) } },
       save: { class_type: 'VHS_VideoCombine', inputs: { images: ['up', 0], audio: ['load', 2], frame_rate: fps, loop_count: 0, filename_prefix: `H3/enhanced/${name}`, format: 'video/h264-mp4', pix_fmt: 'yuv420p', crf: 16, save_metadata: true, trim_to_audio: false, pingpong: false, save_output: true } }
     }
     const project = source.projectId ? this.getProject(source.projectId) : null
-    return this.submitGraph({ kind: 'enhance', graph, projectId: project?.id || null, plan: { enhance: { engine: 'seedvr2', resolution, model: dit, from: out.path }, resolved: { ...source.plan?.resolved, fps } }, name, parent: source.id })
+    return this.submitGraph({ kind: 'enhance', graph, projectId: project?.id || null, plan: { enhance: { engine: 'seedvr2', resolution, model: dit, from: out.path, ...(noise ? { detail: noise } : {}) }, resolved: { ...source.plan?.resolved, fps } }, name, parent: source.id })
   }
 
-  async enhanceDlss(source, out, scale) {
+  async enhanceDlss(source, out, scale, { strength = null, style = null } = {}) {
     if (!(await this.capabilities()).dlss) throw new Error('DLSS 5 isn\'t installed in ComfyUI.')
     const name = `${path.basename(out.path).replace(/\.[^.]+$/, '').replace(/-audio$/, '')}_dlss_${scale}x`
     const t = this.template['50'].inputs
@@ -690,11 +711,11 @@ export class Studio {
             pick: { class_type: 'VHS_SelectFilename', inputs: { filenames: ['copy', 0], index: -1 } }
           }
         : {}),
-      dlss: { class_type: 'DLSS5_Enhance_Video', inputs: { ...t, 'Video Path': outside ? ['pick', 0] : out.path, Scale: scale, 'Target FPS': 0, 'Filename Prefix': name, 'Output Directory': 'H3/enhanced', 'Input FPS': fps } },
+      dlss: { class_type: 'DLSS5_Enhance_Video', inputs: { ...t, 'Video Path': outside ? ['pick', 0] : out.path, Scale: scale, 'Target FPS': 0, 'Filename Prefix': name, 'Output Directory': 'H3/enhanced', 'Input FPS': fps, ...dlssLook({ strength, style }) } },
       out: { class_type: 'PreviewAny', inputs: { source: ['dlss', 0] } }
     }
     const project = source.projectId ? this.getProject(source.projectId) : null
-    return this.submitGraph({ kind: 'enhance', graph, projectId: project?.id || null, plan: { enhance: { engine: 'dlss', scale, from: out.path }, resolved: source.plan?.resolved }, name, parent: source.id })
+    return this.submitGraph({ kind: 'enhance', graph, projectId: project?.id || null, plan: { enhance: { engine: 'dlss', scale, from: out.path, ...dlssLook({ strength, style }, true) }, resolved: source.plan?.resolved }, name, parent: source.id })
   }
 
   // ---------- renders, files and models (shared by the window and the MCP server) ----------
@@ -1156,7 +1177,7 @@ export class Studio {
       // a finish whose enhancer is SeedVR2: its enhance step starts as soon as the finish is done
       if (job.kind === 'finish' && job.status === 'success' && job.plan?.finish?.enhancer === 'seedvr2' && !job.enhanceJob) {
         try {
-          const e = await this.enhanceFinal({ jobId: job.id, engine: 'seedvr2', resolution: job.plan.finish.enhanceResolution })
+          const e = await this.enhanceFinal({ jobId: job.id, engine: 'seedvr2', resolution: job.plan.finish.enhanceResolution, detail: job.plan.finish.enhanceDetail || 0 })
           job.enhanceJob = e.id
         } catch (err) {
           job.enhanceError = err.message
@@ -1196,8 +1217,8 @@ export class Studio {
       else if (job.plan.finish?.way === 'local') {
         // the free finish on this PC (h3refine.js): H3's pass saved by VHS, then the path DLSS 5 answers with
         const v = videoOf(outputs.save)
-        if (v) list.push(file(v, 'before_dlss'))
         const p = outputs.out?.text?.[0]
+        if (v) list.push(file(v, p ? 'before_dlss' : 'final'))
         if (p) list.push(this.fileFromPath(p, 'final'))
       } else {
         const f = finalFrom(outputs)
