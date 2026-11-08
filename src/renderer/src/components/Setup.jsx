@@ -159,7 +159,18 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
                       </div>
                       <div className="dim small">{i.detail}</div>
                       {i.fix && <div className="small pink">{i.fix}</div>}
-                      {i.id === 'comfyui' && i.status !== 'ok' && !remote && <StartComfy notify={notify} recheck={recheck} />}
+                      {i.id === 'comfyui' && i.address && (
+                        <button
+                          className="btn btn-small"
+                          onClick={async () => {
+                            await window.ivstudio.settings.set({ comfyUrl: i.address })
+                            recheck()
+                          }}
+                        >
+                          Use {i.address}
+                        </button>
+                      )}
+                      {i.id === 'comfyui' && i.status !== 'ok' && !i.busy && !i.address && !remote && <StartComfy notify={notify} recheck={recheck} />}
                       {i.status !== 'ok' && (i.url || i.page) && (
                         <button className="link-btn mono" onClick={() => window.ivstudio.links.open(i.url || i.page)}>
                           {i.url ? 'Open its GitHub page' : 'Model page and licence'}

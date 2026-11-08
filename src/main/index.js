@@ -1189,7 +1189,8 @@ app.whenReady().then(() => {
   // The title bar's GPU and memory readout: this PC's RAM, and the GPU as ComfyUI sees it (none in cloud mode).
   handle('system:stats', async () => {
     if (readSettings(BASE).target === 'cloud') return null
-    const st = await studio.comfy.systemStats().catch(() => null)
+    // a short wait: the meter asks every few seconds, so a busy ComfyUI just skips a reading
+    const st = await studio.comfy.systemStats({ timeout: 4000 }).catch(() => null)
     const d = st?.devices?.[0]
     return {
       ram: { total: os.totalmem(), free: os.freemem() },
@@ -1200,7 +1201,7 @@ app.whenReady().then(() => {
   // carries on), IV Studio's voice engine stops, and Ollama lets go of a writer model. Returns what changed.
   handle('system:free', async () => {
     const vram = async () => {
-      const d = (await studio.comfy.systemStats().catch(() => null))?.devices?.[0]
+      const d = (await studio.comfy.systemStats({ timeout: 4000 }).catch(() => null))?.devices?.[0]
       return d ? d.vram_total - d.vram_free : null
     }
     const before = { vram: await vram(), ram: os.totalmem() - os.freemem() }

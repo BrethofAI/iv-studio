@@ -154,14 +154,46 @@ export function linuxCommand(file) {
   return [file, []]
 }
 
-// True when ComfyUI answers at url.
-export async function comfyUp(url, timeoutMs = 3000) {
+// 'up' when ComfyUI answers at url, 'busy' when something there took the connection but didn't answer in time (a
+// ComfyUI loading models, rendering or short on memory holds its server up for seconds), 'down' when nothing listens.
+// A refused connection comes back at once, so a timeout means it's there: never start a second ComfyUI over it.
+export async function comfyState(url, timeoutMs = 3000) {
   try {
     const res = await fetch(`${url.replace(/\/$/, '')}/system_stats`, { signal: AbortSignal.timeout(timeoutMs) })
-    return res.ok
-  } catch {
-    return false
+    return res.ok ? 'up' : 'down'
+  } catch (err) {
+    return err.name === 'TimeoutError' || err.name === 'AbortError' ? 'busy' : 'down'
   }
+}
+
+// True when ComfyUI is at url, answering or busy.
+export const comfyUp = async (url, timeoutMs = 3000) => (await comfyState(url, timeoutMs)) !== 'down'
+
+// The ports a ComfyUI on this PC usually has: its own default, the ComfyUI Desktop app's, and the next few that
+// launchers (and a second copy) pick.
+export const COMFY_PORTS = [8188, 8000, 8189, 8190, 8001, 8288]
+
+// When nothing answers at a local url: the address of a ComfyUI that answers on another usual port of this PC, or
+// null. Only a reply that reads as ComfyUI's own /system_stats counts.
+export async function findComfyElsewhere(url, { ports = COMFY_PORTS, timeoutMs = 2500 } = {}) {
+  if (!isLocalUrl(url)) return null
+  let u
+  try {
+    u = new URL(url)
+  } catch {
+    return null
+  }
+  const here = Number(u.port || (u.protocol === 'https:' ? 443 : 80))
+  const tries = ports
+    .filter((p) => p !== here)
+    .map(async (p) => {
+      const at = `http://127.0.0.1:${p}`
+      const res = await fetch(`${at}/system_stats`, { signal: AbortSignal.timeout(timeoutMs) })
+      const j = await res.json()
+      if (!res.ok || !j?.system || !Array.isArray(j.devices)) throw new Error('not ComfyUI')
+      return at
+    })
+  return Promise.any(tries).catch(() => null)
 }
 
 // Waits until ComfyUI answers (a first start with custom nodes can take a few minutes).

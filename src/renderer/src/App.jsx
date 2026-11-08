@@ -132,6 +132,14 @@ export default function App() {
     }
   }, [])
 
+  // ComfyUI was running but too busy to answer (loading a model, rendering): look again shortly by itself
+  const comfyBusy = setup?.items?.some((i) => i.id === 'comfyui' && i.busy)
+  useEffect(() => {
+    if (!comfyBusy) return
+    const t = setTimeout(recheck, 10000)
+    return () => clearTimeout(t)
+  }, [comfyBusy, setup, recheck])
+
   useEffect(() => {
     recheck()
     window.ivstudio.characters.list().then(setCharacters)
@@ -290,8 +298,8 @@ export default function App() {
   }, [])
   const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, editRun, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle, remakeClip, replaceSeed }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
-  // ComfyUI on this PC isn't answering: the title bar offers to start it
-  const comfyDown = !setup?.remote && setup?.items?.some((i) => i.id === 'comfyui' && i.status !== 'ok')
+  // ComfyUI on this PC isn't there: the title bar offers to start it (not when it's running but busy)
+  const comfyDown = !setup?.remote && setup?.items?.some((i) => i.id === 'comfyui' && i.status !== 'ok' && !i.busy)
 
   // Incognito: a private set of everything made, switched by restarting (see main's BASE / DATA). The eye
   // art closes while it's on.

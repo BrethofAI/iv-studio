@@ -81,8 +81,13 @@ export class Comfy {
       }
       return text ? JSON.parse(text) : {}
     } catch (err) {
-      if (err.name === 'AbortError') throw new Error(`ComfyUI did not answer ${route} within ${timeout / 1000} s`)
-      if (err.cause?.code === 'ECONNREFUSED') throw new Error(`ComfyUI is not running at ${this.url}`)
+      // busy: the server took the connection (so ComfyUI is running) but didn't reply in time; down: nothing listens
+      if (err.name === 'AbortError')
+        throw Object.assign(
+          new Error(this.remote ? `ComfyUI did not answer ${route} within ${timeout / 1000} s` : `ComfyUI is running at ${this.url} but didn’t answer within ${timeout / 1000} s. It’s probably busy loading a model, rendering, or short on memory. Wait for it to settle, then try again.`),
+          { busy: true }
+        )
+      if (err.cause?.code === 'ECONNREFUSED') throw Object.assign(new Error(`ComfyUI is not running at ${this.url}`), { down: true })
       if (this.hosted && COMFY_CLOUD_ERRORS[err.status]) throw Object.assign(new Error(COMFY_CLOUD_ERRORS[err.status]), { status: err.status })
       if (err.status === 503 && this.remote) throw Object.assign(new Error('The cloud GPU is still starting up.'), { status: 503, starting: true })
       throw err
@@ -91,7 +96,9 @@ export class Comfy {
     }
   }
 
-  systemStats = () => this.req('/system_stats', { timeout: 5000 })
+  // A ComfyUI loading a big model or rendering can hold its server up for many seconds (much longer when it's short on
+  // memory), so readiness checks wait 20 s; the title bar's meter asks with a short timeout and just skips a beat.
+  systemStats = ({ timeout = 20000 } = {}) => this.req('/system_stats', { timeout })
   queue = () => this.req('/queue')
   // Comfy Cloud keeps ComfyUI's history shape under history_v2 (its /jobs is the newer form)
   history = (id) => this.req(this.hosted ? `/history_v2/${id}` : `/history/${id}`)

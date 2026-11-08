@@ -32,7 +32,7 @@ export async function comfyPlace(comfy, folder) {
   if (!isLocalUrl(comfy.url)) throw new Error('ComfyUI isn’t on this PC, so IV Studio can’t add node packs to it. Install them where that ComfyUI runs.')
   let customNodes = null
   try {
-    const paths = await comfy.req('/internal/folder_paths', { timeout: 5000 })
+    const paths = await comfy.req('/internal/folder_paths', { timeout: 20000 })
     customNodes = (paths.custom_nodes || []).map((p) => (Array.isArray(p) ? p[0] : p)).find((p) => p && fs.existsSync(p)) || null
   } catch {}
   if (!customNodes && folder) customNodes = ['ComfyUI/custom_nodes', 'custom_nodes'].map((f) => path.join(folder, f)).find((f) => fs.existsSync(f)) || null

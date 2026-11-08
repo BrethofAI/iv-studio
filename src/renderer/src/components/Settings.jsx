@@ -74,7 +74,7 @@ function PcCard({ n, settings }) {
 }
 
 // The ComfyUI IV Studio renders on, and how IV Studio starts it: the person's own launcher (found or picked).
-function ComfyCard({ n, settings, setSettings, notify, recheck, comfyUp }) {
+function ComfyCard({ n, settings, setSettings, notify, recheck, comfyUp, comfyBusy }) {
   const [url, setUrl] = useState(settings.comfyUrl)
   const [l, setL] = useState(null)
   useEffect(() => setUrl(settings.comfyUrl), [settings.comfyUrl])
@@ -108,7 +108,7 @@ function ComfyCard({ n, settings, setSettings, notify, recheck, comfyUp }) {
       n={n}
       title="ComfyUI"
       sub="The ComfyUI IV Studio renders on, and how it starts."
-      aside={comfyUp ? <Pill tone="ok">Ready</Pill> : <Pill tone="warn">Not running</Pill>}
+      aside={comfyUp ? <Pill tone="ok">Ready</Pill> : comfyBusy ? <Pill tone="warn">Busy</Pill> : <Pill tone="warn">Not running</Pill>}
     >
       <SetField label="Address" hint="Where ComfyUI answers. On this PC it's usually http://127.0.0.1:8188.">
         <div className="set-inline grow">
@@ -151,7 +151,7 @@ function ComfyCard({ n, settings, setSettings, notify, recheck, comfyUp }) {
               <button className="btn btn-small" onClick={choose}>
                 Choose…
               </button>
-              {!comfyUp && <StartComfy notify={notify} recheck={recheck} />}
+              {!comfyUp && !comfyBusy && <StartComfy notify={notify} recheck={recheck} />}
             </div>
             {!l.chosen && !l.folder && l.found.length > 1 && (
               <div className="set-found">
@@ -702,6 +702,7 @@ export default function Settings({ info, recheck, notify, go, setup }) {
 
   if (!settings) return null
   const comfyUp = setup?.items?.some((i) => i.id === 'comfyui' && i.status === 'ok')
+  const comfyBusy = setup?.items?.some((i) => i.id === 'comfyui' && i.busy)
   const shown = SECTIONS.filter(([id]) => id !== 'agents' || info?.mcp)
   const n = (id) => shown.findIndex(([s]) => s === id) + 1
   const jump = (id) => {
@@ -727,7 +728,7 @@ export default function Settings({ info, recheck, notify, go, setup }) {
 
         <div className="set-cards">
           <PcCard n={n('pc')} settings={settings} />
-          <ComfyCard n={n('comfy')} {...common} recheck={recheck} comfyUp={comfyUp} />
+          <ComfyCard n={n('comfy')} {...common} recheck={recheck} comfyUp={comfyUp} comfyBusy={comfyBusy} />
           <FolderCard n={n('folders')} {...common} incognito={!!info?.incognito} />
           <ModelCard n={n('models')} {...common} />
           <WriterCard n={n('writer')} {...common} />

@@ -13,7 +13,7 @@ import { adaptGraph, capabilities, withLivePreview } from './remote.js'
 import { Cast, resolveMentions } from './cast.js'
 import { contextIrGraph, fromContextIr, writeHarness, writeLocal, writeStoryLocal } from './prompter.js'
 import { renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
-import { checkSetup, comboOptions, modelFileMap } from './setup.js'
+import { checkSetup, comboOptions, modelFileMap, whyUnreached } from './setup.js'
 import { comfyPlace, installPacks, missingPacks } from './nodepacks.js'
 import { checkUpdates, copySnapshot, MANAGER_PACK, packFolders, readRecord, reenable, restart, undo, update, writeRecord } from './comfyupdate.js'
 import { comfyUp, isDesktopLauncher, isLocalUrl } from './comfylauncher.js'
@@ -186,13 +186,22 @@ export class Studio {
   // ComfyUI folder picked in Settings, used when ComfyUI doesn't say where custom_nodes is. Restart ComfyUI afterwards.
   async installNodePacks({ folder, onProgress } = {}) {
     if (this.comfy.remote) throw new Error('Node packs for the cloud are installed by IV Studio’s cloud setup, not here.')
-    let info, stats
+    // object_info says which nodes it has. Only a ComfyUI that isn't there is "start it": a busy one is told to wait,
+    // and one on another port is named.
+    let info
     try {
-      ;[info, stats] = await Promise.all([this.comfy.objectInfo(), this.comfy.systemStats()])
-    } catch {
-      throw new Error('Start ComfyUI first: IV Studio asks it which nodes it already has and where its custom_nodes folder is.')
+      info = await this.comfy.objectInfo()
+    } catch (err) {
+      const why = await whyUnreached(this.comfy, err)
+      if (why.busy) throw new Error(err.message)
+      if (why.address) throw new Error(`${why.detail} Set that address in Settings → ComfyUI, then press Install again.`)
+      if (why.down) throw new Error(`Start ComfyUI first (${err.message}): IV Studio asks it which nodes it already has and where its custom_nodes folder is.`)
+      throw new Error(`ComfyUI couldn’t list its nodes: ${err.message}`)
     }
-    const packs = missingPacks(this.manifest, info, { linux: !['nt', 'win32'].includes(stats.system?.os) })
+    // only for which packs suit Linux; this ComfyUI is on this PC, so this PC's system stands in if it's slow to say
+    const stats = await this.comfy.systemStats().catch(() => null)
+    const os = stats?.system?.os || process.platform
+    const packs = missingPacks(this.manifest, info, { linux: !['nt', 'win32'].includes(os) })
     if (!packs.length) return { results: [], restart: false }
     const place = await comfyPlace(this.comfy, folder)
     const results = await installPacks(packs, { ...place, resourcesDir: this.resourcesDir, onProgress })

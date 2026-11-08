@@ -1,6 +1,20 @@
 // Readiness check: is ComfyUI up, is there a capable GPU, are the node packs and models IV Studio needs there?
 // Everything is read from ComfyUI itself (/system_stats and /object_info), so it works with any install.
 
+import { findComfyElsewhere } from './comfylauncher.js'
+
+// Why a ComfyUI request failed, as a Setup item's status, detail and fix:
+// - busy: ComfyUI took the connection but didn't answer in time (loading, rendering or short on memory); it's running,
+//   so nobody is told to start it.
+// - down: nothing listens there. When a ComfyUI answers on another usual port of this PC (the ComfyUI Desktop app's
+//   8000, say), address is that one, for "Use this address".
+export async function whyUnreached(comfy, err, { ports } = {}) {
+  if (err?.busy && !comfy.remote) return { status: 'warn', busy: true, detail: err.message, fix: 'IV Studio checks again by itself in a few seconds.' }
+  const elsewhere = err?.down && !comfy.remote ? await findComfyElsewhere(comfy.url, ports ? { ports } : {}).catch(() => null) : null
+  if (elsewhere) return { status: 'missing', down: true, address: elsewhere, detail: `Nothing answers at ${comfy.url}, but a ComfyUI answers at ${elsewhere}.`, fix: `Use ${elsewhere} as ComfyUI’s address (Settings → ComfyUI).` }
+  return { status: 'missing', down: !!err?.down, detail: err?.message || String(err), fix: 'Start ComfyUI, or set its address in Settings.' }
+}
+
 const TEMPLATE_SKIP = new Set(['PixaromaGroupSwitch', 'PixaromaLabel', 'MarkdownNote', 'Note'])
 
 export function comboOptions(info, cls, input) {
@@ -55,7 +69,7 @@ export async function checkSetup({ comfy, template, manifest, characters, chosen
     stats = await comfy.systemStats()
     items.push({ id: 'comfyui', label: 'ComfyUI', status: 'ok', detail: `Version ${stats.system?.comfyui_version || '?'} at ${comfy.url}` })
   } catch (err) {
-    items.push({ id: 'comfyui', label: 'ComfyUI', status: 'missing', detail: err.message, fix: 'Start ComfyUI, or set its address in Settings.' })
+    items.push({ id: 'comfyui', label: 'ComfyUI', ...(await whyUnreached(comfy, err)) })
     return { ready: false, items }
   }
 
