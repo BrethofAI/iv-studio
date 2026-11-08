@@ -1,7 +1,10 @@
 // The Modal account (src/service/cloud.js): signed in only when Modal's own token check names a workspace, and
 // signing out takes out just the active profile.
 import assert from 'node:assert/strict'
-import { workspaceOf, withoutActiveProfile } from '../src/service/cloud.js'
+import { workspaceOf, withoutActiveProfile, Cloud, IMAGE_BUILDER } from '../src/service/cloud.js'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 
 let n = 0
 const ok = (name, fn) => (fn(), n++, console.log('ok ', name))
@@ -27,5 +30,18 @@ ok('signing out removes the active profile and keeps the others', () => {
   assert.equal(crlf.removed, 'x')
   assert.ok(crlf.text.startsWith('[y]\r\n'))
 })
+
+// every Modal command asks for the image builder IV Studio is tested with; other programs don't get it
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ivm-'))
+const cloud = new Cloud({ dataDir: dir, resourcesDir: dir })
+const show = ['-e', 'process.stdout.write(process.env.MODAL_IMAGE_BUILDER_VERSION || "none")']
+Object.defineProperty(cloud, 'modalExe', { get: () => process.execPath, configurable: true })
+assert.equal(await cloud.exec(process.execPath, show, { quiet: true }), IMAGE_BUILDER)
+assert.equal(IMAGE_BUILDER, '2025.06')
+Object.defineProperty(cloud, 'modalExe', { get: () => 'not-node', configurable: true })
+assert.equal(await cloud.exec(process.execPath, show, { quiet: true }), 'none')
+fs.rmSync(dir, { recursive: true, force: true })
+n++
+console.log('ok  Modal commands ask for image builder', IMAGE_BUILDER)
 
 console.log(`\n${n} passed`)
