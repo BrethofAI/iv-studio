@@ -38,6 +38,10 @@ Apps that show MCP prompts also list them as slash commands (in Claude Code, `/m
 5. Look at the candidates: `grab_frame` with `file` and a time shows you a frame of any output.
 6. `finish_candidate` with the best one (2 MP pass + DLSS, optional RTX 2x and frame generation).
    It reuses the preview's saved latent, so the picked performance stays the same. Poll `get_job`.
+   `dlssStrength` (0-2, default 0.8; lower keeps more texture, higher smooths skin) and `dlssStyle`
+   (Default, Natural, Cinematic) set DLSS 5's look. `enhance_final` makes a sharper copy of any final later:
+   `engine: "dlss"` with `scale`, `strength`, `style`, or `engine: "seedvr2"` with `resolution` and `detail`
+   (0 restores faithfully; 0.1-0.3 invents more detail and can drift from the take).
 
 Speed presets (`get_speeds`): `quality` (0.4 MP, 8 steps, 3 takes, 2 MP finish), `balanced` (0.4 MP, 8 steps,
 2 takes, 1 MP finish + RTX 2x), `fast` (0.3 MP, 4 steps, 2 takes, 1 MP + 2x) and `low` (Low memory: 0.3 MP,
@@ -51,6 +55,27 @@ Modes: `text` (prompt only), `reference` (pictures, videos or audio named `<Pict
 (extend a video from its last frames). `voiceLine` lip-syncs the previews to a recording.
 `prepare_media` crops pictures and trims videos and sounds first (first/last frames should be
 cropped to the shot's aspect, because they're stretched to fit).
+
+## Seedance 2.5 (paid, on the person's Comfy.org credits)
+
+Seedance 2.5 is a second model for the same shots, through ComfyUI's ByteDance partner nodes. It runs on the
+person's Comfy.org credits (their key is in Settings → Comfy account; the MCP server reads `COMFY_ORG_API_KEY`).
+
+- **Ask before spending, every time.** `price_shot` (same fields as `generate_previews`, `engine: "seedance"`)
+  gives ComfyUI's own price (211 credits = $1). Tell the person the figure, get a yes, then pass it as
+  `confirm_cost`. `generate_previews` and a paid `finish_candidate` refuse without it. `comfy_balance` shows
+  their credits; `price_workflow` prices any API graph.
+- `generate_previews` with `engine: "seedance"`, `tier` (`draft` 480p, `720p`, `1080p`), `seconds` 4-30 and
+  `audio`. Draft takes are cheap; hunt with them, then finish the one you pick. Speed presets don't apply.
+- Prompts are written for Seedance, not H3: `write_prompt` with `target: "seedance"`, references named
+  `@image1`, `@video1`, `@audio1`, each given a job in the prompt. A character comes along as their face picture.
+- Finishing a Seedance take (`finish_candidate`):
+  - `way: "seedance"` renders a draft again at 1080p with Seedance (paid: `price_shot` with `jobId` first).
+  - `way: "local"` finishes free on this PC with `refiner`: `seedvr2` (default, cleanest, about 4 minutes;
+    `resolution` 1080 or 1440, `detail`), `dlss` (about 15 s; `dlssStrength`, `dlssStyle`), `h3` (H3 redraws it
+    at `megapixels` with `strength` 0.05-0.5, then DLSS 5; faces shift a little) or `h3seedvr2` (the same H3
+    pass, then SeedVR2; follow the finish job's `enhanceJob`).
+  - `way: "take"` uses the take as it is.
 
 ## Directing a scene
 
@@ -455,7 +480,8 @@ a switch until it's restarted (reconnect the iv-studio MCP). Don't mention or mo
 - Renders take real GPU minutes, and the person may be using ComfyUI for other work too. Only
   cancel IV Studio jobs you started (`cancel_job`); never touch anything else in the queue.
 - Ask the person before deleting anything (`delete_edit`, `delete_sequence`, `delete_character`) and
-  before anything that costs money (the Context IR writer).
+  before anything that costs money (the Context IR writer, any Seedance render or paid finish). Say the price
+  from `price_shot` and wait for a yes; never pass a `confirm_cost` they didn't agree to.
 - Voices too: only invented voices, the person's own, or someone who agreed. Never clone a real person's
   voice from a found recording.
 - Music: write original lyrics and describe a style, not a named artist's voice. Don't feed in someone

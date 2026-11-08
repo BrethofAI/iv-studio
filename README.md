@@ -28,13 +28,39 @@ pictures, songs and spoken lines, cut it all together and export. IV Studio driv
 cloud. No strong graphics card? Shots can also render on a GPU in your own [RunPod](https://www.runpod.io) or
 [Modal](https://modal.com) account, billed by the second, or on Comfy Cloud (see [Cloud](#cloud)).
 
-**This is IV Studio 1.0.** Every page now walks you through itself (**How it works**), a two-minute tour shows
-the whole app, **Check my PC** sets it up for your computer, and characters train free on your own graphics
-card. See [what's new in 1.0](#whats-new-in-10).
+**IV Studio 1.1** adds Seedance 2.5 beside MiniMax H3, speed presets for smaller graphics cards, free finishes
+with their own strength, Compare for up to four versions, a Library that shows how each render was made, and
+Simple words for people new to AI video. See [what's new in 1.1](#whats-new-in-11).
 
 <p align="center">
   <img src="docs/images/create.png" alt="Create: Tess picked, Write it for me with the idea, the H3 prompt, and the pinned Your shot card with Hunt 3 previews" width="100%">
 </p>
+
+## What's new in 1.1
+
+- **Seedance 2.5 in Create.** A model switch beside MiniMax H3: the same shots on ByteDance's Seedance 2.5,
+  through ComfyUI's partner nodes, on your Comfy.org credits. Cheap 480p drafts to try ideas, or 720p and
+  1080p takes, 4 to 30 seconds. The price shows on the button and you confirm before anything is charged.
+  **Write it for me** writes for Seedance from a Seedance 2.5 prompt guide.
+- **Your Comfy account.** Settings → Comfy account holds your Comfy.org key and shows your credits, also in
+  the title bar. Anything paid is priced first, from ComfyUI's own prices, and needs your OK.
+- **Free finishes for Seedance takes.** Finish a draft on your own graphics card: SeedVR2 (cleanest), DLSS 5
+  (quickest), or H3 redrawing it at full size followed by DLSS 5 or SeedVR2.
+- **Upscaler strength.** DLSS 5 has a strength and a look (Default, Natural, Cinematic), SeedVR2 an extra-detail
+  slider and H3's redraw a strength, in the Finish dialog and in Enhance.
+- **Speed presets.** Quality, Balanced, Fast and Low memory trade picture size and steps for time and memory.
+  Check my PC picks the one that suits your card; every preset fits a 12 GB card, the 2 MP finish too.
+- **Compare and finish.** Mark up to four takes, finals or enhanced copies and play them in sync, side by
+  side, as a wipe or in a grid, zoomed in on the same spot. Picking a take opens the Finish settings over the
+  page, and every finished version sits in one card.
+- **Library details.** Open any render to see how it was made: model, size, length, seed, character, LoRAs,
+  how it was finished and enhanced, render time, cost and the prompt (with Copy). Tiles show size, length and
+  model; search finds words in prompts.
+- **Simple words.** Check my PC asks how much you know about AI video. New to it? IV Studio says
+  "trained look" for LoRA, "variation number" for seed, "quick sharpen" for DLSS and so on. Only the words
+  change; switch it in Settings → Words.
+- **Cloud setup you can follow.** Setting up RunPod or Modal shows each step with a timer and the time left,
+  and tells you when it's ready (1.0.6). Modal's sign-in, sign-out and new accounts work (1.0.3 to 1.0.5).
 
 ## What's new in 1.0
 
@@ -322,6 +348,9 @@ stays against the right edge.
 
    Create is laid out as numbered steps (what kind of shot, who's in it, what it builds on, what happens,
    shape and size) beside a pinned **Your shot** card that shows the frame in its shape and the Hunt button.
+   At the top, pick the model: **MiniMax H3** on this PC (free) or **Seedance 2.5** on your Comfy.org credits
+   (see [Seedance 2.5](#seedance-25)). For H3, a **Speed** preset sets the preview size, steps, takes and the
+   finish together: Quality, Balanced, Fast or Low memory (Check my PC picks one for your card).
    Set the aspect, length, preview size and how many previews to hunt (1 to 3). Optional extras: a voice
    line to lip-sync, RefMods and LoRAs (both in **Who's in it**), and under **Advanced** the steps, sampler and
    scheduler (from your ComfyUI's own lists; er_sde and beta by default).
@@ -331,11 +360,33 @@ stays against the right edge.
    - **DLSS 5** (the default): RTX 2× upscale and frame generation (30/50/60/120 fps), seconds per shot.
    - **SeedVR2** (3B): restores face, eye and hair detail and upscales to 1080p, 1440p or 2160p, on any
      NVIDIA card. **Enhance** runs either one again on a finished shot.
+
+   Picking a take opens the Finish settings over the page. DLSS 5 has a **strength** (its noise reduction:
+   lower keeps more texture, higher smooths skin) and a look (Default, Natural, Cinematic); SeedVR2 has
+   **extra detail** (0 restores faithfully, more invents detail). Every final and enhanced copy sits in one
+   **Finished versions** card. **Compare** plays up to four takes, finals or copies in sync: side by side, as a
+   wipe or in a grid, zoomed in on the same spot, with frame-by-frame stepping.
 4. **Shots.** Every shot keeps its runs, previews and finals. **Show in folder** opens the file. The Shots page
    groups them by the day you last worked on them (older ones by month; each day's heading stays at the top as
    you scroll and folds away with a click) and filters them by status, when, kind of shot, who's in it and
    shape, in a panel that folds away. Tiles load their video only as they come near the screen, so a long
    history opens at once.
+
+### Seedance 2.5
+
+The model switch in Create also runs ByteDance's **Seedance 2.5** through ComfyUI's partner nodes, billed to
+your Comfy.org credits (add your key in **Settings → Comfy account**; your balance shows there and in the title
+bar). It's the same Create page: text, references, first/last frame or continuing a clip, 4 to 30 seconds.
+
+- **Quality.** Draft (480p) takes are cheap: try a few, then finish the one you like. Or make 720p or 1080p
+  takes straight away.
+- **The price first.** The Hunt button shows ComfyUI's own price for the takes, and a confirmation asks before
+  anything is charged. Paid finishes ask too.
+- **Writing.** **Write it for me** follows a Seedance 2.5 prompt guide: references are named `@image1`,
+  `@video1`, `@audio1` and each gets a job; a character comes along as their face picture.
+- **Finishing a take.** Seedance 1080p (paid), or free on this PC: SeedVR2 (cleanest, about 4 minutes for
+  5 seconds), DLSS 5 (about 15 seconds), H3 + DLSS 5 or H3 + SeedVR2 (H3 redraws it at full size first; faces
+  change a little), or keep the take as it is.
 
 ### Before and after a render
 
@@ -605,12 +656,25 @@ previews and finals are one tile with an "N versions" badge; click it to watch e
 viewer and step through them with the arrow keys. Everything sits under the day it was made (older work by
 month), filtered by type (videos, images, music, voice lines), when, where it came from (Shots, Sequences,
 Replace, Edit exports, Images, Music, Voice lines) and, for shots, their kind, who's in them and their shape;
-sort by newest, oldest, name or most versions. Then add any of them to an edit or use a sound as a shot's
-voice line.
+sort by newest, oldest, name, most versions or longest. Search also finds words in the prompts renders were
+made from. Tiles show each render's size, length and model.
+
+Open a tile to watch its versions, listed as rows with their full names. **How it was made** shows the model,
+kind of shot, size, length and frame rate, character, LoRAs and RefMods, seed and steps, which take it is, how
+it was finished and enhanced, the render time and what it cost, with the prompt it came from (**Copy**,
+**Show all**). Then add any of them to an edit or use a sound as a shot's voice line.
 
 Above it, the **Queue** shows what ComfyUI is rendering and what waits, on every page: each render's name,
 its step and time, a click to open its page, and × to cancel one of IV Studio's own. Renders an agent
 started show as rendering with their time, without the step count.
+
+## Simple words
+
+New to AI video? **Check my PC** asks how much you know about making AI video and pictures, and **Settings →
+Words** has the same switch. With **Simple words** on, IV Studio explains itself in everyday words: a LoRA is a
+"trained look", a seed a "variation number", DLSS a "quick sharpen", an upscale an "enlargement", a prompt a
+"description", and the main help lines are rewritten in plain language. Only the words change: every page,
+control and setting stays the same, and names, prompts and file paths are never touched.
 
 ## Incognito
 
@@ -850,7 +914,7 @@ cloud renders don't see them yet. Training a character runs on your PC, RunPod o
 
 ## Agents (MCP)
 
-IV Studio includes a local MCP server (stdio) with 154 tools. It uses the same projects, characters, voices
+IV Studio includes a local MCP server (stdio) with 172 tools. It uses the same projects, characters, voices
 and songs as the window, so Claude Code or any MCP client can render shots and sequences, make pictures,
 speak lines, make music, cut them together and export. **Settings → Agents** has the command for your
 install, a message to paste into any agent, and a button that adds the IV Studio skill to Claude Code.
