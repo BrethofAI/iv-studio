@@ -12880,3 +12880,20 @@ button.set-chip:hover {
   }
 }
 .wel-speed { margin: -2px 0 6px; }
+
+/* Compare: wheel zoom at the pointer, drag to look around */
+.compare-stage.zoomed .cmp-frame {
+  cursor: grab;
+}
+.compare-stage.zoomed.panning .cmp-frame,
+.compare-stage.panning .wipe-slider {
+  cursor: grabbing;
+}
+.compare-stage .cmp-frame video {
+  transition: transform 0.08s linear;
+}
+.compare-zoom-now {
+  font-size: 12px;
+  color: var(--cream);
+  min-width: 36px;
+}

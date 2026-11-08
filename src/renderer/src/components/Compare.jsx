@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 // Versions of a shot against each other (takes, finals, enhanced copies): up to four, played, paused, stepped and
-// scrubbed together. Side by side and Wipe show the first two; Grid shows them all. Zoom (1x, 2x, 4x) looks at the
-// same spot in every one, which is where upscalers differ; double-click a picture to choose the spot. Each slot can
+// scrubbed together. Side by side and Wipe show the first two; Grid shows them all. Zoom looks at the same spot in
+// every one, which is where upscalers differ: the mouse wheel zooms in and out (1x to 8x) at the pointer, dragging
+// looks around (Shift-drag in Wipe, where a plain drag moves the wipe), 1x/2x/4x jump there, and a double-click
+// zooms in where you click. The spot is one offset for every picture (fractions of a picture), so it lines up. Each slot can
 // be swapped for any other version of the shot (pool). The sound is the first one's.
 //   items: [{ key, url, label, prompt }] (2-4), or a and b; pool: every version the slots can take.
 export function CompareViewer({ a, b, items, pool = [], onClose }) {
@@ -16,8 +18,13 @@ export function CompareViewer({ a, b, items, pool = [], onClose }) {
   const shown = slots.map((k) => all.find((it) => it.key === k)).filter(Boolean)
   const [mode, setMode] = useState(start.length > 2 ? 'grid' : 'side')
   const [split, setSplit] = useState(50)
+  // zoom 1-8, and the top-left corner of what's in view, as fractions of a picture (0 to zoom - 1)
   const [zoom, setZoom] = useState(1)
-  const [focus, setFocus] = useState({ x: 50, y: 40 })
+  const [off, setOff] = useState({ x: 0, y: 0 })
+  const [panning, setPanning] = useState(false)
+  const stage = useRef(null)
+  const view = useRef({ zoom: 1, off: { x: 0, y: 0 } })
+  view.current = { zoom, off }
   const [playing, setPlaying] = useState(false)
   const [t, setT] = useState(0)
   const [length, setLength] = useState(0)
@@ -76,16 +83,59 @@ export function CompareViewer({ a, b, items, pool = [], onClose }) {
     setPlaying(false)
     seek(Math.min(Math.max(0, t + frames / 24), length || t))
   }
+  // zoom to z keeping the point under c (fractions of the picture box) where it is
+  function zoomAt(z, c = { x: 0.5, y: 0.5 }) {
+    const { zoom: z1, off: o1 } = view.current
+    const z2 = Math.min(8, Math.max(1, z))
+    const keep = (k) => Math.min(z2 - 1, Math.max(0, ((c[k] + o1[k]) / z1) * z2 - c[k]))
+    setZoom(z2)
+    setOff(z2 <= 1.001 ? { x: 0, y: 0 } : { x: keep('x'), y: keep('y') })
+  }
+  // where the pointer is, as fractions of the picture box it's over
+  const at = (e) => {
+    const box = e.target.closest?.('.cmp-frame, .compare-wipe') || stage.current
+    const r = box.getBoundingClientRect()
+    return { box: r, c: { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height } }
+  }
   function aim(e) {
-    const r = e.currentTarget.getBoundingClientRect()
-    setFocus({ x: Math.round(((e.clientX - r.left) / r.width) * 100), y: Math.round(((e.clientY - r.top) / r.height) * 100) })
-    if (zoom === 1) setZoom(2)
+    if (zoom === 1) zoomAt(2, at(e).c)
+  }
+  // the wheel zooms at the pointer (a listener that can stop the page scrolling)
+  useEffect(() => {
+    const el = stage.current
+    if (!el) return
+    const wheel = (e) => {
+      e.preventDefault()
+      const z = view.current.zoom * Math.pow(1.0018, -e.deltaY)
+      zoomAt(Math.abs(z - 1) < 0.04 ? 1 : z, at(e).c)
+    }
+    el.addEventListener('wheel', wheel, { passive: false })
+    return () => el.removeEventListener('wheel', wheel)
+  }, [mode])
+  // dragging a zoomed picture looks around it (in Wipe, Shift-drag: a plain drag moves the wipe)
+  function grab(e) {
+    if (view.current.zoom <= 1 || e.button !== 0 || (mode === 'wipe' && !e.shiftKey)) return
+    e.preventDefault()
+    e.stopPropagation()
+    const { box } = at(e)
+    let last = { x: e.clientX, y: e.clientY }
+    setPanning(true)
+    const move = (m) => {
+      const { zoom: z, off: o } = view.current
+      const dx = (m.clientX - last.x) / box.width
+      const dy = (m.clientY - last.y) / box.height
+      last = { x: m.clientX, y: m.clientY }
+      setOff({ x: Math.min(z - 1, Math.max(0, o.x - dx)), y: Math.min(z - 1, Math.max(0, o.y - dy)) })
+    }
+    const up = () => (setPanning(false), window.removeEventListener('pointermove', move), window.removeEventListener('pointerup', up))
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
   }
   const swap = (i, key) => setSlots((s) => s.map((k, j) => (j === i ? key : k)))
   const unused = all.filter((it) => !slots.includes(it.key))
 
   refs.current = []
-  const look = { transform: `scale(${zoom})`, transformOrigin: `${focus.x}% ${focus.y}%` }
+  const look = { transform: `translate(${-off.x * 100}%, ${-off.y * 100}%) scale(${zoom})`, transformOrigin: '0 0', ...(panning ? { transition: 'none' } : {}) }
   const frame = (it, i, extra = {}) => (
     <div className="cmp-frame" onDoubleClick={aim} {...extra}>
       <video
@@ -116,14 +166,15 @@ export function CompareViewer({ a, b, items, pool = [], onClose }) {
               Grid
             </button>
           </div>
-          <div className="segmented compare-zoom" title="Double-click a picture to choose where to look">
+          <div className="segmented compare-zoom" title="The mouse wheel zooms at the pointer; drag to look around">
             {[1, 2, 4].map((z) => (
-              <button key={z} className={zoom === z ? 'on' : ''} onClick={() => setZoom(z)}>
+              <button key={z} className={Math.abs(zoom - z) < 0.01 ? 'on' : ''} onClick={() => zoomAt(z)}>
                 {z}×
               </button>
             ))}
           </div>
-          <span className="mono dim small">Space plays · ← → a frame · double-click to zoom there</span>
+          {![1, 2, 4].some((z) => Math.abs(zoom - z) < 0.01) && <span className="mono compare-zoom-now">{zoom.toFixed(1)}×</span>}
+          <span className="mono dim small">Space plays · ← → a frame · wheel zooms · {mode === 'wipe' ? 'Shift-drag' : 'drag'} to look around</span>
           <button className="link-btn mono" onClick={onClose}>
             Close
           </button>
@@ -160,6 +211,7 @@ export function CompareViewer({ a, b, items, pool = [], onClose }) {
           )}
         </div>
 
+        <div className={`compare-stage ${zoom > 1 ? 'zoomed' : ''} ${panning ? 'panning' : ''}`} ref={stage} onPointerDownCapture={grab}>
         {mode === 'side' && (
           <div className="compare-side">
             {visible.map((it, i) => (
@@ -190,6 +242,8 @@ export function CompareViewer({ a, b, items, pool = [], onClose }) {
             ))}
           </div>
         )}
+
+        </div>
 
         <div className="compare-transport">
           <button className="btn btn-small" onClick={toggle}>
