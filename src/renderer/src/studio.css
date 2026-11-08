@@ -12897,3 +12897,36 @@ button.set-chip:hover {
   color: var(--cream);
   min-width: 36px;
 }
+
+/* the page error (ErrorBoundary.jsx): instead of a blank window */
+.page-error {
+  max-width: 720px;
+  margin: 12vh auto 0;
+  padding: 28px 32px;
+  display: grid;
+  gap: 14px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--red);
+  color: var(--paper);
+}
+.page-error h1 {
+  margin: 0;
+  font: 800 30px/1.05 var(--display);
+  color: var(--cream);
+}
+.page-error p {
+  margin: 0;
+  color: var(--paper-dim);
+}
+.page-error-btns {
+  display: flex;
+  gap: 10px;
+}
+.page-error pre {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  font-size: 12px;
+  white-space: pre-wrap;
+}

@@ -42,7 +42,10 @@ const since = (p) => (p && !p.finishedAt ? Math.max(0, Math.round((Date.now() - 
 export default function SetupProgress({ progress: p, log = [], name }) {
   const [details, setDetails] = useState(false)
   const logEl = useRef(null)
-  useEffect(() => logEl.current?.scrollTo(0, logEl.current.scrollHeight), [log, details])
+  // braces: scrollTo returns a Promise in Electron's Chromium, and React would take it for a cleanup function
+  useEffect(() => {
+    logEl.current?.scrollTo(0, logEl.current.scrollHeight)
+  }, [log, details])
   if (!p) return null
   const extra = since(p)
   const elapsed = p.elapsed + extra

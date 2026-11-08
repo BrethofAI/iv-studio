@@ -60,7 +60,10 @@ export default function CloudWizard({ onClose, notify, recheck, info }) {
     })
     return window.ivstudio.cloud.onLog((line) => setLog((l) => [...l.slice(-300), line]))
   }, [])
-  useEffect(() => logEl.current?.scrollTo(0, logEl.current.scrollHeight), [log])
+  // braces: scrollTo returns a Promise in Electron's Chromium, and React would take it for a cleanup function
+  useEffect(() => {
+    logEl.current?.scrollTo(0, logEl.current.scrollHeight)
+  }, [log])
   useEffect(() => {
     const k = (e) => e.key === 'Escape' && !busy && onClose()
     window.addEventListener('keydown', k)
