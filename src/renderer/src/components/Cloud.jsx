@@ -433,6 +433,14 @@ export default function Cloud({ notify, recheck, setup, info }) {
                 Install the cloud tools
               </button>
             )}
+            {st.toolkitUpdate && (
+              <p className="small">
+                Modal’s client {st.toolkitVersion || ''} updates to {st.toolkitUpdate} by itself before the next setup or render (about a minute).{' '}
+                <button className="link-btn" disabled={!!busy} onClick={() => run('Updating the cloud tools', () => window.ivstudio.cloud.install())}>
+                  Update now
+                </button>
+              </p>
+            )}
           </Step>
 
           <Step n={2} title="Modal account" done={!!st.workspace}>

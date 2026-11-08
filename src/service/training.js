@@ -655,8 +655,9 @@ export class Trainings {
   get trainDir() {
     return path.join(this.dataDir, 'cloud', 'train')
   }
-  modal(args, env = {}) {
+  async modal(args, env = {}) {
     if (!this.cloud.toolkitReady()) throw new Error('Set up the cloud tools first (Cloud page, step 1).')
+    await this.cloud.ensureCurrent()
     fs.mkdirSync(this.trainDir, { recursive: true })
     fs.copyFileSync(path.join(this.resourcesDir, 'cloud', 'train_app.py'), path.join(this.trainDir, 'train_app.py'))
     return this.cloud.exec(this.cloud.modalExe, args, { cwd: this.trainDir, env: { PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', MSYS_NO_PATHCONV: '1', ...env } })

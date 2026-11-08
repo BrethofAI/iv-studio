@@ -7,7 +7,7 @@ import { comfyFolders, dataLocation, incognitoDir, readSettings, resourcesDir, w
 import { chooseTarget, copyData, discardCopy, freeBytes, listData, movableEntries, oldCopy, removeOldCopy, verifyCopy, writePointer } from '../service/datafolder'
 import { EXTRA_BIN, harnessStatus } from '../service/harness'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
-import { Cloud, GPUS } from '../service/cloud'
+import { Cloud, GPUS, MODAL_VERSION } from '../service/cloud'
 import { RunPod, GPUS as RUNPOD_GPUS } from '../service/runpod'
 import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
 import { comboOptions } from '../service/setup'
@@ -903,6 +903,9 @@ app.whenReady().then(() => {
     return {
       provider: s.cloudProvider || 'modal',
       toolkit: cloud.toolkitReady(),
+      // an install from an older IV Studio: Modal's client is updated before the next setup, render or training
+      toolkitVersion: cloud.toolkitReady() ? cloud.toolkitVersion() : null,
+      toolkitUpdate: cloud.toolkitReady() && !cloud.toolkitCurrent() ? MODAL_VERSION : null,
       workspace: s.cloudProvider === 'runpod' || s.cloudProvider === 'comfycloud' ? null : await cloud.workspace(),
       // while Modal's sign-in waits: its page, for when no browser opened
       signInUrl: cloud.signInUrl || null,

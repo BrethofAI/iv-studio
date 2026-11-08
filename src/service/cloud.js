@@ -53,17 +53,46 @@ export class Cloud {
     return path.join(this.dir, 'deploy')
   }
 
+  // Modal's client is installed (any version): it can sign in and answer questions
   toolkitReady = () => fs.existsSync(this.modalExe)
+  // the installed client's version, read from its package folder (modal-1.6.2.dist-info), or null
+  toolkitVersion() {
+    return clientVersionIn(this.sitePackages())
+  }
+  sitePackages() {
+    const venv = path.join(this.dir, 'venv')
+    if (WIN) return path.join(venv, 'Lib', 'site-packages')
+    const lib = path.join(venv, 'lib')
+    const py = fs.existsSync(lib) ? fs.readdirSync(lib).find((d) => /^python3/.test(d)) : null
+    return py ? path.join(lib, py, 'site-packages') : path.join(lib, 'python3.12', 'site-packages')
+  }
+  // the installed client is the one this IV Studio is built for (MODAL_VERSION)
+  toolkitCurrent = () => this.toolkitReady() && this.toolkitVersion() === MODAL_VERSION
 
-  // uv (checked against its published SHA-256), then a Python with Modal's client, all inside app data.
+  // uv (checked against its published SHA-256), then a Python with Modal's client, all inside app data. An install
+  // from an older IV Studio is brought to MODAL_VERSION in place (the sign-in is kept: it lives in Modal's config).
   async installToolkit() {
-    if (this.toolkitReady()) return true
+    if (this.toolkitCurrent()) return true
+    if (this.toolkitReady()) {
+      await this.ensureUv()
+      this.onLog(`Updating Modal’s client from ${this.toolkitVersion() || 'an older version'} to ${MODAL_VERSION}…`)
+      await this.exec(this.uvExe, ['pip', 'install', '--python', path.join(this.dir, 'venv'), `modal==${MODAL_VERSION}`], { env: this.uvEnv() })
+      return this.toolkitCurrent()
+    }
     await this.ensureUv()
     this.onLog('Setting up Python and Modal’s client…')
     const env = this.uvEnv()
     await this.exec(this.uvExe, ['venv', path.join(this.dir, 'venv'), '--python', '3.12'], { env })
     await this.exec(this.uvExe, ['pip', 'install', '--python', path.join(this.dir, 'venv'), `modal==${MODAL_VERSION}`], { env })
     return this.toolkitReady()
+  }
+
+  // Before a command that builds or runs something: an older client is updated first (once; others wait for it).
+  // Quick questions (who's signed in, what's running) use whatever is installed.
+  ensureCurrent() {
+    if (!this.toolkitReady() || this.toolkitCurrent()) return Promise.resolve(true)
+    this.updating ||= this.installToolkit().finally(() => (this.updating = null))
+    return this.updating
   }
 
   // uv and its Python downloads live in the cloud folder; Shinobi's engine shares them.
@@ -98,7 +127,7 @@ export class Cloud {
     if (this.ws && Date.now() - this.ws.at < 30000) return this.ws.value
     let value = null
     try {
-      value = workspaceOf(await this.modal(['token', 'info'], { quiet: true }))
+      value = workspaceOf(await this.modal(['token', 'info'], { quiet: true, quick: true }))
     } catch {}
     this.ws = { at: Date.now(), value }
     return value
@@ -187,7 +216,7 @@ export class Cloud {
 
   // The containers running IV Studio's cloud app right now (each holds a GPU while it's up).
   async containers() {
-    const out = await this.modal(['container', 'list', '--json'], { quiet: true })
+    const out = await this.modal(['container', 'list', '--json'], { quiet: true, quick: true })
     const list = JSON.parse(out.slice(out.indexOf('[')) || '[]')
     return list.filter((c) => c.app_name === APP_NAME).map((c) => ({ id: c.container_id, startedAt: c.start_time }))
   }
@@ -197,12 +226,13 @@ export class Cloud {
     const running = await this.containers()
     for (const c of running) {
       this.onLog(`Shutting down cloud GPU ${c.id}…`)
-      await this.modal(['container', 'stop', c.id], { quiet: true })
+      await this.modal(['container', 'stop', c.id], { quiet: true, quick: true })
     }
     return { stopped: running.length }
   }
 
-  modal(args, { env = {}, quiet = false, secret = false, onSpawn, onText } = {}) {
+  async modal(args, { env = {}, quiet = false, secret = false, onSpawn, onText, quick = false } = {}) {
+    if (!quick) await this.ensureCurrent()
     return this.exec(this.modalExe, args, { cwd: this.deployDir, env: { PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', ...env }, quiet, secret, onSpawn, onText })
   }
 
@@ -268,4 +298,14 @@ function killTree(p) {
     if (process.platform === 'win32') spawn('taskkill', ['/pid', String(p.pid), '/T', '/F'], { windowsHide: true })
     else p.kill('SIGTERM')
   } catch {}
+}
+
+// The version of Modal's client installed in a site-packages folder (its modal-<version>.dist-info), or null.
+export function clientVersionIn(dir) {
+  try {
+    const hit = fs.readdirSync(dir).map((d) => d.match(/^modal-(\d+(?:\.\d+)*)\.dist-info$/)).find(Boolean)
+    return hit ? hit[1] : null
+  } catch {
+    return null
+  }
 }
