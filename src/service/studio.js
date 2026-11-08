@@ -443,7 +443,7 @@ export class Studio {
   async finishCandidate({ jobId, speed, fallbackSpeed, ...given }) {
     const source = this.getJob(jobId, { refresh: false })
     if (source.kind !== 'previews') throw new Error('finish_candidate needs a previews job id.')
-    if (source.plan?.engine === SEEDANCE) return this.seedanceFinish(source, finish)
+    if (source.plan?.engine === SEEDANCE) return this.seedanceFinish(source, given)
     const caps = await this.capabilities()
     const finish = applyFinishSpeed(given, speed || source.plan.request?.speed || fallbackSpeed, caps)
     if (finish.fps && !caps.fps.includes(finish.fps)) throw new Error(`This ComfyUI can make ${caps.fps.filter(Boolean).join(', ') || 'no other'} fps.`)
