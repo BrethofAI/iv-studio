@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import ModalAccount from './ModalAccount'
 import { createPortal } from 'react-dom'
 import Hero from './Hero'
 import { StepHead } from './CreateKit'
@@ -210,17 +211,8 @@ export default function CloudWizard({ onClose, notify, recheck, info }) {
                         </button>
                       )}
                     </Task>
-                    <Task done={!!st.workspace} title="Modal account" text={st.workspace ? `Signed in to the workspace ${st.workspace}.` : 'Opens Modal’s sign-in page in your browser. New to Modal? Signing up is free.'}>
-                      {!st.workspace && (
-                        <>
-                          <button className="btn" onClick={() => window.ivstudio.links.open(info?.links?.modalSignup || 'https://modal.com/signup')}>
-                            Create an account
-                          </button>
-                          <button className="btn btn-primary" disabled={!!busy || !st.toolkit} onClick={() => run('Waiting for the Modal sign-in in your browser', () => window.ivstudio.cloud.signIn())}>
-                            Sign in with Modal
-                          </button>
-                        </>
-                      )}
+                    <Task done={!!st.workspace} title="Modal account" text={st.workspace ? '' : 'Opens Modal’s sign-in page in your browser. New to Modal? Signing up is free.'}>
+                      <ModalAccount st={st} busy={busy} run={run} info={info} notify={notify} onChanged={refresh} compact />
                     </Task>
                   </div>
                 ) : account ? (

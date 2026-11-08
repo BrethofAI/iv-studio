@@ -229,6 +229,29 @@ function createWindow() {
     return { action: 'deny' }
   })
   win.once('ready-to-show', () => win.show())
+  // A window whose page crashed, or whose graphics process did (seen as a blank window on a low-end PC), loads
+  // itself again instead of staying blank; at most once in 30 s, so a crash that repeats doesn't loop. Each one is
+  // noted in logs\window.log in the data folder.
+  let reloadedAt = 0
+  const note = (line) => {
+    try {
+      fs.mkdirSync(path.join(BASE, 'logs'), { recursive: true })
+      fs.appendFileSync(path.join(BASE, 'logs', 'window.log'), `${new Date().toISOString()} ${line}\n`)
+    } catch {}
+  }
+  const recover = (why) => {
+    note(why)
+    if (!win || win.isDestroyed() || Date.now() - reloadedAt < 30000) return
+    reloadedAt = Date.now()
+    setTimeout(() => win && !win.isDestroyed() && win.webContents.reload(), 600)
+  }
+  win.webContents.on('render-process-gone', (_e, d) => d.reason !== 'clean-exit' && recover(`page gone: ${d.reason} (exit ${d.exitCode}); reloading`))
+  win.webContents.on('unresponsive', () => note('page not responding'))
+  win.webContents.on('responsive', () => note('page responding again'))
+  if (!createWindow.watching) {
+    createWindow.watching = true
+    app.on('child-process-gone', (_e, d) => d.type === 'GPU' && d.reason !== 'clean-exit' && recover(`graphics process gone: ${d.reason} (exit ${d.exitCode}); reloading`))
+  }
   // A bigger window gets a bigger interface, so a full-screen window on a large monitor isn't a small laptop-sized
   // layout in one corner. Pages are laid out for about 1600 x 1000; past that everything scales up together (like
   // browser zoom, so the layout's own breakpoints still apply), to 150% at most.
@@ -881,6 +904,9 @@ app.whenReady().then(() => {
       provider: s.cloudProvider || 'modal',
       toolkit: cloud.toolkitReady(),
       workspace: s.cloudProvider === 'runpod' || s.cloudProvider === 'comfycloud' ? null : await cloud.workspace(),
+      // while Modal's sign-in waits: its page, for when no browser opened
+      signInUrl: cloud.signInUrl || null,
+      signingIn: !!cloud.signing,
       cloud: s.cloud,
       runpod: { ...rp, hasKey: !!s.runpodKey, ready: !!(rp.modelsAt && s.runpodToken) },
       comfycloud: { ...(s.comfycloud || {}), hasKey: !!(s.comfyCloudKey || s.comfyApiKey), ownKey: !!s.comfyCloudKey },
@@ -920,7 +946,19 @@ app.whenReady().then(() => {
     return survey
   })
   handle('cloud:install', () => cloudTask('installing the cloud tools', () => cloud.installToolkit()))
-  handle('cloud:signIn', () => cloudTask('signing in to Modal', async () => (await cloud.signIn(), cloud.workspace())))
+  handle('cloud:signIn', () => cloudTask('signing in to Modal', () => cloud.signIn()))
+  // stop waiting for the browser (the window offers it while it waits)
+  handle('cloud:cancelSignIn', () => cloud.cancelSignIn())
+  // sign out of Modal, to sign in again or with another account (not while rendering on it)
+  handle('cloud:signOut', () => {
+    const s = readSettings(BASE)
+    if (s.target === 'cloud' && (s.cloudProvider || 'modal') === 'modal') throw new Error('Switch rendering to This PC first, then sign out of Modal.')
+    if (cloud.signing) cloud.cancelSignIn()
+    const r = cloud.signOut()
+    // the app it deployed belongs to that account: setting up again starts fresh
+    writeSettings({ cloud: null, cloudToken: null }, BASE)
+    return r
+  })
   handle('cloud:deploy', ({ gpu, idleSeconds }) =>
     cloudTask('setting up the cloud', async () => {
       const { url, token } = await cloud.deploy({ gpu, idleSeconds })

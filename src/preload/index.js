@@ -197,6 +197,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
     status: call('cloud:status'),
     install: call('cloud:install'),
     signIn: call('cloud:signIn'),
+    cancelSignIn: call('cloud:cancelSignIn'),
+    signOut: call('cloud:signOut'),
     deploy: call('cloud:deploy'),
     fetchModels: call('cloud:fetchModels'),
     uploadCharacters: call('cloud:uploadCharacters'),

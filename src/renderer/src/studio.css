@@ -12500,3 +12500,23 @@ button.set-chip:hover {
   font-size: 13px;
   line-height: 1.45;
 }
+
+/* ---------- the Modal account (Cloud page and cloud wizard) ---------- */
+.modal-account {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.modal-account p {
+  margin: 0;
+}
+.modal-account.waiting p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.modal-account-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
