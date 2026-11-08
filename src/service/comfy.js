@@ -118,6 +118,8 @@ export class Comfy {
     }
     const r = await this.req('/prompt', { method: 'POST', json: { prompt, client_id: this.clientId, extra_data: extra, ...(front ? { front: true } : {}) } })
     if (price?.paid) Comfy.onPaid?.({ comfy: this, promptId: r.prompt_id, price })
+    // what that cost (the job records it; the Library shows it)
+    this.lastPrice = price?.paid ? { usd: price.max, label: price.label, rate: !!price.rate } : null
     return r.prompt_id
   }
 

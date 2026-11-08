@@ -129,6 +129,7 @@ export function Viewer({ sets, at, setAt, onClose, edits, notify, sendToCreate, 
             <span className="viewer-variant">{item.variant || item.label}</span>
             {meta.length > 0 && <span className="mono small dim">{meta.join(' · ')}</span>}
           </div>
+          <Details item={item} notify={notify} />
           {set.items.length > 1 && (
             <div className="viewer-versions">
               <span className="mono small dim">{set.items.length} versions</span>
@@ -187,6 +188,66 @@ export function Viewer({ sets, at, setAt, onClose, edits, notify, sendToCreate, 
   )
 }
 
+// How a version was made: the render's facts (model, size, length, seed, finish, render time, cost...) and the
+// prompt it came from, with Copy. Folded or open as last left (localStorage iv.viewerDetails).
+function Details({ item, notify }) {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem('iv.viewerDetails') !== 'closed'
+    } catch {
+      return true
+    }
+  })
+  const [full, setFull] = useState(false)
+  useEffect(() => setFull(false), [item.key])
+  const facts = item.facts || []
+  if (!facts.length && !item.prompt) return null
+  const flip = () => {
+    setOpen(!open)
+    try {
+      localStorage.setItem('iv.viewerDetails', open ? 'closed' : 'open')
+    } catch {}
+  }
+  const copy = () => navigator.clipboard.writeText(item.prompt).then(() => notify?.('Prompt copied.', 'ok'), () => notify?.('Couldn’t copy the prompt.'))
+  return (
+    <div className="viewer-details">
+      <button className="viewer-details-head mono small" onClick={flip} aria-expanded={open}>
+        <span>{open ? '▾' : '▸'}</span> How it was made
+      </button>
+      {open && (
+        <>
+          {facts.length > 0 && (
+            <dl className="viewer-facts">
+              {facts.map(([k, v]) => (
+                <div key={k}>
+                  <dt className="mono small dim">{k}</dt>
+                  <dd className="words-exact">{v}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {item.prompt && (
+            <div className="viewer-prompt">
+              <div className="viewer-prompt-head">
+                <span className="mono small dim">Prompt</span>
+                <button className="link-btn mono small" onClick={copy}>
+                  Copy
+                </button>
+              </div>
+              <p className={`words-exact ${full ? 'full' : ''}`}>{item.prompt}</p>
+              {item.prompt.length > 220 && (
+                <button className="link-btn mono small" onClick={() => setFull(!full)}>
+                  {full ? 'Show less' : 'Show all'}
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 export function Tile({ set, onOpen }) {
   const c = set.cover
   const ref = useRef(null)
@@ -210,11 +271,13 @@ export function Tile({ set, onOpen }) {
         <div className="lib-wave mono">{c.type === 'music' ? '♪' : '“ ”'}</div>
       )}
       {count > 1 && <span className="lib-count mono">{count} {c.type === 'image' ? 'pictures' : 'versions'}</span>}
+      {c.model && <span className={`lib-model mono ${c.model}`}>{c.model === 'seedance' ? 'Seedance' : 'H3'}</span>}
       <span className="tile-body">
         <span className="tile-name" title={set.name}>
           {set.name}
         </span>
-        <span className="mono dim small">{[set.group, c.variant, c.detail, secs(c.duration), day(set.at)].filter(Boolean).join(' · ')}</span>
+        <span className="tile-info small">{c.tile || [c.detail, secs(c.duration)].filter(Boolean).join(' · ') || c.variant}</span>
+        <span className="mono dim small tile-where">{[set.group, day(set.at)].filter(Boolean).join(' · ')}</span>
       </span>
     </button>
   )
@@ -230,7 +293,8 @@ const SORTS = [
   ['new', 'Newest'],
   ['old', 'Oldest'],
   ['name', 'Name'],
-  ['versions', 'Most versions']
+  ['versions', 'Most versions'],
+  ['longest', 'Longest']
 ]
 
 export default function MediaLibrary(ctx) {
@@ -251,6 +315,7 @@ export default function MediaLibrary(ctx) {
   const [mode, setMode] = useState('all')
   const [who, setWho] = useState('all')
   const [shape, setShape] = useState('all')
+  const [model, setModel] = useState('all')
   const [sort, setSort] = useState('new')
   useEffect(() => {
     window.ivstudio.library.all().then(setItems, (err) => (ctx.notify(err.message), setItems([])))
@@ -279,32 +344,36 @@ export default function MediaLibrary(ctx) {
     mode: (x) => mode === 'all' || x.cover.mode === mode,
     who: (x) => who === 'all' || whoOf(x) === who,
     shape: (x) => shape === 'all' || x.cover.aspect === shape,
-    q: (x) => words.every((w) => `${x.name} ${x.group} ${x.items.map((i) => `${i.label} ${i.detail || ''}`).join(' ')}`.toLowerCase().includes(w))
+    model: (x) => model === 'all' || x.items.some((i) => i.model === model),
+    // words in a name, a detail or the prompt a render was made from
+    q: (x) => words.every((w) => `${x.name} ${x.group} ${x.items.map((i) => `${i.label} ${i.detail || ''} ${i.prompt || ''}`).join(' ')}`.toLowerCase().includes(w))
   }
   const passing = (except) => allSets.filter((x) => Object.entries(tests).every(([k, t]) => k === except || t(x)))
   const count = (except, fn) => passing(except).filter(fn).length
-  const key = `${q}|${filter}|${period}|${from}|${mode}|${who}|${shape}|${sort}`
+  const key = `${q}|${filter}|${period}|${from}|${mode}|${who}|${shape}|${model}|${sort}`
   const sets = useMemo(() => {
     let list = passing()
     if (sort === 'old') list = [...list].reverse()
     if (sort === 'name') list = [...list].sort((x, y) => x.name.localeCompare(y.name))
     if (sort === 'versions') list = [...list].sort((x, y) => y.items.length - x.items.length)
+    if (sort === 'longest') list = [...list].sort((x, y) => (y.cover.duration || 0) - (x.cover.duration || 0))
     return list.map((x, i) => ({ ...x, idx: i }))
   }, [allSets, key])
-  const groups = sort === 'new' || sort === 'old' ? groupBy(sets, (x) => dayGroup(x.at, now)) : [[sort === 'name' ? 'A to Z' : 'Most versions first', sets]]
+  const groups = sort === 'new' || sort === 'old' ? groupBy(sets, (x) => dayGroup(x.at, now)) : [[sort === 'name' ? 'A to Z' : sort === 'longest' ? 'Longest first' : 'Most versions first', sets]]
   const [limit, more] = useMore(sets.length, 36, key)
   const sources = [...new Set(allSets.map((x) => x.group))]
   const people = [...new Set(allSets.map(whoOf).filter(Boolean))]
   const shapes = [...new Set(allSets.map((x) => x.cover.aspect).filter(Boolean))]
-  const clear = () => (setPeriod('any'), setFrom('all'), setMode('all'), setWho('all'), setShape('all'))
-  const active = [period !== 'any' && WHEN.find(([w]) => w === period)[1], from !== 'all' && from, mode !== 'all' && MODES.find(([m]) => m === mode)?.[1], who !== 'all' && nameOf(who), shape !== 'all' && shape].filter(Boolean)
+  const models = [...new Set(allSets.flatMap((x) => x.items.map((i) => i.model)).filter(Boolean))]
+  const clear = () => (setPeriod('any'), setFrom('all'), setMode('all'), setWho('all'), setShape('all'), setModel('all'))
+  const active = [period !== 'any' && WHEN.find(([w]) => w === period)[1], from !== 'all' && from, mode !== 'all' && MODES.find(([m]) => m === mode)?.[1], who !== 'all' && nameOf(who), shape !== 'all' && shape, model !== 'all' && (model === 'seedance' ? 'Seedance' : 'H3')].filter(Boolean)
 
   return (
     <div className="media-library">
       <Hero art="library" title="Library" kicker="Everything you've made" />
       <p className="lede">
-        Every video, song and line in one place.
-        <span className="lede-small dim">A shot's previews and finals, a sequence's takes and an edit's exports are one tile. Click it to watch every version and step through them.</span>
+        Every video, picture, song and line you’ve made.
+        <span className="lede-small dim">Each tile holds all its versions. Open one to watch them and see how each was made.</span>
       </p>
       <div className="shelf-tools">
         <div className="shelf-bar">
@@ -334,6 +403,7 @@ export default function MediaLibrary(ctx) {
             {allSets.some((x) => x.cover.mode) && <Chips label="Kind" value={mode} onChange={setMode} options={[['all', 'Any'], ...MODES.map(([id, label]) => [id, label, count('mode', (x) => x.cover.mode === id)])]} />}
             {people.length > 1 && <Chips label="Who" value={who} onChange={setWho} options={[['all', 'Anyone'], ...people.map((id) => [id, nameOf(id), count('who', (x) => whoOf(x) === id)])]} />}
             {shapes.length > 1 && <Chips label="Shape" value={shape} onChange={setShape} options={[['all', 'Any'], ...shapes.map((x) => [x, x, count('shape', (y) => y.cover.aspect === x)])]} />}
+            {models.length > 1 && <Chips label="Model" value={model} onChange={setModel} options={[['all', 'Any'], ...models.map((m) => [m, m === 'seedance' ? 'Seedance 2.5' : 'MiniMax H3', count('model', (y) => y.items.some((i) => i.model === m))])]} />}
           </FilterPanel>
         )}
       </div>

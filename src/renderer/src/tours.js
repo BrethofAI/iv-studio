@@ -304,10 +304,10 @@ export const TOURS = {
   library: {
     title: 'Library',
     steps: [
-      { at: '.shelf-bar', title: 'Everything you made', text: 'Videos, pictures, songs and voice lines in one place, each with a count. Search everything and sort.' },
-      { at: '.shelf-filters', title: 'Narrow it down', text: 'When it was made, where it came from, and for shots their kind, who is in them and their shape. Fold the panel away with Filters; it remembers.' },
+      { at: '.shelf-bar', title: 'Everything you made', text: 'Videos, pictures, songs and voice lines in one place, each with a count. Search everything, even the words of a prompt, and sort, longest first too.' },
+      { at: '.shelf-filters', title: 'Narrow it down', text: 'When it was made, where it came from, and for shots their kind, who is in them, their shape and the model. Fold the panel away with Filters; it remembers.' },
       { at: '.shelf-group-head', title: 'One day at a time', text: 'Everything sits under the day it was made, older work by month. Click a day to fold it away.' },
-      { at: '.lib-tile', title: 'One tile per thing', text: 'A shot’s previews and finals sit in one tile. Open it to step through every version with the arrow keys, add it to an edit or use it in a shot.' }
+      { at: '.lib-tile', title: 'One tile per thing', text: 'A shot’s previews and finals sit in one tile, with its size, length and model. Open it to step through every version with the arrow keys and see how each was made: settings, seed, finish, render time, cost and the prompt.' }
     ]
   }
 }

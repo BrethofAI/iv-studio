@@ -4099,7 +4099,8 @@ body.resizing * {
   width: min(1440px, 100%);
   height: min(880px, calc(100vh - 48px));
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  /* the side panel holds the render's details as well as its versions: a little wider on wide windows */
+  grid-template-columns: minmax(0, 1fr) clamp(320px, 26vw, 400px);
   background: var(--ink);
   border: 1px solid var(--line-strong);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
@@ -12741,4 +12742,107 @@ button.set-chip:hover {
 }
 .setup-pill:hover {
   background: var(--ink-3);
+}
+
+/* ---------- Library: what each render is, and how it was made ---------- */
+.lib-tile .tile-info {
+  color: var(--paper);
+  font-variant-numeric: tabular-nums;
+}
+.lib-model {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  padding: 3px 7px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: rgba(0, 0, 0, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.lib-model.seedance {
+  border-color: rgba(125, 211, 252, 0.6);
+  color: #bae6fd;
+}
+.viewer-details {
+  display: grid;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.viewer-details-head {
+  justify-self: start;
+  display: inline-flex;
+  gap: 6px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--paper-dim);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.viewer-details-head:hover {
+  color: var(--paper);
+}
+.viewer-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+}
+.viewer-facts > div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.viewer-facts dt {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.viewer-facts dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--paper);
+  overflow-wrap: anywhere;
+}
+.viewer-prompt {
+  display: grid;
+  gap: 4px;
+}
+.viewer-prompt-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.viewer-prompt p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--paper-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+.viewer-prompt p.full {
+  display: block;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.viewer-prompt .link-btn {
+  justify-self: start;
+}
+
+.lib-tile .tile-info,
+.lib-tile .tile-where {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

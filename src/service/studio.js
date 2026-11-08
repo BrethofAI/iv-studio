@@ -93,6 +93,57 @@ const ENHANCE_MODELS = ['seedvr2_ema_3b_fp16.safetensors', 'seedvr2_ema_3b_fp8_e
 export const seedvr2Batch = (resolution) =>
   resolution > 1440 ? { batch: 5, overlap: 1, swap: 16 } : resolution > 1080 ? { batch: 9, overlap: 2, swap: 0 } : { batch: 21, overlap: 3, swap: 0 }
 
+// What the Library tells about one render (a shot's preview, final or enhanced copy), from its job and the jobs
+// above it: facts as [label, value] rows for the viewer, a short line for its tile, the prompt as asked, and its
+// size, length, model and the time it took for sorting and filtering. Nothing is guessed: a fact the job didn't
+// record is left out.
+export function renderFacts({ job, jobs = [], output = {}, request = {}, characters = [] }) {
+  const up = (x) => jobs.find((y) => y.id === x?.parent)
+  const run = job.kind === 'previews' ? job : job.kind === 'finish' ? up(job) : up(up(job))
+  const fin = job.kind === 'finish' ? job : job.kind === 'enhance' ? up(job) : null
+  const r = job.plan?.resolved || {}
+  const rr = run?.plan?.resolved || {}
+  const engine = job.plan?.engine || run?.plan?.engine || request.engine || 'h3'
+  const seedance = engine === 'seedance'
+  const candidate = output.candidate || fin?.plan?.finish?.candidate || null
+  const facts = []
+  const add = (k, v) => v != null && v !== '' && facts.push([k, String(v)])
+  const width = r.width || rr.width
+  const height = r.height || rr.height
+  const seconds = r.seconds || rr.seconds
+  const fps = (job.kind === 'finish' && fin?.plan?.finish?.fps) || r.fps || rr.fps
+  const model = seedance ? rr.model || 'Seedance 2.5' : 'MiniMax H3'
+  const MODES = { text: 'Text', reference: 'References', frames: 'First / last frame', continue: 'Continue a video' }
+  add('Model', model)
+  add('Kind', MODES[request.mode] || request.mode)
+  add('Size', width && height ? `${width} × ${height}` : null)
+  add('Length', seconds ? `${Math.round(seconds * 10) / 10} s${fps ? ` at ${fps} fps` : ''}` : null)
+  const ch = request.character && request.character !== 'none' ? characters.find((c) => c.id === request.character) : null
+  add('Character', ch?.name || null)
+  const loras = (request.extraLoras || []).filter((l) => l?.name).map((l) => `${String(l.name).split(/[\\/]/).pop().replace(/\.safetensors$/, '')}${l.strength != null && l.strength !== 1 ? ` ${l.strength}` : ''}`)
+  add('LoRAs', loras.join(', ') || null)
+  const refmods = (request.refmods || []).filter((x) => x?.name).map((x) => String(x.name).split(/[\\/]/).pop())
+  add('RefMods', refmods.join(', ') || null)
+  const seed = rr.seeds && candidate ? rr.seeds[candidate - 1] : null
+  add('Seed', seed)
+  if (!seedance && (request.steps || rr.steps)) add('Steps', request.steps || rr.steps)
+  if (job.kind === 'previews') add('Take', candidate ? `Preview ${candidate} of ${rr.previews || '?'}` : null)
+  // how it was finished, and enhanced
+  const f = fin?.plan?.finish
+  if (f) {
+    if (seedance) add('Finish', f.way === 'seedance' ? 'Seedance 1080p' : f.way === 'take' ? 'The take, as it is' : f.refiner === 'h3' || f.refiner === 'h3seedvr2' ? `H3 at ${f.megapixels || 2} MP, strength ${f.strength ?? 'light'}${f.refiner === 'h3seedvr2' ? ', then SeedVR2' : ', then DLSS 5'}` : f.refiner === 'dlss' ? 'DLSS 5' : `SeedVR2 ${f.resolution || 1080}p`)
+    else add('Finish', `${f.megapixels || 2} MP from preview ${f.candidate || 1}${f.enhancer === 'seedvr2' ? ', then SeedVR2' : f.upscale2x ? ', DLSS 5 and RTX 2×' : ', DLSS 5'}${f.dlssStrength != null ? ` (strength ${f.dlssStrength}${f.dlssStyle && f.dlssStyle !== 'Default' ? `, ${f.dlssStyle}` : ''})` : ''}${f.fps ? `, ${f.fps} fps` : ''}`)
+  }
+  const e = job.kind === 'enhance' ? job.plan?.enhance : null
+  if (e) add('Enhanced', e.engine === 'dlss' ? `DLSS 5 ${e.scale}×${e.strength != null ? `, strength ${e.strength}` : ''}${e.style && e.style !== 'Default' ? `, ${e.style}` : ''}` : `SeedVR2 ${e.resolution}p${e.detail ? `, detail ${e.detail}` : ''}`)
+  if (job.seconds) add('Render time', job.seconds >= 90 ? `${Math.floor(job.seconds / 60)} min ${job.seconds % 60} s` : `${job.seconds} s`)
+  const cost = job.plan?.cost
+  add('Cost', cost?.usd != null ? `$${cost.usd.toFixed(2)} of Comfy credits` : seedance ? null : 'Free, on this PC')
+  const prompt = run?.plan?.asked?.prompt || request.prompt || null
+  const tile = [width && height ? `${width}×${height}` : null, seconds ? `${Math.round(seconds)} s` : null, seedance ? 'Seedance' : 'H3'].filter(Boolean).join(' · ')
+  return { facts, tile, prompt, model: seedance ? 'seedance' : 'h3', width: width || null, height: height || null, duration: seconds || null, renderSeconds: job.seconds || null, cost: cost?.usd ?? null }
+}
+
 export class Studio {
   // models: { text, frames, reference, continue, take, retake } -> a UNET name per workflow (Settings).
   constructor({ dataDir, resourcesDir, comfyUrl, comfyToken = null, comfyApiKey = null, outputDir, models = null }) {
@@ -471,7 +522,7 @@ export class Studio {
     const { graph } = await this.seedanceBuild(plan, name)
     plan.asked = { prompt: asked.prompt, mode: asked.mode, media: (asked.media || []).map((m) => ({ kind: m.kind, file: m.file || m.path })), voiceLine: asked.voiceLine || null, engine: SEEDANCE, tier: asked.tier, audio: asked.audio }
     const promptId = await this.comfy.submit(graph, { api_key_comfy_org: key, iv_studio: { kind: 'previews', project: project.id, engine: SEEDANCE } }, { spend })
-    return this.recordJob({ kind: 'previews', projectId: project.id, name, promptId, plan: { ...plan, engine: SEEDANCE } })
+    return this.recordJob({ kind: 'previews', projectId: project.id, name, promptId, plan: { ...plan, engine: SEEDANCE, cost: this.comfy.lastPrice || null } })
   }
 
   seedanceFinishPlan(source, finish = {}) {
@@ -528,7 +579,7 @@ export class Studio {
     if (!info[SEEDANCE_NODES.final]) throw new Error('This ComfyUI has no Seedance 2.5 Draft to Final node. Update ComfyUI (Settings → Setup → Updates).')
     const graph = finalGraph(take.draftTaskId, info, name)
     const promptId = await this.comfy.submit(graph, { api_key_comfy_org: key, iv_studio: { kind: 'finish', project: source.projectId, engine: SEEDANCE } }, { spend })
-    return this.recordJob({ kind: 'finish', projectId: source.projectId, name, parent: source.id, promptId, plan: { engine: SEEDANCE, finish: { candidate, way: 'seedance' }, request: source.plan.request, resolved } })
+    return this.recordJob({ kind: 'finish', projectId: source.projectId, name, parent: source.id, promptId, plan: { engine: SEEDANCE, finish: { candidate, way: 'seedance' }, request: source.plan.request, resolved, cost: this.comfy.lastPrice || null } })
   }
 
   // The free finish on this PC for any take that isn't H3's own (h3refine.js): H3 refines it at the finish size at
@@ -740,6 +791,7 @@ export class Studio {
   // Every IV Studio render, newest first: shot finals and previews, sequence versions and finals.
   library() {
     const items = []
+    const chars = this.characters()
     for (const p of this.listProjects()) {
       if (p.trainingId) continue // a character training's test renders
       const jobs = this.listJobs(p.id)
@@ -767,7 +819,8 @@ export class Studio {
           const run = runRaw || 0
           const name = o.kind !== 'final' ? `Preview ${o.candidate}` : j.kind === 'enhance' ? `${fin?.name || 'Final'} · ${enhanced(j.plan?.enhance)}` : fin?.name || 'Final'
           const variant = `${run ? `Run ${run} · ` : ''}${name}`
-          items.push({ key: `${j.id}:${o.kind}:${o.candidate || ''}`, label: `${p.name} · ${variant.toLowerCase()}`, group: p.tool === 'replace' ? 'Replace' : p.sequenceId ? 'Sequence shots' : 'Shots', at: j.finishedAt || j.createdAt, file: { path: o.path, url: o.url, filename: o.filename }, set: p.sequenceId ? `sequence:${p.sequenceId}` : `project:${p.id}`, setName: p.name.replace(/ \(sequence\)$/, ''), variant: p.sequenceId ? `Shot ${variant.toLowerCase()}` : variant, rank: (o.kind === 'final' ? 0 : 10 + (o.candidate || 0)) + (run ? (runs.size - run) * 100 : 0), projectId: p.sequenceId ? null : p.id, sequenceId: p.sequenceId || null, mode: req.mode || null, character: req.character || null, aspect: req.aspect || null })
+          const about = renderFacts({ job: j, jobs, output: o, request: req, characters: chars })
+          items.push({ ...about, key: `${j.id}:${o.kind}:${o.candidate || ''}`, label: `${p.name} · ${variant.toLowerCase()}`, group: p.tool === 'replace' ? 'Replace' : p.sequenceId ? 'Sequence shots' : 'Shots', at: j.finishedAt || j.createdAt, file: { path: o.path, url: o.url, filename: o.filename }, set: p.sequenceId ? `sequence:${p.sequenceId}` : `project:${p.id}`, setName: p.name.replace(/ \(sequence\)$/, ''), variant: p.sequenceId ? `Shot ${variant.toLowerCase()}` : variant, rank: (o.kind === 'final' ? 0 : 10 + (o.candidate || 0)) + (run ? (runs.size - run) * 100 : 0), projectId: p.sequenceId ? null : p.id, sequenceId: p.sequenceId || null, mode: req.mode || null, character: req.character || null, aspect: req.aspect || null })
         }
       }
     }
