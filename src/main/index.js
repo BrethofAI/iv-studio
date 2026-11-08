@@ -1155,8 +1155,11 @@ app.whenReady().then(() => {
     return { scan, rec: recommend(scan), promptEngine: s.promptEngine, onboarded: s.onboarded }
   })
   // what the wizard chose: the shot defaults and the writer, and that it's been done (so it doesn't open again)
-  handle('hardware:apply', ({ shotPrefs, promptEngine, hardware } = {}) => {
+  // plainWords / aiLevel: the welcome's "how much do you know" question (Simple words, words.js)
+  handle('hardware:apply', ({ shotPrefs, promptEngine, hardware, plainWords, aiLevel } = {}) => {
     const patch = { onboarded: new Date().toISOString() }
+    if (typeof plainWords === 'boolean') patch.plainWords = plainWords
+    if (['new', 'some', 'lots'].includes(aiLevel)) patch.aiLevel = aiLevel
     if (shotPrefs) patch.shotPrefs = shotPrefs
     if (hardware) patch.hardware = hardware
     if (promptEngine && ['local', 'claude', 'codex'].includes(promptEngine)) patch.promptEngine = promptEngine

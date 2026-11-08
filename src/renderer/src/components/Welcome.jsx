@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import Hero from './Hero'
 import { StepHead } from './CreateKit'
 import { startTour } from '../tours'
+import { setSimpleWords, simpleWords } from '../words'
 
 // The welcome wizard (Check my PC): opens on first launch, and again from Settings. It reads this computer
 // (hardware:scan; nothing leaves the PC), says plainly what it can do, suggests a way of working (this PC, the
@@ -55,6 +56,11 @@ export default function Welcome({ onClose, go, notify, first }) {
   const [packs, setPacks] = useState(true)
   const [started, setStarted] = useState(null) // what Download started
   const [comfyStarting, setComfyStarting] = useState(false)
+  // how much they know about AI video and pictures, and Simple words (words.js), which follows the answer
+  const [level, setLevel] = useState(null)
+  const [simple, setSimple] = useState(simpleWords)
+  const words = (on) => (setSimple(on), setSimpleWords(on))
+  const knows = (id) => (setLevel(id), words(id === 'new'))
   const body = useRef(null)
   const at = STEPS.findIndex(([id]) => id === step)
   const stepRef = useRef(step)
@@ -99,7 +105,7 @@ export default function Welcome({ onClose, go, notify, first }) {
 
   async function finish(target, cloudWizard = false) {
     try {
-      await window.ivstudio.hardware.apply({ shotPrefs: prefs, promptEngine: writer !== data?.promptEngine ? writer : undefined, hardware: summaryOf(data) })
+      await window.ivstudio.hardware.apply({ shotPrefs: prefs, promptEngine: writer !== data?.promptEngine ? writer : undefined, hardware: summaryOf(data), plainWords: simple, ...(level ? { aiLevel: level } : {}) })
     } catch (e) {
       notify?.(e.message)
     }
@@ -112,7 +118,7 @@ export default function Welcome({ onClose, go, notify, first }) {
   async function skip() {
     if (stepRef.current === 'done') return finish()
     try {
-      await window.ivstudio.hardware.apply({})
+      await window.ivstudio.hardware.apply({ plainWords: simple, ...(level ? { aiLevel: level } : {}) })
     } catch {}
     window.dispatchEvent(new CustomEvent('iv:settings'))
     onClose()
@@ -176,7 +182,7 @@ export default function Welcome({ onClose, go, notify, first }) {
           </ol>
 
           <div className="welcome-body" key={`b-${step}`}>
-            {step === 'hello' && <Hello />}
+            {step === 'hello' && <Hello level={level} knows={knows} simple={simple} words={words} />}
             {step === 'scan' && <Scan rows={rows} shown={shown} error={error} retry={scan} />}
             {step === 'pc' && rec && <YourPc rec={rec} scan={data.scan} />}
             {step === 'way' && rec && <Way rec={rec} way={way} setWay={setWay} prefs={prefs} setPrefs={setPrefs} writer={writer} setWriter={setWriter} installs={installs} scan={data.scan} />}
@@ -226,7 +232,13 @@ export default function Welcome({ onClose, go, notify, first }) {
   )
 }
 
-function Hello() {
+const LEVELS = [
+  ['new', 'New to it', 'I haven’t made AI video or pictures before.'],
+  ['some', 'Tried a little', 'I’ve used an app or two.'],
+  ['lots', 'Know it well', 'LoRAs, seeds and samplers are old friends.']
+]
+
+function Hello({ level, knows, simple, words }) {
   const what = [
     ['Shots', 'Write an idea, hunt a few takes, pick one and finish it at full size.'],
     ['Characters and voices', 'Your own cast, with faces, voices and trained looks.'],
@@ -247,6 +259,27 @@ function Hello() {
       <p className="wel-lede">
         First, a quick look at this computer: its graphics card, memory and free space. IV Studio reads them here and keeps them here, then suggests how to work and what to download. It takes a few seconds.
       </p>
+      <div className="wel-know">
+        <h3>How much do you know about making AI video and pictures?</h3>
+        <div className="wel-ways wel-levels">
+          {LEVELS.map(([id, title, desc]) => (
+            <button key={id} className={`wel-way ${level === id ? 'on' : ''}`} onClick={() => knows(id)} aria-pressed={level === id}>
+              <h3>{title}</h3>
+              <p className="dim small words-exact">{desc}</p>
+            </button>
+          ))}
+        </div>
+        <label className="switch-toggle wel-simple">
+          <input type="checkbox" checked={simple} onChange={(e) => words(e.target.checked)} />
+          <span className="switch-track">
+            <span className="switch-knob" />
+          </span>
+          <span>
+            <strong>Simple words</strong>
+            <span className="dim small words-exact">The app says “trained look” for LoRA, “variation number” for seed, “quick sharpen” for DLSS and so on. Everything else stays the same. Change it any time in Settings.</span>
+          </span>
+        </label>
+      </div>
     </section>
   )
 }

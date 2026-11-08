@@ -23,13 +23,18 @@ export function CreateKind({ kind, onKind }) {
 }
 
 // A step's number, title and one line on what it's for.
-export function StepHead({ n, title, sub }) {
+// subPlain: the sub line in plain words, shown instead with Simple words on (words.js)
+export function StepHead({ n, title, sub, subPlain }) {
   return (
     <div className="step-head">
       {n != null && <span className="step-n">{String(n).padStart(2, '0')}</span>}
       <div>
         <h2>{title}</h2>
-        {sub && <p className="dim small">{sub}</p>}
+        {sub && (
+          <p className="dim small" data-plain={subPlain}>
+            {sub}
+          </p>
+        )}
       </div>
     </div>
   )

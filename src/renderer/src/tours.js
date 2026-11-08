@@ -262,6 +262,7 @@ export const TOURS = {
       { at: '.settings-tabs', title: 'Settings and Setup', text: 'Settings is how IV Studio works for you. Setup checks what ComfyUI has and downloads what it needs.' },
       { at: '.set-nav', title: 'Jump around', text: 'Every topic in one list. Click one to jump to it.' },
       { at: '#set-pc', title: 'Your PC', text: 'What your computer can do. Check again re-runs the scan and its recommended defaults.' },
+      { at: '#set-words', title: 'Words', text: 'Simple words: the app talks in everyday words instead of AI terms, for people new to this. Only the words change.' },
       { at: '#set-comfy', title: 'ComfyUI', text: 'Where ComfyUI is, and whether IV Studio starts it for you when it opens.' },
       { at: '#set-writer', title: 'Prompt writer', text: 'Who writes your prompts: a free local model, your own Claude Code or Codex, or MiniMax’s paid rewriter.' },
       { at: '#set-account', title: 'Comfy account', text: 'Your Comfy.org key and credits, for ComfyUI’s paid partner models such as Seedance, Kling and Veo. The balance also shows in the title bar, and IV Studio shows the price and asks before anything paid runs.' },

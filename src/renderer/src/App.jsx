@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { setSimpleWords } from './words'
 import { CharacterList, CharacterTrainer } from './components/Characters'
 import Create from './components/Create'
 import ivMark from './assets/iv-mark.png'
@@ -301,13 +302,16 @@ export default function App() {
   const [welcome, setWelcome] = useState(null)
   const [cloudWiz, setCloudWiz] = useState(false)
   useEffect(() => {
-    window.ivstudio.settings.get().then((s) => !s.onboarded && setWelcome('first'), () => {})
+    window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), !s.onboarded && setWelcome('first')), () => {})
+    // Simple words (words.js), whenever the settings change (Settings, Check my PC)
+    const words = () => window.ivstudio.settings.get().then((s) => setSimpleWords(s.plainWords), () => {})
+    window.addEventListener('iv:settings', words)
     const open = () => setWelcome('again')
     window.addEventListener('iv:welcome', open)
     // the cloud setup wizard: from Check my PC and the Cloud page
     const cloud = () => setCloudWiz(true)
     window.addEventListener('iv:cloud-wizard', cloud)
-    return () => (window.removeEventListener('iv:welcome', open), window.removeEventListener('iv:cloud-wizard', cloud))
+    return () => (window.removeEventListener('iv:welcome', open), window.removeEventListener('iv:cloud-wizard', cloud), window.removeEventListener('iv:settings', words))
   }, [])
   const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, editRun, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle, openRebuild,remakeClip, replaceSeed }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0

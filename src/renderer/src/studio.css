@@ -12465,3 +12465,38 @@ button.set-chip:hover {
 .enhance-grid .segmented button {
   white-space: nowrap;
 }
+
+/* ---------- Simple words: the welcome question and the Settings card ---------- */
+.wel-know {
+  margin-top: 22px;
+  display: grid;
+  gap: 12px;
+}
+.wel-know > h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--cream);
+}
+.wel-levels .wel-way {
+  min-height: 0;
+}
+.wel-simple {
+  align-items: flex-start;
+  gap: 12px;
+}
+.wel-simple > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+.set-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.wel-simple .dim {
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: var(--body);
+  font-size: 13px;
+  line-height: 1.45;
+}

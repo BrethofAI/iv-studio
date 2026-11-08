@@ -10,7 +10,7 @@ import { lintSeedance } from '../../../service/seedlint'
 
 const DONE = ['success', 'error', 'cancelled']
 // A local upscaler's strength: a slider with its value, the default marked, and a line saying what it does.
-function Strength({ label, value, min, max, step, def, onChange, hint, format = (v) => v.toFixed(2) }) {
+function Strength({ label, value, min, max, step, def, onChange, hint, plain, format = (v) => v.toFixed(2) }) {
   return (
     <div className="row">
       <span className="row-label">{label}</span>
@@ -24,7 +24,11 @@ function Strength({ label, value, min, max, step, def, onChange, hint, format = 
             </button>
           )}
         </div>
-        {hint && <span className="dim small">{hint}</span>}
+        {hint && (
+          <span className="dim small" data-plain={plain}>
+            {hint}
+          </span>
+        )}
       </div>
     </div>
   )
@@ -48,6 +52,8 @@ function DlssLook({ strength, style, onChange, label = 'DLSS strength' }) {
     </>
   )
 }
+const SEEDVR2_PLAIN = (v) => (v === 0 ? 'Brings back what is there, nothing made up.' : v < 0.2 ? 'Adds a little new detail.' : 'Adds lots of new detail: sharper, but it can stray from your take.')
+const H3_PLAIN = (v) => (v <= 0.1 ? 'A light redraw: a bit more detail, faces change a little.' : v <= 0.2 ? 'A stronger redraw: more detail, faces change more.' : 'A heavy redraw: lots changes, faces too.')
 const SEEDVR2_HINT = (v) => (v === 0 ? 'Restores what is there, faithfully (the default).' : v < 0.2 ? 'A little invented detail on top.' : 'More invented detail: sharper, but it can drift from the take.')
 const H3_HINT = (v) => (v <= 0.1 ? 'The lightest H3 pass: adds detail, faces shift a little.' : v <= 0.2 ? 'More of H3’s detail; faces change more.' : 'Strong: H3 redraws a lot, faces change (0.4 is H3’s own finish).')
 // What a finish is called on its card and in Compare: H3's own, or how a Seedance take was finished
@@ -197,6 +203,12 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
       : way === 'local'
         ? 'Finished on your graphics card, free.'
         : 'The take becomes the shot’s final now. Enhance (DLSS 5 or SeedVR2) can still run on it afterwards.'
+  const enginePlain = {
+    seedvr2: 'Makes it bigger and adds back fine detail, keeping the faces, movement and sound. The cleanest result; about 4 minutes for a 5-second shot.',
+    dlss: 'Makes it bigger fast (about 15 seconds), keeping the faces, movement and sound. Skin can look a little grainy; more strength smooths it.',
+    h3: 'The video model draws it again at full size, keeping the movement and sound, then quick sharpen tidies it. Faces change a little. About 3 minutes.',
+    h3seedvr2: 'The video model draws it again at full size, keeping the movement and sound, then detail restore adds back fine detail. Faces change a little. About 7 minutes.'
+  }[opts.engine]
   const engineNote =
     opts.engine === 'seedvr2'
       ? 'Restores detail and upscales, keeping Seedance’s faces, motion and sound. The cleanest; about 4 minutes for 5 s at 1080p.'
@@ -244,7 +256,9 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
                 H3 + SeedVR2
               </button>
             </div>
-            <span className="dim small">{engineNote}</span>
+            <span className="dim small" data-plain={enginePlain}>
+              {engineNote}
+            </span>
             </div>
           </div>
         )}
@@ -260,7 +274,7 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
             </div>
           </div>
         )}
-        {way === 'local' && opts.engine === 'seedvr2' && <Strength label="Added detail" value={opts.detail} min={0} max={0.5} step={0.05} def={0} onChange={(v) => set({ detail: v })} hint={SEEDVR2_HINT(opts.detail)} />}
+        {way === 'local' && opts.engine === 'seedvr2' && <Strength label="Added detail" value={opts.detail} min={0} max={0.5} step={0.05} def={0} onChange={(v) => set({ detail: v })} hint={SEEDVR2_HINT(opts.detail)} plain={SEEDVR2_PLAIN(opts.detail)} />}
         {way === 'local' && opts.engine === 'dlss' && <DlssLook strength={opts.dlssStrength} style={opts.dlssStyle} onChange={set} />}
         {way === 'local' && (opts.engine === 'h3' || opts.engine === 'h3seedvr2') && (
           <>
@@ -274,7 +288,7 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
                 ))}
               </div>
             </div>
-            <Strength label="H3 strength" value={opts.strength} min={0.05} max={0.5} step={0.05} def={0.1} onChange={(v) => set({ strength: v })} hint={H3_HINT(opts.strength)} />
+            <Strength label="H3 strength" value={opts.strength} min={0.05} max={0.5} step={0.05} def={0.1} onChange={(v) => set({ strength: v })} hint={H3_HINT(opts.strength)} plain={H3_PLAIN(opts.strength)} />
             {opts.engine === 'h3' ? (
               <>
                 <DlssLook strength={opts.dlssStrength} style={opts.dlssStyle} onChange={set} label="Then DLSS" />
@@ -302,7 +316,7 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
                     ))}
                   </div>
                 </div>
-                <Strength label="SeedVR2 detail" value={opts.detail} min={0} max={0.5} step={0.05} def={0} onChange={(v) => set({ detail: v })} hint={SEEDVR2_HINT(opts.detail)} />
+                <Strength label="SeedVR2 detail" value={opts.detail} min={0} max={0.5} step={0.05} def={0} onChange={(v) => set({ detail: v })} hint={SEEDVR2_HINT(opts.detail)} plain={SEEDVR2_PLAIN(opts.detail)} />
               </>
             )}
             {ch?.lora && (
@@ -583,7 +597,7 @@ function VersionsCard({ run, finishes, jobs, remote, caps, notify, marks, onMark
                   </div>
                 </>
               )}
-              <Strength label="SeedVR2 detail" value={look.detail} min={0} max={0.5} step={0.05} def={0} onChange={(v) => setL({ detail: v })} hint={SEEDVR2_HINT(look.detail)} />
+              <Strength label="SeedVR2 detail" value={look.detail} min={0} max={0.5} step={0.05} def={0} onChange={(v) => setL({ detail: v })} hint={SEEDVR2_HINT(look.detail)} plain={SEEDVR2_PLAIN(look.detail)} />
               <div className="row">
                 <span className="row-label">SeedVR2</span>
                 <div className="enhancer-pick">

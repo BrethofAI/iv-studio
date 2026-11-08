@@ -16,11 +16,12 @@ import { confirmSpend, dollars } from './ComfyAccount'
 const SAMPLER_DEFAULT = 'er_sde'
 const SCHEDULER_DEFAULT = 'beta'
 
+// [id, label, hint, the hint in plain words (Simple words)]
 const MODES = [
-  ['text', 'Text', 'Just the prompt.'],
-  ['reference', 'References', 'Pictures, videos or audio guide the shot. Name them <Picture 1>, <Video 1>, <Audio 1>.'],
-  ['frames', 'First / last frame', 'The clip opens on picture 1 and, optionally, ends on picture 2.'],
-  ['continue', 'Continue a video', 'Carries a clip on from its last frames. One preview, finished at its own size.']
+  ['text', 'Text', 'Just the prompt.', 'Describe it in words; nothing else needed.'],
+  ['reference', 'References', 'Pictures, videos or audio guide the shot. Name them <Picture 1>, <Video 1>, <Audio 1>.', 'Your own pictures, clips or sounds steer the shot. Call them <Picture 1>, <Video 1>, <Audio 1> in your words.'],
+  ['frames', 'First / last frame', 'The clip opens on picture 1 and, optionally, ends on picture 2.', 'The video starts on your picture, and can end on a second one.'],
+  ['continue', 'Continue a video', 'Carries a clip on from its last frames. One preview, finished at its own size.', 'Picks up where a video ends and keeps it going.']
 ]
 const ASPECTS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9']
 const PREVIEW_MP = [0.3, 0.4, 0.6, 0.8]
@@ -413,7 +414,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
       <div className="create-layout">
         <div className="create-steps">
           <section className="create-step">
-            <StepHead n={1} title="What kind of shot" sub={sd ? 'Seedance 2.5 renders on your Comfy.org credits, through ComfyUI. It starts from words, your references, a first frame, or a clip to carry on.' : 'How H3 starts: from words, from your pictures and clips, from a first frame, or carrying a video on.'} />
+            <StepHead n={1} title="What kind of shot" sub={sd ? 'Seedance 2.5 renders on your Comfy.org credits, through ComfyUI. It starts from words, your references, a first frame, or a clip to carry on.' : 'How H3 starts: from words, from your pictures and clips, from a first frame, or carrying a video on.'} subPlain={sd ? 'Seedance makes the video online and uses your Comfy credits. Start from words, your own pictures or clips, a first picture, or a video to carry on.' : 'Pick how the video starts: from words, from your own pictures and clips, from a first picture, or carrying on a video.'} />
             <div className="engine-switch" role="radiogroup" aria-label="Model">
               {ENGINES.map(([id, label, note]) => (
                 <button key={id} role="radio" aria-checked={form.engine === id} className={`engine-card ${form.engine === id ? 'on' : ''}`} onClick={() => switchEngine(id)}>
@@ -423,18 +424,20 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
               ))}
             </div>
             <div className="mode-cards create-modes">
-              {MODES.map(([id, label, hint]) => (
+              {MODES.map(([id, label, hint, plain]) => (
                 <button key={id} className={`mode-card ${form.mode === id ? 'on' : ''}`} onClick={() => set({ mode: id, media: [] })}>
                   <ModeIcon id={id} />
                   <span className="mode-name">{label}</span>
-                  <span className="dim small">{sd ? SD_HINTS[id] : hint}</span>
+                  <span className="dim small" data-plain={sd ? undefined : plain}>
+                    {sd ? SD_HINTS[id] : hint}
+                  </span>
                 </button>
               ))}
             </div>
           </section>
 
           <section className="create-step">
-            <StepHead n={steps.who} title="Who's in it" sub={sd ? 'A character comes along as their face picture, so Seedance keeps their look.' : 'A character keeps the same face and voice in every shot. LoRAs add a look, a style or a move; RefMods bring a saved look, voice or place.'} />
+            <StepHead n={steps.who} title="Who's in it" sub={sd ? 'A character comes along as their face picture, so Seedance keeps their look.' : 'A character keeps the same face and voice in every shot. LoRAs add a look, a style or a move; RefMods bring a saved look, voice or place.'} subPlain={sd ? 'Pick a character and their face comes along, so they look the same.' : 'Pick a character and they keep the same face and voice in every shot. Looks add a style or a kind of movement; reference packs bring a saved face, voice or place.'} />
             <div className="cast-picker" role="radiogroup" aria-label="Character">
               {characters.map((c) => (
                 <button key={c.id} role="radio" aria-checked={form.character === c.id} className={`cast-chip ${form.character === c.id ? 'on' : ''}`} onClick={() => set({ character: c.id })}>
@@ -596,7 +599,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
           )}
 
           <section className="create-step">
-            <StepHead n={steps.what} title="What happens" sub={sd ? 'Who, what happens, where, the camera and the sound, in plain sentences. Give every reference a job.' : 'Clothes, place, camera, action and the lines. Never the face or voice: the character carries those.'} />
+            <StepHead n={steps.what} title="What happens" sub={sd ? 'Who, what happens, where, the camera and the sound, in plain sentences. Give every reference a job.' : 'Clothes, place, camera, action and the lines. Never the face or voice: the character carries those.'} subPlain={sd ? 'Say who is there, what happens, where, how the camera moves and what we hear. Say what each of your pictures is for.' : 'Describe the clothes, the place, the camera, what happens and what is said. Skip the face and voice: the character already has those.'} />
             <PromptWriter
               context={{ engine: form.engine, mode: form.mode, seconds: form.seconds, aspect: form.aspect, character: form.character ?? 'none', media: form.media.map((m) => ({ kind: m.kind, file: m.path })), voiceLine: form.voiceLine || null }}
               current={form.prompt}
@@ -671,7 +674,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
           </section>
 
           <section className="create-step">
-            <StepHead n={steps.shape} title="Shape and size" sub={sd ? 'Hunt with cheap Draft takes, then finish the one you pick. Or render 720p or 1080p takes straight away.' : 'The previews are small and quick; the one you pick is finished at full size.'} />
+            <StepHead n={steps.shape} title="Shape and size" sub={sd ? 'Hunt with cheap Draft takes, then finish the one you pick. Or render 720p or 1080p takes straight away.' : 'The previews are small and quick; the one you pick is finished at full size.'} subPlain={sd ? 'Try a few cheap rough takes first, then finish the one you like. Or make sharp 720p or 1080p takes straight away.' : 'You get a few small, quick versions first. The one you like is then made again at full size.'} />
             <div className="aspect-tiles" role="radiogroup" aria-label="Aspect ratio">
               {ASPECTS.map((a) => (
                 <button key={a} role="radio" aria-checked={form.aspect === a} className={`aspect-tile ${form.aspect === a ? 'on' : ''}`} onClick={() => set({ aspect: a })}>

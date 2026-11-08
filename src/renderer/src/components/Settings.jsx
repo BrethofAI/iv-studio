@@ -15,6 +15,7 @@ const open = (url) => window.ivstudio.links.open(url)
 // The page's topics, in order: the index on the left and each card's number come from here.
 const SECTIONS = [
   ['pc', 'Your PC'],
+  ['words', 'Words'],
   ['comfy', 'ComfyUI'],
   ['folders', 'Folders'],
   ['data', 'Data folder'],
@@ -72,6 +73,42 @@ function PcCard({ n, settings }) {
           </div>
         )}
       </div>
+    </SetCard>
+  )
+}
+
+// Simple words (words.js): plain words for people new to AI video and pictures; only the words change
+const WORD_SAMPLES = [
+  ['LoRA', 'trained look'],
+  ['RefMod', 'reference pack'],
+  ['seed', 'variation number'],
+  ['sampler', 'drawing method'],
+  ['DLSS 5', 'quick sharpen'],
+  ['SeedVR2', 'detail restore'],
+  ['upscale', 'enlarge'],
+  ['prompt', 'description']
+]
+function WordsCard({ n, settings, setSettings }) {
+  const set = async (patch) => {
+    setSettings(await window.ivstudio.settings.set(patch))
+    window.dispatchEvent(new CustomEvent('iv:settings'))
+  }
+  return (
+    <SetCard id="words" n={n} title="Words" sub="How IV Studio talks to you." aside={settings.plainWords ? <Pill tone="ok">Simple</Pill> : <Pill>Standard</Pill>}>
+      <SetField label="Simple words" hint="For people new to AI video and pictures: the app explains itself in everyday words. Only the words change; every page, control and setting stays the same.">
+        <SetSwitch checked={settings.plainWords} onChange={(on) => set({ plainWords: on })}>
+          {settings.plainWords ? 'On' : 'Off'}
+        </SetSwitch>
+      </SetField>
+      <SetField label="For example">
+        <div className="set-words words-exact">
+          {WORD_SAMPLES.map(([a, b]) => (
+            <span key={a} className="set-chip">
+              <span className="mono">{a}</span> → {b}
+            </span>
+          ))}
+        </div>
+      </SetField>
     </SetCard>
   )
 }
@@ -858,6 +895,7 @@ export default function Settings({ info, recheck, notify, go, setup }) {
 
         <div className="set-cards">
           <PcCard n={n('pc')} settings={settings} />
+          <WordsCard n={n('words')} {...common} />
           <ComfyCard n={n('comfy')} {...common} recheck={recheck} comfyUp={comfyUp} comfyBusy={comfyBusy} />
           <FolderCard n={n('folders')} {...common} incognito={!!info?.incognito} />
           <DataCard n={n('data')} notify={notify} />
