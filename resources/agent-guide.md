@@ -295,6 +295,12 @@ IV Studio makes songs and instrumentals on this PC's ComfyUI, free. Two engines:
 5. A reel: `make_reel` with pictures (or clips) in order and a song's `file` cuts them to its beat, a whole
    number of beats each (pace calm, normal or fast) with slow moves on the pictures, as a new edit. It finds
    the beat itself and keeps the cuts on the song's bars; check the BPM it returns, then `export_edit`.
+6. A remix: `remix_music` with a sound file (`source`) or a finished song (`songId`), 5 s to 5 minutes, and
+   the new style as `caption`. ACE-Step redraws the song; `strength` is how much: 0.5 subtle (the same song
+   with a new sound), 0.65 remix (the default: same shape, clearly restyled), 0.8 reimagine (a loose take).
+   It reads the tempo and guesses the key itself (`read_song` shows them first); pass `bpm` or `key` when the
+   person knows better. It works best on instrumentals; singing can come back garbled. Only remix music the
+   person has the rights to. Poll `get_music`; the song's `remix` says what it came from.
 
 ## Shinobi: edits you cut as an agent
 

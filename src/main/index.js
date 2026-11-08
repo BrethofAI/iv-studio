@@ -36,7 +36,7 @@ import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS, MAX_CHARACTERS, DEFAULT_TONE, OPENJUTSU } from '../service/replace'
 import { CREDIT as REMAKE_CREDIT, Remake } from '../service/remake'
 import { Voices } from '../service/voices'
-import { ACE_KEYS, Music, MUSIC_DEFAULTS, MUSIC_ENGINES } from '../service/music'
+import { ACE_KEYS, monoDecoder, Music, MUSIC_DEFAULTS, MUSIC_ENGINES, REMIX } from '../service/music'
 import { Images } from '../service/images'
 import { RefMods } from '../service/refmods'
 import { Civitai, CIVITAI_SITES, LORA_SORTS, LORA_TAGS } from '../service/civitai'
@@ -429,12 +429,21 @@ app.whenReady().then(() => {
   handle('voices:deleteLine', (id) => voices.deleteLine(id))
   handle('voices:transcribe', (file) => voices.transcribe(file))
   // ---------- Audio: music (MiniMax Music 3 and ACE-Step 1.5 on this PC's ComfyUI) ----------
-  music = new Music({ studio, dataDir: DATA, probe: (f) => edits.probe(f) })
-  handle('music:meta', () => ({ engines: MUSIC_ENGINES, defaults: MUSIC_DEFAULTS, keys: ACE_KEYS }))
+  music = new Music({ studio, dataDir: DATA, probe: (f) => edits.probe(f), decode: monoDecoder((a) => edits.run(a)) })
+  handle('music:meta', () => ({ engines: MUSIC_ENGINES, defaults: MUSIC_DEFAULTS, keys: ACE_KEYS, remix: REMIX }))
   handle('music:status', () => music.status())
   handle('music:create', async (opts) => {
     await voices.release()
     return music.create(opts)
+  })
+  handle('music:analyse', (opts) => music.analyse(opts))
+  handle('music:remix', async (opts) => {
+    await voices.release()
+    return music.remix(opts)
+  })
+  handle('music:pickSong', async () => {
+    const r = await dialog.showOpenDialog(win, { title: 'A song to remix', properties: ['openFile'], filters: [{ name: 'Sound', extensions: ['mp3', 'wav', 'flac', 'm4a', 'aac', 'ogg', 'opus', 'wma'] }] })
+    return r.canceled ? null : r.filePaths[0]
   })
   handle('music:list', () => music.list())
   handle('music:get', (id) => music.get(id))

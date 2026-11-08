@@ -5,9 +5,14 @@
 //   ace      ACE-Step 1.5 Turbo (Apache-2.0): a song in seconds, for drafts and background music.
 // Each song is a ComfyUI job (a project with tool 'music'); once it finishes, its audio is copied into the
 // data folder's music/, so Edit, Create and agents get a file on this PC whatever ComfyUI it ran on.
+// Remix: a song the person brings (or one made here) is encoded and partly re-noised, then ACE-Step redraws it
+// in a new style; strength is how much is redrawn. Core ComfyUI nodes only. Its tempo comes from Reel's beat
+// finder and its key from musickey.js; the person can change both.
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import { estimateKey } from './musickey.js'
+import { findBeats } from './reel.js'
 import { comboOptions } from './setup.js'
 
 export const MUSIC_ENGINES = [
@@ -33,6 +38,22 @@ export const MUSIC_ENGINES = [
 export const ACE_KEYS = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B'].flatMap((k) => [`${k} major`, `${k} minor`])
 export const MUSIC_DEFAULTS = { engine: 'minimax', seconds: 60, bpm: 120, key: 'C major', timesignature: '4', language: 'en' }
 const INSTRUMENTAL = '[Instrumental]'
+// Remix strength: how much of the song ACE-Step redraws (the sampler's denoise). Picked by ear on an IV Studio
+// score: 0.5 keeps nearly all of it, 0.65 restyles it and keeps its shape, 0.8 is a loose take. Outside
+// 0.4..0.9 it barely changes or barely resembles the song.
+export const REMIX = {
+  min: 0.4,
+  max: 0.9,
+  default: 0.65,
+  maxSeconds: 300,
+  presets: [
+    { id: 'subtle', label: 'Subtle', strength: 0.5, note: 'The same song with a new sound' },
+    { id: 'remix', label: 'Remix', strength: 0.65, note: 'Same shape, clearly restyled' },
+    { id: 'reimagine', label: 'Reimagine', strength: 0.8, note: 'A loose take on the original' }
+  ]
+}
+const AUDIO = /\.(mp3|wav|flac|m4a|aac|ogg|opus|wma)$/i
+const RATE = 11025 // the rate songs are read at for their tempo and key
 // Below this much VRAM, MiniMax's audio is decoded in tiles (a little slower, a small risk of seams).
 const TILED_BELOW_GB = 20
 
@@ -83,11 +104,37 @@ export function aceGraph({ ckpt, tags, lyrics, seconds, seed, bpm, key, timesign
   }
 }
 
+// ACE-Step 1.5 Turbo redrawing a song: its audio is encoded and partly re-noised (denoise = strength) instead
+// of starting from silence. The text encoder's audio codes stay off: they plan a new song from the words and
+// drown out the one given (ComfyUI's own hint says to turn them off with an audio reference).
+export function remixGraph({ ckpt, audio, tags, seconds, seed, bpm, key, timesignature, language, strength, prefix }) {
+  return {
+    1: { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: ckpt } },
+    2: { class_type: 'ModelSamplingAuraFlow', inputs: { model: ['1', 0], shift: 3 } },
+    3: { class_type: 'TextEncodeAceStepAudio1.5', inputs: { clip: ['1', 1], tags, lyrics: INSTRUMENTAL, seed, bpm, duration: seconds, timesignature, language, keyscale: key, generate_audio_codes: false, cfg_scale: 2, temperature: 0.85, top_p: 0.9, top_k: 0, min_p: 0 } },
+    4: { class_type: 'ConditioningZeroOut', inputs: { conditioning: ['3', 0] } },
+    5: { class_type: 'LoadAudio', inputs: { audio } },
+    6: { class_type: 'VAEEncodeAudio', inputs: { audio: ['5', 0], vae: ['1', 2] } },
+    7: { class_type: 'KSampler', inputs: { model: ['2', 0], positive: ['3', 0], negative: ['4', 0], latent_image: ['6', 0], seed, steps: 8, cfg: 1, sampler_name: 'euler', scheduler: 'simple', denoise: strength } },
+    8: { class_type: 'VAEDecodeAudio', inputs: { samples: ['7', 0], vae: ['1', 2] } },
+    9: { class_type: 'SaveAudio', inputs: { audio: ['8', 0], filename_prefix: prefix } }
+  }
+}
+
+// decode() for Music from an ffmpeg runner (Edits.run): a file as mono Float32 samples at `rate`.
+export const monoDecoder = (run) => async (file, rate) => {
+  const pcm = await run(['-v', 'error', '-i', file, '-vn', '-ac', '1', '-ar', String(rate), '-f', 'f32le', 'pipe:1'])
+  // (copied: a Buffer's bytes needn't start on a 4-byte boundary)
+  return new Float32Array(pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + (pcm.byteLength - (pcm.byteLength % 4))))
+}
+
 export class Music {
-  constructor({ studio, dataDir, probe }) {
+  // decode(file, rate): a file's sound as mono Float32 samples at that rate (ffmpeg); Remix reads tempo and key with it.
+  constructor({ studio, dataDir, probe, decode = null }) {
     this.studio = studio
     this.dir = path.join(dataDir, 'music')
     this.probe = probe
+    this.decode = decode
   }
 
   songsFile = () => path.join(this.dir, 'songs.json')
@@ -119,7 +166,10 @@ export class Music {
         else missing.push({ id, label: m.label, size: m.size, folder: m.folder })
       }
       const missingNodes = nodes.filter((n) => !info[n])
-      return { ...e, ready: !missing.length && !missingNodes.length, missing, missingNodes, files }
+      const ready = !missing.length && !missingNodes.length
+      // Remix (ACE only) also loads and encodes the song
+      const remix = e.id === 'ace' ? { remixReady: ready && !!info.LoadAudio && !!info.VAEEncodeAudio } : {}
+      return { ...e, ready, missing, missingNodes, files, ...remix }
     })
     return { ready: engines.some((e) => e.ready), engines, vramGb: gpu ? Math.round(gpu.vram_total / 1024 ** 3) : null }
   }
@@ -156,6 +206,76 @@ export class Music {
     const project = this.studio.createProject(`Music · ${title}`, null, null, 'music')
     const job = await this.studio.submitGraph({ kind: 'music', graph, projectId: project.id, name: title, plan: { music: { songId: id }, request: { prompt: style } } })
     const song = { id, name: title, engine, caption: style, lyrics: words === INSTRUMENTAL ? '' : words, instrumental: words === INSTRUMENTAL, seconds: secs, seed: s, ...(engine === 'ace' && { bpm: Math.round(bpm), key, timesignature: String(timesignature), language }), projectId: project.id, jobId: job.id, status: job.status, file: null, duration: null, createdAt: now() }
+    this.saveAll([song, ...this.all()])
+    return song
+  }
+
+  // A song to remix: a sound file on this PC, or a finished song from the list (songId).
+  sourceOf({ source, songId } = {}) {
+    if (songId) {
+      const s = this.all().find((x) => x.id === songId)
+      if (!s) throw new Error(`No song ${songId}.`)
+      if (!s.file || !fs.existsSync(s.file)) throw new Error(`"${s.name}" has no finished file to remix.`)
+      return { file: s.file, name: s.name }
+    }
+    const file = String(source || '').trim()
+    if (!file) throw new Error('Pick a song to remix.')
+    if (!fs.existsSync(file)) throw new Error(`File not found: ${file}`)
+    if (!AUDIO.test(file)) throw new Error('Remix takes a sound file: mp3, wav, flac, m4a, aac, ogg or opus.')
+    const mine = this.all().find((x) => x.file && path.resolve(x.file) === path.resolve(file))
+    return { file, name: mine?.name || path.basename(file).replace(/\.[^.]+$/, '') }
+  }
+
+  // A song's length, tempo and key, read on this PC (no ComfyUI). The tempo is Reel's beat finder; the key a guess.
+  async analyse(opts) {
+    const { file, name } = this.sourceOf(typeof opts === 'string' ? { source: opts } : opts)
+    const duration = (await this.probe(file).catch(() => null))?.duration
+    if (!duration) throw new Error("Couldn't read that file's length. Is it a song?")
+    const out = { file, name, duration: +duration.toFixed(2) }
+    if (this.decode) {
+      const samples = await this.decode(file, RATE)
+      const beat = findBeats(samples, RATE)
+      const k = estimateKey(samples, RATE)
+      Object.assign(out, { bpm: beat.bpm ? Math.round(beat.bpm) : null, beatStrength: beat.strength, key: k.key, keyScore: k.score })
+    }
+    return out
+  }
+
+  // Queues a remix of a song: ACE-Step redraws it in the new style. strength 0.4..0.9 (REMIX.presets); the tempo
+  // and key are read from the song unless given. Returns the song record (remix: what it came from).
+  async remix({ source, songId, name, caption = '', strength = REMIX.default, seed = null, bpm = null, key = null, timesignature = '4', language = MUSIC_DEFAULTS.language } = {}) {
+    const style = String(caption || '').trim()
+    if (!style) throw new Error('Describe the new style first: genre, mood, instruments, tempo.')
+    const amount = Number(strength)
+    if (!(amount >= REMIX.min && amount <= REMIX.max)) throw new Error(`Strength is ${REMIX.min} to ${REMIX.max}.`)
+    if (!['2', '3', '4', '6'].includes(String(timesignature))) throw new Error('Time signature is 2, 3, 4 or 6 beats.')
+    if (key != null && key !== '' && !ACE_KEYS.includes(key)) throw new Error(`Key must be one of: ${ACE_KEYS.join(', ')}.`)
+    if (bpm != null && bpm !== '' && !(Number(bpm) >= 30 && Number(bpm) <= 300)) throw new Error('Tempo is 30 to 300 BPM.')
+    const from = this.sourceOf({ source, songId })
+    const needs = bpm == null || bpm === '' || key == null || key === ''
+    const read = needs ? await this.analyse({ source: from.file }) : { duration: (await this.probe(from.file).catch(() => null))?.duration }
+    const seconds = read.duration
+    if (!seconds) throw new Error("Couldn't read that file's length. Is it a song?")
+    if (seconds < 5 || seconds > REMIX.maxSeconds) throw new Error(`Remix takes songs of 5 seconds to ${REMIX.maxSeconds / 60} minutes; this one is ${Math.round(seconds)} s. Trim it first.`)
+    const tempo = Math.round(Number(bpm || read.bpm || MUSIC_DEFAULTS.bpm))
+    const tone = key || read.key || MUSIC_DEFAULTS.key
+
+    const st = await this.status()
+    if (st.remote) throw new Error('Music runs on this PC\'s ComfyUI. Switch to "This PC" in Settings to make music.')
+    const eng = st.engines.find((e) => e.id === 'ace')
+    if (eng.missingNodes?.length) throw new Error(`This ComfyUI has no ${eng.missingNodes.join(', ')} node. Update ComfyUI (0.33 or newer has it).`)
+    if (eng.missing.length) throw new Error(`Remix uses ACE-Step 1.5 Turbo, which needs ${eng.missing.map((m) => m.label).join(', ')}. Download ${eng.missing.length === 1 ? 'it' : 'them'} on the Music page.`)
+    if (!eng.remixReady) throw new Error("This ComfyUI can't load songs (no LoadAudio or VAEEncodeAudio node). Update ComfyUI.")
+
+    const id = randomUUID().slice(0, 8)
+    const s = seed == null || seed === '' ? Math.floor(Math.random() * 2 ** 31) : Math.floor(Number(seed))
+    const title = String(name || '').trim() || `${from.name} (remix)`.slice(0, 60)
+    const prefix = `iv_studio/music/${slug(title)}_${id}`
+    const audio = await this.studio.stage(from.file, 'iv_studio/remix')
+    const graph = remixGraph({ ckpt: eng.files.ace15, audio, tags: style, seconds: +seconds.toFixed(1), seed: s, bpm: tempo, key: tone, timesignature: String(timesignature), language, strength: amount, prefix })
+    const project = this.studio.createProject(`Music · ${title}`, null, null, 'music')
+    const job = await this.studio.submitGraph({ kind: 'music', graph, projectId: project.id, name: title, plan: { music: { songId: id }, request: { prompt: style } } })
+    const song = { id, name: title, engine: 'ace', caption: style, lyrics: '', instrumental: true, seconds: Math.round(seconds), seed: s, bpm: tempo, key: tone, timesignature: String(timesignature), language, remix: { source: from.file, sourceName: from.name, strength: amount }, projectId: project.id, jobId: job.id, status: job.status, file: null, duration: null, createdAt: now() }
     this.saveAll([song, ...this.all()])
     return song
   }
