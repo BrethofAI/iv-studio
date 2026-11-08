@@ -425,6 +425,7 @@ function Get({ rec, way, pick, setPick, packs, setPacks, installs, scan, started
   return (
     <section className="block create-step">
       <StepHead n={5} title="What to download" sub="The ones for how you’ll work are ticked. Each is checked against its published fingerprint." />
+      <p className="wel-lede">IV Studio uses the ComfyUI already on this PC, wherever it is (the Desktop app, or a portable ComfyUI on another drive); it never installs one of its own. These download into that ComfyUI’s models folder, so they go on its drive.</p>
       {!installs.modelsKnown && (
         <div className="wel-callout">
           <p>{installs.comfyFound ? 'ComfyUI isn’t running, so IV Studio can’t see which models you already have, or download into it.' : 'No ComfyUI on this PC yet. Install ComfyUI first (the Desktop app or the portable build), then come back here from Settings → Check my PC.'}</p>

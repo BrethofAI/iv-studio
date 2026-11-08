@@ -2,12 +2,59 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-export function dataDir() {
-  if (process.env.IV_STUDIO_DATA) return process.env.IV_STUDIO_DATA
+// Where the data folder is, in this order:
+//   env       IV_STUDIO_DATA names it (tests, and anyone who wants to set it by hand)
+//   portable  a folder called "data" sits next to IV Studio.exe (the portable zip ships with one)
+//   moved     the person moved it in Settings → Data folder; the default folder keeps a small pointer to it
+//   default   %APPDATA%\IV Studio (Windows), ~/Library/Application Support/IV Studio (Mac), ~/.config/IV Studio
+// The default folder is also where Electron keeps the window's own files, so the pointer lives there.
+// `missing` is set when the pointer names a folder that isn't there (a drive that isn't plugged in).
+export const POINTER_FILE = 'data-folder.json'
+export const PORTABLE_FOLDER = 'data'
+// Only IV Studio's own binary counts for portable, so a dev copy (electron.exe) or a Node run never does.
+const OWN_EXE = /^(IV Studio|iv-studio)(\.exe)?$/i
+const isDir = (p) => {
+  try {
+    return fs.statSync(p).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+export function defaultDataDir({ env = process.env, platform = process.platform } = {}) {
   // a Mac keeps app data in ~/Library/Application Support (where Electron keeps the window's own)
-  if (process.platform === 'darwin') return path.join(process.env.HOME || '.', 'Library', 'Application Support', 'IV Studio')
-  const base = process.env.APPDATA || path.join(process.env.HOME || '.', '.config')
+  if (platform === 'darwin') return path.join(env.HOME || '.', 'Library', 'Application Support', 'IV Studio')
+  const base = env.APPDATA || path.join(env.HOME || '.', '.config')
   return path.join(base, 'IV Studio')
+}
+
+export function portableDataDir({ execPath = process.execPath } = {}) {
+  if (!execPath || !OWN_EXE.test(path.basename(execPath))) return null
+  const dir = path.join(path.dirname(execPath), PORTABLE_FOLDER)
+  return isDir(dir) ? dir : null
+}
+
+export function readPointer(defaultDir) {
+  try {
+    const p = JSON.parse(fs.readFileSync(path.join(defaultDir, POINTER_FILE), 'utf8'))
+    return p && typeof p.dir === 'string' && path.isAbsolute(p.dir) ? p : null
+  } catch {
+    return null
+  }
+}
+
+export function dataLocation({ env = process.env, execPath = process.execPath, platform = process.platform } = {}) {
+  const defaultDir = defaultDataDir({ env, platform })
+  if (env.IV_STUDIO_DATA) return { dir: env.IV_STUDIO_DATA, source: 'env', defaultDir }
+  const portable = portableDataDir({ execPath })
+  if (portable) return { dir: portable, source: 'portable', defaultDir }
+  const pointer = readPointer(defaultDir)
+  if (pointer) return { dir: pointer.dir, source: 'moved', defaultDir, pointer, missing: !isDir(pointer.dir) }
+  return { dir: defaultDir, source: 'default', defaultDir }
+}
+
+export function dataDir(opts) {
+  return dataLocation(opts).dir
 }
 
 // Packaged: <install>/resources/resources. Dev and the built MCP script: the repo's resources folder.

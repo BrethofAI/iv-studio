@@ -5,16 +5,21 @@
 // installs on quit, so a test can't replace the installed app.
 import { app, shell } from 'electron'
 import electronUpdater from 'electron-updater'
+import { dataLocation } from '../service/paths'
 
 const { autoUpdater } = electronUpdater
 const SIX_HOURS = 6 * 60 * 60 * 1000
 const TEST_FEED = process.env.IV_STUDIO_UPDATE_FEED
 // macOS installs updates only into an app signed with an Apple Developer ID. Until the Mac build is signed, a Mac
 // copy says a new version is out and opens the release page to download it (as IV Downloader does).
-export const MANUAL = process.platform === 'darwin'
+// The portable copy (a "data" folder beside IV Studio.exe, see paths.js) is updated the same way: the installer
+// would put a second copy in Program Files, so it says a new version is out and opens the release page, where the
+// person downloads the new zip and unzips it over this folder (the data folder stays).
+export const PORTABLE = dataLocation().source === 'portable'
+export const MANUAL = process.platform === 'darwin' || PORTABLE
 const RELEASES = 'https://github.com/hollisorg/iv-studio/releases/latest'
 
-let state = { status: 'idle', version: app.getVersion(), available: null, percent: null, error: null, checkedAt: null, manual: MANUAL }
+let state = { status: 'idle', version: app.getVersion(), available: null, percent: null, error: null, checkedAt: null, manual: MANUAL, portable: PORTABLE }
 export const updateState = () => state
 
 export function initUpdater(onChange) {
@@ -30,6 +35,8 @@ export function initUpdater(onChange) {
   }
 
   if (TEST_FEED) autoUpdater.setFeedURL({ provider: 'generic', url: TEST_FEED })
+  // the zip carries no installer's update settings, so name the releases it checks
+  else if (PORTABLE) autoUpdater.setFeedURL({ provider: 'github', owner: 'hollisorg', repo: 'iv-studio' })
   autoUpdater.autoDownload = !MANUAL
   autoUpdater.autoInstallOnAppQuit = !TEST_FEED && !MANUAL
 

@@ -115,8 +115,8 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
       <Hero art="settings" title="Settings" kicker="Infinite Variance" help="setup" />
       <SettingsTabs tab="setup" go={go} setup={setup} />
       <p className="lede">
-        IV Studio drives your own ComfyUI. This checks it has everything the workflow needs.
-        <span className="lede-small dim">Models download from their upstream hosts straight into ComfyUI's models folder and are checked against the SHA-256 the host publishes. A paused download picks up where it stopped. Node packs install with one click, each at the version IV Studio is tested with.</span>
+        IV Studio reuses the ComfyUI you already have, wherever it is (a portable ComfyUI on another drive works too); it never installs a second one. This checks it has everything the workflow needs.
+        <span className="lede-small dim">Models download from their upstream hosts straight into that ComfyUI's models folder, on its drive, and are checked against the SHA-256 the host publishes. A paused download picks up where it stopped. Node packs install with one click, each at the version IV Studio is tested with.</span>
       </p>
       <div className="setup-actions">
         <button className="btn btn-primary" disabled={checking} onClick={recheck}>

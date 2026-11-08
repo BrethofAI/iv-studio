@@ -16,6 +16,7 @@ const SECTIONS = [
   ['pc', 'Your PC'],
   ['comfy', 'ComfyUI'],
   ['folders', 'Folders'],
+  ['data', 'Data folder'],
   ['models', 'Models'],
   ['writer', 'Prompt writer'],
   ['civitai', 'Civitai'],
@@ -107,7 +108,7 @@ function ComfyCard({ n, settings, setSettings, notify, recheck, comfyUp, comfyBu
       id="comfy"
       n={n}
       title="ComfyUI"
-      sub="The ComfyUI IV Studio renders on, and how it starts."
+      sub="IV Studio uses the ComfyUI you already have, on any drive; it never installs one of its own. H3 models, LoRAs from Civitai and your renders all go into that ComfyUI’s own folders."
       aside={comfyUp ? <Pill tone="ok">Ready</Pill> : comfyBusy ? <Pill tone="warn">Busy</Pill> : <Pill tone="warn">Not running</Pill>}
     >
       <SetField label="Address" hint="Where ComfyUI answers. On this PC it's usually http://127.0.0.1:8188.">
@@ -629,16 +630,6 @@ function AboutCard({ n, info }) {
           </button>
         </div>
       </SetField>
-      <SetField label="Data folder" hint="Your shots, edits, characters, voices and settings.">
-        <div className="set-inline grow">
-          <SetPath path={info?.dataDir} />
-          {info?.dataDir && (
-            <button className="btn btn-small" onClick={() => window.ivstudio.files.reveal(info.dataDir)}>
-              Show
-            </button>
-          )}
-        </div>
-      </SetField>
     </SetCard>
   )
 }
@@ -666,6 +657,143 @@ function scroller(el) {
   let s = el
   while (s && !/(auto|scroll)/.test(getComputedStyle(s).overflowY)) s = s.parentElement
   return s
+}
+
+// Where IV Studio keeps its own data (projects, edits, voices, trainings, the voice engine and Shinobi), and moving
+// it to another drive: copy, check, then restart on the new folder. ComfyUI's models, LoRAs and renders aren't
+// here; they live in ComfyUI's folders, on whatever drive ComfyUI is on.
+function DataCard({ n, notify }) {
+  const [info, setInfo] = useState(null)
+  const [size, setSize] = useState(null)
+  const [plan, setPlan] = useState(null) // { to, free }: picked, not started
+  const [progress, setProgress] = useState(null)
+  const [moved, setMoved] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const refresh = () => window.ivstudio.data.info().then(setInfo).catch((err) => notify(err.message))
+  useEffect(() => {
+    refresh()
+    window.ivstudio.data.size().then(setSize).catch(() => {})
+    return window.ivstudio.data.onProgress(setProgress)
+  }, [])
+  if (!info) return null
+  async function choose() {
+    try {
+      const p = await window.ivstudio.data.choose()
+      if (p) setPlan(p)
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  async function move() {
+    setBusy(true)
+    setProgress({ phase: 'counting' })
+    try {
+      setMoved(await window.ivstudio.data.move(plan.to))
+      setPlan(null)
+    } catch (err) {
+      notify(err.message)
+      setProgress(null)
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function removeOld() {
+    if (!(await ask({ title: 'Remove the old copy?', message: `This deletes IV Studio’s old data in ${info.old.dir}. The copy IV Studio uses now, in ${info.dir}, stays.`, confirm: 'Remove the old copy', danger: true }))) return
+    setBusy(true)
+    try {
+      await window.ivstudio.data.removeOld()
+      await refresh()
+      notify('Old copy removed.', 'info')
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const pct = progress?.total ? Math.floor((progress.done / progress.total) * 100) : null
+  const phase = { counting: 'Counting files…', copying: 'Copying…', copied: 'Checking the copy…', checking: 'Checking the copy…', checked: 'Checking the copy…', done: 'Done' }[progress?.phase] || ''
+  const where = { portable: 'Portable', moved: 'Moved', env: 'Set by IV_STUDIO_DATA' }[info.source]
+  return (
+    <SetCard
+      id="data"
+      n={n}
+      title="Data folder"
+      sub="What IV Studio makes and installs for itself: projects, edits, characters, voices, trainings, the voice engine and Shinobi. ComfyUI’s models, LoRAs and your renders aren’t here; they stay in ComfyUI’s own folders."
+      aside={info.moved ? <Pill tone="warn">Drive not found</Pill> : where ? <Pill>{where}</Pill> : null}
+    >
+      <SetField label="Folder" hint={size ? `${GB(size.bytes)} in ${size.files.toLocaleString()} files${info.free != null ? ` · ${GB(info.free)} free on that drive` : ''}.` : 'Measuring…'}>
+        <div className="set-inline grow">
+          <SetPath path={info.dir} />
+          <button className="btn btn-small" onClick={() => window.ivstudio.files.reveal(info.dir)}>
+            Show
+          </button>
+        </div>
+      </SetField>
+      {info.moved && (
+        <SetField label="Moved data" warn={`Your data was moved to ${info.moved}, which isn’t there now. This run uses the default folder; connect the drive and restart IV Studio.`} />
+      )}
+      <SetField label="Another drive" hint={info.canMove ? 'Copies everything, checks the copy, then IV Studio restarts on it. The current folder isn’t changed until you remove it.' : null}>
+        {!info.canMove && <p className="small dim set-plain">{info.whyNot}</p>}
+        {info.canMove && !moved && !plan && (
+          <div className="set-inline">
+            <button className="btn btn-small" disabled={busy} onClick={choose}>
+              Move to another drive…
+            </button>
+          </div>
+        )}
+        {plan && !moved && (
+          <>
+            <p className="small set-plain">
+              Copy everything to <span className="mono">{plan.to}</span>
+              {plan.free != null ? ` (${GB(plan.free)} free there)` : ''}. Let renders and downloads finish first.
+            </p>
+            {busy ? (
+              <div className="dl">
+                <div className="bar">
+                  <span style={{ width: `${pct ?? 6}%` }} className={pct == null ? 'indeterminate' : ''} />
+                </div>
+                <span className="mono dim">
+                  {phase}
+                  {pct != null && progress?.phase === 'copying' ? ` ${pct}% of ${GB(progress.total)}` : ''}
+                </span>
+              </div>
+            ) : (
+              <div className="set-actions">
+                <button className="link-btn" onClick={() => setPlan(null)}>
+                  Cancel
+                </button>
+                <button className="btn btn-small btn-primary" onClick={move}>
+                  Move
+                </button>
+              </div>
+            )}
+          </>
+        )}
+        {moved && (
+          <>
+            <p className="small set-plain">
+              Copied and checked: {GB(moved.bytes)} in {moved.files.toLocaleString()} files, now in <span className="mono">{moved.to}</span>. IV Studio uses it from its next start.
+            </p>
+            <div className="set-inline">
+              <button className="btn btn-small btn-primary" onClick={() => window.ivstudio.data.restart()}>
+                Restart IV Studio now
+              </button>
+            </div>
+          </>
+        )}
+      </SetField>
+      {info.old && !moved && (
+        <SetField label="Old copy" hint="Left behind by the move, in case you want it. IV Studio doesn’t use it.">
+          <div className="set-inline grow">
+            <SetPath path={info.old.dir} />
+            <button className="btn btn-small" disabled={busy} onClick={removeOld}>
+              Remove
+            </button>
+          </div>
+        </SetField>
+      )}
+    </SetCard>
+  )
 }
 
 export default function Settings({ info, recheck, notify, go, setup }) {
@@ -730,6 +858,7 @@ export default function Settings({ info, recheck, notify, go, setup }) {
           <PcCard n={n('pc')} settings={settings} />
           <ComfyCard n={n('comfy')} {...common} recheck={recheck} comfyUp={comfyUp} comfyBusy={comfyBusy} />
           <FolderCard n={n('folders')} {...common} incognito={!!info?.incognito} />
+          <DataCard n={n('data')} notify={notify} />
           <ModelCard n={n('models')} {...common} />
           <WriterCard n={n('writer')} {...common} />
           <CivitaiCard n={n('civitai')} {...common} />

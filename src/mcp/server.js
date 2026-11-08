@@ -26,7 +26,7 @@ import { Reels } from '../service/reel'
 import { Cutouts } from '../service/cutout'
 import { Reframes } from '../service/reframe'
 import { MediaTools } from '../service/media'
-import { comfyFolders, contentDir, dataDir, readSettings, resourcesDir, writerOf, writeSettings } from '../service/paths'
+import { comfyFolders, contentDir, dataLocation, readSettings, resourcesDir, writerOf, writeSettings } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
@@ -50,7 +50,14 @@ import { Comfy } from '../service/comfy'
 import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
 
 // Settings in BASE; what's made in DATA (BASE\incognito while the app is in Incognito; see contentDir).
-const BASE = dataDir()
+// The same data folder the app uses (paths.js): IV_STUDIO_DATA, the portable "data" folder beside IV Studio.exe,
+// the folder it was moved to in Settings, or the default.
+const LOCATION = dataLocation()
+if (LOCATION.missing) {
+  console.error(`IV Studio's data folder was moved to ${LOCATION.dir}, which isn't there. Connect its drive, or open IV Studio to choose.`)
+  process.exit(1)
+}
+const BASE = LOCATION.dir
 const INCOGNITO = !!readSettings(BASE).incognito
 const DATA = contentDir(BASE)
 // the writer's Ollama: the address in Settings → Prompt writer, else OLLAMA_HOST, else this PC (prompter.js)
