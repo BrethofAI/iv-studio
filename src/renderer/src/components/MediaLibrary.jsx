@@ -134,9 +134,14 @@ export function Viewer({ sets, at, setAt, onClose, edits, notify, sendToCreate, 
               <span className="mono small dim">{set.items.length} versions</span>
               <div className="viewer-strip">
                 {set.items.map((x, k) => (
-                  <button key={x.key} className={`viewer-thumb ${k === ii ? 'on' : ''}`} onClick={() => setAt([si, k])} title={x.variant || x.label}>
-                    {x.type === 'video' ? <video src={`${src(x.file)}#t=0.3`} muted preload="metadata" /> : x.type === 'image' ? <img src={src(x.file)} alt="" loading="lazy" /> : <span className="viewer-thumb-sound">{x.type === 'music' ? '♪' : '“ ”'}</span>}
-                    <span className="mono">{x.variant || x.label}</span>
+                  <button key={x.key} className={`viewer-thumb ${k === ii ? 'on' : ''}`} onClick={() => setAt([si, k])} aria-current={k === ii ? 'true' : undefined}>
+                    <span className="viewer-thumb-pic">
+                      {x.type === 'video' ? <video src={`${src(x.file)}#t=0.3`} muted preload="metadata" /> : x.type === 'image' ? <img src={src(x.file)} alt="" loading="lazy" /> : <span className="viewer-thumb-sound">{x.type === 'music' ? '♪' : '“ ”'}</span>}
+                    </span>
+                    <span className="viewer-thumb-text">
+                      <span className="viewer-thumb-label">{x.variant || x.label}</span>
+                      {(x.detail || x.duration) && <span className="mono small dim">{[x.detail, secs(x.duration)].filter(Boolean).join(' · ')}</span>}
+                    </span>
                   </button>
                 ))}
               </div>
