@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import SetupProgress, { useSetupProgress } from './SetupProgress'
 import ModalAccount from './ModalAccount'
 import { createPortal } from 'react-dom'
 import Hero from './Hero'
@@ -51,6 +52,7 @@ export default function CloudWizard({ onClose, notify, recheck, info }) {
   const at = STEPS.findIndex(([id]) => id === step)
 
   const refresh = () => window.ivstudio.cloud.status().then((s) => (setSt(s), s))
+  const progress = useSetupProgress(st?.setup)
   useEffect(() => {
     refresh().then((s) => {
       setIdle((s.provider === 'runpod' ? s.runpod?.idleSeconds : s.cloud?.idleSeconds) || 300)
@@ -123,11 +125,7 @@ export default function CloudWizard({ onClose, notify, recheck, info }) {
     setLog([])
     await run('Setting up', async () => {
       if (p === 'runpod') await window.ivstudio.cloud.runpodSetUp({ gpu: pick, idleSeconds: idle })
-      else {
-        await window.ivstudio.cloud.deploy({ gpu: pick, idleSeconds: idle })
-        await window.ivstudio.cloud.fetchModels()
-        await window.ivstudio.cloud.uploadCharacters()
-      }
+      else await window.ivstudio.cloud.setUp({ gpu: pick, idleSeconds: idle })
     })
   }
   async function switchOn() {
@@ -333,12 +331,16 @@ export default function CloudWizard({ onClose, notify, recheck, info }) {
                   <button className="btn btn-primary" disabled={!!busy || !account || onCloud} onClick={setUp}>
                     {busy === 'Setting up' ? 'Setting up…' : ready ? 'Set up again' : `Set up ${LABEL[p]}`}
                   </button>
-                  {busy === 'Setting up' && <span className="mono small dim">Keeps going if you close this; the Cloud page shows it.</span>}
+                  {busy === 'Setting up' && <span className="mono small dim">Keeps going if you close this; the Cloud page and the top bar show it.</span>}
                 </div>
-                {(log.length > 0 || busy === 'Setting up') && (
-                  <pre className="code cloud-log cw-log" ref={logEl}>
-                    {log.join('\n') || 'Starting…'}
-                  </pre>
+                {progress && progress.provider === p && (!progress.finishedAt || Date.now() - progress.finishedAt < 30 * 60 * 1000) ? (
+                  <SetupProgress progress={progress} log={log} />
+                ) : (
+                  (log.length > 0 || busy === 'Setting up') && (
+                    <pre className="code cloud-log cw-log" ref={logEl}>
+                      {log.join('\n') || 'Starting…'}
+                    </pre>
+                  )
                 )}
               </section>
             )}

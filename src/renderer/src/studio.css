@@ -12129,3 +12129,208 @@ button.set-chip:hover {
   background: var(--red);
   animation: free-urge 1.2s ease-in-out infinite;
 }
+
+/* ---------- the cloud setup as it happens (SetupProgress.jsx) ---------- */
+.setup-progress {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 18px 20px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--red);
+}
+.setup-progress.is-done {
+  border-left-color: #6ee7a8;
+}
+.setup-progress-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.setup-progress-head > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+.setup-progress-kicker {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pink);
+}
+.is-done .setup-progress-kicker {
+  color: #8ff0bd;
+}
+.setup-progress-pct {
+  font: 800 44px/1 var(--display);
+  color: var(--cream);
+}
+.setup-progress-times {
+  display: flex;
+  gap: 22px;
+  font-size: 14px;
+}
+.setup-progress-bar {
+  height: 10px;
+  background: var(--ink-3);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.setup-progress-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--red), var(--pink));
+  transition: width 0.6s ease;
+}
+.is-done .setup-progress-bar i {
+  background: #6ee7a8;
+}
+.setup-progress-leave {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--paper-dim);
+}
+.setup-progress-leave strong {
+  color: var(--cream);
+}
+.setup-progress-leave.ok {
+  color: #8ff0bd;
+}
+.setup-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.setup-step {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.setup-step-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font: 700 12px/1 var(--mono, monospace);
+  color: var(--paper-dim);
+  border: 1px solid var(--line-strong, var(--line));
+}
+.setup-step-mark svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: #0b0b0d;
+  stroke-width: 2.6;
+}
+.setup-step.done .setup-step-mark {
+  background: #6ee7a8;
+  border-color: #6ee7a8;
+}
+.setup-step.running .setup-step-mark {
+  border-color: var(--red);
+}
+.setup-step.failed .setup-step-mark {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+.setup-step.waiting,
+.setup-step.skipped {
+  opacity: 0.55;
+}
+.setup-step-body {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.setup-step-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+.setup-step-label {
+  color: var(--cream);
+  font-size: 14px;
+}
+.setup-step-time {
+  font-size: 12px;
+  color: var(--paper-dim);
+  white-space: nowrap;
+}
+.setup-step-bar {
+  height: 4px;
+  background: var(--ink-3);
+  overflow: hidden;
+  position: relative;
+}
+.setup-step-bar i {
+  display: block;
+  height: 100%;
+  background: var(--red);
+  transition: width 0.6s ease;
+}
+/* a step that can't say how far it is: a sweep across the bar */
+.setup-step-bar.busy i {
+  position: absolute;
+  width: 30%;
+  animation: setup-sweep 1.6s ease-in-out infinite;
+}
+@keyframes setup-sweep {
+  0% { left: -30%; }
+  100% { left: 100%; }
+}
+.setup-step-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.setup-step-spin {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--red);
+  animation: setup-spin 0.9s linear infinite;
+  display: inline-block;
+}
+@keyframes setup-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .setup-step-bar.busy i,
+  .setup-step-spin {
+    animation: none;
+  }
+}
+.setup-progress-details .cloud-log {
+  margin-top: 8px;
+  max-height: 260px;
+}
+/* the title-bar pill while a setup runs */
+.setup-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  background: var(--ink-2);
+  color: var(--paper);
+  border: 1px solid var(--red);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1;
+  -webkit-app-region: no-drag;
+}
+.setup-pill:hover {
+  background: var(--ink-3);
+}

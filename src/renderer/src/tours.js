@@ -250,7 +250,7 @@ export const TOURS = {
     title: 'Cloud',
     steps: [
       { title: 'Render on a cloud GPU', text: 'No strong graphics card, or want more? Shots can render on your own RunPod, Modal or Comfy Cloud account, billed by the second.' },
-      { at: '.cloud-guided', title: 'Guided setup', text: 'The easiest way in: pick a service, connect it, choose a GPU and set it up.' },
+      { at: '.cloud-guided', title: 'Guided setup', text: 'The easiest way in: pick a service, connect it, choose a GPU and set it up. Setup shows each step with a timer and how long is left; you can leave the page, and IV Studio tells you when it’s ready.' },
       { at: '.cloud-control', title: 'Where it renders', text: 'Switch between this PC and the cloud whenever you like.' },
       { at: '.engine-badge', title: 'The meter', text: 'While on the cloud, the title bar shows GPU time and cost. Shut down GPU stops it at once; it also stops by itself when idle.' }
     ]

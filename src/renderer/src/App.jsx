@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { SetupPill } from './components/SetupProgress'
 import { CharacterList, CharacterTrainer } from './components/Characters'
 import Create from './components/Create'
 import ivMark from './assets/iv-mark.png'
@@ -122,6 +123,13 @@ export default function App() {
     clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), 7000)
   }, [])
+
+  // the cloud setup ending (on any page): a message, and the notification's click opens the Cloud page
+  useEffect(() => {
+    const offDone = window.ivstudio.cloud.onSetupDone?.((d) => notify(`${d.title}. ${d.body}`, d.ok ? 'ok' : 'error'))
+    const offOpen = window.ivstudio.cloud.onOpen?.(() => setPage('cloud'))
+    return () => (offDone?.(), offOpen?.())
+  }, [notify])
 
   const recheck = useCallback(async () => {
     setChecking(true)
@@ -357,6 +365,7 @@ export default function App() {
           {/* on a Mac the cloud comes first; Start ComfyUI stays on Settings → Setup */}
           {comfyDown && info?.platform !== 'darwin' && <StartComfy notify={notify} recheck={recheck} className="btn btn-small engine-start" />}
           {setup?.items?.find((i) => i.id === 'gpu') && <span className="mono dim engine-gpu">{setup.items.find((i) => i.id === 'gpu').detail}</span>}
+          <SetupPill onOpen={() => setPage('cloud')} />
           {setup?.remote ? <CloudMeter onOpen={() => setPage('cloud')} /> : setup && <SystemMeter notify={notify} />}
         </div>
       </header>

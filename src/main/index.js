@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, screen, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, protocol, safeStorage, screen, shell } from 'electron'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -8,6 +8,7 @@ import { chooseTarget, copyData, discardCopy, freeBytes, listData, movableEntrie
 import { EXTRA_BIN, harnessStatus } from '../service/harness'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS, MODAL_VERSION } from '../service/cloud'
+import { SetupProgress, about } from '../service/setupprogress'
 import { RunPod, GPUS as RUNPOD_GPUS } from '../service/runpod'
 import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
 import { comboOptions } from '../service/setup'
@@ -831,8 +832,50 @@ app.whenReady().then(() => {
   })
 
   // ---------- cloud (Modal, the user's own account) ----------
-  const cloud = new Cloud({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), onLog: (line) => send('cloud:log', line) })
+  const cloud = new Cloud({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), onLog: (line) => (send('cloud:log', line), setupNow && !setupNow.finishedAt && setupNow.fromLine(line)) })
   let cloudBusy = null
+  // The cloud setup's progress (setupprogress.js): the window's progress view and title-bar pill follow it
+  // (cloud:progress, and cloud:status after a reload), and it says when it's done (a notification, cloud:setupDone).
+  let setupNow = null
+  const tracked = async (provider, fn, models = []) => {
+    let last = 0
+    const t = new SetupProgress(provider, {
+      models,
+      onChange: (snap) => {
+        // a few updates a second at most; the first, the last and every step change always go
+        const now = Date.now()
+        if (snap.finishedAt || now - last > 250 || snap.steps.some((s) => s.status === 'running' && s.seconds === 0)) (send('cloud:progress', snap), (last = now))
+      }
+    })
+    setupNow = t
+    t.changed()
+    const tell = (title, body) => {
+      send('cloud:setupDone', { ok: t.ok, title, body })
+      try {
+        if (!Notification.isSupported() || (win && !win.isDestroyed() && win.isFocused())) return
+        const n = new Notification({ title, body, icon: path.join(resourcesDir(path.join(app.getAppPath(), 'resources')), 'icon.png') })
+        n.on('click', () => {
+          if (!win || win.isDestroyed()) return
+          if (win.isMinimized()) win.restore()
+          win.show()
+          win.focus()
+          send('cloud:open')
+        })
+        n.show()
+      } catch {}
+    }
+    const name = provider === 'runpod' ? 'RunPod' : 'Modal'
+    try {
+      const out = await fn(t)
+      t.finish()
+      tell(`The cloud is ready`, `${name} is set up (${about(t.snapshot().elapsed)}). Switch on The cloud to render there.`)
+      return out
+    } catch (err) {
+      t.fail(err)
+      tell('Cloud setup stopped', `${name}: ${String(err.message || err).split('\n')[0].slice(0, 160)}`)
+      throw err
+    }
+  }
   const cloudTask = async (label, fn) => {
     if (cloudBusy) throw new Error(`Still busy: ${cloudBusy}.`)
     cloudBusy = label
@@ -864,6 +907,8 @@ app.whenReady().then(() => {
       gpus: GPUS,
       runpodGpus: RUNPOD_GPUS,
       busy: cloudBusy,
+      // the last (or current) setup's progress, for a window that opens or reloads mid-setup
+      setup: setupNow?.snapshot() || null,
       hasToken: !!s.cloudToken
     }
   })
@@ -924,24 +969,97 @@ app.whenReady().then(() => {
     })
   )
   // Each character's LoRA and the RefMods it uses, found through the local ComfyUI's model folders.
-  handle('cloud:uploadCharacters', () =>
-    cloudTask('uploading characters', async () => {
-      const local = await fetch(`${readSettings(BASE).comfyUrl}/experiment/models`).then((r) => r.json())
-      const roots = (name) => local.find((f) => f.name === name)?.folders || []
-      const find = (kind, rel) => roots(kind).map((d) => path.join(d, rel)).find((p) => fs.existsSync(p))
-      const done = []
-      for (const c of studio.characters()) {
-        const lora = c.lora && find('loras', c.lora)
-        if (lora) await cloud.uploadModel(lora, `loras/${c.lora.replace(/\\/g, '/')}`), done.push(c.lora)
-        for (const r of [c.refmod, c.voiceRefmod, c.visualRefmod].filter(Boolean)) {
-          const file = find('refmods', `${r}.safetensors`)
-          if (file) await cloud.uploadModel(file, `refmods/${r}.safetensors`), done.push(r)
-        }
-      }
-      saveCloud({ charactersAt: new Date().toISOString() })
-      return done
-    })
+  // The whole Modal setup in one call: the access token and image (deploy), the models, then the characters. It
+  // runs here, not in the window, so leaving the page or reloading the window doesn't stop it.
+  handle('cloud:setUp', ({ gpu, idleSeconds }) =>
+    cloudTask('setting up the cloud', () =>
+      tracked(
+        'modal',
+        async (t) => {
+          // IV_STUDIO_FAKE_SETUP (test copies only): replays a setup's output quickly, so the progress view can be
+          // checked without touching a Modal account
+          if (process.env.IV_STUDIO_FAKE_SETUP) return fakeSetup(t, process.env.IV_STUDIO_FAKE_SETUP)
+          const { url, token } = await cloud.deploy({ gpu, idleSeconds })
+          writeSettings({ cloudToken: seal(token) }, BASE)
+          saveCloud({ url, gpu, idleSeconds, workspace: await cloud.workspace(), deployedAt: new Date().toISOString() })
+          t.start('models', 'Checking which models your storage already has')
+          await cloud.fetchModels()
+          saveCloud({ modelsAt: new Date().toISOString() })
+          t.start('characters')
+          const done = await uploadModalCharacters()
+          if (done === null) t.done('characters', 'No ComfyUI on this PC, so there are no character files to upload')
+          else t.done('characters', done.length ? `${done.length} file${done.length === 1 ? '' : 's'} uploaded` : 'No character files to upload')
+          return readSettings(BASE).cloud
+        },
+        cloudModels()
+      )
+    )
   )
+  // A stand-in Modal setup for test copies: Modal's own lines, sped up. "fail" stops it in the model download.
+  async function fakeSetup(t, mode) {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+    const say = (line) => cloud.onLog(line)
+    say('Saving the access token in your Modal workspace…')
+    await wait(1500)
+    say('Building the cloud image and publishing ComfyUI (the first time takes 10–15 minutes)…')
+    for (const l of ['Building image im-a1b2c3', '=> Step 0: FROM base', '=> Step 1: RUN apt-get install -y ffmpeg git', '=> Step 2: RUN pip install torch==2.9.1', '=> Step 3: RUN git clone ComfyUI v0.42.5', '=> Step 4: COPY node packs', 'Built image im-a1b2c3 in 412.3s']) (say(l), await wait(1500))
+    t.start('models', 'Checking which models your storage already has')
+    say('Downloading the H3 models into your cloud storage (about 60 GB, once)…')
+    const models = cloudModels()
+    for (const [i, m] of models.entries()) {
+      if (i === 0) (say(`have ${m.label}`), await wait(600))
+      else {
+        say(`downloading ${m.label}`)
+        for (let p = 0; p <= 100; p += 20) {
+          say(`progress ${m.id} ${p}% of ${m.size}`)
+          await wait(350)
+          if (mode === 'fail' && i === 2 && p === 60) throw new Error(`${m.label}: the host answered 503 for https://huggingface.co/...`)
+        }
+        say(`done ${m.label} (checksum verified)`)
+      }
+    }
+    say(`models ready: ${models.length}/${models.length} in 1234 s`)
+    t.start('characters')
+    await wait(1200)
+    t.done('characters', 'No character files to upload')
+    return readSettings(BASE).cloud
+  }
+  // the models the Modal setup downloads (models.json without the optional ones, plus cloud.json's extras)
+  function cloudModels() {
+    try {
+      const res = resourcesDir(path.join(app.getAppPath(), 'resources'))
+      const m = JSON.parse(fs.readFileSync(path.join(res, 'models.json'), 'utf8')).models.filter((x) => !x.optional)
+      const extra = JSON.parse(fs.readFileSync(path.join(res, 'cloud', 'cloud.json'), 'utf8')).extraModels || []
+      return [...m, ...extra].map((x) => ({ id: x.id, label: x.label, size: x.size || 0 }))
+    } catch {
+      return []
+    }
+  }
+  // Each character's LoRA and RefMods, found through this PC's ComfyUI, into the Modal volume. null when there's no
+  // ComfyUI on this PC (a cloud-only PC): nothing to upload, and not an error.
+  async function uploadModalCharacters() {
+    let local
+    try {
+      local = await fetch(`${readSettings(BASE).comfyUrl}/experiment/models`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json())
+    } catch {
+      saveCloud({ charactersAt: new Date().toISOString() })
+      return null
+    }
+    const roots = (name) => local.find((f) => f.name === name)?.folders || []
+    const find = (kind, rel) => roots(kind).map((d) => path.join(d, rel)).find((p) => fs.existsSync(p))
+    const done = []
+    for (const c of studio.characters()) {
+      const lora = c.lora && find('loras', c.lora)
+      if (lora) await cloud.uploadModel(lora, `loras/${c.lora.replace(/\\/g, '/')}`), done.push(c.lora)
+      for (const r of [c.refmod, c.voiceRefmod, c.visualRefmod].filter(Boolean)) {
+        const file = find('refmods', `${r}.safetensors`)
+        if (file) await cloud.uploadModel(file, `refmods/${r}.safetensors`), done.push(r)
+      }
+    }
+    saveCloud({ charactersAt: new Date().toISOString() })
+    return done
+  }
+  handle('cloud:uploadCharacters', () => cloudTask('uploading characters', async () => (await uploadModalCharacters()) || []))
   // ---------- cloud on RunPod (the user's own account; runpod.js) ----------
   const runpod = new RunPod({ resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), key: () => unseal(readSettings(BASE).runpodKey), onLog: (line) => send('cloud:log', line) })
   // character training on RunPod uses the same account
@@ -1001,27 +1119,39 @@ app.whenReady().then(() => {
   // Set up (and Set up again): the volume, a pod that installs ComfyUI and downloads the models onto it, then
   // the characters. A new gate token each time, so pods started with the old one are shut down first.
   handle('cloud:runpodSetUp', ({ gpu, idleSeconds }) =>
-    cloudTask('setting up RunPod', async () => {
+    cloudTask('setting up RunPod', () => tracked('runpod', async (t) => {
       const s = readSettings(BASE)
       if (s.target === 'cloud') throw new Error('Switch rendering to My PC first.')
       await runpod.stopAll()
       const known = s.runpod?.volumeId ? { id: s.runpod.volumeId, dataCenter: s.runpod.dataCenter } : null
       if (!known) send('cloud:log', 'Finding a data center with network storage and a free GPU…')
+      if (known) t.skip('storage', `Already made, in ${known.dataCenter}`)
+      else t.start('storage', 'Finding a data center with network storage and a free GPU')
       const volume = known || (await runpod.ensureVolume(await runpod.pickDataCenter(gpu)))
+      t.start('pod', `Starting a ${RUNPOD_GPUS.find((g) => g.id === gpu)?.label.split(' ·')[0] || 'GPU'} in ${volume.dataCenter}`)
       writeSettings({ runpodToken: seal(randomBytes(24).toString('base64url')) }, BASE)
       saveRunpod({ gpu, idleSeconds, volumeId: volume.id, dataCenter: volume.dataCenter, url: null, podId: null })
       send('cloud:log', `Starting a pod in ${volume.dataCenter}. The first time, it installs ComfyUI and downloads the H3 models onto your volume (20–40 minutes).`)
-      const url = await wakeRunpod()
+      runpod.onHealth = (h) => t.fromHealth(h)
+      let url
+      try {
+        url = await wakeRunpod()
+      } finally {
+        runpod.onHealth = null
+      }
       saveRunpod({ modelsAt: new Date().toISOString(), setUpAt: new Date().toISOString() })
+      t.start('characters')
       const done = []
       for (const f of await characterFiles().catch(() => [])) {
+        t.update('characters', { detail: `Uploading ${f.name}` })
         await runpod.uploadModel(url, runpodToken(), f.file, f.remote)
         done.push(f.name)
       }
+      t.done('characters', done.length ? `${done.length} file${done.length === 1 ? '' : 's'} uploaded` : 'No character files to upload')
       saveRunpod({ charactersAt: new Date().toISOString() })
       send('cloud:log', `Ready. ${done.length} character file${done.length === 1 ? '' : 's'} uploaded. The GPU shuts itself off after ${Math.round(idleSeconds / 60)} idle minutes.`)
       return readSettings(BASE).runpod
-    })
+    }))
   )
   handle('cloud:use', (target) => {
     const s = readSettings(BASE)

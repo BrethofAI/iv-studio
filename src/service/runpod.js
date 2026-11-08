@@ -202,6 +202,8 @@ export class RunPod {
         onStage?.(h)
         said = line
       }
+      // the setup's progress view follows every answer (model percentages change within a stage)
+      this.onHealth?.(h)
       if (h?.stage === 'ready') return { seconds: Math.round((Date.now() - t0) / 1000) }
       if (h?.stage === 'error') throw new Error(`The cloud pod stopped: ${h.detail}`)
       if (Date.now() - t0 > timeoutMs) throw new Error('The cloud pod took too long to start.')
