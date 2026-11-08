@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import ModalAccount from './ModalAccount'
 import Hero from './Hero'
 import { ask } from './Confirm'
 
@@ -435,29 +436,7 @@ export default function Cloud({ notify, recheck, setup, info }) {
           </Step>
 
           <Step n={2} title="Modal account" done={!!st.workspace}>
-            {st.workspace ? (
-              <p className="small">
-                Signed in to the Modal workspace <span className="mono">{st.workspace}</span>.
-              </p>
-            ) : (
-              <>
-                <p className="small dim">
-                  Opens Modal's sign-in page in your browser. New to Modal? Signing up is free.{' '}
-                  <button className="link-btn" onClick={() => window.ivstudio.links.open(info?.links?.modalSignup || 'https://modal.com/signup')}>
-                    Create an account
-                  </button>
-                  {info?.links?.modalSignup && (
-                    <span className="cloud-support">
-                      {' '}
-                      This is IV Studio's referral link: signing up through it supports the app, and costs you nothing extra.
-                    </span>
-                  )}
-                </p>
-                <button className="btn btn-small" disabled={!!busy || !st.toolkit} onClick={() => run('Waiting for Modal sign-in', () => window.ivstudio.cloud.signIn())}>
-                  Sign in with Modal
-                </button>
-              </>
-            )}
+            <ModalAccount st={st} busy={busy} run={run} info={info} notify={notify} onChanged={refresh} />
           </Step>
 
           <Step n={3} title="GPU and shut-off" done={!!st.cloud?.url}>

@@ -12101,3 +12101,31 @@ button.set-chip:hover {
 .ed-help .help-btn {
   width: auto;
 }
+
+/* ---------- the Modal account (Cloud page and cloud wizard) ---------- */
+.modal-account {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.modal-account p {
+  margin: 0;
+}
+.modal-account.waiting p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.modal-account-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* the waiting dot (the Modal sign-in) */
+.version-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: free-urge 1.2s ease-in-out infinite;
+}

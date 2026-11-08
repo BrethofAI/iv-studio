@@ -5,6 +5,7 @@
 import { spawn } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { Readable } from 'node:stream'
@@ -84,20 +85,62 @@ export class Cloud {
     return this.uvExe
   }
 
-  // The Modal workspace the client is signed in to, or null.
+  // The Modal workspace the client is signed in to, or null. Asked of Modal itself (`modal token info` checks the
+  // token): `modal profile current` answers "default" even with no token at all, which read as signed in.
+  // Kept for 30 s, because the window asks often; forget() after signing in or out.
   async workspace() {
     if (!this.toolkitReady()) return null
+    if (this.ws && Date.now() - this.ws.at < 30000) return this.ws.value
+    let value = null
     try {
-      const out = await this.modal(['profile', 'current'], { quiet: true })
-      return out.trim().split(/\r?\n/).pop() || null
-    } catch {
-      return null
-    }
+      value = workspaceOf(await this.modal(['token', 'info'], { quiet: true }))
+    } catch {}
+    this.ws = { at: Date.now(), value }
+    return value
+  }
+  forget() {
+    this.ws = null
   }
 
-  // Opens Modal's sign-in page in the browser and waits until the user has approved it.
-  signIn() {
-    return this.modal(['token', 'new'])
+  // Opens Modal's sign-in page in the browser and waits until the person has approved it. The page's address is
+  // kept (signInUrl) so the window can offer it when no browser opened; cancelSignIn() stops waiting.
+  async signIn() {
+    if (this.signing) throw new Error('Already waiting for the Modal sign-in.')
+    this.signInUrl = null
+    this.cancelled = false
+    try {
+      await this.modal(['token', 'new'], {
+        onSpawn: (p) => (this.signing = p),
+        onText: (t) => (this.signInUrl ||= t.match(/https:\/\/modal\.com\/token-flow\/[\w-]+/)?.[0] || null)
+      })
+    } catch (err) {
+      if (this.cancelled) throw new Error('Sign-in cancelled.')
+      throw err
+    } finally {
+      this.signing = null
+      this.signInUrl = null
+      this.forget()
+    }
+    const ws = await this.workspace()
+    if (!ws) throw new Error('Modal didn’t finish signing in. Try again, or sign out and sign in again.')
+    return ws
+  }
+  cancelSignIn() {
+    if (!this.signing) return false
+    this.cancelled = true
+    killTree(this.signing)
+    return true
+  }
+
+  // Signs this PC out of Modal: takes the active profile out of Modal's config (~/.modal.toml, or MODAL_CONFIG_PATH),
+  // leaving any other profiles. Modal's own tools on this PC use the same file, so they're signed out too.
+  signOut() {
+    const file = modalConfigPath()
+    this.forget()
+    if (!fs.existsSync(file)) return { removed: null }
+    const { text, removed } = withoutActiveProfile(fs.readFileSync(file, 'utf8'))
+    if (removed) fs.writeFileSync(file, text)
+    return { removed }
   }
 
   // Copies the cloud files next to each other so `modal deploy` sees one folder.
@@ -154,19 +197,21 @@ export class Cloud {
     return { stopped: running.length }
   }
 
-  modal(args, { env = {}, quiet = false, secret = false } = {}) {
-    return this.exec(this.modalExe, args, { cwd: this.deployDir, env: { PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', ...env }, quiet, secret })
+  modal(args, { env = {}, quiet = false, secret = false, onSpawn, onText } = {}) {
+    return this.exec(this.modalExe, args, { cwd: this.deployDir, env: { PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', ...env }, quiet, secret, onSpawn, onText })
   }
 
   // Runs a program, streams each output line to onLog (unless quiet), resolves with all output.
-  exec(cmd, args, { cwd, env = {}, quiet = false, secret = false } = {}) {
+  exec(cmd, args, { cwd, env = {}, quiet = false, secret = false, onSpawn, onText } = {}) {
     return new Promise((resolve, reject) => {
       if (cwd) fs.mkdirSync(cwd, { recursive: true })
       const p = spawn(cmd, args, { cwd, env: { ...process.env, ...env }, windowsHide: true })
+      onSpawn?.(p)
       let out = ''
       const take = (buf) => {
         const text = buf.toString()
         out += text
+        onText?.(out)
         if (!quiet) for (const line of text.split(/\r?\n/)) if (line.trim()) this.onLog(line.trim())
       }
       p.stdout.on('data', take)
@@ -179,4 +224,42 @@ export class Cloud {
       })
     })
   }
+}
+
+// Modal's config file: MODAL_CONFIG_PATH, else ~/.modal.toml.
+export const modalConfigPath = () => process.env.MODAL_CONFIG_PATH || path.join(os.homedir(), '.modal.toml')
+
+// The workspace in `modal token info`'s answer ("Workspace: name (ac-...)"), or null.
+export function workspaceOf(text) {
+  return String(text || '').match(/^\s*Workspace:\s*([^\s(]+)/m)?.[1] || null
+}
+
+// Modal's config without its active profile: the [section] marked active = true, or the only one there is.
+// Other profiles and anything outside a section are kept as they are.
+export function withoutActiveProfile(text) {
+  const lines = String(text).split(/\r?\n/)
+  const nl = /\r\n/.test(text) ? '\r\n' : '\n'
+  const sections = []
+  let cur = { name: null, lines: [] }
+  for (const line of lines) {
+    const m = line.match(/^\s*\[\s*["']?([^"'\]]+?)["']?\s*\]\s*$/)
+    if (m) {
+      sections.push(cur)
+      cur = { name: m[1], lines: [line] }
+    } else cur.lines.push(line)
+  }
+  sections.push(cur)
+  const named = sections.filter((x) => x.name)
+  const active = named.find((x) => x.lines.some((l) => /^\s*active\s*=\s*true\b/i.test(l))) || (named.length === 1 ? named[0] : null)
+  if (!active) return { text, removed: null }
+  const kept = sections.filter((x) => x !== active).flatMap((x) => x.lines)
+  return { text: kept.join(nl).replace(/(\r?\n){3,}/g, nl + nl), removed: active.name }
+}
+
+// Stops a process and everything it started (Modal's client starts a helper on Windows).
+function killTree(p) {
+  try {
+    if (process.platform === 'win32') spawn('taskkill', ['/pid', String(p.pid), '/T', '/F'], { windowsHide: true })
+    else p.kill('SIGTERM')
+  } catch {}
 }
