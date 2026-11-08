@@ -363,6 +363,43 @@ camera, cuts, motion and soundtrack.
 `replace_video` is the old engine (OpenJutsu masks): use it for faces and colours.
 Only put invented characters, or people who agreed, into a video.
 
+## Rebuild: take a video apart and rebuild it
+
+When the person has a short video (up to 2 minutes) they made or may rework, and wants it made again on this
+PC: the same cuts, pacing and captions, with the AI shots re-rendered by H3 and, if they ask, a person,
+product or setting swapped. Ask whether it's theirs first. For someone else's video, describe its format in
+words instead and don't rebuild it. Free and local throughout: never use the paid writer.
+1. `rebuild_read` {file, rights: true}. Pass rights only once the person confirms. It finds the cuts and
+   gives every shot its first, middle and last frame, a contact sheet, the times captions come and go
+   (`bandTop`, `bandBottom`), the tempo, loudness and pauses, and the words when the voice engine is set up.
+   It returns a sheet of every shot.
+2. Look at each shot (`view_rebuild_shot`) and say what it is with `save_rebuild_reading`: `kind` (ai_video,
+   live, code_graphics, screen, still, film_clip, or `unsure` when you can't tell; never guess), `why`, a
+   concrete English `description` (subject, clothes, place, framing, the motion start to end), every caption
+   word for word with `from`/`to` in seconds into the shot and `where`, plus stickers, camera and light.
+   (`writer: true` on `rebuild_read` has the writer from Settings do this; check what it says.)
+3. Write the plan with `save_rebuild_plan`, one route per shot. Defaults: ai_video shots are `h3`, stills are
+   `still`, everything else (unsure included) is `keep`. `own` puts in the person's own clip, and `replace`
+   keeps the shot here for the Replace page. An `h3` prompt opens with the frames line its `h3` field calls
+   for: first and last frame (`useLast`), or the first frame only for shots under about 4.1 s. Those render
+   5.17 s, H3's trained minimum, and the cut keeps their first `trimTo` seconds, so write the action to
+   start at once. The prompt also says "There is no writing anywhere in the picture.", because H3 copies any
+   writing it sees. `check_prompt` with mode frames first. Shots over about 18 s can't be one take, so keep
+   them. Show the person the plan: which shots render and about 3-5 GPU minutes each. Wait for their OK,
+   then `approve_rebuild_plan`.
+4. `make_rebuild_frames` paints the writing out of each H3 shot's frames, and the swap in, with this PC's
+   picture editor (both ends one seed). Shots with no writing and no swap keep their frames. LOOK at the
+   before/after pictures it returns, show the person, and wait for their OK: `approve_rebuild_frames`.
+   (`only` repaints chosen shots.)
+5. `make_rebuild_shots` renders two previews per H3 shot (three with a swap). Poll `get_rebuild`. When a
+   take says `pick`, look at its previews (`grab_frame` at the start, middle and end) and pass
+   `picks: [{index, candidate}]` to `make_rebuild_shots`. Each pick is finished at 1 MP. Render again rather
+   than settle.
+6. `rebuild_first_cut` builds an Edit: each shot in its slot on V1 (new takes retimed to fit, their own
+   sound muted), kept shots as the original footage, stills with a slow push, captions as titles on T1, and
+   the original sound on A1 as a guide. Then work on it with the Edit tools. Tell the person the guide
+   sound must be replaced before they publish, and which shots are still the original footage.
+
 ## Train a new character
 
 The Characters page (and these tools) turn an invented person into a character preset:
@@ -406,5 +443,6 @@ a switch until it's restarted (reconnect the iv-studio MCP). Don't mention or mo
   else's song lyrics.
 - Characters must be invented, or real people who agreed to it. Don't make a real person say or do
   things without their consent.
+- Rebuild only video the person made or may rework; the reference's sound is a guide.
 - The MCP server renders on the local ComfyUI, even when the app window is set to the cloud.
 - Report what you made with its file path, so the person can open it.

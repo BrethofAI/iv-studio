@@ -48,6 +48,8 @@ import { RefMods } from '../service/refmods'
 import { Civitai, LORA_SORTS, LORA_TAGS } from '../service/civitai'
 import { Comfy } from '../service/comfy'
 import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
+import { Reader } from '../service/reader'
+import { KINDS as REBUILD_KINDS, Rebuilds, ROUTES as REBUILD_ROUTES, WHERE as REBUILD_WHERE } from '../service/rebuild'
 
 // Settings in BASE; what's made in DATA (BASE\incognito while the app is in Incognito; see contentDir).
 // The same data folder the app uses (paths.js): IV_STUDIO_DATA, the portable "data" folder beside IV Studio.exe,
@@ -1107,6 +1109,74 @@ sizzleTool('sizzle_first_cut', "Website sizzle, step 5: IV Studio cuts the film 
   return { pictures, ...sizzleSummary(r), shinobi: r.shinobi, warnings: r.warnings }
 })
 tool('delete_sizzle', 'Delete a sizzle and its capture (renders, songs and the Shinobi film stay). Ask the person first.', { sizzleId: z.string() }, ({ sizzleId }) => sizzles.remove(sizzleId))
+
+// ---------- Rebuild: a video taken apart and rebuilt ----------
+const reader = new Reader({ ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe, run: (a) => edits.run(a), runErr: (a) => edits.runErr(a), beatsOf: (f) => reels.beatsOf(f), voices })
+const rebuilds = new Rebuilds({ dataDir: DATA, reader, studio, images, remake, edits, writer: () => writerOf(readSettings(BASE)), lint: lintPrompt })
+// what the agent needs to see of a rebuild: everything but the music's beat list
+const rebuildSummary = (r) => {
+  const v = rebuilds.view(r)
+  return { ...v, music: v.music && { bpm: v.music.bpm, strength: v.music.strength, beats: v.music.beats.length } }
+}
+const rebuildCaption = { text: z.string(), from: z.number().describe('seconds into the shot'), to: z.number().describe('seconds into the shot'), where: z.enum(REBUILD_WHERE) }
+const rebuildSwap = z.object({ ask: z.string().describe('What changes, in plain words: "Make her a man in a grey suit", "Put the mug on a beach"'), picture: z.string().optional().describe('A picture of what goes in (a face, a product), on this PC') })
+sizzleTool('rebuild_read', `Rebuild, step 1: read a video into shots, to make it again on this PC. Only for video the person made or has the right to rework: ask them, and pass rights: true only when they confirm (for someone else's video, describe it in words and don't rebuild it). Up to 2 minutes long. Finds the cuts, takes each shot's first, middle and last frame and a contact sheet, notes when captions come and go (top and bottom bands), the music's tempo, loudness and pauses, and the words when the voice engine is set up. Returns the shots and a sheet of every shot's middle frame. Then look at each shot (view_rebuild_shot) and say what it is (save_rebuild_reading), or pass writer: true to have the writer from Settings read them (local, Claude Code or Codex; never the paid one). Takes about a second per second of video.`, {
+  file: z.string().describe('The video, on this PC'),
+  name: z.string().optional(),
+  rights: z.boolean().default(false).describe('true only when the person confirms they made the video or may rework it'),
+  swap: rebuildSwap.optional().describe('What changes in the remake, when the person already said'),
+  writer: z.boolean().default(false).describe('Have the writer from Settings read every shot too')
+}, async ({ file, name, rights, swap, writer }) => {
+  let r = await rebuilds.read({ file, name, rights, swap: swap || null })
+  if (writer) r = await rebuilds.readWithWriter(r.id)
+  const mids = r.shots.map((s) => s.middle)
+  const pictures = [await sizzlePicture(mids, { width: r.source.width >= r.source.height ? 240 : 160, tile: [6, Math.ceil(mids.length / 6)], aspect: r.source.width / r.source.height })]
+  return { pictures, ...rebuildSummary(r) }
+})
+sizzleTool('view_rebuild_shot', 'One shot of a rebuild to look at: its contact sheet (first, middle and last frame) and its first and last frames, with what the reader measured (times, caption-band changes, words) and its reading.', { rebuildId: z.string(), index: z.number().int().min(1) }, async ({ rebuildId, index }) => {
+  const r = rebuilds.get(rebuildId)
+  const s = rebuilds.view(r).shots.find((x) => x.index === index)
+  if (!s) throw new Error(`There's no shot ${index}; the shots run 1 to ${r.shots.length}.`)
+  const aspect = r.source.width / r.source.height
+  const pictures = [await sizzlePicture([s.sheet], { width: 960 }), await sizzlePicture([s.first, s.last], { width: aspect >= 1 ? 480 : 270, tile: [2, 1], aspect })]
+  return { pictures, rebuildId, ...s }
+})
+tool('save_rebuild_reading', `Rebuild, step 2: say what each shot is, after looking at it. kind: ${REBUILD_KINDS.join(', ')} (unsure when you can't tell; it stays original footage unless the person says otherwise). why: the signs. description: in English and concretely, subject, clothes, place, framing and the motion start to end (it becomes the H3 prompt). captions: every piece of writing on the picture, word for word, with from/to in seconds into the shot and where. stickers, camera, light. Shots can be saved a few at a time.`, {
+  rebuildId: z.string(),
+  shots: z.array(z.object({ index: z.number().int().min(1), kind: z.enum(REBUILD_KINDS), why: z.string().default(''), description: z.string().default(''), captions: z.array(z.object(rebuildCaption)).default([]), stickers: z.array(z.string()).default([]), camera: z.string().default(''), light: z.string().default('') }))
+}, ({ rebuildId, shots }) => rebuildSummary(rebuilds.saveReading(rebuildId, shots)))
+tool('save_rebuild_plan', `Rebuild, step 3: the plan, one route per shot. h3: render it again with H3 in frames mode, from a prompt that opens with the frames line the shot's h3 field calls for (first and last frame when useLast, else first frame only) and says "There is no writing anywhere in the picture." (check_prompt with mode frames first). Shots under about 4.1 s render 5.17 s from the first frame (write the action to start at once) and are trimmed to fit; shots over about 18 s can't be one take, so keep them. still: the first frame with a slow push. keep: the original footage. own: the person's own clip (file). replace: keep it here and remake it on the Replace page (up to 14 s). swap: what changes, for the frames. Saving resets both approvals. Then show the person the plan with the GPU time (about 3-5 min per H3 shot) and wait for their OK.`, {
+  rebuildId: z.string(),
+  plan: z.object({
+    swap: rebuildSwap.nullable().optional().describe('null: no swap. Left out: the one given to rebuild_read.'),
+    shots: z.array(z.object({ index: z.number().int().min(1), route: z.enum(REBUILD_ROUTES), prompt: z.string().optional(), character: z.string().optional().describe('none, or a character preset id; write {char} in the prompt'), file: z.string().optional().describe('own: the clip'), note: z.string().optional() })),
+    notes: z.string().optional()
+  })
+}, ({ rebuildId, plan }) => rebuildSummary(rebuilds.savePlan(rebuildId, plan)))
+tool('approve_rebuild_plan', 'Record that the person approved the rebuild plan. Only call this after they said yes to it.', { rebuildId: z.string() }, ({ rebuildId }) => rebuildSummary(rebuilds.approvePlan(rebuildId)))
+sizzleTool('make_rebuild_frames', "Rebuild, step 4: the frames each H3 shot starts (and ends) on. Writing is painted out (H3 copies any it sees) and the swap painted in, with the picture editor on this PC (Qwen Image 2.1, Flux.2 or Flux 3 Klein), both ends with one seed. A shot with no writing and no swap keeps its own frames. Free and local; about 30-60 s a frame. Needs the plan's OK. Returns before/after pictures: look at them, show the person, and wait for their OK. only: just these shots again.", { rebuildId: z.string(), only: z.array(z.number().int().min(1)).optional() }, async ({ rebuildId, only }) => {
+  if (readSettings(BASE).target !== 'cloud') await voices.release()
+  const r = await rebuilds.makeFrames(rebuildId, { only: only || null })
+  const aspect = r.source.width / r.source.height
+  const pictures = []
+  for (const [index, f] of Object.entries(r.frames)) {
+    if (only && !only.includes(Number(index))) continue
+    const files = [f.original.first, f.first, ...(f.last ? [f.original.last, f.last] : [])]
+    pictures.push(await sizzlePicture(files, { width: aspect >= 1 ? 360 : 200, tile: [files.length, 1], aspect }))
+  }
+  return { pictures, ...rebuildSummary(r) }
+})
+tool('approve_rebuild_frames', 'Record that the person approved the frames. Only call this after they looked at them and said yes.', { rebuildId: z.string() }, ({ rebuildId }) => rebuildSummary(rebuilds.approveFrames(rebuildId)))
+tool('make_rebuild_shots', "Rebuild, step 5: render the H3 shots from the approved frames: two previews each (three with a swap). Free and local, but it takes the GPU for a while (about 2-3 min per shot). Poll get_rebuild; when a shot's take says pick, look at its previews (grab_frame) and pass picks: [{index, candidate}] here; each picked preview is finished at 1 MP. A failed shot renders again when this is called again.", { rebuildId: z.string(), picks: z.array(z.object({ index: z.number().int().min(1), candidate: z.number().int().min(1).max(3) })).optional() }, async ({ rebuildId, picks }) => {
+  for (const p of picks || []) rebuilds.pick(rebuildId, p.index, p.candidate)
+  if (readSettings(BASE).target !== 'cloud') await voices.release()
+  await rebuilds.makeShots(rebuildId)
+  return rebuildSummary(await rebuilds.refresh(rebuildId))
+})
+tool('rebuild_first_cut', "Rebuild, step 6: put every shot back in its slot in an IV Studio Edit: new takes retimed into their slots (V1, their own sound muted), kept shots as the original footage, stills with a slow push, the captions as titles (T1) and the original sound on A1 as a guide. Returns the edit's id (get_edit, edit_timeline and export_edit work on it) and what's still original. Tell the person the guide sound has to be replaced before they publish.", { rebuildId: z.string() }, ({ rebuildId }) => rebuilds.firstCut(rebuildId))
+tool('get_rebuild', "A rebuild, brought up to date: its shots with their readings, routes and H3 lengths, the plan and approvals, each H3 shot's frames and take (previews, pick, finish, final file), and the edit. Call it to move rendering along.", { rebuildId: z.string() }, async ({ rebuildId }) => rebuildSummary(await rebuilds.refresh(rebuildId)))
+tool('list_rebuilds', 'Rebuilds, newest first: name, status (reading, planning, approved, frames, rendering, ready, editing), shots and length.', {}, () => ({ items: rebuilds.list() }))
+tool('delete_rebuild', 'Delete a rebuild and its frames, takes and cut pieces (renders in Shots and the Edit stay). Ask the person first.', { rebuildId: z.string() }, ({ rebuildId }) => rebuilds.remove(rebuildId))
 
 // ---------- LoRAs: Civitai's H3 LoRAs and the ones on this PC ----------
 // Downloads use CIVITAI_API_KEY from this server's environment (the app keeps its own key encrypted).

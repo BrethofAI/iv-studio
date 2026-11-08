@@ -60,6 +60,18 @@ function coverOf(e) {
   return { path: m.path, kind: /\.(png|jpe?g|webp)$/i.test(m.path) ? 'picture' : 'video', at: clip.in || 0 }
 }
 
+// The title font is Latin only: words in another script (a Chinese caption a rebuild brought in) are drawn with
+// one of the system's fonts for that script, or ffmpeg prints every character as "?". The first one on this PC
+// wins; none found keeps the Latin font.
+const SCRIPT_FONTS = {
+  hangul: ['C:/Windows/Fonts/malgunbd.ttf', 'C:/Windows/Fonts/malgun.ttf', '/System/Library/Fonts/AppleSDGothicNeo.ttc', '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc', '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'],
+  cjk: ['C:/Windows/Fonts/msyhbd.ttc', 'C:/Windows/Fonts/msyh.ttc', 'C:/Windows/Fonts/YuGothB.ttc', 'C:/Windows/Fonts/simhei.ttf', '/System/Library/Fonts/PingFang.ttc', '/System/Library/Fonts/Hiragino Sans GB.ttc', '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc', '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc']
+}
+export function titleFont(text, latinFont, exists = fs.existsSync) {
+  const script = /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/.test(text) ? 'hangul' : /[\u2e80-\u2fdf\u3000-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]/.test(text) ? 'cjk' : null
+  return (script && SCRIPT_FONTS[script].find((f) => exists(f))) || latinFont
+}
+
 export class Edits {
   constructor({ dataDir, ffmpeg, ffprobe, fontFile }) {
     this.dir = path.join(dataDir, 'edits')
@@ -168,7 +180,7 @@ export class Edits {
       const size = Math.round((c.text.size || 8) * H / 100)
       const y = { top: `h*0.08`, center: `(h-text_h)/2`, bottom: `h*0.92-text_h` }[c.text.position || 'bottom']
       const a = `if(lt(t-${c.start},${c.fadeIn || 0.001}),(t-${c.start})/${c.fadeIn || 0.001},if(gt(t,${clipEnd(c) - (c.fadeOut || 0.001)}),(${clipEnd(c)}-t)/${c.fadeOut || 0.001},1))`
-      const font = this.fontFile.replace(/\\/g, '/').replace(':', '\\:')
+      const font = titleFont(c.text.content, this.fontFile).replace(/\\/g, '/').replace(':', '\\:')
       const tfile = tf.replace(/\\/g, '/').replace(':', '\\:')
       const box = c.text.box ? `:box=1:boxcolor=black@0.55:boxborderw=${Math.round(size * 0.35)}` : ''
       filters.push(`[${last}]drawtext=fontfile='${font}':textfile='${tfile}':fontsize=${size}:fontcolor=${c.text.color || '#f4ecdc'}:x=(w-text_w)/2:y=${y}${box}:alpha='${a}':enable='between(t,${c.start.toFixed(3)},${clipEnd(c).toFixed(3)})'[t${k}]`)
