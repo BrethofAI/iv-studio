@@ -2,6 +2,16 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.0.2',
+    items: [
+      { text: 'Remix a song: on Music, pick a song or one of yours, describe a new style and choose how far to take it (Subtle, Remix or Reimagine, or the slider). ACE-Step redraws it in seconds, reading its tempo and key for you. Works best on instrumentals.' },
+      { text: 'Sequences take LoRAs: add up to four in Look and size and every shot uses them, in one take, retakes and shot by shot.' },
+      { text: 'Edit and run again on a sequence’s shot now opens that shot in its sequence, so the new render stays part of it. Renders that came loose before can be put back with Use as shot N.' },
+      { text: 'Move IV Studio’s data folder to another drive in Settings → Data folder. There’s also a portable Windows zip that keeps everything in a folder beside IV Studio.exe.' },
+      { text: 'Agents can rebuild a video: read it into shots, plan how each is remade, render the H3 ones and cut a first version in Edit (the Rebuild tools).' }
+    ]
+  },
+  {
     version: '1.0.1',
     items: [
       { text: 'A ComfyUI that is busy loading a model or rendering is no longer taken for one that isn’t running: Setup says it’s busy, checks again by itself, and never offers to start a second ComfyUI.' },
