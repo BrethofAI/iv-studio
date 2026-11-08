@@ -2,6 +2,14 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.0.6',
+    items: [
+      { text: 'Cloud setup shows how it’s going: each step with a check or its own progress bar, the time so far and about how long is left, instead of a scrolling log (that’s under Show details).' },
+      { text: 'You don’t have to watch it: leave the page or use the rest of IV Studio. A pill in the top bar shows the progress, and IV Studio tells you when the cloud is ready (with a notification if it’s in the background).' },
+      { text: 'Setting up Modal on a PC without ComfyUI no longer stops at the last step.' }
+    ]
+  },
+  {
     version: '1.0.5',
     items: [
       { text: 'IV Studio keeps its copy of Modal’s client up to date: when a release needs a newer one, it updates itself before your next cloud setup, render or training on Modal (about a minute, sign-in kept). The Cloud page says when one is due, with Update now.' }
