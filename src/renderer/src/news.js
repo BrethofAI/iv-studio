@@ -2,6 +2,13 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.0.7',
+    items: [
+      { text: 'Show details during a cloud setup no longer turns the window blank. The setup itself always kept going; now the window does too.' },
+      { text: 'If a page ever hits an error, IV Studio says so with a Reload button instead of showing an empty window. Renders, downloads and setups carry on either way.' }
+    ]
+  },
+  {
     version: '1.0.6',
     items: [
       { text: 'Cloud setup shows how it’s going: each step with a check or its own progress bar, the time so far and about how long is left, instead of a scrolling log (that’s under Show details).' },
