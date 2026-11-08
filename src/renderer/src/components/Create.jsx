@@ -11,10 +11,15 @@ import { AspectGlyph, DropIcon, StepHead } from './CreateKit'
 import { pretty as refmodTitle, RefModIcon, RefModPicker } from './CharacterSources'
 import { lintSeedance } from '../../../service/seedlint'
 import { confirmSpend, dollars } from './ComfyAccount'
+import { SpeedRow } from './Speed'
+import { finishFor, previewFor, savedSpeed, speedOf } from '../../../service/speed'
 
 // the preview pass's tested sampler and scheduler (plan.js DEFAULTS)
 const SAMPLER_DEFAULT = 'er_sde'
 const SCHEDULER_DEFAULT = 'beta'
+// the speed preset the form's preview size, steps and takes match (service/speed.js), or null (Custom)
+const finishLabel = (f) => `${f.megapixels} MP${f.upscale2x ? ' + 2x' : ''}`
+const speedOfForm = (f) => speedOf({ megapixels: f.megapixels, steps: f.steps, previews: f.mode === 'continue' ? undefined : f.previews })
 
 // [id, label, hint, the hint in plain words (Simple words)]
 const MODES = [
@@ -84,6 +89,8 @@ const withLine = (prompt, text) => {
 }
 
 export default function Create({ setup, characters, notify, openShot, go, incomingLine, clearIncomingLine, incomingLora, clearIncomingLora, incomingPicture, clearIncomingPicture, incomingCharacter, clearIncomingCharacter, incomingRun, clearIncomingRun, kindSwitch }) {
+  // the speed preset saved in Settings → Your PC (service/speed.js)
+  const [savedId, setSavedId] = useState('quality')
   const [form, setForm] = useState({
     projectId: null, // set when editing a shot's run: the new run joins that shot
     projectName: '',
@@ -118,9 +125,10 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   // the defaults Check my PC chose for this computer (Settings → Your PC); a fresh form only
   useEffect(() => {
     window.ivstudio.settings.get().then((s) => {
-      const p = s.shotPrefs
-      if (!p) return
-      setForm((f) => (f.projectId || f.megapixels !== 0.4 || f.steps !== 8 ? f : { ...f, megapixels: p.previewMp || f.megapixels, steps: p.quality === 'draft' ? 4 : 8 }))
+      // the saved speed preset (Settings → Your PC, picked by Check my PC) sets a fresh form's size, steps and takes
+      const id = savedSpeed(s)
+      setSavedId(id)
+      setForm((f) => (f.projectId || f.megapixels !== 0.4 || f.steps !== 8 || f.previews !== 3 ? f : { ...f, ...previewFor(id) }))
     }, () => {})
   }, [])
   // faces: a character's own picture, else its ready-made picture from the catalog (as on Characters)
@@ -153,8 +161,11 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
 
   const request = useMemo(() => {
     const { projectId, projectName, voiceItem, ...r } = form
-    return { ...r, character: r.character ?? 'none', media: r.media.map((m) => ({ kind: m.kind, file: m.path })) }
+    return { ...r, speed: speedOfForm(form) || undefined, character: r.character ?? 'none', media: r.media.map((m) => ({ kind: m.kind, file: m.path })) }
   }, [form])
+  const speed = request.speed || null
+  // a Custom shot finishes like the saved preset (the Finish panel's default too)
+  const finishSpeed = speed || savedId
 
   const sd = form.engine === 'seedance'
   // Seedance: what the hunt would cost, from ComfyUI's own price for each take (pricing.js)
@@ -175,13 +186,13 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     let live = true
     const probe = { ...request, prompt: request.prompt || 'x' }
     window.ivstudio.render
-      .plan(probe, { megapixels: 2 })
+      .plan(probe, finishFor(request.speed || savedId, { upscale2x: setup?.caps?.upscale2x !== false }))
       .then((p) => live && (setPlan(p), setPlanError(null)))
       .catch((err) => live && (setPlan(null), setPlanError(err.message)))
     return () => {
       live = false
     }
-  }, [request])
+  }, [request, savedId])
 
   async function addMedia(kind) {
     addFiles((await window.ivstudio.files.pick(kind)).map((path) => ({ kind, path })))
@@ -743,6 +754,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 </div>
               </div>
             )}
+            {!sd && <SpeedRow value={speed} onPick={(id) => set({ ...previewFor(id), ...(form.mode === 'continue' ? { previews: form.previews } : {}) })} />}
             {!sd && (
             <div className="create-grid">
               <div className="create-field">
@@ -891,7 +903,9 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 </div>
                 <div>
                   <dt>Finish</dt>
-                  <dd>{sd ? (r.draft ? `1080p with Seedance, or on this PC` : 'the take you pick, as it is') : `2 MP → ${plan.finish.width}×${plan.finish.height}`}</dd>
+                  <dd>
+                    {sd ? (r.draft ? `1080p with Seedance, or on this PC` : 'the take you pick, as it is') : `${finishLabel(finishFor(finishSpeed, { upscale2x: setup?.caps?.upscale2x !== false }))} → ${plan.finish.width}×${plan.finish.height}`}
+                  </dd>
                 </div>
                 {sd && (
                   <div>
@@ -928,7 +942,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 {r.previews} {sd ? 'take' : 'preview'}{r.previews > 1 ? 's' : ''} · {r.width} × {r.height} · {r.seconds} s · {sd ? 'Seedance 2.5' : r.model}
                 {!sd && plan.mode && plan.mode !== form.mode ? ' · References (for the @ pictures)' : ''}
               </span>
-              <span className="mono dim">{sd ? (price ? price.label : 'Working out the price…') : `${r.frames} frames · finish at 2 MP → ${plan.finish.width} × ${plan.finish.height}`}</span>
+              <span className="mono dim">{sd ? (price ? price.label : 'Working out the price…') : `${r.frames} frames · finish at ${finishLabel(finishFor(finishSpeed, { upscale2x: setup?.caps?.upscale2x !== false }))} → ${plan.finish.width} × ${plan.finish.height}`}</span>
             </>
           ) : (
             <span className="mono pink">{planError}</span>

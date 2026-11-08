@@ -12846,3 +12846,37 @@ button.set-chip:hover {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* speed presets (components/Speed.jsx): Settings → Your PC's cards and Create's row */
+.speed-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-bottom: 0;
+}
+.speed-cards .set-engine {
+  gap: 6px;
+  padding-right: 16px;
+}
+.speed-time {
+  margin-top: 4px;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--paper-dim);
+}
+.speed-rec {
+  justify-self: start;
+  padding: 2px 7px;
+  border: 1px solid rgba(110, 231, 168, 0.55);
+  background: rgba(110, 231, 168, 0.1);
+  color: #8ff0bd;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.speed-row .segmented {
+  flex-wrap: wrap;
+}
+@container settings (max-width: 620px) {
+  .speed-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.wel-speed { margin: -2px 0 6px; }

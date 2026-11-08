@@ -10,6 +10,7 @@ import { Comfy } from './comfy.js'
 import { probe } from './media.js'
 import { buildPrompt, checkPrompt } from './graph.js'
 import { planFinish, planPreviews } from './plan.js'
+import { applyFinishSpeed, applySpeed } from './speed.js'
 import { adaptGraph, capabilities, withLivePreview } from './remote.js'
 import { Cast, resolveMentions } from './cast.js'
 import { contextIrGraph, fromContextIr, writeHarness, writeLocal, writeStoryLocal } from './prompter.js'
@@ -380,9 +381,9 @@ export class Studio {
 
   // ---------- planning ----------
   // With @ mentions resolved as a render would (cast.js); notes says what they turned into.
-  planRender(asked, finish) {
-    if (asked.engine === SEEDANCE) return this.planSeedanceRender(asked)
-    const { request, notes } = resolveMentions(asked, this.cast.members())
+  planRender(given, finish) {
+    if (given.engine === SEEDANCE) return this.planSeedanceRender(given)
+    const { request, notes } = resolveMentions(applySpeed(given), this.cast.members())
     const plan = planPreviews(request, this.characters())
     const out = { resolved: plan.resolved, groups: plan.groups, notes, mode: request.mode }
     if (finish !== false) out.finish = planFinish(plan, { candidate: 1, ...(finish || {}) }).resolved
@@ -402,7 +403,9 @@ export class Studio {
   // characterOverride: a character that isn't a saved preset (a training's checkpoint under test).
   async generatePreviews(input) {
     if (input.engine === SEEDANCE) return this.seedancePreviews(input)
-    const { projectId, projectName, characterOverride, ...asked } = input
+    const { projectId, projectName, characterOverride, ...given } = input
+    // a speed preset (speed.js) fills the preview size, steps and takes the request leaves out
+    const asked = applySpeed(given)
     // @ mentions (cast.js): the picked character's becomes {char}; anyone or anywhere else with a picture is attached
     const { request, notes } = resolveMentions(asked, this.cast.members())
     const unknown = notes.filter((n) => n.level === 'error')
@@ -436,11 +439,13 @@ export class Studio {
     return planFinish(source.plan, finish).resolved
   }
 
-  async finishCandidate({ jobId, ...finish }) {
+  // fallbackSpeed: the saved preset, for a shot made without one; the shot's own preset wins
+  async finishCandidate({ jobId, speed, fallbackSpeed, ...given }) {
     const source = this.getJob(jobId, { refresh: false })
     if (source.kind !== 'previews') throw new Error('finish_candidate needs a previews job id.')
     if (source.plan?.engine === SEEDANCE) return this.seedanceFinish(source, finish)
     const caps = await this.capabilities()
+    const finish = applyFinishSpeed(given, speed || source.plan.request?.speed || fallbackSpeed, caps)
     if (finish.fps && !caps.fps.includes(finish.fps)) throw new Error(`This ComfyUI can make ${caps.fps.filter(Boolean).join(', ') || 'no other'} fps.`)
     if (finish.upscale2x && !caps.upscale2x && finish.enhancer !== 'seedvr2') throw new Error('This ComfyUI has no 2x upscaler.')
     if (finish.enhancer === 'seedvr2' && this.comfy.remote) throw new Error('SeedVR2 runs on this PC\'s ComfyUI only; the cloud finishes with its own upscaler.')

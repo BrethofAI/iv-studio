@@ -11,6 +11,7 @@ import { Cloud, GPUS, MODAL_VERSION } from '../service/cloud'
 import { SetupProgress, about } from '../service/setupprogress'
 import { RunPod, GPUS as RUNPOD_GPUS } from '../service/runpod'
 import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
+import { isSpeed } from '../service/speed'
 import { comboOptions } from '../service/setup'
 import { comfyUp, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launcherFor, launchersIn, waitUp } from '../service/comfylauncher'
 import { randomBytes } from 'node:crypto'
@@ -1332,6 +1333,8 @@ app.whenReady().then(() => {
     if (typeof plainWords === 'boolean') patch.plainWords = plainWords
     if (['new', 'some', 'lots'].includes(aiLevel)) patch.aiLevel = aiLevel
     if (shotPrefs) patch.shotPrefs = shotPrefs
+    // the speed preset (speed.js) the wizard picked; Settings → Your PC can change it afterwards
+    if (shotPrefs?.speed && isSpeed(shotPrefs.speed)) patch.speed = shotPrefs.speed
     if (hardware) patch.hardware = hardware
     if (promptEngine && ['local', 'claude', 'codex'].includes(promptEngine)) patch.promptEngine = promptEngine
     return publicSettings(writeSettings(patch, BASE))

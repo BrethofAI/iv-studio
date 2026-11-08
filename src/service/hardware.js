@@ -6,6 +6,7 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { finishFor, previewFor, speedForTier } from './speed.js'
 
 const GB = 1024 ** 3
 
@@ -131,7 +132,7 @@ const TIERS = {
   top: { title: 'This PC can do everything, fast', summary: 'Render shots, pictures, music and voices here, finish at full size, and train characters on this PC.', renderOn: 'local' },
   all: { title: 'This PC can do everything', summary: 'Render shots, pictures, music and voices here and finish at full size. Big jobs take a few minutes.', renderOn: 'local' },
   most: { title: 'This PC can make shots, a little smaller', summary: 'Shots, pictures, music and voices all run here. Keep finals at 1 to 1.5 MP; use the cloud for the biggest jobs.', renderOn: 'both' },
-  some: { title: 'Pictures here, video in the cloud', summary: 'Pictures, music and voices run here. Video shots are slow on this card, so make them in the cloud.', renderOn: 'both' },
+  some: { title: 'Pictures here, video in the cloud', summary: 'Pictures, music and voices run here. Video shots are slow on this card: make them in the cloud, or here on the Low memory speed preset.', renderOn: 'both' },
   cloud: { title: 'Make video in the cloud', summary: 'This PC has no NVIDIA card with enough memory for video. Shots render on RunPod, Modal or Comfy Cloud; IV Studio still edits, plans and organises here.', renderOn: 'cloud' }
 }
 
@@ -151,8 +152,8 @@ export function recommend(scan) {
     const state = t.id === 'top' || t.id === 'all' ? 'great' : t.id === 'most' ? 'good' : t.id === 'some' ? 'ok' : 'weak'
     const say = {
       great: 'Enough memory for MiniMax H3 at full size, SeedVR2 and training.',
-      good: 'Runs H3. Previews at 0.4 MP and finals up to 1.5 MP fit comfortably.',
-      ok: 'Pictures, music and voices fit. H3 video works but is slow here.',
+      good: 'Runs H3. The Balanced speed preset fits: 0.4 MP previews, finals at 1 MP upscaled 2x.',
+      ok: 'Pictures, music and voices fit. H3 video works but is slow here; use the Low memory speed preset.',
       weak: 'Too little memory for H3 video. Pictures at small sizes may work.'
     }[state]
     verdicts.push({ id: 'gpu', label: 'Graphics card', value: `${g.name} · ${fmt(g.vram)}`, state, say })
@@ -225,12 +226,15 @@ export function recommend(scan) {
 
   // what to set
   const nvidia = g?.vendor === 'nvidia'
-  const finalMp = t.id === 'top' || t.id === 'all' ? 2 : t.id === 'most' ? 1.5 : 1
+  // a speed preset (speed.js) from the tier: its preview size, steps and takes, and its finish
+  const speed = speedForTier(t.id)
+  const preview = previewFor(speed)
   const enhancer = nvidia && win ? 'dlss' : 'seedvr2'
   const prefs = {
-    previewMp: t.id === 'top' ? 0.6 : 0.4,
-    quality: t.id === 'top' || t.id === 'all' ? 'standard' : 'draft',
-    finalMp,
+    speed,
+    previewMp: preview.megapixels,
+    quality: preview.steps === 4 ? 'draft' : 'standard',
+    finalMp: finishFor(speed).megapixels,
     enhancer,
     enhanceResolution: t.id === 'top' ? 1440 : 1080
   }

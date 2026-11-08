@@ -50,6 +50,7 @@ export const TOURS = {
       { at: '.create-step:has(.create-drop)', title: 'What it builds on', text: 'Drop pictures or a video here. Add them before writing the prompt, so the writer can see them.' },
       { at: 'step:What happens', title: 'What happens', text: 'Say your idea in plain words and press Write my prompt. Type @ to bring in a character or a saved place. The checker below flags problems and its Fix button mends most of them.' },
       { at: 'step:Shape and size', title: 'Shape and size', text: 'The frame shape, the length, how many previews and their quality. Draft is about twice as fast for trying ideas. With Seedance: 4 to 30 seconds, Draft 480p or 720p/1080p, and the price.' },
+      { at: '.speed-row', title: 'Speed', text: 'Presets that trade picture size and steps for time and memory. Fast and Low memory suit smaller graphics cards. Changing the size, steps or takes by hand shows Custom.' },
       { at: ['.shot-card', '.create-dock'], title: 'Your shot', text: 'A summary of what you set up. Hunt renders the previews; you then pick the best one and finish it at full size.' }
     ]
   },
@@ -102,7 +103,7 @@ export const TOURS = {
       { at: '.run-head', title: 'A run', text: 'Each run shows how it was made: mode, size, length, seed, character and render time. Older runs have their own Edit and run again.' },
       { at: '.candidates', title: 'The takes', text: 'Watch each take. A score marks the strongest. Review names what is off and suggests one fix. Mark up to four takes, finals or enhanced copies, then Compare them.' },
       { at: '.take-pick', title: 'Pick one', text: 'Pick the take you like: the Finish settings open over the page. Picking also teaches the scoring your taste.' },
-      { at: '.finish-panel', title: 'Finish it', text: 'Render the picked take at full size, with the enhancer, frame rate and sound you want. A Seedance take finishes at 1080p with Seedance, or free here with SeedVR2, DLSS 5, H3 + DLSS 5 or H3 + SeedVR2, each with its own strength slider.' },
+      { at: '.finish-panel', title: 'Finish it', text: 'Render the picked take at full size. An H3 take starts from the shot’s speed preset (1 MP plus 2x is much quicker than 2 MP). A Seedance take finishes at 1080p, or free here with SeedVR2, DLSS 5 or H3, each with a strength slider.' },
       { at: '.versions-card', title: 'Finished versions', text: 'Every final and enhanced copy as a chip, one player for the one you choose. Enhance adds a sharper copy at the strength you set; Compare plays them in sync, in a grid or a wipe, zoomed in on the same spot.' }
     ]
   },
@@ -262,6 +263,7 @@ export const TOURS = {
       { at: '.settings-tabs', title: 'Settings and Setup', text: 'Settings is how IV Studio works for you. Setup checks what ComfyUI has and downloads what it needs.' },
       { at: '.set-nav', title: 'Jump around', text: 'Every topic in one list. Click one to jump to it.' },
       { at: '#set-pc', title: 'Your PC', text: 'What your computer can do. Check again re-runs the scan and its recommended defaults.' },
+      { at: '.speed-cards', title: 'Speed', text: 'How each new shot starts: Quality, Balanced, Fast or Low memory. The one that suits this PC is marked. Times are from an RTX 4090; smaller cards take longer.' },
       { at: '#set-words', title: 'Words', text: 'Simple words: the app talks in everyday words instead of AI terms, for people new to this. Only the words change.' },
       { at: '#set-comfy', title: 'ComfyUI', text: 'Where ComfyUI is, and whether IV Studio starts it for you when it opens.' },
       { at: '#set-writer', title: 'Prompt writer', text: 'Who writes your prompts: a free local model, your own Claude Code or Codex, or MiniMax’s paid rewriter.' },
