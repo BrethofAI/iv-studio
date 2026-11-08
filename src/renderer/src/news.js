@@ -2,6 +2,12 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.0.4',
+    items: [
+      { text: 'Cloud setup on a new Modal account works: Modal gives new accounts a newer image builder that IV Studio’s Modal client can’t use yet, so IV Studio now asks for the one its cloud is built and tested with (2025.06).' }
+    ]
+  },
+  {
     version: '1.0.3',
     items: [
       { text: 'Modal sign-in fixed: IV Studio only says you’re signed in when Modal accepts the login (before, it could show a workspace called “default” with no login, and setup then stalled). While Modal’s page is open there’s a link to it, for when no browser opened, and Cancel.' },
