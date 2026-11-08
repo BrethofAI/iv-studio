@@ -2,6 +2,14 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.0.3',
+    items: [
+      { text: 'Modal sign-in fixed: IV Studio only says you’re signed in when Modal accepts the login (before, it could show a workspace called “default” with no login, and setup then stalled). While Modal’s page is open there’s a link to it, for when no browser opened, and Cancel.' },
+      { text: 'Sign out of Modal on the Cloud page or in the cloud setup, to sign in again or with another account.' },
+      { text: 'If the window’s page or graphics stop working, IV Studio reloads the window instead of leaving it blank.' }
+    ]
+  },
+  {
     version: '1.0.2',
     items: [
       { text: 'Remix a song: on Music, pick a song or one of yours, describe a new style and choose how far to take it (Subtle, Remix or Reimagine, or the slider). ACE-Step redraws it in seconds, reading its tempo and key for you. Works best on instrumentals.' },
