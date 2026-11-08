@@ -192,9 +192,14 @@ tool('generate_previews', 'Start preview candidates (takes). Returns a job at on
   if (readSettings(BASE).target !== 'cloud') await voices.release()
   return studio.generatePreviews(args)
 })
-tool('finish_candidate', "Finish one preview candidate (2 MP pass, then DLSS 5 with optional RTX 2x and frame generation, or SeedVR2 with enhancer seedvr2) from its recorded settings. Reuses the candidate's saved latent. A Seedance take: way seedance (a draft only) renders it again at 1080p on the person's Comfy.org credits (price_shot with jobId gives the price; pass confirm_cost after they agree); way take uses it as it is, free, after which enhance_final can run DLSS 5 or SeedVR2 on it.", { jobId: z.string().describe('The previews job id'), ...finish, way: z.enum(['seedance', 'take']).optional().describe('Seedance takes only'), confirm_cost: z.number().optional() }, async ({ confirm_cost, ...args }) => {
+tool('finish_candidate', "Finish one preview candidate (2 MP pass, then DLSS 5 with optional RTX 2x and frame generation, or SeedVR2 with enhancer seedvr2) from its recorded settings. Reuses the candidate's saved latent. A Seedance take: way seedance (a draft only) renders it again at 1080p on the person's Comfy.org credits (price_shot with jobId gives the price; pass confirm_cost after they agree); way local finishes it free on this PC, with refiner seedvr2 (the default: SeedVR2 to resolution 1080 or 1440, keeps faces, about 4 minutes), dlss (DLSS 5 to the same size, about 15 s, adds a little skin texture) or h3 (H3 refines it at megapixels, strength light or medium, then DLSS 5; faces shift a little; useLora adds the character's LoRA); way take uses it as it is.", { jobId: z.string().describe('The previews job id'), ...finish, way: z.enum(['seedance', 'local', 'take']).optional().describe('Seedance takes only'), refiner: z.enum(['seedvr2', 'dlss', 'h3']).optional().describe('way local: seedvr2 (default, cleanest), dlss (DLSS 5, quickest) or h3'), resolution: z.union([z.literal(1080), z.literal(1440)]).optional().describe('way local, seedvr2 or dlss: the short side'), strength: z.enum(['light', 'medium']).optional().describe('way local, h3'), useLora: z.boolean().optional().describe('way local, h3'), confirm_cost: z.number().optional() }, async ({ confirm_cost, ...args }) => {
   const source = studio.getJob(args.jobId)
   if (source.plan?.engine === 'seedance' && (args.way || (source.plan.resolved.draft ? 'seedance' : 'take')) === 'seedance') return studio.finishCandidate({ ...args, way: 'seedance', spend: await agreed(studio.priceFinish({ jobId: args.jobId, way: 'seedance' }), confirm_cost) })
+  if (source.plan?.engine === 'seedance' && args.way === 'local') {
+    const { refiner = 'seedvr2', resolution = 1080, ...rest } = args
+    if (refiner === 'h3' || readSettings(BASE).target !== 'cloud') await voices.release()
+    return studio.finishCandidate({ ...rest, engine: refiner, resolution })
+  }
   return studio.finishCandidate(args)
 })
 // What a Seedance shot, or finishing a Seedance draft, would cost on the person's Comfy.org credits.

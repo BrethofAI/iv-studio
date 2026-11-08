@@ -92,19 +92,26 @@ function ReviewCard({ review, title, videoKey, before, onRun }) {
   )
 }
 
-// Finishing a Seedance 2.5 take (seedance.js). A draft: Seedance renders it again at 1080p from its draft (paid,
-// priced and confirmed first), or it is used as it is and Enhance below sharpens and upscales it on this PC for free.
-// A 720p or 1080p take is already a final: it is used as it is.
-function SeedanceFinishPanel({ job, candidate, onStart, notify }) {
+// Finishing a Seedance 2.5 take (seedance.js). Three ways:
+//   seedance  a draft only: Seedance renders it again at 1080p from the draft (paid, priced and confirmed first)
+//   local     free on this PC: SeedVR2 restores it to 1080p or 1440p (keeps faces), or H3 refines it at 1-2 MP at a
+//             light strength and DLSS 5 cleans it up (h3refine.js; faces shift a little)
+//   take      the take itself becomes the final, as it is
+function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characters = [] }) {
   const draft = !!job.plan.resolved?.draft
-  const [way, setWay] = useState(draft ? 'seedance' : 'take')
+  const [way, setWay] = useState(draft ? 'seedance' : remote ? 'take' : 'local')
+  const [opts, setOpts] = useState({ engine: 'seedvr2', resolution: 1080, megapixels: 2, strength: 'light', upscale2x: false, useLora: false })
+  const set = (patch) => setOpts((o) => ({ ...o, ...patch }))
   const [price, setPrice] = useState(null)
+  const [size, setSize] = useState(null)
   const [busy, setBusy] = useState(false)
+  const ch = characters.find((c) => c.id === job.plan.request?.character)
   useEffect(() => {
     let live = true
     window.ivstudio.render.priceFinish({ jobId: job.id, way }).then((p) => live && setPrice(p), () => live && setPrice(null))
+    window.ivstudio.render.planFinish(job.id, { candidate, way, ...opts }).then((r) => live && setSize(r), () => live && setSize(null))
     return () => (live = false)
-  }, [job.id, way])
+  }, [job.id, way, opts])
   async function go() {
     setBusy(true)
     try {
@@ -113,42 +120,133 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify }) {
         spend = await confirmSpend(await window.ivstudio.render.priceFinish({ jobId: job.id, way }), { what: `take ${candidate} at 1080p` })
         if (!spend) return
       }
-      onStart(await window.ivstudio.render.finish({ jobId: job.id, candidate, way, ...(spend ? { spend } : {}) }))
+      onStart(await window.ivstudio.render.finish({ jobId: job.id, candidate, way, ...(way === 'local' ? opts : {}), ...(spend ? { spend } : {}) }))
     } catch (err) {
       notify(err.message)
     } finally {
       setBusy(false)
     }
   }
+  const ways = [...(draft ? [['seedance', 'Seedance 1080p']] : []), ...(remote ? [] : [['local', 'On this PC · free']]), ['take', 'As it is']]
+  const note =
+    way === 'seedance'
+      ? `Seedance renders this draft again at 1080p, on your Comfy.org credits. ComfyUI prices it as ${price?.label || '…'}${price?.likelyUsd ? `; at this length it is likely about $${price.likelyUsd.toFixed(2)} (the 1080p rate)` : ''}. You agree to the top of the range.`
+      : way === 'local'
+        ? opts.engine === 'seedvr2'
+          ? 'SeedVR2 restores detail and upscales it on your graphics card, keeping Seedance’s faces, motion and sound. The cleanest; free, about 4 minutes for 5 s at 1080p.'
+          : opts.engine === 'dlss'
+          ? 'DLSS 5 upscales it on your graphics card, keeping Seedance’s faces, motion and sound. The quickest (about 15 s), with a little added skin texture. Free.'
+          : 'H3 renders it again at full size on your graphics card, keeping Seedance’s motion and sound, then DLSS 5 cleans it up. More of H3’s look; faces shift a little. Free; about 3 minutes.'
+        : 'The take becomes the shot’s final now. Enhance (DLSS 5 or SeedVR2) can still run on it afterwards.'
   return (
     <div className="finish-panel">
       <div className="finish-head">
         <span className="finish-kicker mono">Finish</span>
         <h3>Take {candidate}</h3>
-        <span className="dim small">{draft ? 'A 480p draft. Seedance can render it again at 1080p, or use it as it is and enhance it here, free.' : 'Already final quality: it becomes the shot’s final as it is.'}</span>
+        <span className="dim small">{draft ? 'A 480p Seedance draft.' : 'A Seedance take at final quality.'}</span>
       </div>
-      {draft && (
-        <div className="finish-grid">
-          <div className="row">
-            <span className="row-label">How</span>
-            <div className="enhancer-pick">
-              <div className="segmented">
-                <button className={way === 'seedance' ? 'on' : ''} onClick={() => setWay('seedance')}>
-                  Seedance 1080p
+      <div className="finish-grid">
+        <div className="row">
+          <span className="row-label">How</span>
+          <div className="enhancer-pick">
+            <div className="segmented">
+              {ways.map(([id, label]) => (
+                <button key={id} className={way === id ? 'on' : ''} onClick={() => setWay(id)}>
+                  {label}
                 </button>
-                <button className={way === 'take' ? 'on' : ''} onClick={() => setWay('take')}>
-                  As it is, free
-                </button>
-              </div>
-              <span className="dim small">{way === 'seedance' ? `Seedance renders this draft again at 1080p, on your Comfy.org credits. ComfyUI prices it as ${price?.label || '…'}${price?.likelyUsd ? `; at this length it is likely about $${price.likelyUsd.toFixed(2)} (the 1080p rate)` : ''}. You agree to the top of the range.` : 'The 480p take becomes the final now. Then use Enhance (DLSS 5 or SeedVR2) on it, on this PC.'}</span>
+              ))}
             </div>
+            <span className="dim small">{note}</span>
           </div>
         </div>
-      )}
+        {way === 'local' && (
+          <div className="row">
+            <span className="row-label">With</span>
+            <div className="segmented">
+              <button className={opts.engine === 'seedvr2' ? 'on' : ''} onClick={() => set({ engine: 'seedvr2' })}>
+                SeedVR2
+              </button>
+              <button className={opts.engine === 'dlss' ? 'on' : ''} onClick={() => set({ engine: 'dlss' })}>
+                DLSS 5
+              </button>
+              <button className={opts.engine === 'h3' ? 'on' : ''} onClick={() => set({ engine: 'h3' })}>
+                H3 + DLSS 5
+              </button>
+            </div>
+          </div>
+        )}
+        {way === 'local' && opts.engine !== 'h3' && (
+          <div className="row">
+            <span className="row-label">Size</span>
+            <div className="segmented">
+              {[1080, 1440].map((r) => (
+                <button key={r} className={opts.resolution === r ? 'on' : ''} onClick={() => set({ resolution: r })}>
+                  {r}p
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {way === 'local' && opts.engine === 'h3' && (
+          <>
+            <div className="row">
+              <span className="row-label">Final size</span>
+              <div className="segmented">
+                {FINAL_MP.map((mp) => (
+                  <button key={mp} className={opts.megapixels === mp ? 'on' : ''} onClick={() => set({ megapixels: mp })}>
+                    {mp} MP
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="row">
+              <span className="row-label">Strength</span>
+              <div className="enhancer-pick">
+                <div className="segmented">
+                  <button className={opts.strength === 'light' ? 'on' : ''} onClick={() => set({ strength: 'light' })}>
+                    Light
+                  </button>
+                  <button className={opts.strength === 'medium' ? 'on' : ''} onClick={() => set({ strength: 'medium' })}>
+                    Medium
+                  </button>
+                </div>
+                <span className="dim small">{opts.strength === 'light' ? 'The lightest H3 pass: adds detail, faces shift a little.' : 'More of H3’s detail; faces change more.'}</span>
+              </div>
+            </div>
+            <div className="row">
+              <span className="row-label">RTX upscale</span>
+              <div className="segmented">
+                <button className={!opts.upscale2x ? 'on' : ''} onClick={() => set({ upscale2x: false })}>
+                  Off
+                </button>
+                <button className={opts.upscale2x ? 'on' : ''} onClick={() => set({ upscale2x: true })}>
+                  2×
+                </button>
+              </div>
+            </div>
+            {ch?.lora && (
+              <div className="row">
+                <span className="row-label">{ch.name.split(' ')[0]}’s LoRA</span>
+                <div className="enhancer-pick">
+                  <div className="segmented">
+                    <button className={!opts.useLora ? 'on' : ''} onClick={() => set({ useLora: false })}>
+                      Off
+                    </button>
+                    <button className={opts.useLora ? 'on' : ''} onClick={() => set({ useLora: true })}>
+                      On
+                    </button>
+                  </div>
+                  <span className="dim small">Off keeps the face from Seedance. On pulls it toward the trained {ch.name.split(' ')[0]}.</span>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
       <div className="finish-go">
-        <span className="mono">{way === 'seedance' ? `1080p · ${price ? price.label : '…'}` : `${job.plan.resolved?.width} × ${job.plan.resolved?.height} · free`}</span>
+        <span className="mono">{way === 'seedance' ? `1080p · ${price ? price.label : '…'}` : size ? `${size.width} × ${size.height} · ${size.fps || 24} fps · free` : '…'}</span>
         <button className="btn btn-primary" disabled={busy} onClick={go}>
-          {busy ? 'Starting…' : way === 'seedance' ? `Finish · up to ${price?.max ? `$${price.max.toFixed(2)}` : '…'}` : 'Use this take'}
+          {busy ? 'Starting…' : way === 'seedance' ? `Finish · up to ${price?.max ? `$${price.max.toFixed(2)}` : '…'}` : way === 'local' ? 'Finish' : 'Use this take'}
         </button>
       </div>
     </div>
@@ -549,7 +647,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
               .map((o) => (
                 <ReviewCard key={`rv${o.candidate}`} review={run.reviews[o.candidate]} title={`Review of #${o.candidate}`} videoKey={`${run.id}:${o.candidate}`} before={written} onRun={(p) => editRun?.(run, project, p)} />
               ))}
-            {picked[run.id] && (run.plan?.engine === 'seedance' ? <SeedanceFinishPanel job={run} candidate={picked[run.id]} onStart={onStart} notify={notify} /> : <FinishPanel job={run} candidate={picked[run.id]} onStart={onStart} notify={notify} caps={caps} remote={remote} />)}
+            {picked[run.id] && (run.plan?.engine === 'seedance' ? <SeedanceFinishPanel job={run} candidate={picked[run.id]} onStart={onStart} notify={notify} remote={remote} characters={characters} /> : <FinishPanel job={run} candidate={picked[run.id]} onStart={onStart} notify={notify} caps={caps} remote={remote} />)}
             {finishesOf(run.id).map((f) => {
               const final = f.outputs.find((o) => o.kind === 'final')
               return (

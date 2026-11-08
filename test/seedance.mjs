@@ -8,6 +8,7 @@ import { finalGraph, graphProblems, NODES, planSeedance, seedanceGraph, seedance
 import { lintSeedance, toSeedanceTags } from '../src/service/seedlint.js'
 import { priceGraph } from '../src/service/pricing.js'
 import { fillDefaults, missingInputs } from '../src/service/nodeschema.js'
+import { h3Frames, refineGraph } from '../src/service/h3refine.js'
 
 const info = JSON.parse(fs.readFileSync(new URL('./fixtures/partner-info.json', import.meta.url)))
 let n = 0
@@ -146,6 +147,25 @@ await ok('nodeschema: defaults follow the dynamic combo picked, and missing inpu
   assert.equal(filled.watermark, false)
   assert.ok(missingInputs(info.ByteDance2TextToVideoNode, { model: 'Seedance 2.5' }).includes('model.prompt'))
   assert.deepEqual(missingInputs(info.SaveVideo, fillDefaults(info.SaveVideo, { video: ['1', 0], format: 'mp4' })), [])
+})
+
+await ok('the free H3 finish: 121 frames pad to 124 and trim back, the 480p draft encodes at 864x480, sound kept or silenced', async () => {
+  assert.equal(h3Frames(121), 124)
+  assert.equal(h3Frames(124), 124)
+  assert.equal(h3Frames(97), 107)
+  const template = JSON.parse(fs.readFileSync(new URL('../resources/workflows/iv_studio_api.json', import.meta.url)))
+  const { graph, resolved } = refineGraph(template, { source: { path: 'C:/t.mp4', width: 854, height: 480, frames: 121 }, prompt: '{char} waves', character: { name: 'Tess Marlow', lora: 'MiniMax H3/tess/t.safetensors' }, trigger: 't3ss4', name: 'x', denoise: 0.1 })
+  assert.deepEqual([resolved.encodeWidth, resolved.encodeHeight, resolved.padded, resolved.width, resolved.height], [864, 480, 124, 1952, 1088])
+  assert.equal(graph.tail.inputs.num_frames, 3)
+  assert.equal(graph.trim.inputs.num_frames, 121)
+  assert.equal(graph.sigmas.inputs.denoise, 0.1)
+  assert.equal(graph.cond.inputs.prompt, 't3ss4 waves')
+  assert.match(graph.char.inputs.LoraLoaderState, /tess/)
+  assert.deepEqual(graph.save.inputs.audio, ['load', 2])
+  const quiet = refineGraph(template, { source: { path: 'C:/t.mp4', width: 854, height: 480, frames: 124 }, prompt: 'x', name: 'x', silence: 'iv_studio/silence_51.wav' }).graph
+  assert.equal(quiet.save.inputs.audio, undefined)
+  assert.deepEqual(quiet.aenc.inputs.audio, ['quiet', 0])
+  assert.equal(quiet.tail, undefined, '124 frames need no padding')
 })
 
 console.log(`\n${n} passed`)
