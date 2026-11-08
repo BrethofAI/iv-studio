@@ -2,6 +2,12 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.0.5',
+    items: [
+      { text: 'IV Studio keeps its copy of Modal’s client up to date: when a release needs a newer one, it updates itself before your next cloud setup, render or training on Modal (about a minute, sign-in kept). The Cloud page says when one is due, with Update now.' }
+    ]
+  },
+  {
     version: '1.0.4',
     items: [
       { text: 'Cloud setup on a new Modal account works: Modal gives new accounts a newer image builder that IV Studio’s Modal client can’t use yet, so IV Studio now asks for the one its cloud is built and tested with (2025.06).' }
