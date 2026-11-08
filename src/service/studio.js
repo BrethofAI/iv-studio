@@ -17,6 +17,9 @@ import { checkSetup, comboOptions, modelFileMap, whyUnreached } from './setup.js
 import { comfyPlace, installPacks, missingPacks } from './nodepacks.js'
 import { checkUpdates, copySnapshot, MANAGER_PACK, packFolders, readRecord, reenable, restart, undo, update, writeRecord } from './comfyupdate.js'
 import { comfyUp, isDesktopLauncher, isLocalUrl } from './comfylauncher.js'
+import { finalFrom, finalGraph, graphProblems, NODES as SEEDANCE_NODES, planSeedance, SEEDANCE, seedanceGraph, seedanceMentions, sizeOf, takesFrom, FINAL_FROM_DRAFT } from './seedance.js'
+import { infoFor, priceGraph } from './pricing.js'
+import { writeSeedance } from './seedwriter.js'
 
 const SHOT_BOILERPLATE = [/^there is no (?:writing|text|lettering)/i, /^no (?:signs|text|labels|captions|writing|lettering)\b/i, /^(?:one|a single) (?:continuous|unbroken)\b/i, /^(?:filmed|shot) (?:on|with)\b/i, /^the camera\b/i, /^(?:handheld|static|locked[- ]off)\b/i]
 // A new shot's name from its prompt: the first words of [Shot 1] (not "subject_definitions" or the frames line),
@@ -312,6 +315,7 @@ export class Studio {
   // ---------- planning ----------
   // With @ mentions resolved as a render would (cast.js); notes says what they turned into.
   planRender(asked, finish) {
+    if (asked.engine === SEEDANCE) return this.planSeedanceRender(asked)
     const { request, notes } = resolveMentions(asked, this.cast.members())
     const plan = planPreviews(request, this.characters())
     const out = { resolved: plan.resolved, groups: plan.groups, notes, mode: request.mode }
@@ -331,6 +335,7 @@ export class Studio {
 
   // characterOverride: a character that isn't a saved preset (a training's checkpoint under test).
   async generatePreviews(input) {
+    if (input.engine === SEEDANCE) return this.seedancePreviews(input)
     const { projectId, projectName, characterOverride, ...asked } = input
     // @ mentions (cast.js): the picked character's becomes {char}; anyone or anywhere else with a picture is attached
     const { request, notes } = resolveMentions(asked, this.cast.members())
@@ -361,12 +366,14 @@ export class Studio {
   planFinishJob(jobId, finish) {
     const source = this.getJob(jobId)
     if (source.kind !== 'previews') throw new Error('Needs a previews job id.')
+    if (source.plan?.engine === SEEDANCE) return this.seedanceFinishPlan(source, finish)
     return planFinish(source.plan, finish).resolved
   }
 
   async finishCandidate({ jobId, ...finish }) {
     const source = this.getJob(jobId, { refresh: false })
     if (source.kind !== 'previews') throw new Error('finish_candidate needs a previews job id.')
+    if (source.plan?.engine === SEEDANCE) return this.seedanceFinish(source, finish)
     const caps = await this.capabilities()
     if (finish.fps && !caps.fps.includes(finish.fps)) throw new Error(`This ComfyUI can make ${caps.fps.filter(Boolean).join(', ') || 'no other'} fps.`)
     if (finish.upscale2x && !caps.upscale2x && finish.enhancer !== 'seedvr2') throw new Error('This ComfyUI has no 2x upscaler.')
@@ -374,6 +381,121 @@ export class Studio {
     const plan = planFinish(source.plan, finish)
     plan.values['80'] = source.name
     return this.submit({ kind: 'finish', project: this.getProject(source.projectId), plan, name: source.name, parent: source.id, previewPlan: source.plan })
+  }
+
+  // ---------- Seedance 2.5 (seedance.js): the same shots on ComfyUI's ByteDance partner nodes ----------
+  // partnerKey: () => the person's Comfy.org API key (the app's sealed key, or the MCP server's environment).
+  seedanceRequest(asked) {
+    const { request, notes } = seedanceMentions(asked, this.cast.members())
+    const unknown = notes.filter((n) => n.level === 'error')
+    if (unknown.length) throw new Error(unknown.map((n) => n.message).join(' '))
+    const character = request.character && request.character !== 'none' ? this.characters().find((c) => c.id === request.character) : null
+    const plan = planSeedance(request, this.characters(), { face: character ? this.facePicture(character, this.resourcesDir) : null })
+    plan.notes = [...notes.map((n) => n.message), ...plan.notes]
+    return plan
+  }
+
+  planSeedanceRender(asked) {
+    const plan = this.seedanceRequest({ ...asked, prompt: asked.prompt || 'x' })
+    const { resolved, request } = plan
+    const finish = resolved.draft ? { ...sizeOf(FINAL_FROM_DRAFT.short, request.aspect), seconds: resolved.seconds, fps: 24 } : { width: resolved.width, height: resolved.height, seconds: resolved.seconds, fps: 24 }
+    return { resolved, groups: [], notes: plan.notes.map((message) => ({ level: 'warning', message })), mode: request.mode, engine: SEEDANCE, finish }
+  }
+
+  // The graph for a request, with the references staged into ComfyUI (or, to price it, only named).
+  async seedanceBuild(plan, name, { stage = true } = {}) {
+    const put = (f) => (stage ? this.stage(f, 'seedance') : Promise.resolve(path.basename(f || '')))
+    const staged = { pictures: [], videos: [], audios: [] }
+    for (const k of Object.keys(staged)) for (const f of plan.refs[k]) staged[k].push(await put(f))
+    const probe = { a: { class_type: plan.node.cls }, b: { class_type: 'SaveVideo' }, c: { class_type: 'PreviewAny' }, d: { class_type: 'LoadImage' }, e: { class_type: 'LoadVideo' }, f: { class_type: 'LoadAudio' } }
+    const info = await infoFor(this.comfy, probe)
+    if (!info[plan.node.cls]) throw new Error(`This ComfyUI has no ${plan.node.cls}. Seedance 2.5 needs ComfyUI 0.44 or newer (Settings → Setup → Updates).`)
+    const graph = seedanceGraph(plan, staged, info, name)
+    if (stage) {
+      const problems = graphProblems(graph, info)
+      if (problems.length) throw new Error(`Internal graph error: ${problems.join('; ')}`)
+    }
+    return { graph, info }
+  }
+
+  // What a Seedance request (Create's form) would cost: { paid, min, max, credits, label, nodes, unknown }.
+  async priceRender(asked) {
+    if (asked.engine !== SEEDANCE) return { paid: false, label: 'Free on this PC', min: 0, max: 0, nodes: [], unknown: [] }
+    const plan = this.seedanceRequest({ ...asked, prompt: asked.prompt || 'x' })
+    const { graph, info } = await this.seedanceBuild(plan, 'price', { stage: false })
+    return priceGraph(graph, info)
+  }
+
+  // What finishing a take would cost: Draft to Final for a draft, nothing for a take used as it is.
+  async priceFinish({ jobId, way = 'seedance' }) {
+    const source = this.getJob(jobId)
+    if (source.plan?.engine !== SEEDANCE || !source.plan.resolved.draft || way !== 'seedance') return { paid: false, label: 'Free', min: 0, max: 0, nodes: [], unknown: [] }
+    const graph = finalGraph('x', null, 'price')
+    return priceGraph(graph, await infoFor(this.comfy, graph))
+  }
+
+  async seedancePreviews(input) {
+    const { projectId, projectName, spend, ...asked } = input
+    const plan = this.seedanceRequest(asked)
+    const key = this.partnerKey?.()
+    if (!key) throw new Error('Seedance runs on your Comfy.org credits: add your Comfy.org API key in Settings → Comfy account.')
+    const character = this.characters().find((c) => c.id === plan.request.character)
+    const project = projectId ? this.getProject(projectId) : this.createProject(projectName || shotName(plan.request.prompt, character))
+    const run = project.jobs.length + 1
+    const name = `${slug(project.name)}_${project.id}_r${run}`
+    const { graph } = await this.seedanceBuild(plan, name)
+    plan.asked = { prompt: asked.prompt, mode: asked.mode, media: (asked.media || []).map((m) => ({ kind: m.kind, file: m.file || m.path })), voiceLine: asked.voiceLine || null, engine: SEEDANCE, tier: asked.tier, audio: asked.audio }
+    const promptId = await this.comfy.submit(graph, { api_key_comfy_org: key, iv_studio: { kind: 'previews', project: project.id, engine: SEEDANCE } }, { spend })
+    return this.recordJob({ kind: 'previews', projectId: project.id, name, promptId, plan: { ...plan, engine: SEEDANCE } })
+  }
+
+  seedanceFinishPlan(source, finish = {}) {
+    const { resolved, request } = source.plan
+    const way = finish.way || (resolved.draft ? 'seedance' : 'take')
+    if (way === 'seedance' && resolved.draft) return { ...sizeOf(FINAL_FROM_DRAFT.short, request.aspect), seconds: resolved.seconds, fps: 24, way, engine: SEEDANCE }
+    return { width: resolved.width, height: resolved.height, seconds: resolved.seconds, fps: 24, way: 'take', engine: SEEDANCE }
+  }
+
+  // Finishing a Seedance take. way 'seedance' (a draft only): Draft to Final at 1080p, paid. way 'take': the take
+  // itself becomes the shot's final as it is, at once and free (Enhance can then run DLSS 5 or SeedVR2 on it here).
+  async seedanceFinish(source, { candidate = 1, way, spend } = {}) {
+    const take = (source.outputs || []).find((o) => o.kind === 'preview' && o.candidate === candidate)
+    if (!take) throw new Error(`Take ${candidate} hasn't finished.`)
+    const resolved = this.seedanceFinishPlan(source, { way })
+    if (resolved.way === 'take') {
+      const final = { ...take, kind: 'final' }
+      delete final.candidate
+      return this.recordJob({ kind: 'finish', projectId: source.projectId, name: source.name, parent: source.id, promptId: null, status: 'success', outputs: [final], plan: { engine: SEEDANCE, finish: { candidate, way: 'take' }, request: source.plan.request, resolved } })
+    }
+    if (!take.draftTaskId) throw new Error("That take has no draft task id, so Seedance can't finish it. Use it as it is, or make it again.")
+    const key = this.partnerKey?.()
+    if (!key) throw new Error('Seedance runs on your Comfy.org credits: add your Comfy.org API key in Settings → Comfy account.')
+    const name = `${source.name}_c${candidate}`
+    const info = await infoFor(this.comfy, finalGraph('x', null, name))
+    if (!info[SEEDANCE_NODES.final]) throw new Error('This ComfyUI has no Seedance 2.5 Draft to Final node. Update ComfyUI (Settings → Setup → Updates).')
+    const graph = finalGraph(take.draftTaskId, info, name)
+    const promptId = await this.comfy.submit(graph, { api_key_comfy_org: key, iv_studio: { kind: 'finish', project: source.projectId, engine: SEEDANCE } }, { spend })
+    return this.recordJob({ kind: 'finish', projectId: source.projectId, name, parent: source.id, promptId, plan: { engine: SEEDANCE, finish: { candidate, way: 'seedance' }, request: source.plan.request, resolved } })
+  }
+
+  // Saves a job record (as submitGraph does for H3 graphs) and returns it as the window sees it.
+  recordJob({ kind, projectId, name, promptId, plan, parent = null, status = 'queued', outputs = [] }) {
+    const job = { id: randomUUID().slice(0, 12), kind, projectId, sequenceId: null, parent, name, promptId, status, createdAt: now(), plan, outputs, ...(status === 'success' ? { finishedAt: now() } : {}) }
+    writeJson(this.jobFile(job.id), job)
+    if (projectId) this.touchProject(projectId, job.id)
+    return this.publicJob(job)
+  }
+
+  // Seedance's SaveVideo reports no file path, so its videos are copied into the data folder's seedance folder
+  // (also from a remote ComfyUI), where the editor, Enhance and the Library can use them.
+  async keepLocal(job) {
+    const dir = path.join(this.dataDir, 'seedance')
+    for (const o of job.outputs) {
+      if (o.path && fs.existsSync(o.path)) continue
+      try {
+        o.path = await this.localCopy(o, dir)
+      } catch {}
+    }
   }
 
   async submit({ kind, project, plan, name, parent, previewPlan }) {
@@ -580,6 +702,12 @@ export class Studio {
   async writePrompt(request, { engine = 'local', apiKey = null, model } = {}) {
     const { idea, character: charId = 'none', mode = 'text', seconds = 5, aspect = '16:9', media = [], sequence = false, previous = null } = request
     if (!idea?.trim()) throw new Error('Describe the idea first.')
+    // a Seedance 2.5 shot: its own guide and reference names (seedwriter.js); Context IR is H3's own rewriter
+    if (request.engine === SEEDANCE) {
+      const character = charId === 'none' ? null : this.characters().find((c) => c.id === charId) || null
+      const files = media.map((m) => ({ kind: m.kind, file: m.file || m.path }))
+      return writeSeedance({ engine: engine === 'contextir' ? 'local' : engine, model: engine === 'contextir' ? undefined : model, idea, mode, seconds, character, face: character ? this.facePicture(character, this.resourcesDir) : null, media: files, voiceLine: request.voiceLine || null, resourcesDir: this.resourcesDir, cpu: engine === 'local' && (await this.gpuBusy()) })
+    }
     const character = charId === 'none' ? null : this.characters().find((c) => c.id === charId) || null
     const files = media.map((m) => ({ kind: m.kind, file: m.file || m.path }))
     if (engine === 'local') return writeLocal({ idea, mode, seconds, character, sequence, previous, media: files, model, cpu: await this.gpuBusy() })
@@ -920,6 +1048,7 @@ export class Studio {
       const t = msgs.filter((m) => ['execution_start', 'execution_success', 'execution_error'].includes(m[0])).map((m) => m[1].timestamp)
       if (t.length > 1) job.seconds = Math.round((t.at(-1) - t[0]) / 1000)
       job.outputs = this.collectOutputs(job, h.outputs || {})
+      if (job.plan?.engine === SEEDANCE) await this.keepLocal(job)
       job.finishedAt = now()
       writeJson(this.jobFile(job.id), job)
       // a finish whose enhancer is SeedVR2: its enhance step starts as soon as the finish is done
@@ -959,6 +1088,15 @@ export class Studio {
     const list = []
     const file = (f, kind, extra = {}) => ({ kind, path: f.fullpath || null, url: this.comfy.viewUrl(f), filename: f.filename, subfolder: f.subfolder, ...extra })
     const videoOf = (o) => (o?.gifs || []).filter((f) => /\.mp4$/i.test(f.filename)).sort((a, b) => /-audio/.test(b.filename) - /-audio/.test(a.filename))[0]
+    if (job.plan?.engine === SEEDANCE) {
+      // Seedance 2.5 (seedance.js): its takes, each with the draft task id a 1080p finish needs, or the final
+      if (job.kind === 'previews') for (const t of takesFrom(outputs, job.plan.resolved.previews)) list.push(file(t.file, 'preview', { candidate: t.candidate, seed: job.plan.resolved.seeds[t.candidate - 1], draftTaskId: t.draftTaskId }))
+      else {
+        const f = finalFrom(outputs)
+        if (f) list.push(file(f, 'final'))
+      }
+      return list
+    }
     if (job.plan?.replace) {
       // OpenJutsu's workflows: the final video (Context Loop assembly or VHS), plus mask and "who is who" previews
       const fin = job.plan.replace.finalNode

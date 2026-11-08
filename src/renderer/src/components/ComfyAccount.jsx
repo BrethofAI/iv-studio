@@ -116,14 +116,14 @@ export function AccountCard({ n, notify }) {
 
 // Asks before a paid run. price: from account.price(graph). Resolves with the spend OK to pass along
 // ({ approvedUsd, unknownOk }), or null when the person says no. Free graphs pass straight through.
-export async function confirmSpend(price, { what = 'This run' } = {}) {
+export async function confirmSpend(price, { what = 'this run' } = {}) {
   if (!price?.paid) return { approvedUsd: 0 }
   const a = await window.ivstudio.account.state()
   const cost = (nd) => (nd.unknown ? (nd.text ? `${nd.text}, total not known` : 'no price shown') : nd.min === nd.max ? `about ${dollars(nd.max)}` : `${dollars(nd.min)} to ${dollars(nd.max)}`)
   const range = price.max - price.min > 0.005
   const short = a?.balance && a.balance.usd < price.max
   const message = [
-    `${what} uses paid Comfy.org nodes. These are ComfyUI's own prices.`,
+    `This runs paid Comfy.org nodes (${what}). The prices are ComfyUI's own.`,
     range ? `The final price depends on how the run goes, so you agree to at most ${dollars(price.max)}.` : '',
     price.unknown.length ? 'Some nodes don’t show a fixed price, so the total may be higher.' : ''
   ]
@@ -140,5 +140,5 @@ export async function confirmSpend(price, { what = 'This run' } = {}) {
 
 // Test copies only: lets a test show the confirm for a graph without a run button (window.ivTestSpend(graph)).
 window.ivstudio?.app?.info?.().then?.((i) => {
-  if (i?.testCopy) window.ivTestSpend = async (graph) => confirmSpend(await window.ivstudio.account.price(graph), { what: 'This test' })
+  if (i?.testCopy) window.ivTestSpend = async (graph) => confirmSpend(await window.ivstudio.account.price(graph), { what: 'a test' })
 })

@@ -9,6 +9,8 @@ import { blocking, lintPrompt } from '../../../service/lint'
 import { fileUrl } from './edit/model'
 import { AspectGlyph, DropIcon, StepHead } from './CreateKit'
 import { pretty as refmodTitle, RefModIcon, RefModPicker } from './CharacterSources'
+import { lintSeedance } from '../../../service/seedlint'
+import { confirmSpend, dollars } from './ComfyAccount'
 
 // the preview pass's tested sampler and scheduler (plan.js DEFAULTS)
 const SAMPLER_DEFAULT = 'er_sde'
@@ -45,6 +47,33 @@ overall_soundscape: ___. Her voice is close and natural.
 
 non_diegetic_music: N/A`
 
+// Seedance 2.5 (Comfy credits): references are @image1, @video1, @audio1 in attach order; plain sentences.
+const SEEDANCE_TEMPLATE = `{char}, a woman in her late twenties wearing ___, ___ in ___. Cinematic and realistic, ___ light.
+
+One continuous medium shot, ___ camera.
+0-2 seconds: ___. End state: ___.
+2-5 seconds: ___. Dialogue language: American English. {char} says quietly: "___" End state: ___.
+
+Audio: ___.
+
+Pure video, no subtitles, no on-screen text, no background music.`
+const TIERS = [
+  ['draft', 'Draft · 480p', 'Quick and cheap to hunt with. Finish the one you pick at 1080p with Seedance, or free on this PC.'],
+  ['720p', '720p', 'Final quality straight away.'],
+  ['1080p', '1080p', 'Final quality, full HD.']
+]
+// Seedance's own words for the mode cards
+const SD_HINTS = {
+  text: 'Just the prompt. A character comes along as their face picture.',
+  reference: 'Up to 30 pictures, 10 clips and 10 sounds. Name them @image1, @video1, @audio1.',
+  frames: 'Opens on picture 1 and, optionally, lands on picture 2.',
+  continue: 'Carries a clip on for the length you set. One take.'
+}
+const ENGINES = [
+  ['h3', 'MiniMax H3', 'On this PC · free'],
+  ['seedance', 'Seedance 2.5', 'Comfy credits · priced first']
+]
+
 const base = (p) => p.split(/[\\/]/).pop()
 // The first <d>[Language] …</d> in a prompt takes the spoken words; a prompt without one is left alone.
 const DIALOGUE = /<d>\[([^\]]+)\][^<]*<\/d>/
@@ -57,6 +86,9 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const [form, setForm] = useState({
     projectId: null, // set when editing a shot's run: the new run joins that shot
     projectName: '',
+    engine: 'h3', // 'h3' (this PC) or 'seedance' (Comfy credits)
+    tier: 'draft',
+    audio: true,
     mode: 'text',
     character: 'none',
     prompt: '',
@@ -122,6 +154,21 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     const { projectId, projectName, voiceItem, ...r } = form
     return { ...r, character: r.character ?? 'none', media: r.media.map((m) => ({ kind: m.kind, file: m.path })) }
   }, [form])
+
+  const sd = form.engine === 'seedance'
+  // Seedance: what the hunt would cost, from ComfyUI's own price for each take (pricing.js)
+  const [price, setPrice] = useState(null)
+  useEffect(() => {
+    if (!sd) return setPrice(null)
+    let live = true
+    const t = setTimeout(() => {
+      window.ivstudio.render
+        .price({ ...request, prompt: request.prompt || 'x' })
+        .then((p) => live && setPrice(p))
+        .catch(() => live && setPrice(null))
+    }, 250)
+    return () => ((live = false), clearTimeout(t))
+  }, [request, sd])
 
   useEffect(() => {
     let live = true
@@ -191,6 +238,9 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
       projectId,
       projectName,
       mode: asked?.mode || q.mode,
+      engine: asked?.engine || q.engine || 'h3',
+      tier: asked?.tier || q.tier || f.tier,
+      audio: asked?.audio ?? q.audio ?? true,
       character: q.character ?? 'none',
       prompt: asked?.prompt ?? q.prompt,
       aspect: q.aspect || f.aspect,
@@ -282,10 +332,21 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   }
   const mediaLabel = (m, i) => (form.mode === 'frames' ? (i === 0 ? 'First frame' : 'Last frame') : form.mode === 'continue' ? 'Source video' : `<${m.kind[0].toUpperCase() + m.kind.slice(1)} ${form.media.filter((x, j) => x.kind === m.kind && j <= i).length}>`)
 
+  // Seedance makes 4 to 30 seconds, H3 1 to 15: the length is kept inside the new engine's range
+  function switchEngine(engine) {
+    setForm((f) => ({ ...f, engine, seconds: engine === 'seedance' ? Math.min(30, Math.max(4, Math.round(f.seconds))) : Math.min(15, f.seconds) }))
+  }
+
   async function hunt() {
     setBusy(true)
     try {
-      const job = await window.ivstudio.render.previews({ ...request, projectId: form.projectId || undefined, projectName: form.projectName || undefined })
+      let spend
+      if (sd) {
+        const p = await window.ivstudio.render.price(request)
+        spend = await confirmSpend(p, { what: `${r?.previews || 1} Seedance take${r?.previews > 1 ? 's' : ''}` })
+        if (!spend) return
+      }
+      const job = await window.ivstudio.render.previews({ ...request, projectId: form.projectId || undefined, projectName: form.projectName || undefined, ...(spend ? { spend } : {}) })
       notify('Previews started. You can keep working; they appear here as they finish.', 'info')
       openShot(job.projectId)
     } catch (err) {
@@ -297,21 +358,33 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
 
   const char = characters.find((c) => c.id === form.character)
   // The prompt checker (src/service/lint.js) on every edit; its errors hold back the hunt unless rendered anyway.
+  // Seedance's references, in the order the graph attaches them (seedance.js): the person's own, then the
+  // character's face, then the voice line
+  const sdRefs = useMemo(() => {
+    const face = form.mode !== 'frames' && char && faceOf(char) ? 1 : 0
+    const n = (k) => form.media.filter((m) => m.kind === k).length
+    const voice = form.voiceLine && form.mode !== 'frames' ? 1 : 0
+    // the face and the voice line get their role lines from IV Studio when the prompt leaves them out
+    const auto = [face && `@image${n('picture') + 1}`, voice && `@audio${n('audio') + 1}`].filter(Boolean)
+    return { pictures: Array(n('picture') + face).fill(0), videos: Array(n('video')).fill(0), audios: Array(n('audio') + voice).fill(0), auto }
+  }, [form.media, form.mode, form.voiceLine, char, catalog])
   const findings = useMemo(
-    () => (form.prompt.trim() ? lintPrompt(form.prompt, { mode: form.mode, seconds: form.seconds, media: form.media, character: char ? { name: char.name, trigger: char.trigger } : null, voiceLine: form.voiceLine, mentions: members.map((m) => m.handle) }) : []),
-    [form.prompt, form.mode, form.seconds, form.media, form.voiceLine, char, members]
+    () => (!form.prompt.trim() ? [] : sd ? lintSeedance(form.prompt, { mode: form.mode, seconds: form.seconds, refs: sdRefs, auto: sdRefs.auto }) : lintPrompt(form.prompt, { mode: form.mode, seconds: form.seconds, media: form.media, character: char ? { name: char.name, trigger: char.trigger } : null, voiceLine: form.voiceLine, mentions: members.map((m) => m.handle) })),
+    [form.prompt, form.mode, form.seconds, form.media, form.voiceLine, char, members, sd, sdRefs]
   )
   const errors = blocking(findings)
   const [anyway, setAnyway] = useState(false)
   useEffect(() => setAnyway(false), [form.prompt])
   const r = plan?.resolved
-  const blocked = setup && !setup.ready
+  const comfyOk = setup?.items?.some((i) => i.id === 'comfyui' && i.status === 'ok')
+  const blocked = setup && (sd ? !comfyOk : !setup.ready)
 
   // the step numbers: "What it builds on" only shows for modes that take media
   const steps = form.mode === 'text' ? { who: 2, what: 3, shape: 4 } : { who: 2, media: 3, what: 4, shape: 5 }
   const modeLabel = MODES.find(([id]) => id === form.mode)?.[1]
   const counts = ['picture', 'video', 'audio'].map((k) => [k, form.media.filter((m) => m.kind === k).length]).filter(([, n]) => n)
-  const huntLabel = busy ? 'Starting…' : errors.length && !anyway ? `Fix ${errors.length} error${errors.length > 1 ? 's' : ''} first` : `Hunt ${r?.previews || ''} preview${r?.previews > 1 ? 's' : ''}`
+  const priceText = sd && price?.paid ? (price.max - price.min > 0.005 ? `up to ${dollars(price.max)}` : `about ${dollars(price.max)}`) : ''
+  const huntLabel = busy ? 'Starting…' : errors.length && !anyway ? `Fix ${errors.length} error${errors.length > 1 ? 's' : ''} first` : sd ? `Hunt ${r?.previews || ''} take${r?.previews > 1 ? 's' : ''}${priceText ? ` · ${priceText}` : ''}` : `Hunt ${r?.previews || ''} preview${r?.previews > 1 ? 's' : ''}`
   const canHunt = !(busy || !form.prompt.trim() || !r || blocked || (errors.length > 0 && !anyway))
 
   return (
@@ -340,20 +413,28 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
       <div className="create-layout">
         <div className="create-steps">
           <section className="create-step">
-            <StepHead n={1} title="What kind of shot" sub="How H3 starts: from words, from your pictures and clips, from a first frame, or carrying a video on." />
+            <StepHead n={1} title="What kind of shot" sub={sd ? 'Seedance 2.5 renders on your Comfy.org credits, through ComfyUI. It starts from words, your references, a first frame, or a clip to carry on.' : 'How H3 starts: from words, from your pictures and clips, from a first frame, or carrying a video on.'} />
+            <div className="engine-switch" role="radiogroup" aria-label="Model">
+              {ENGINES.map(([id, label, note]) => (
+                <button key={id} role="radio" aria-checked={form.engine === id} className={`engine-card ${form.engine === id ? 'on' : ''}`} onClick={() => switchEngine(id)}>
+                  <span className="engine-name">{label}</span>
+                  <span className="dim small mono">{note}</span>
+                </button>
+              ))}
+            </div>
             <div className="mode-cards create-modes">
               {MODES.map(([id, label, hint]) => (
                 <button key={id} className={`mode-card ${form.mode === id ? 'on' : ''}`} onClick={() => set({ mode: id, media: [] })}>
                   <ModeIcon id={id} />
                   <span className="mode-name">{label}</span>
-                  <span className="dim small">{hint}</span>
+                  <span className="dim small">{sd ? SD_HINTS[id] : hint}</span>
                 </button>
               ))}
             </div>
           </section>
 
           <section className="create-step">
-            <StepHead n={steps.who} title="Who's in it" sub="A character keeps the same face and voice in every shot. LoRAs add a look, a style or a move; RefMods bring a saved look, voice or place." />
+            <StepHead n={steps.who} title="Who's in it" sub={sd ? 'A character comes along as their face picture, so Seedance keeps their look.' : 'A character keeps the same face and voice in every shot. LoRAs add a look, a style or a move; RefMods bring a saved look, voice or place.'} />
             <div className="cast-picker" role="radiogroup" aria-label="Character">
               {characters.map((c) => (
                 <button key={c.id} role="radio" aria-checked={form.character === c.id} className={`cast-chip ${form.character === c.id ? 'on' : ''}`} onClick={() => set({ character: c.id })}>
@@ -366,6 +447,9 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 <span className="cast-chip-name">Nobody</span>
               </button>
             </div>
+            {sd && <p className="dim small engine-note">Seedance takes a character as their face picture, named in the prompt. LoRAs and RefMods are for H3 only.</p>}
+            {!sd && (
+            <>
             <div className="create-field">
               <span className="create-label mono">LoRAs</span>
               <div className="lora-tray">
@@ -441,6 +525,8 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
               )}
               <span className="dim small">Saved references: a character's look or voice, a place, a style. Best with References mode.</span>
             </div>
+            </>
+            )}
             {pickingRefmod && (
               <RefModPicker
                 onClose={() => setPickingRefmod(false)}
@@ -457,7 +543,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
               <StepHead
                 n={steps.media}
                 title={form.mode === 'frames' ? 'The frames' : form.mode === 'continue' ? 'The video to carry on' : 'What it builds on'}
-                sub={form.mode === 'frames' ? 'The first frame, and a last frame if the clip should land on one.' : form.mode === 'continue' ? 'The clip to continue. 24 fps works best.' : 'A place, an outfit, a voice: name them in the prompt as <Picture 1>, <Video 1>, <Audio 1>.'}
+                sub={form.mode === 'frames' ? 'The first frame, and a last frame if the clip should land on one.' : form.mode === 'continue' ? 'The clip to continue. 24 fps works best.' : sd ? 'A place, an outfit, a voice, a camera move: name each one in the prompt as @image1, @video1, @audio1 and say what to take from it.' : 'A place, an outfit, a voice: name them in the prompt as <Picture 1>, <Video 1>, <Audio 1>.'}
               />
               <div className={`media create-drop ${dragOver ? 'drag-over' : ''} ${form.media.length ? 'filled' : ''}`} onDragOver={(e) => (e.preventDefault(), setDragOver(true))} onDragLeave={() => setDragOver(false)} onDrop={dropMedia}>
                 {form.media.length > 0 ? (
@@ -491,7 +577,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                   {form.media.length > 0 && <span className="dim small">Click one to crop or trim it; the original isn't changed.</span>}
                 </div>
               </div>
-              {form.mode === 'continue' && (
+              {form.mode === 'continue' && !sd && (
                 <div className="create-field inline">
                   <span className="create-label mono">Overlap frames</span>
                   <div className="segmented">
@@ -510,9 +596,9 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
           )}
 
           <section className="create-step">
-            <StepHead n={steps.what} title="What happens" sub="Clothes, place, camera, action and the lines. Never the face or voice: the character carries those." />
+            <StepHead n={steps.what} title="What happens" sub={sd ? 'Who, what happens, where, the camera and the sound, in plain sentences. Give every reference a job.' : 'Clothes, place, camera, action and the lines. Never the face or voice: the character carries those.'} />
             <PromptWriter
-              context={{ mode: form.mode, seconds: form.seconds, aspect: form.aspect, character: form.character ?? 'none', media: form.media.map((m) => ({ kind: m.kind, file: m.path })) }}
+              context={{ engine: form.engine, mode: form.mode, seconds: form.seconds, aspect: form.aspect, character: form.character ?? 'none', media: form.media.map((m) => ({ kind: m.kind, file: m.path })), voiceLine: form.voiceLine || null }}
               current={form.prompt}
               names={char ? [char.name, ...characters.filter((c) => c.id !== char.id).map((c) => c.name), 'Someone'] : ['Someone', ...characters.map((c) => c.name)]}
               onPrevis={(clip) => {
@@ -528,7 +614,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
               <span className="create-label mono">
                 Prompt {char && <span className="dim">· write <code>{'{char}'}</code> for {char.name.split(' ')[0]}</span>}
               </span>
-              <button className="link-btn mono" onClick={() => set({ prompt: form.mode === 'reference' ? REF_TEMPLATE : TEMPLATE })}>
+              <button className="link-btn mono" onClick={() => set({ prompt: sd ? SEEDANCE_TEMPLATE : form.mode === 'reference' ? REF_TEMPLATE : TEMPLATE })}>
                 Insert template
               </button>
             </div>
@@ -559,7 +645,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
               <div className="create-voice-head">
                 <span className="create-label mono">Voice line</span>
                 <span className="dim small">
-                  {char?.voiceId ? `Optional. Speak a line in ${char.name.split(' ')[0]}'s voice, or add a recording; the words go into the prompt.` : char ? `Optional. Give ${char.name.split(' ')[0]} a voice under Audio › Voices to speak lines here.` : 'Optional. A recording H3 lip-syncs to; write the same words in the prompt.'}
+                  {sd ? 'Optional. A recording Seedance uses as the voice and the words (it goes along as an @audio reference).' : char?.voiceId ? `Optional. Speak a line in ${char.name.split(' ')[0]}'s voice, or add a recording; the words go into the prompt.` : char ? `Optional. Give ${char.name.split(' ')[0]} a voice under Audio › Voices to speak lines here.` : 'Optional. A recording H3 lip-syncs to; write the same words in the prompt.'}
                 </span>
               </div>
               <div className="voice-control">
@@ -576,7 +662,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                       </div>
                     )}
                     <button className="btn btn-small" onClick={pickVoice}>
-                      + Recording to lip-sync
+                      {sd ? '+ Voice recording' : '+ Recording to lip-sync'}
                     </button>
                   </>
                 )}
@@ -585,7 +671,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
           </section>
 
           <section className="create-step">
-            <StepHead n={steps.shape} title="Shape and size" sub="The previews are small and quick; the one you pick is finished at full size." />
+            <StepHead n={steps.shape} title="Shape and size" sub={sd ? 'Hunt with cheap Draft takes, then finish the one you pick. Or render 720p or 1080p takes straight away.' : 'The previews are small and quick; the one you pick is finished at full size.'} />
             <div className="aspect-tiles" role="radiogroup" aria-label="Aspect ratio">
               {ASPECTS.map((a) => (
                 <button key={a} role="radio" aria-checked={form.aspect === a} className={`aspect-tile ${form.aspect === a ? 'on' : ''}`} onClick={() => set({ aspect: a })}>
@@ -599,16 +685,62 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 Length <span className="create-value">{form.seconds} s</span>
               </span>
               <div className="length-slider">
-                <input type="range" min={1} max={15} step={0.5} value={form.seconds} onChange={(e) => set({ seconds: Number(e.target.value) })} aria-label="Length in seconds" />
+                <input type="range" min={sd ? 4 : 1} max={sd ? 30 : 15} step={sd ? 1 : 0.5} value={form.seconds} onChange={(e) => set({ seconds: Number(e.target.value) })} aria-label="Length in seconds" />
                 <div className="length-marks mono" aria-hidden="true">
-                  {[1, 5, 10, 15].map((s) => (
-                    <span key={s} style={{ left: `${((s - 1) / 14) * 100}%` }}>
+                  {(sd ? [4, 10, 20, 30] : [1, 5, 10, 15]).map((s) => (
+                    <span key={s} style={{ left: `${((s - (sd ? 4 : 1)) / (sd ? 26 : 14)) * 100}%` }}>
                       {s}s
                     </span>
                   ))}
                 </div>
               </div>
             </div>
+            {sd && (
+              <div className="create-grid">
+                <div className="create-field">
+                  <span className="create-label mono">Quality</span>
+                  <div className="segmented">
+                    {TIERS.map(([id, label, hint]) => (
+                      <button key={id} className={form.tier === id ? 'on' : ''} onClick={() => set({ tier: id })} title={hint}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="dim small">{TIERS.find(([id]) => id === form.tier)?.[2]}</span>
+                </div>
+                {form.mode !== 'continue' && (
+                  <div className="create-field">
+                    <span className="create-label mono">Takes</span>
+                    <div className="segmented">
+                      {[1, 2, 3].map((n) => (
+                        <button key={n} className={form.previews === n ? 'on' : ''} onClick={() => set({ previews: n })}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="create-field">
+                  <span className="create-label mono">Sound</span>
+                  <div className="segmented">
+                    {[
+                      [true, 'With sound'],
+                      [false, 'Silent']
+                    ].map(([v, l]) => (
+                      <button key={l} className={form.audio === v ? 'on' : ''} onClick={() => set({ audio: v })}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="create-field">
+                  <span className="create-label mono">Price</span>
+                  <span className="sd-price">{price ? price.label : 'Working it out…'}</span>
+                  <span className="dim small">ComfyUI’s own price, on your Comfy.org credits. You confirm before anything runs.</span>
+                </div>
+              </div>
+            )}
+            {!sd && (
             <div className="create-grid">
               <div className="create-field">
                 <span className="create-label mono">Preview size</span>
@@ -653,6 +785,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 </div>
               </div>
             </div>
+            )}
             <div className="create-field">
               <span className="create-label mono">
                 Shot name <span className="dim">· optional</span>
@@ -660,6 +793,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
               <input className="shot-name-input" value={form.projectName} placeholder="e.g. Tess car rant" onChange={(e) => set({ projectName: e.target.value })} />
             </div>
 
+            {!sd && (
             <div className={`more-settings ${advanced ? 'open' : ''}`}>
               <button type="button" className="more-settings-toggle mono" onClick={() => setAdvanced(!advanced)} aria-expanded={advanced}>
                 {advanced ? '−' : '+'} Advanced: steps, sampler, scheduler
@@ -707,6 +841,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 </div>
               )}
             </div>
+            )}
           </section>
         </div>
 
@@ -714,12 +849,12 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
         <aside className="shot-card" aria-label="Your shot">
           <div className="shot-card-head mono">
             <span>Your shot</span>
-            <span className="dim">{modeLabel}</span>
+            <span className="dim">{sd ? `Seedance · ${modeLabel}` : modeLabel}</span>
           </div>
           <ShotFrame aspect={form.aspect} media={form.media} mode={form.mode} char={char} face={faceOf(char)} seconds={form.seconds} />
           <div className="shot-time" aria-hidden="true">
             {Array.from({ length: 15 }, (_, i) => (
-              <span key={i} className={i < Math.ceil(form.seconds) ? 'on' : ''} />
+              <span key={i} className={i < Math.ceil((form.seconds * 15) / (sd ? 30 : 15)) ? 'on' : ''} />
             ))}
           </div>
           <dl className="shot-facts">
@@ -727,7 +862,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
               <dt>Who</dt>
               <dd>{char ? char.name : 'Nobody in particular'}</dd>
             </div>
-            {form.extraLoras.length > 0 && (
+            {!sd && form.extraLoras.length > 0 && (
               <div>
                 <dt>LoRAs</dt>
                 <dd>{form.extraLoras.map((l) => loraInfo(l.name)?.civitai?.name || loraTitle(l.name)).join(', ')}</dd>
@@ -746,28 +881,30 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             {r ? (
               <>
                 <div>
-                  <dt>Previews</dt>
+                  <dt>{sd ? 'Takes' : 'Previews'}</dt>
                   <dd>
                     {r.previews} × {r.width}×{r.height} · {r.seconds} s
                   </dd>
                 </div>
                 <div>
                   <dt>Finish</dt>
-                  <dd>
-                    2 MP → {plan.finish.width}×{plan.finish.height}
-                  </dd>
+                  <dd>{sd ? (r.draft ? `1080p with Seedance, or on this PC` : 'the take you pick, as it is') : `2 MP → ${plan.finish.width}×${plan.finish.height}`}</dd>
                 </div>
+                {sd && (
+                  <div>
+                    <dt>Price</dt>
+                    <dd>{price ? price.label : '…'}</dd>
+                  </div>
+                )}
               </>
             ) : null}
             <div>
               <dt>Quality</dt>
-              <dd>
-                {QUALITY.find(([s]) => s === form.steps)?.[1] || `${form.steps} steps`} · seed {form.seed}
-              </dd>
+              <dd>{sd ? `${TIERS.find(([id]) => id === form.tier)?.[1]} · ${form.audio ? 'with sound' : 'silent'}` : `${QUALITY.find(([s]) => s === form.steps)?.[1] || `${form.steps} steps`} · seed ${form.seed}`}</dd>
             </div>
           </dl>
           {!r && planError && <p className="shot-card-error small">{planError}</p>}
-          {plan?.mode && plan.mode !== form.mode && <p className="dim small">Renders in References mode, for the @ pictures.</p>}
+          {!sd && plan?.mode && plan.mode !== form.mode && <p className="dim small">Renders in References mode, for the @ pictures.</p>}
           {errors.length > 0 && !anyway && (
             <button className="link-btn mono small go-anyway" onClick={() => setAnyway(true)}>
               Render anyway
@@ -785,12 +922,10 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
           {r ? (
             <>
               <span className="mono">
-                {r.previews} preview{r.previews > 1 ? 's' : ''} · {r.width} × {r.height} · {r.seconds} s · {r.model}
-                {plan.mode && plan.mode !== form.mode ? ' · References (for the @ pictures)' : ''}
+                {r.previews} {sd ? 'take' : 'preview'}{r.previews > 1 ? 's' : ''} · {r.width} × {r.height} · {r.seconds} s · {sd ? 'Seedance 2.5' : r.model}
+                {!sd && plan.mode && plan.mode !== form.mode ? ' · References (for the @ pictures)' : ''}
               </span>
-              <span className="mono dim">
-                {r.frames} frames · finish at 2 MP → {plan.finish.width} × {plan.finish.height}
-              </span>
+              <span className="mono dim">{sd ? (price ? price.label : 'Working out the price…') : `${r.frames} frames · finish at 2 MP → ${plan.finish.width} × ${plan.finish.height}`}</span>
             </>
           ) : (
             <span className="mono pink">{planError}</span>

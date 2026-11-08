@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { confirmSpend } from './ComfyAccount'
 import { media } from '../media'
 import Hero from './Hero'
 import Findings from './Findings'
 import { LiveFrame } from './Live'
 import { CompareViewer, PromptDiff, runChanges } from './Compare'
 import { lintPrompt } from '../../../service/lint'
+import { lintSeedance } from '../../../service/seedlint'
 
 const DONE = ['success', 'error', 'cancelled']
 const FINAL_MP = [1, 1.5, 2]
@@ -86,6 +88,69 @@ function ReviewCard({ review, title, videoKey, before, onRun }) {
           </details>
         </div>
       )}
+    </div>
+  )
+}
+
+// Finishing a Seedance 2.5 take (seedance.js). A draft: Seedance renders it again at 1080p from its draft (paid,
+// priced and confirmed first), or it is used as it is and Enhance below sharpens and upscales it on this PC for free.
+// A 720p or 1080p take is already a final: it is used as it is.
+function SeedanceFinishPanel({ job, candidate, onStart, notify }) {
+  const draft = !!job.plan.resolved?.draft
+  const [way, setWay] = useState(draft ? 'seedance' : 'take')
+  const [price, setPrice] = useState(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    let live = true
+    window.ivstudio.render.priceFinish({ jobId: job.id, way }).then((p) => live && setPrice(p), () => live && setPrice(null))
+    return () => (live = false)
+  }, [job.id, way])
+  async function go() {
+    setBusy(true)
+    try {
+      let spend
+      if (way === 'seedance') {
+        spend = await confirmSpend(await window.ivstudio.render.priceFinish({ jobId: job.id, way }), { what: `take ${candidate} at 1080p` })
+        if (!spend) return
+      }
+      onStart(await window.ivstudio.render.finish({ jobId: job.id, candidate, way, ...(spend ? { spend } : {}) }))
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="finish-panel">
+      <div className="finish-head">
+        <span className="finish-kicker mono">Finish</span>
+        <h3>Take {candidate}</h3>
+        <span className="dim small">{draft ? 'A 480p draft. Seedance can render it again at 1080p, or use it as it is and enhance it here, free.' : 'Already final quality: it becomes the shot’s final as it is.'}</span>
+      </div>
+      {draft && (
+        <div className="finish-grid">
+          <div className="row">
+            <span className="row-label">How</span>
+            <div className="enhancer-pick">
+              <div className="segmented">
+                <button className={way === 'seedance' ? 'on' : ''} onClick={() => setWay('seedance')}>
+                  Seedance 1080p
+                </button>
+                <button className={way === 'take' ? 'on' : ''} onClick={() => setWay('take')}>
+                  As it is, free
+                </button>
+              </div>
+              <span className="dim small">{way === 'seedance' ? `Seedance renders this draft again at 1080p, on your Comfy.org credits: ${price?.label || '…'}.` : 'The 480p take becomes the final now. Then use Enhance (DLSS 5 or SeedVR2) on it, on this PC.'}</span>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="finish-go">
+        <span className="mono">{way === 'seedance' ? `1080p · ${price ? price.label : '…'}` : `${job.plan.resolved?.width} × ${job.plan.resolved?.height} · free`}</span>
+        <button className="btn btn-primary" disabled={busy} onClick={go}>
+          {busy ? 'Starting…' : way === 'seedance' ? `Finish · up to ${price?.max ? `$${price.max.toFixed(2)}` : '…'}` : 'Use this take'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -378,7 +443,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
         const before = runs[i + 1]
         const changes = runChanges(req, before?.plan.request)
         const ch = characters.find((c) => c.id === req.character)
-        const findings = req.prompt ? lintPrompt(req.prompt, { mode: req.mode, seconds: req.seconds, media: req.media || [], character: ch ? { name: ch.name, trigger: ch.trigger } : null, voiceLine: req.voiceLine }) : []
+        const findings = !req.prompt ? [] : run.plan?.engine === 'seedance' ? lintSeedance(req.prompt, { mode: req.mode, seconds: req.seconds, refs: run.plan.refs || {} }) : lintPrompt(req.prompt, { mode: req.mode, seconds: req.seconds, media: req.media || [], character: ch ? { name: ch.name, trigger: ch.trigger } : null, voiceLine: req.voiceLine })
         const notes = findings.filter((f) => f.level !== 'info').length
         const takeOf = (key, url, label) => ({ key: `${run.id}:${key}`, url: media(url), label: `Run ${runs.length - i} · ${label}`, prompt: written })
         return (
@@ -389,7 +454,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                 <span className="run-n">{String(runs.length - i).padStart(2, '0')}</span>
               </span>
               <span className="run-chips mono">
-                {[MODE_NAME[req.mode] || req.mode, `${run.plan.resolved?.width}×${run.plan.resolved?.height}`, `${run.plan.resolved?.seconds} s`, `seed ${req.seed}`, ch?.name, run.seconds && `${run.seconds} s render`]
+                {[run.plan?.engine === 'seedance' && `Seedance 2.5 ${run.plan.resolved?.draft ? 'Draft' : run.plan.resolved?.tier}`, MODE_NAME[req.mode] || req.mode, `${run.plan.resolved?.width}×${run.plan.resolved?.height}`, `${run.plan.resolved?.seconds} s`, run.plan?.engine !== 'seedance' && `seed ${req.seed}`, ch?.name, run.seconds && `${run.seconds} s render`]
                   .filter(Boolean)
                   .map((c) => (
                     <span key={c}>{c}</span>
@@ -484,7 +549,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
               .map((o) => (
                 <ReviewCard key={`rv${o.candidate}`} review={run.reviews[o.candidate]} title={`Review of #${o.candidate}`} videoKey={`${run.id}:${o.candidate}`} before={written} onRun={(p) => editRun?.(run, project, p)} />
               ))}
-            {picked[run.id] && <FinishPanel job={run} candidate={picked[run.id]} onStart={onStart} notify={notify} caps={caps} remote={remote} />}
+            {picked[run.id] && (run.plan?.engine === 'seedance' ? <SeedanceFinishPanel job={run} candidate={picked[run.id]} onStart={onStart} notify={notify} /> : <FinishPanel job={run} candidate={picked[run.id]} onStart={onStart} notify={notify} caps={caps} remote={remote} />)}
             {finishesOf(run.id).map((f) => {
               const final = f.outputs.find((o) => o.kind === 'final')
               return (

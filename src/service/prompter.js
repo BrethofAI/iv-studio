@@ -361,7 +361,7 @@ const run = (cmd, args) =>
   })
 
 // One picture or video frame as base64 JPEG. at: a fraction of the video's length, 'end', or none for a picture.
-async function jpegOf({ file, at }) {
+export async function jpegOf({ file, at }) {
   let seek = []
   if (at === 'end') seek = ['-sseof', '-0.1']
   else if (at != null) {

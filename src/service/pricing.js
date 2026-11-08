@@ -4,12 +4,14 @@
 // for an API-form graph, so the confirm before a paid run shows the price ComfyUI's own window would show.
 // (Written for IV Studio from how ComfyUI behaves; none of ComfyUI's front-end code is copied. JSONata is MIT.)
 import jsonata from 'jsonata'
+import { isLink, specDefault, specFor } from './nodeschema.js'
+
+export { specDefault, specFor }
 
 // Comfy.org sells 211 credits for $1 (ComfyUI's own front end uses the same rate).
 export const CREDITS_PER_USD = 211
 export const usdToCredits = (usd) => Math.round(usd * CREDITS_PER_USD)
 
-const isLink = (v) => Array.isArray(v) && v.length === 2 && (typeof v[0] === 'string' || typeof v[0] === 'number') && typeof v[1] === 'number'
 
 // Nodes that only hold a value; a widget linked to one of these still has a known value.
 const PRIMITIVES = new Set(['PrimitiveInt', 'PrimitiveFloat', 'PrimitiveString', 'PrimitiveStringMultiline', 'PrimitiveBoolean', 'PrimitiveNode'])
@@ -19,40 +21,6 @@ export function partnerNodes(graph, info) {
   return Object.entries(graph || {})
     .filter(([, n]) => n && info?.[n.class_type]?.api_node)
     .map(([id, node]) => ({ id, node, def: info[node.class_type] }))
-}
-
-// The input spec for a (possibly dotted) input name, following the dynamic combo the graph picked:
-// "model.resolution" is the `resolution` input of whichever `model` option the node has.
-export function specFor(def, name, inputs = {}) {
-  const parts = name.split('.')
-  let scope = { ...(def?.input?.required || {}), ...(def?.input?.optional || {}) }
-  let prefix = ''
-  for (let i = 0; i < parts.length; i++) {
-    const spec = scope[parts[i]]
-    if (!spec) return null
-    const full = prefix ? `${prefix}.${parts[i]}` : parts[i]
-    if (i === parts.length - 1) return spec
-    if (spec[0] === 'COMFY_DYNAMICCOMBO_V3') {
-      const options = spec[1]?.options || []
-      const key = inputs[full] ?? options[0]?.key
-      const picked = options.find((o) => o.key === key) || options[0]
-      scope = { ...(picked?.inputs?.required || {}), ...(picked?.inputs?.optional || {}) }
-    } else if (spec[0] === 'COMFY_AUTOGROW_V3') {
-      scope = { ...(spec[1]?.template?.input?.required || {}), ...(spec[1]?.template?.input?.optional || {}) }
-    } else return null
-    prefix = full
-  }
-  return null
-}
-
-// A widget's default from its spec: an explicit default, else the first option.
-export function specDefault(spec) {
-  if (!spec) return null
-  const o = spec[1]
-  if (o && typeof o === 'object' && 'default' in o) return o.default
-  if (Array.isArray(o?.options) && o.options.length) return typeof o.options[0] === 'object' && o.options[0] ? o.options[0].key : o.options[0]
-  if (Array.isArray(spec[0]) && spec[0].length) return spec[0][0]
-  return null
 }
 
 // Widget values as the price expressions expect them: numbers for INT/FLOAT, booleans for BOOLEAN, and everything

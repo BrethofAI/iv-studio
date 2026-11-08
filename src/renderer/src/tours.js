@@ -44,11 +44,12 @@ export const TOURS = {
     title: 'Create a shot',
     steps: [
       { at: '.create-kind', title: 'Video or picture', text: 'Make a shot with sound (Video) or a still picture (Image).' },
+      { at: '.engine-switch', title: 'The model', text: 'MiniMax H3 renders on this PC, free. Seedance 2.5 uses your Comfy.org credits: same modes and hunt, and you see the price and confirm first. Hunt in cheap 480p drafts, then finish your pick at 1080p.' },
       { at: 'step:What kind of shot', title: 'What kind of shot', text: 'Text starts from words alone. References, Frames and Continue start from your pictures or a video.' },
       { at: "step:Who's in it", title: 'Who is in it', text: 'Pick a character so they look and sound the same in every shot. LoRAs and RefMods add a look, a style or a move.' },
       { at: '.create-step:has(.create-drop)', title: 'What it builds on', text: 'Drop pictures or a video here. Add them before writing the prompt, so the writer can see them.' },
       { at: 'step:What happens', title: 'What happens', text: 'Say your idea in plain words and press Write my prompt. Type @ to bring in a character or a saved place. The checker below flags problems and its Fix button mends most of them.' },
-      { at: 'step:Shape and size', title: 'Shape and size', text: 'The frame shape, the length, how many previews and their quality. Draft is about twice as fast for trying ideas.' },
+      { at: 'step:Shape and size', title: 'Shape and size', text: 'The frame shape, the length, how many previews and their quality. Draft is about twice as fast for trying ideas. With Seedance: 4 to 30 seconds, Draft 480p or 720p/1080p, and the price.' },
       { at: ['.shot-card', '.create-dock'], title: 'Your shot', text: 'A summary of what you set up. Hunt renders the previews; you then pick the best one and finish it at full size.' }
     ]
   },

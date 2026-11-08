@@ -32,6 +32,7 @@ import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
 import { getBalance } from '../service/comfyaccount'
 import { infoFor, priceGraph } from '../service/pricing'
+import { lintSeedance } from '../service/seedlint'
 import { comfyUp, findLaunchers, launcherFor } from '../service/comfylauncher'
 import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
 import { comboOptions } from '../service/setup'
@@ -99,12 +100,15 @@ const media = z
   .optional()
   .describe('frames mode: 1-2 pictures (first, last). reference mode: pictures, videos, audio, named <Picture 1>, <Video 1>, <Audio 1> in the prompt. continue mode: 1 video.')
 const request = {
+  engine: z.enum(['h3', 'seedance']).default('h3').describe('h3: MiniMax H3 on this PC (free). seedance: Seedance 2.5 through ComfyUI\'s partner nodes, on the person\'s Comfy.org credits (needs COMFY_ORG_API_KEY in this server\'s environment and confirm_cost; price it first with price_shot). Seedance takes no LoRAs, RefMods or sampler settings; a character comes in as their face picture.'),
+  tier: z.enum(['draft', '720p', '1080p']).optional().describe('seedance: draft (480p, cheap, for hunting; finish the pick at 1080p with way seedance, or use it as it is with way take), 720p or 1080p (final quality)'),
+  audio: z.boolean().optional().describe('seedance: generate sound (default true)'),
   mode: z.enum(Object.keys(MODES)).default('text').describe('text, frames (first/last frame), reference (ref2va), continue (extend a video)'),
-  prompt: z.string().describe('H3 prompt. Write {char} where the character trigger word goes, e.g. "{char} (S1) says: <d>[English] Hi.</d>"'),
+  prompt: z.string().describe('H3 prompt. Write {char} where the character trigger word goes, e.g. "{char} (S1) says: <d>[English] Hi.</d>". For seedance: plain sentences, references named @image1, @video1, @audio1 in attach order (write_prompt with target seedance writes them)'),
   character: z.string().default('tess').describe('Character preset id from list_characters, or "none"'),
   aspect: z.enum(Object.keys(ASPECTS)).default('16:9'),
   megapixels: z.number().min(0.1).max(2.5).default(0.4).describe('Preview size. 0.4 is the tested default.'),
-  seconds: z.number().min(1).max(15).default(5),
+  seconds: z.number().min(1).max(30).default(5).describe('H3: 1-15. seedance: 4-30, whole seconds'),
   previews: z.number().int().min(1).max(3).default(3),
   seed: z.number().int().min(0).default(4242).describe('Previews use seed, seed+1000, seed+2000'),
   steps: z.number().int().min(4).max(20).default(8),
@@ -176,13 +180,28 @@ tool('list_cast', 'Who and what a prompt can mention with @: character presets (
 tool('save_place', 'Save a place to mention as @Name in any prompt: a name, a picture (an image file path) and a short description of the room or setting.', { name: z.string(), picture: z.string().describe('An image file path'), description: z.string().default(''), id: z.string().optional().describe('To change a saved place') }, (args) => studio.cast.savePlace(args))
 tool('enhance_final', "Enhance a finished shot: engine seedvr2 (SeedVR2 3B restores detail and upscales to a short side of resolution, sound kept) or dlss (DLSS 5 with the finish's own noise reduction, at scale 1 or 2). A new job in the same shot; follow with get_job. On this PC's ComfyUI only. jobId is the finish job.", { jobId: z.string(), engine: z.enum(['seedvr2', 'dlss']).default('seedvr2'), resolution: z.union([z.literal(1080), z.literal(1440), z.literal(2160)]).default(1080).describe('seedvr2: the short side'), scale: z.union([z.literal(1), z.literal(2)]).default(1).describe('dlss: 1 cleans up at the same size, 2 doubles it') }, async (args) => (readSettings(BASE).target === 'cloud' || (await voices.release()), studio.enhanceFinal(args)))
 tool('check_prompt', "Check an H3 prompt before rendering: the prompt checker lists what H3 is likely to misread (wrong opening line for frames, cut times past the end, more lines than fit the time, quotes or names inside <d>, missing speaker IDs, references attached but never named, describing a LoRA character's face, filler words, too many camera moves). Each finding has a level (error blocks generate_previews unless force), a message and sometimes fix: the whole prompt mended.", { ...request }, (args) => ({ findings: checkRequest(args) }))
-tool('generate_previews', 'Start preview candidates. Returns a job at once; follow with get_job. The prompt checker runs first: errors stop it (fix them, or pass force: true when you mean it).', { ...request, projectId: z.string().optional(), projectName: z.string().optional(), force: z.boolean().default(false) }, async ({ force, ...args }) => {
+tool('generate_previews', 'Start preview candidates (takes). Returns a job at once; follow with get_job. The prompt checker runs first: errors stop it (fix them, or pass force: true when you mean it). engine seedance renders on the person\'s Comfy.org credits: get the price with price_shot, tell the person, and pass confirm_cost (at least the top of the price) only after they agree.', { ...request, projectId: z.string().optional(), projectName: z.string().optional(), force: z.boolean().default(false), confirm_cost: z.number().optional().describe('seedance: the dollars the person agreed to (price_shot\'s maxUsd)') }, async ({ force, confirm_cost, ...args }) => {
+  if (args.engine === 'seedance') {
+    const plan = studio.seedanceRequest(args)
+    const errs = lintSeedance(plan.request.prompt, { mode: plan.request.mode, seconds: plan.resolved.seconds, refs: plan.refs }).filter((f) => f.level === 'error')
+    if (errs.length && !force) throw new Error(`The Seedance prompt checker found: ${errs.map((f) => f.message).join(' | ')} Fix the prompt, or pass force: true.`)
+    return studio.generatePreviews({ ...args, spend: await agreed(studio.priceRender(args), confirm_cost) })
+  }
   const errors = blocking(checkRequest(args))
   if (errors.length && !force) throw new Error(`The prompt checker found ${errors.length} error${errors.length > 1 ? 's' : ''}: ${errors.map((f) => f.message).join(' | ')} Fix the prompt (check_prompt gives fixes), or pass force: true.`)
   if (readSettings(BASE).target !== 'cloud') await voices.release()
   return studio.generatePreviews(args)
 })
-tool('finish_candidate', "Finish one preview candidate (2 MP pass, then DLSS 5 with optional RTX 2x and frame generation, or SeedVR2 with enhancer seedvr2) from its recorded settings. Reuses the candidate's saved latent.", { jobId: z.string().describe('The previews job id'), ...finish }, (args) => studio.finishCandidate(args))
+tool('finish_candidate', "Finish one preview candidate (2 MP pass, then DLSS 5 with optional RTX 2x and frame generation, or SeedVR2 with enhancer seedvr2) from its recorded settings. Reuses the candidate's saved latent. A Seedance take: way seedance (a draft only) renders it again at 1080p on the person's Comfy.org credits (price_shot with jobId gives the price; pass confirm_cost after they agree); way take uses it as it is, free, after which enhance_final can run DLSS 5 or SeedVR2 on it.", { jobId: z.string().describe('The previews job id'), ...finish, way: z.enum(['seedance', 'take']).optional().describe('Seedance takes only'), confirm_cost: z.number().optional() }, async ({ confirm_cost, ...args }) => {
+  const source = studio.getJob(args.jobId)
+  if (source.plan?.engine === 'seedance' && (args.way || (source.plan.resolved.draft ? 'seedance' : 'take')) === 'seedance') return studio.finishCandidate({ ...args, way: 'seedance', spend: await agreed(studio.priceFinish({ jobId: args.jobId, way: 'seedance' }), confirm_cost) })
+  return studio.finishCandidate(args)
+})
+// What a Seedance shot, or finishing a Seedance draft, would cost on the person's Comfy.org credits.
+tool('price_shot', "The price of a Seedance 2.5 render before it runs, from ComfyUI's own price for each take (211 credits = $1): pass the same fields as generate_previews (engine seedance), or jobId (and way seedance) for finishing a draft at 1080p. Tell the person the figure and get a yes before passing it as confirm_cost. H3 renders on this PC are free.", { ...request, prompt: z.string().default('x'), jobId: z.string().optional() }, async ({ jobId, ...args }) => {
+  const p = jobId ? await studio.priceFinish({ jobId, way: 'seedance' }) : await studio.priceRender(args)
+  return { paid: p.paid, label: p.label, minUsd: p.min, maxUsd: p.max, credits: p.credits, noPrice: p.unknown }
+})
 const sequenceFields = {
   name: z.string().optional(),
   method: z.enum(['take', 'shots']).optional().describe('take: every shot in one seamless render. shots: hunt and finish shot by shot, each continuing from the last.'),
@@ -231,8 +250,11 @@ tool('write_prompt', "Write a MiniMax H3 prompt from a plain-words idea, using t
   media,
   sequence: z.boolean().default(false).describe('Write it as one shot of a continuous sequence (join rules)'),
   previous: z.string().optional().describe('sequence: the prompt of the previous shot'),
-  engine: z.enum(['local', 'claude', 'codex', 'contextir']).optional().describe('Defaults to the choice in Settings → Prompt writer')
-}, ({ engine, ...request }) => {
+  engine: z.enum(['local', 'claude', 'codex', 'contextir']).optional().describe('Defaults to the choice in Settings → Prompt writer'),
+  target: z.enum(['h3', 'seedance']).default('h3').describe('seedance: a Seedance 2.5 prompt from IV Studio\'s Seedance guide, with references named @image1, @video1, @audio1 (a character\'s face comes after your pictures)'),
+  voiceLine: z.string().optional().describe('seedance: a voice recording that goes along as @audio')
+}, ({ engine, target, ...request }) => {
+  if (target === 'seedance') request = { ...request, engine: 'seedance' }
   const s = readSettings(BASE)
   const chosen = engine || (s.promptEngine === 'contextir' && !process.env.COMFY_ORG_API_KEY ? 'local' : s.promptEngine || 'local')
   const w = writerOf({ ...s, promptEngine: chosen })
@@ -906,6 +928,8 @@ tool('review_take', "Review one take against its prompt, as a director would: th
 })
 process.on('exit', () => voices.release())
 studio.beforeRender = () => voices.release()
+// Seedance and other partner nodes run on the key in this server's environment (the app keeps its own sealed)
+studio.partnerKey = () => process.env.COMFY_ORG_API_KEY || null
 tool('voice_status', `Whether IV Studio's voice engine is set up (${VOICE_ENGINES.map((e) => `${e.label}: ${e.note}`).join(' ')} Whisper large-v3 turbo, MIT, reads the words in recordings). installed false: ask the person to press Set up voices on Audio > Voices, or run setup_voices with their OK.`, {}, () => voices.status())
 tool('setup_voices', "Set up IV Studio's voice engine once: a Python environment with PyTorch and VoxCPM, plus the VoxCPM2 and Whisper models, about 12 GB of free downloads into IV Studio's data folder (roughly 5-15 minutes). Ask the person first. Returns when done.", {}, () => voices.setup())
 tool('list_voices', 'Every saved voice: id, name, kind (designed, clone, ready), engine, seed, reference recording and its words, and which characters use it.', {}, async () => {
@@ -1021,6 +1045,14 @@ tool('scan_hardware', "Check this PC, as the welcome wizard does: graphics card 
   const scan = await scanHardware({ installs, comfyFolder: modelsFolder || s.comfyFolder || (launchers[0] ? path.dirname(launchers[0].path) : '') })
   return { scan, recommendations: recommend(scan) }
 })
+// A paid render goes ahead only with the person's OK for at least its price (agents pass it as confirm_cost).
+async function agreed(pricePromise, confirm) {
+  const p = await pricePromise
+  if (!p.paid) return { approvedUsd: 0 }
+  if (typeof confirm !== 'number') throw new Error(`This costs ${p.label} on the person's Comfy.org credits. Tell them, and pass confirm_cost: ${Math.ceil(p.max * 100) / 100} once they agree.`)
+  if (confirm < p.max - 0.005) throw new Error(`This costs up to $${p.max.toFixed(2)} (${p.label}); confirm_cost ${confirm} is less. Ask the person to agree to the full figure.`)
+  return { approvedUsd: confirm, unknownOk: p.unknown.length > 0 }
+}
 // The Comfy.org account: this server reads COMFY_ORG_API_KEY from its environment (the app keeps its own key encrypted).
 tool('comfy_balance', "The person's Comfy.org credit balance: what ComfyUI's paid partner nodes (Seedance, Kling, Veo and others) spend. Returns credits and dollars (211 credits = $1). Needs COMFY_ORG_API_KEY in this server's environment; the IV Studio window shows the same balance in its title bar.", {}, async () => {
   if (!process.env.COMFY_ORG_API_KEY) throw new Error('This server has no COMFY_ORG_API_KEY in its environment. The person can see their balance in the IV Studio window (title bar, or Settings → Comfy account), or add the key to this server’s environment.')

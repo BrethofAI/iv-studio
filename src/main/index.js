@@ -164,6 +164,8 @@ function makeStudio() {
   if (civitai) civitai.comfy = new Comfy(s.comfyUrl)
   // nothing of IV Studio's own holds the GPU while ComfyUI renders (see Studio.makeRoom)
   studio.beforeRender = () => voices?.release()
+  // Seedance and other partner nodes: the person's Comfy.org key, read when a render needs it (never sent to the window)
+  studio.partnerKey = () => unseal(readSettings(BASE).comfyApiKey)
   if (!installer?.running) installer = new ModelInstaller({ comfy: studio.comfy, manifest: studio.manifest, onUpdate: (u) => send('models:update', u) })
   stopWatch = studio.watch((msg) => {
     if (msg.type === 'progress' || msg.type === 'executing' || msg.type === 'execution_success' || msg.type === 'execution_error') pump()
@@ -1408,14 +1410,17 @@ app.whenReady().then(() => {
   handle('cast:places', () => studio.cast.places())
   handle('cast:savePlace', (place) => studio.cast.savePlace(place))
   handle('cast:deletePlace', (id) => studio.cast.deletePlace(id))
+  // What a render would cost on Comfy.org credits (Seedance), and what finishing a take would
+  handle('render:price', (request) => studio.priceRender(request))
+  handle('render:priceFinish', (opts) => studio.priceFinish(opts))
   handle('render:previews', async (request) => {
-    await freeVoices()
+    if (request?.engine !== 'seedance') await freeVoices()
     const job = await studio.generatePreviews(request)
     pending.add(job.id)
     return job
   })
   handle('render:finish', async (opts) => {
-    await freeVoices()
+    if (studio.getJob(opts.jobId)?.plan?.engine !== 'seedance' || opts.way === 'local') await freeVoices()
     const job = await studio.finishCandidate(opts)
     pending.add(job.id)
     return job

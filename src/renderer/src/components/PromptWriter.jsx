@@ -37,7 +37,8 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
     window.ivstudio.prompts.status().then(setStatus).catch(() => setStatus(null))
   }, [])
 
-  const engine = status?.engine || 'local'
+  // Context IR is MiniMax's H3 rewriter: a Seedance shot is written by the local writer instead
+  const engine = context.engine === 'seedance' && status?.engine === 'contextir' ? 'local' : status?.engine || 'local'
   const harness = engine === 'claude' || engine === 'codex'
   const blocker =
     status &&
@@ -81,7 +82,7 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
     <div className={`writer ${compact ? 'compact' : ''}`}>
       <div className="writer-head">
         <span className="mono label writer-label">✦ Write it for me</span>
-        <span className="mono dim small">{engine === 'contextir' ? `MiniMax Context IR · ${status?.contextIrPrice?.split(' (')[0] || 'paid'}` : harness ? `${HARNESS_NAME[engine]} · your plan` : `Local writer · free`}</span>
+        <span className="mono dim small">{engine === 'contextir' ? `MiniMax Context IR · ${status?.contextIrPrice?.split(' (')[0] || 'paid'}` : harness ? `${HARNESS_NAME[engine]} · your plan` : `Local writer · free`}{context.engine === 'seedance' ? ' · Seedance guide' : ''}</span>
       </div>
       <div className="writer-row">
         <textarea rows={compact ? 2 : 2} value={idea} placeholder={context.sequence ? 'What happens in this shot, in plain words' : 'Your idea in plain words, e.g. Tess in a parked car at night admits she kept the letter'} onChange={(e) => setIdea(e.target.value)} />
