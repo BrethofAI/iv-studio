@@ -8,6 +8,10 @@
 //   Finish: 2 MP pass 194 s (only 1 GB of H3 stays on a 24 GB card), 1 MP + RTX 2x 116 s (2752x1536).
 //   Attention settings (SLA keep %, dense, comfy kitchen vs PyTorch) and EasyCache changed almost nothing.
 //   0.3 MP with 4 steps: 37 s for one take, close to the 0.4 MP / 8-step picture.
+// The same 4090 with ComfyUI's --reserve-vram set to leave what a 16 GB card (7.5) and a 12 GB card (11.5) would:
+//   0.4 MP, 8 steps 109 s / 123 s; 0.3 MP, 4 steps 46 s / 65 s; 2 MP finish 227 s / 213 s; 1 MP + RTX 2x 152 s / 148 s.
+//   Everything fit (no out-of-memory) and the pictures matched; only the speed changed. A smaller card's own
+//   compute is slower too, which that can't show.
 
 export const SPEEDS = {
   quality: {
