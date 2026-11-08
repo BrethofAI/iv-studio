@@ -210,6 +210,11 @@ export default function CloudWizard({ onClose, notify, recheck, info }) {
                           Install
                         </button>
                       )}
+                      {st.toolkitUpdate && (
+                        <button className="btn" disabled={!!busy} onClick={() => run('Updating the cloud tools', () => window.ivstudio.cloud.install())}>
+                          Update to {st.toolkitUpdate}
+                        </button>
+                      )}
                     </Task>
                     <Task done={!!st.workspace} title="Modal account" text={st.workspace ? '' : 'Opens Modal’s sign-in page in your browser. New to Modal? Signing up is free.'}>
                       <ModalAccount st={st} busy={busy} run={run} info={info} notify={notify} onChanged={refresh} compact />

@@ -1,7 +1,7 @@
 // The Modal account (src/service/cloud.js): signed in only when Modal's own token check names a workspace, and
 // signing out takes out just the active profile.
 import assert from 'node:assert/strict'
-import { workspaceOf, withoutActiveProfile, Cloud, IMAGE_BUILDER } from '../src/service/cloud.js'
+import { workspaceOf, withoutActiveProfile, Cloud, IMAGE_BUILDER, MODAL_VERSION, clientVersionIn } from '../src/service/cloud.js'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -43,5 +43,44 @@ assert.equal(await cloud.exec(process.execPath, show, { quiet: true }), 'none')
 fs.rmSync(dir, { recursive: true, force: true })
 n++
 console.log('ok  Modal commands ask for image builder', IMAGE_BUILDER)
+
+// an install from an older IV Studio: its client version is read from its files and it's updated once, before
+// commands that build or run, never before quick questions
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ivm-'))
+  const cloud = new Cloud({ dataDir: dir, resourcesDir: dir })
+  assert.equal(cloud.toolkitVersion(), null)
+  assert.equal(cloud.toolkitReady(), false)
+  if (process.platform !== 'win32') fs.mkdirSync(path.join(dir, 'cloud', 'venv', 'lib', 'python3.12', 'site-packages'), { recursive: true })
+  const site = cloud.sitePackages()
+  fs.mkdirSync(path.dirname(cloud.modalExe), { recursive: true })
+  fs.writeFileSync(cloud.modalExe, '')
+  fs.mkdirSync(path.join(site, 'modal-1.6.1.dist-info'), { recursive: true })
+  fs.mkdirSync(path.join(site, 'modal_proto'), { recursive: true })
+  assert.equal(cloud.toolkitVersion(), '1.6.1')
+  assert.equal(cloud.toolkitReady(), true)
+  assert.equal(cloud.toolkitCurrent(), false)
+  let installs = 0
+  cloud.installToolkit = async () => {
+    installs++
+    await new Promise((r) => setTimeout(r, 30))
+    fs.renameSync(path.join(site, 'modal-1.6.1.dist-info'), path.join(site, `modal-${MODAL_VERSION}.dist-info`))
+    return true
+  }
+  const ran = []
+  cloud.exec = async (cmd, args) => (ran.push(args[0]), '')
+  await cloud.modal(['token', 'info'], { quick: true })
+  assert.equal(installs, 0, 'a quick question uses the installed client')
+  await Promise.all([cloud.modal(['deploy', 'x']), cloud.modal(['run', 'y'])])
+  assert.equal(installs, 1, 'two commands at once update it once')
+  assert.equal(cloud.toolkitCurrent(), true)
+  await cloud.modal(['deploy', 'x'])
+  assert.equal(installs, 1, 'a current client is left alone')
+  assert.deepEqual(ran, ['token', 'deploy', 'run', 'deploy'])
+  assert.equal(clientVersionIn(path.join(dir, 'nowhere')), null)
+  fs.rmSync(dir, { recursive: true, force: true })
+  n++
+  console.log('ok  an older Modal client is updated once, before commands that build or run')
+}
 
 console.log(`\n${n} passed`)
