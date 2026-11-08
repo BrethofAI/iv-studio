@@ -30,16 +30,21 @@ export async function getBalance(key, { base = COMFY_API, timeout = 15000, fetch
   return shape(await res.json().catch(() => ({})), false)
 }
 
-// amount_micros is millionths of a dollar (ComfyUI's front end converts dollars to it with usdToMicros).
+// Comfy.org gives each figure twice, in cents and in millionths of a dollar ("_micros"), with currency "usd"
+// (seen 2026-11-08: amount, effective_balance, prepaid_balance, cloud_credit_balance, pending_charges).
+// The micros are used; the cents stand in when an answer has only those.
 function shape(b, none) {
-  const micros = (v) => (typeof v === 'number' && Number.isFinite(v) ? v / 1e6 : null)
-  const usd = micros(b.effective_balance_micros) ?? micros(b.amount_micros) ?? 0
+  const fig = (name) => (Number.isFinite(b[`${name}_micros`]) ? b[`${name}_micros`] / 1e6 : Number.isFinite(b[`${name}_cents`]) ? b[`${name}_cents`] / 100 : null)
+  const usd = fig('effective_balance') ?? fig('amount') ?? 0
   return {
     usd,
     credits: Math.round(usd * CREDITS_PER_USD),
-    prepaidUsd: micros(b.prepaid_balance_micros),
-    cloudUsd: micros(b.cloud_credit_balance_micros),
+    prepaidUsd: fig('prepaid_balance'),
+    cloudUsd: fig('cloud_credit_balance'),
+    pendingUsd: fig('pending_charges'),
     newCustomer: none,
+    // what Comfy.org answered (numbers and words only), so a change in its format can be seen
+    fields: Object.fromEntries(Object.entries(b).filter(([, v]) => ['number', 'string', 'boolean'].includes(typeof v))),
     at: new Date().toISOString()
   }
 }

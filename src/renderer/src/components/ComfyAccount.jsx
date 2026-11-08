@@ -88,7 +88,11 @@ export function AccountCard({ n, notify }) {
         )}
       </SetField>
       {a?.hasKey && (
-        <SetField label="Balance" hint={b ? `Checked ${new Date(b.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. It updates after each paid run.` : null} warn={a.error || null}>
+        <SetField
+          label="Balance"
+          hint={b ? `${b.pendingUsd > 0 ? `${dollars(b.pendingUsd)} of runs still being charged. ` : ''}Checked ${new Date(b.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. It updates after each paid run.` : null}
+          warn={a.error || (b && b.usd <= 0 ? 'No credits on this Comfy.org account. Paid nodes won’t run until you add some.' : null)}
+        >
           <div className="set-inline">
             {b ? (
               <span className="account-balance">

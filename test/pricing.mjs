@@ -144,8 +144,11 @@ const server = http.createServer((req, res) => {
     const key = req.headers['x-api-key']
     if (!key) return send(401, { message: 'No Authorization header found' })
     if (key === 'new') return send(404, { message: 'customer not found' })
-    if (key !== 'good') return send(401, { message: 'Invalid Comfy API key' })
-    return send(200, { amount_micros: 12_500_000, effective_balance_micros: 12_000_000, prepaid_balance_micros: 10_000_000, cloud_credit_balance_micros: 2_000_000 })
+    if (!['good', 'cents', 'zero'].includes(key)) return send(401, { message: 'Invalid Comfy API key' })
+    if (key === 'cents') return send(200, { amount_cents: 450, effective_balance_cents: 425, pending_charges_cents: 25, currency: 'usd' })
+    // the shape Comfy.org answered with on 2026-11-08 (an account with nothing on it)
+    if (key === 'zero') return send(200, { amount_cents: 0, amount_micros: 0, cloud_credit_balance_cents: 0, cloud_credit_balance_micros: 0, currency: 'usd', effective_balance_cents: 0, effective_balance_micros: 0, pending_charges_cents: 0, pending_charges_micros: 0, prepaid_balance_cents: 0, prepaid_balance_micros: 0 })
+    return send(200, { amount_micros: 12_500_000, effective_balance_micros: 12_000_000, prepaid_balance_micros: 10_000_000, cloud_credit_balance_micros: 2_000_000, pending_charges_micros: 500_000, currency: 'usd' })
   }
   send(404, {})
 })
@@ -185,12 +188,21 @@ await ok('balance: no key, a fake key and a key with no purchases yet', async ()
   assert.equal(none.newCustomer, true)
 })
 
-await ok('balance: micros become dollars and credits (the effective balance wins)', async () => {
+await ok('balance: micros (or cents) become dollars and credits; the effective balance wins; an empty account reads 0', async () => {
   const b = await getBalance('good', { base })
   assert.equal(b.usd, 12)
   assert.equal(b.credits, 2532)
   assert.equal(b.prepaidUsd, 10)
   assert.equal(b.cloudUsd, 2)
+  assert.equal(b.pendingUsd, 0.5)
+  assert.equal(b.fields.currency, 'usd')
+  const c = await getBalance('cents', { base })
+  assert.equal(c.usd, 4.25)
+  assert.equal(c.pendingUsd, 0.25)
+  const z = await getBalance('zero', { base })
+  assert.equal(z.usd, 0)
+  assert.equal(z.credits, 0)
+  assert.equal(z.newCustomer, false)
 })
 
 await ok('balance: nothing listening is "offline", not a bad key', async () => {
