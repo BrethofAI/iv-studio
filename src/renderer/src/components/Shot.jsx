@@ -9,6 +9,22 @@ import { lintPrompt } from '../../../service/lint'
 import { lintSeedance } from '../../../service/seedlint'
 
 const DONE = ['success', 'error', 'cancelled']
+// What a finish is called on its card and in Compare: H3's own, or how a Seedance take was finished
+export function finalLabel(f) {
+  const n = f.plan?.finish?.candidate
+  const way = f.plan?.engine === 'seedance' ? f.plan.finish?.way : null
+  if (way === 'seedance') return `Final · take ${n} · Seedance 1080p`
+  if (way === 'local' && f.plan.finish?.refiner === 'h3') return `Final · take ${n} · H3 ${f.plan.finish.strength || 'light'} + DLSS 5`
+  if (way === 'local' || way === 'take') return `Final · take ${n} · as it came`
+  return `Final · take ${n}`
+}
+// The same, short, for Compare: "Take 1 · Seedance 1080p", "Take 1 · SeedVR2 1080p"
+export function shortLabel(f, e = null) {
+  const n = f.plan?.finish?.candidate
+  if (e) return `Take ${n} · ${enhanceLabel(e)}`
+  return finalLabel(f).replace(/^Final · take \d+/, `Take ${n} final`)
+}
+export const enhanceLabel = (e) => (e.plan?.enhance?.engine === 'dlss' ? `DLSS 5 ${e.plan.enhance.scale}×` : `SeedVR2 ${e.plan?.enhance?.resolution}p`)
 const FINAL_MP = [1, 1.5, 2]
 const MODE_NAME = { text: 'Text', reference: 'References', frames: 'First / last frame', continue: 'Continue' }
 
@@ -99,7 +115,8 @@ function ReviewCard({ review, title, videoKey, before, onRun }) {
 //   take      the take itself becomes the final, as it is
 function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characters = [] }) {
   const draft = !!job.plan.resolved?.draft
-  const [way, setWay] = useState(draft ? 'seedance' : remote ? 'take' : 'local')
+  // free on this PC first; paid Seedance 1080p is one click away (and asks before it spends)
+  const [way, setWay] = useState(remote ? (draft ? 'seedance' : 'take') : 'local')
   const [opts, setOpts] = useState({ engine: 'seedvr2', resolution: 1080, megapixels: 2, strength: 'light', upscale2x: false, useLora: false })
   const set = (patch) => setOpts((o) => ({ ...o, ...patch }))
   const [price, setPrice] = useState(null)
@@ -391,6 +408,134 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote }) {
   )
 }
 
+// A run's finished versions in one card: a chip for every final (however it was finished) and every enhanced copy,
+// one player for the chosen one, its actions in one row, and Enhance folded behind a button. Replaces a stack of
+// full-size players, so a shot with several finishes doesn't run on for screens.
+function VersionsCard({ run, finishes, jobs, remote, caps, notify, marks, onMark, onCompare, review, reviewing, enhance, enhancing, written, editRun, project, versionOf }) {
+  const list = []
+  for (const f of finishes) {
+    list.push({ key: f.id, job: f, finish: f, out: f.outputs.find((o) => o.kind === 'final'), label: shortLabel(f), kind: 'final' })
+    for (const e of jobs.filter((x) => x.kind === 'enhance' && x.parent === f.id)) list.push({ key: e.id, job: e, finish: f, out: e.outputs?.find((o) => o.kind === 'final'), label: shortLabel(f, e), kind: 'enhance' })
+  }
+  const ready = list.filter((v) => v.out?.url)
+  // a chip's words: how the final was made, or the enhancer of a copy; the take number only when several takes were finished
+  const takes = new Set(finishes.map((f) => f.plan?.finish?.candidate))
+  const how = (f) => {
+    const w = finalLabel(f).split(' · ').slice(2).join(' · ')
+    return w || 'final'
+  }
+  const chipOf = (x) => `${takes.size > 1 ? `Take ${x.finish.plan?.finish?.candidate} · ` : ''}${x.kind === 'final' ? how(x.finish) : `→ ${enhanceLabel(x.job)}`}`
+  const [chosen, setChosen] = useState(null)
+  const [more, setMore] = useState(false)
+  // the newest version that has a video, unless one was chosen
+  const v = list.find((x) => x.key === chosen) || [...ready].reverse()[0] || list[list.length - 1]
+  if (!v) return null
+  const f = v.finish
+  // an enhanced copy's own size: DLSS scales the final, SeedVR2 sets its short side
+  const base = f.plan.resolved || {}
+  const en = v.kind === 'enhance' ? v.job.plan?.enhance : null
+  const res = !en
+    ? base
+    : en.engine === 'dlss'
+      ? { width: Math.round((base.width * en.scale) / 2) * 2, height: Math.round((base.height * en.scale) / 2) * 2, fps: base.fps }
+      : { width: Math.round((base.width * en.resolution) / Math.min(base.width, base.height) / 2) * 2, height: Math.round((base.height * en.resolution) / Math.min(base.width, base.height) / 2) * 2, fps: base.fps }
+  const chips = [res?.width && `${res.width}×${res.height}`, (res?.fps || 24) && `${res?.fps || 24} fps`, v.job.seconds && `${v.job.seconds} s render`].filter(Boolean)
+  const markKey = `${run.id}:${v.key}`
+  const state = (x) => (x.out?.url ? '' : x.job.status === 'error' ? 'error' : 'busy')
+  return (
+    <div className="versions-card">
+      <div className="versions-head">
+        <span className="final-badge mono">★ Finished versions</span>
+        {ready.length > 1 && (
+          <button className="btn btn-small" onClick={() => onCompare(ready.slice(-4).map((x) => versionOf(run, x.key, x.out.url, x.label)))}>
+            Compare {Math.min(ready.length, 4)} versions
+          </button>
+        )}
+      </div>
+      <div className="version-chips" role="tablist" aria-label="Finished versions">
+        {list.map((x) => (
+          <button key={x.key} role="tab" aria-selected={x.key === v.key} className={`version-chip ${x.key === v.key ? 'on' : ''} ${state(x)}`} onClick={() => setChosen(x.key)} title={x.job.status === 'error' ? x.job.error : ''}>
+            {chipOf(x)}
+            {state(x) === 'busy' && <span className="version-dot" aria-label="rendering" />}
+            {state(x) === 'error' && <span className="version-err">!</span>}
+          </button>
+        ))}
+      </div>
+      <div className="version-main">
+        <div className="version-meta">
+          <span className="mono">{v.label}</span>
+          <span className="run-chips mono">
+            {chips.map((c) => (
+              <span key={c}>{c}</span>
+            ))}
+          </span>
+        </div>
+        <Progress job={v.job} />
+        {v.job.status === 'error' && <p className="notice">{v.job.error}</p>}
+        {v.out?.url && <video key={v.key} className="final-video" data-take={`${f.id}:final`} src={media(v.out.url)} controls preload="metadata" />}
+        <div className="version-actions">
+          {v.out?.path && (
+            <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(v.out).catch((err) => notify(err.message))}>
+              {remote ? 'Download' : 'Show in folder'}
+            </button>
+          )}
+          {v.out?.url && (
+            <button className={`link-btn mono ${marks(markKey) ? 'pink' : ''}`} onClick={() => onMark(versionOf(run, v.key, v.out.url, v.label))}>
+              {marks(markKey) ? 'Marked' : 'Mark'}
+            </button>
+          )}
+          {v.kind === 'final' && v.out?.path && !remote && (
+            <button className="link-btn mono" disabled={!!reviewing[`${f.id}:0`]} onClick={() => review(f, 0)}>
+              {reviewing[`${f.id}:0`] ? 'Reviewing…' : 'Review'}
+            </button>
+          )}
+          {v.kind === 'final' && v.out?.path && !remote && (
+            <button className={`link-btn mono ${more ? 'pink' : ''}`} onClick={() => setMore(!more)} aria-expanded={more}>
+              Enhance {more ? '▴' : '▾'}
+            </button>
+          )}
+        </div>
+        {more && v.kind === 'final' && v.out?.path && !remote && (
+          <div className="enhance-row">
+            <span className="dim small enhance-sub">A sharper copy, added beside this one:</span>
+            {caps?.dlss !== false &&
+              [1, 2].map((scale) => (
+                <button key={`d${scale}`} className="btn btn-small" disabled={!!enhancing[f.id]} onClick={() => (enhance(f, { engine: 'dlss', scale }), setMore(false))}>
+                  DLSS 5 · {scale}×
+                </button>
+              ))}
+            {[1080, 1440].map((r) => (
+              <button key={`s${r}`} className="btn btn-small" disabled={!!enhancing[f.id]} onClick={() => (enhance(f, { engine: 'seedvr2', resolution: r }), setMore(false))}>
+                SeedVR2 · {r}p
+              </button>
+            ))}
+          </div>
+        )}
+        {v.kind === 'final' && f.reviews?.final && <ReviewCard review={f.reviews.final} title="Review of the final" videoKey={`${f.id}:final`} before={written} onRun={(p) => editRun?.(run, project, p)} />}
+      </div>
+    </div>
+  )
+}
+
+// The finish settings for a picked take, in a dialog over the page, so nothing has to be scrolled to.
+function FinishDialog({ children, onClose }) {
+  useEffect(() => {
+    const key = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [onClose])
+  return (
+    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal finish-modal" role="dialog" aria-modal="true" aria-label="Finish a take">
+        <button className="finish-modal-x" onClick={onClose} aria-label="Close">
+          ×
+        </button>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps, remote, editRun, openSequence, characters = [] }) {
   const [project, setProject] = useState(null)
   // a sequence's shot-by-shot project: which shot each run is (sequences.runsOf), so edits go back through it
@@ -411,14 +556,12 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
   const [jobIds, setJobIds] = useState([])
   const [picked, setPicked] = useState({})
   const [name, setName] = useState('')
-  // takes marked for Compare (up to two): { key, url, label, prompt }; the viewer opens when there are two
+  // versions marked for Compare (up to four: takes, finals, enhanced copies): { key, url, label, prompt }; the
+  // Compare button opens them once two are marked
   const [marked, setMarked] = useState([])
   const [comparing, setComparing] = useState(false)
-  const mark = (take) => {
-    const next = marked.some((m) => m.key === take.key) ? marked.filter((m) => m.key !== take.key) : [...marked, take].slice(-2)
-    setMarked(next)
-    if (next.length === 2) setComparing(true)
-  }
+  const mark = (take) => setMarked((m) => (m.some((x) => x.key === take.key) ? m.filter((x) => x.key !== take.key) : [...m, take].slice(-4)))
+  const compareNow = (list) => (setMarked(list), setComparing(true))
   const isMarked = (key) => marked.some((m) => m.key === key)
   // take ranking (ranking.js): runs as they finish are ranked by the app; older ones on request
   const [ranking, setRanking] = useState({})
@@ -460,9 +603,12 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
       setReviewing((r) => ({ ...r, [key]: false }))
     }
   }
+  // the take being finished: { runId, candidate } while the Finish dialog is open
+  const [finishing, setFinishing] = useState(null)
   const pick = (run, candidate) => {
+    if (picked[run.id] !== candidate && run.ranking) window.ivstudio.rank.learn(run.id, candidate).catch(() => {})
     setPicked({ ...picked, [run.id]: candidate })
-    if (run.ranking) window.ivstudio.rank.learn(run.id, candidate).catch(() => {})
+    setFinishing({ runId: run.id, candidate })
   }
 
   const load = useCallback(async () => {
@@ -494,6 +640,21 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
     setJobs((all) => ({ ...all, [job.id]: job }))
   }
 
+  // Every version of the shot (takes, finals, enhanced copies), for Compare's slot menus
+  const versionOf = (run, key, url, label) => ({ key: `${run.id}:${key}`, url: media(url), label: runs.length > 1 ? `Run ${runs.length - runs.indexOf(run)} · ${label}` : label, prompt: run.plan.asked?.prompt ?? run.plan.request?.prompt })
+  const versions = []
+  for (const run of runs) {
+    for (const o of run.outputs.filter((x) => x.kind === 'preview' && x.url)) versions.push(versionOf(run, o.candidate, o.url, `#${o.candidate}${o.seed != null && run.plan?.engine !== 'seedance' ? ` · seed ${o.seed}` : ''}`))
+    for (const f of finishesOf(run.id)) {
+      const fin = f.outputs.find((o) => o.kind === 'final')
+      if (fin?.url) versions.push(versionOf(run, f.id, fin.url, shortLabel(f)))
+      for (const e of jobs.filter((x) => x.kind === 'enhance' && x.parent === f.id)) {
+        const out = e.outputs?.find((o) => o.kind === 'final')
+        if (out?.url) versions.push(versionOf(run, e.id, out.url, shortLabel(f, e)))
+      }
+    }
+  }
+
   if (!project) return null
 
   return (
@@ -515,17 +676,37 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
             New run
           </button>
         )}
-        {marked.length === 1 && <span className="mono dim small">1 take marked: mark another to compare them</span>}
+        {marked.length === 1 && <span className="mono dim small">1 marked: mark another take, final or enhanced copy to compare</span>}
+        {marked.length >= 2 && (
+          <span className="compare-bar">
+            <button className="btn btn-small btn-primary" onClick={() => setComparing(true)}>
+              Compare {marked.length}
+            </button>
+            <button className="link-btn mono small" onClick={() => setMarked([])}>
+              Clear
+            </button>
+          </span>
+        )}
       </div>
       {seqRuns && (
         <p className="notice seq-runs-note">
           These are the shot-by-shot renders of the sequence {seqRuns.sequenceName}. Edit, pick and finish them in the sequence, so every new render stays part of it.
         </p>
       )}
-      {comparing && marked.length === 2 && (
+      {finishing && (() => {
+        const run = runs.find((r) => r.id === finishing.runId)
+        if (!run) return null
+        const started = (job) => (onStart(job), setFinishing(null))
+        return (
+          <FinishDialog onClose={() => setFinishing(null)}>
+            {run.plan?.engine === 'seedance' ? <SeedanceFinishPanel job={run} candidate={finishing.candidate} onStart={started} notify={notify} remote={remote} characters={characters} /> : <FinishPanel job={run} candidate={finishing.candidate} onStart={started} notify={notify} caps={caps} remote={remote} />}
+          </FinishDialog>
+        )
+      })()}
+      {comparing && marked.length >= 2 && (
         <CompareViewer
-          a={marked[0]}
-          b={marked[1]}
+          items={marked}
+          pool={versions}
           onClose={() => {
             setComparing(false)
             setMarked([])
@@ -543,7 +724,6 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
         const ch = characters.find((c) => c.id === req.character)
         const findings = !req.prompt ? [] : run.plan?.engine === 'seedance' ? lintSeedance(req.prompt, { mode: req.mode, seconds: req.seconds, refs: run.plan.refs || {} }) : lintPrompt(req.prompt, { mode: req.mode, seconds: req.seconds, media: req.media || [], character: ch ? { name: ch.name, trigger: ch.trigger } : null, voiceLine: req.voiceLine })
         const notes = findings.filter((f) => f.level !== 'info').length
-        const takeOf = (key, url, label) => ({ key: `${run.id}:${key}`, url: media(url), label: `Run ${runs.length - i} · ${label}`, prompt: written })
         return (
           <section key={run.id} className="run run-card">
             <div className="run-head">
@@ -569,7 +749,8 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                   {linking === run.id ? 'Linking…' : `Use as shot ${seqRuns.runs[run.id].index + 1}`}
                 </button>
               )}
-              {editRun && (
+              {/* the latest run is edited from the button at the top of the page; older runs have their own */}
+              {editRun && (seqRuns || i > 0) && (
                 <button className="btn btn-small run-edit" onClick={() => editRun(run, project)}>
                   {seqRuns ? 'Edit in the sequence' : 'Edit and run again'}
                 </button>
@@ -630,11 +811,11 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                           {reviewing[`${run.id}:${o.candidate}`] ? 'Reviewing…' : 'Review'}
                         </button>
                       )}
-                      <button className={`link-btn mono small ${isMarked(`${run.id}:${o.candidate}`) ? 'pink' : ''}`} onClick={() => mark(takeOf(o.candidate, o.url, `#${o.candidate} · seed ${o.seed}`))}>
-                        {isMarked(`${run.id}:${o.candidate}`) ? 'Marked' : 'Compare'}
+                      <button className={`link-btn mono small ${isMarked(`${run.id}:${o.candidate}`) ? 'pink' : ''}`} onClick={() => mark(versionOf(run, o.candidate, o.url, `#${o.candidate}${o.seed != null && run.plan?.engine !== 'seedance' ? ` · seed ${o.seed}` : ''}`))}>
+                        {isMarked(`${run.id}:${o.candidate}`) ? 'Marked' : 'Mark'}
                       </button>
                       <button className={`btn btn-small take-pick ${picked[run.id] === o.candidate ? 'btn-primary' : ''}`} onClick={() => pick(run, o.candidate)}>
-                        {picked[run.id] === o.candidate ? '✓ Picked' : 'Pick'}
+                        {picked[run.id] === o.candidate ? 'Finish ✓' : 'Pick'}
                       </button>
                     </figcaption>
                   </figure>
@@ -647,88 +828,28 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
               .map((o) => (
                 <ReviewCard key={`rv${o.candidate}`} review={run.reviews[o.candidate]} title={`Review of #${o.candidate}`} videoKey={`${run.id}:${o.candidate}`} before={written} onRun={(p) => editRun?.(run, project, p)} />
               ))}
-            {picked[run.id] && (run.plan?.engine === 'seedance' ? <SeedanceFinishPanel job={run} candidate={picked[run.id]} onStart={onStart} notify={notify} remote={remote} characters={characters} /> : <FinishPanel job={run} candidate={picked[run.id]} onStart={onStart} notify={notify} caps={caps} remote={remote} />)}
-            {finishesOf(run.id).map((f) => {
-              const final = f.outputs.find((o) => o.kind === 'final')
-              return (
-                <div key={f.id} className="final final-card">
-                  <div className="final-head">
-                    <span className="final-badge mono">★ Final · take {f.plan.finish?.candidate}</span>
-                    <span className="run-chips mono">
-                      {[f.plan.resolved?.finishWidth && `${f.plan.resolved.finishWidth}×${f.plan.resolved.finishHeight}, SeedVR2 to`, `${f.plan.resolved?.width}×${f.plan.resolved?.height}`, `${f.plan.resolved?.fps} fps`, f.seconds && `${f.seconds} s render`]
-                        .filter(Boolean)
-                        .map((c) => (
-                          <span key={c}>{c}</span>
-                        ))}
-                    </span>
-                    <span className="final-actions">
-                    {final?.path && (
-                      <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(final).catch((err) => notify(err.message))}>
-                        {remote ? 'Download' : 'Show in folder'}
-                      </button>
-                    )}
-                    {final?.url && (
-                      <button className={`link-btn mono ${isMarked(`${run.id}:${f.id}`) ? 'pink' : ''}`} onClick={() => mark(takeOf(f.id, final.url, `final of #${f.plan.finish?.candidate}`))}>
-                        {isMarked(`${run.id}:${f.id}`) ? 'Marked' : 'Compare'}
-                      </button>
-                    )}
-                    {final?.path && !remote && (
-                      <button className="link-btn mono" disabled={!!reviewing[`${f.id}:0`]} onClick={() => review(f, 0)}>
-                        {reviewing[`${f.id}:0`] ? 'Reviewing…' : 'Review'}
-                      </button>
-                    )}
-                    </span>
-                  </div>
-                  <Progress job={f} />
-                  {f.status === 'error' && <p className="notice">{f.error}</p>}
-                  {final && <video className="final-video" data-take={`${f.id}:final`} src={media(final.url)} controls preload="metadata" />}
-                  {f.reviews?.final && <ReviewCard review={f.reviews.final} title="Review of the final" videoKey={`${f.id}:final`} before={written} onRun={(p) => editRun?.(run, project, p)} />}
-                  {final?.path && !remote && (
-                    <div className="enhance-row">
-                      <span className="enhance-label mono">Enhance</span>
-                      <span className="dim small enhance-sub">a sharper copy beside this one</span>
-                      {caps?.dlss !== false &&
-                        [1, 2].map((scale) => (
-                          <button key={`d${scale}`} className="btn btn-small" disabled={!!enhancing[f.id]} onClick={() => enhance(f, { engine: 'dlss', scale })}>
-                            DLSS 5 · {scale}×
-                          </button>
-                        ))}
-                      {[1080, 1440].map((r) => (
-                        <button key={`s${r}`} className="btn btn-small" disabled={!!enhancing[f.id]} onClick={() => enhance(f, { engine: 'seedvr2', resolution: r })}>
-                          SeedVR2 · {r}p
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {jobs
-                    .filter((e) => e.kind === 'enhance' && e.parent === f.id)
-                    .map((e) => {
-                      const out = e.outputs?.find((o) => o.kind === 'final')
-                      return (
-                        <div key={e.id} className="final enhanced">
-                          <div className="final-head">
-                            <span className="final-badge mono enhanced-badge">Enhanced · {e.plan?.enhance?.engine === 'dlss' ? `DLSS 5 ${e.plan.enhance.scale}×` : `SeedVR2 ${e.plan?.enhance?.resolution}p`}</span>
-                            <span className="mono dim">{e.seconds ? `${e.seconds} s render` : ''}</span>
-                            {out?.path && (
-                              <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(out).catch((err) => notify(err.message))}>
-                                Show in folder
-                              </button>
-                            )}
-                            {out?.url && final?.url && (
-                              <button className="link-btn mono" onClick={() => (setMarked([takeOf(f.id, final.url, `final of #${f.plan.finish?.candidate}`), takeOf(e.id, out.url, e.plan?.enhance?.engine === 'dlss' ? `DLSS 5 ${e.plan.enhance.scale}×` : `SeedVR2 ${e.plan?.enhance?.resolution}p`)]), setComparing(true))}>
-                                Compare with the final
-                              </button>
-                            )}
-                          </div>
-                          <Progress job={e} />
-                          {e.status === 'error' && <p className="notice">{e.error}</p>}
-                          {out && <video className="final-video" src={media(out.url)} controls preload="metadata" />}
-                        </div>
-                      )
-                    })}
-                </div>
-              )
-            })}
+            {finishesOf(run.id).length > 0 && (
+              <VersionsCard
+                key={`v${run.id}`}
+                run={run}
+                finishes={finishesOf(run.id).slice().reverse()}
+                jobs={jobs}
+                remote={remote}
+                caps={caps}
+                notify={notify}
+                marks={isMarked}
+                onMark={mark}
+                onCompare={compareNow}
+                review={review}
+                reviewing={reviewing}
+                enhance={enhance}
+                enhancing={enhancing}
+                written={written}
+                editRun={editRun}
+                project={project}
+                versionOf={versionOf}
+              />
+            )}
           </section>
         )
       })}

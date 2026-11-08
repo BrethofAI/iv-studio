@@ -99,11 +99,11 @@ export const TOURS = {
     title: 'A shot',
     steps: [
       { at: '.shot-actions', title: 'Try again', text: 'Edit the latest run’s settings and render again into this same shot.' },
-      { at: '.run-head', title: 'A run', text: 'Each run shows how it was made: mode, size, length, seed, character and render time. Its own Edit and run again starts from it.' },
-      { at: '.candidates', title: 'The takes', text: 'Watch each take. A score marks the strongest. Review names what is off and suggests one fix; Compare plays two side by side.' },
-      { at: '.take-pick', title: 'Pick one', text: 'Pick the take you like. Picking also teaches the scoring your taste.' },
-      { at: '.finish-panel', title: 'Finish it', text: 'Render the picked take at full size, with the enhancer, frame rate and sound you want.' },
-      { at: '.final-card, .final', title: 'The final', text: 'The finished shot. Enhance makes a sharper copy beside it, any time later.' }
+      { at: '.run-head', title: 'A run', text: 'Each run shows how it was made: mode, size, length, seed, character and render time. Older runs have their own Edit and run again.' },
+      { at: '.candidates', title: 'The takes', text: 'Watch each take. A score marks the strongest. Review names what is off and suggests one fix. Mark up to four takes, finals or enhanced copies, then Compare them.' },
+      { at: '.take-pick', title: 'Pick one', text: 'Pick the take you like: the Finish settings open over the page. Picking also teaches the scoring your taste.' },
+      { at: '.finish-panel', title: 'Finish it', text: 'Render the picked take at full size, with the enhancer, frame rate and sound you want. A Seedance take finishes at 1080p with Seedance, or free here with SeedVR2, DLSS 5 or H3.' },
+      { at: '.versions-card', title: 'Finished versions', text: 'Every final and enhanced copy as a chip, one player for the one you choose. Enhance adds a sharper copy; Compare plays them in sync, in a grid or a wipe, zoomed in on the same spot.' }
     ]
   },
   edits: {
