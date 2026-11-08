@@ -8,6 +8,7 @@ import Library from './components/Library'
 import Cloud, { CloudMeter } from './components/Cloud'
 import StartComfy from './components/StartComfy'
 import SystemMeter from './components/SystemMeter'
+import { BalanceChip } from './components/ComfyAccount'
 import { EditEditor, EditList } from './components/Edit'
 import { SequenceEditor, SequenceList } from './components/Sequences'
 import Settings from './components/Settings'
@@ -358,6 +359,7 @@ export default function App() {
           {comfyDown && info?.platform !== 'darwin' && <StartComfy notify={notify} recheck={recheck} className="btn btn-small engine-start" />}
           {setup?.items?.find((i) => i.id === 'gpu') && <span className="mono dim engine-gpu">{setup.items.find((i) => i.id === 'gpu').detail}</span>}
           {setup?.remote ? <CloudMeter onOpen={() => setPage('cloud')} /> : setup && <SystemMeter notify={notify} />}
+          <BalanceChip />
         </div>
       </header>
       <nav className="nav">

@@ -30,6 +30,8 @@ import { comfyFolders, contentDir, dataLocation, readSettings, resourcesDir, wri
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
+import { getBalance } from '../service/comfyaccount'
+import { infoFor, priceGraph } from '../service/pricing'
 import { comfyUp, findLaunchers, launcherFor } from '../service/comfylauncher'
 import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
 import { comboOptions } from '../service/setup'
@@ -1018,6 +1020,19 @@ tool('scan_hardware', "Check this PC, as the welcome wizard does: graphics card 
   }
   const scan = await scanHardware({ installs, comfyFolder: modelsFolder || s.comfyFolder || (launchers[0] ? path.dirname(launchers[0].path) : '') })
   return { scan, recommendations: recommend(scan) }
+})
+// The Comfy.org account: this server reads COMFY_ORG_API_KEY from its environment (the app keeps its own key encrypted).
+tool('comfy_balance', "The person's Comfy.org credit balance: what ComfyUI's paid partner nodes (Seedance, Kling, Veo and others) spend. Returns credits and dollars (211 credits = $1). Needs COMFY_ORG_API_KEY in this server's environment; the IV Studio window shows the same balance in its title bar.", {}, async () => {
+  if (!process.env.COMFY_ORG_API_KEY) throw new Error('This server has no COMFY_ORG_API_KEY in its environment. The person can see their balance in the IV Studio window (title bar, or Settings → Comfy account), or add the key to this server’s environment.')
+  const b = await getBalance(process.env.COMFY_ORG_API_KEY)
+  return { credits: b.credits, usd: Math.round(b.usd * 100) / 100, newCustomer: b.newCustomer, checkedAt: b.at }
+})
+tool('price_workflow', "What a ComfyUI graph in API form would cost on the person's Comfy.org credits, before running it: each paid partner node's price from its own price formula, the total (a range when the price depends on how the run goes) and nodes that show no price. Free graphs say so. Pass the graph itself or a path to its .json. Prices are ComfyUI's own; tell the person the figure and get their OK before anything paid runs.", { graph: z.record(z.any()).optional().describe('An API-form graph: { "<id>": { class_type, inputs } }'), path: z.string().optional().describe('Or a path to an API-form .json file') }, async ({ graph, path: file }) => {
+  const g = graph || (file ? JSON.parse(fs.readFileSync(file, 'utf8')) : null)
+  if (!g || typeof g !== 'object') throw new Error('Pass graph or path.')
+  if (Array.isArray(g.nodes)) throw new Error('This is a workflow saved from ComfyUI’s window (UI form). Save it with Export (API), or pass the API form.')
+  const p = await priceGraph(g, await infoFor(studio.comfy, g))
+  return { paid: p.paid, label: p.label, minUsd: p.min, maxUsd: p.max, credits: p.credits, nodes: p.nodes.map(({ id, class: cls, title, min, max, unknown, why }) => ({ id, class: cls, title, ...(unknown ? { unknown: true, why } : { minUsd: min, maxUsd: max }) })), noPrice: p.unknown }
 })
 tool('free_memory', "Clear the GPU and RAM now: ComfyUI unloads its models (between prompts; a running render keeps its memory until it finishes), this server's voice engine stops and the prompt writer's Ollama models unload. The next job loads what it needs. Use it when the person asks, or before a big job on a crowded GPU.", {}, async () => {
   await studio.comfy.freeMemory()

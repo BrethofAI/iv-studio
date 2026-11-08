@@ -6,6 +6,7 @@ import { ask } from './Confirm'
 import { setUnblurred } from './Loras'
 import { SetCard, SetField, SetSwitch, Pill, SetPath, SetCode } from './SettingsKit'
 import { startTour } from '../tours'
+import { AccountCard } from './ComfyAccount'
 
 const WRITER_MODEL = 'huihui_ai/qwen3-vl-abliterated:8b-instruct'
 const GB = (b) => `${(b / 1e9).toFixed(1)} GB`
@@ -19,6 +20,7 @@ const SECTIONS = [
   ['data', 'Data folder'],
   ['models', 'Models'],
   ['writer', 'Prompt writer'],
+  ['account', 'Comfy account'],
   ['civitai', 'Civitai'],
   ['agents', 'Agents'],
   ['updates', 'Updates'],
@@ -861,6 +863,7 @@ export default function Settings({ info, recheck, notify, go, setup }) {
           <DataCard n={n('data')} notify={notify} />
           <ModelCard n={n('models')} {...common} />
           <WriterCard n={n('writer')} {...common} />
+          <AccountCard n={n('account')} notify={notify} />
           <CivitaiCard n={n('civitai')} {...common} />
           <AgentCard n={n('agents')} mcp={info?.mcp} notify={notify} />
           <UpdateSettings n={n('updates')} notify={notify} />

@@ -2832,6 +2832,7 @@ body.resizing * {
   color: var(--cream);
 }
 .confirm-message {
+  white-space: pre-line;
   margin: 0;
   color: var(--paper-dim);
   line-height: 1.5;
@@ -12100,4 +12101,57 @@ button.set-chip:hover {
 /* the editor's How it works pill sizes to its words (the old round "?" had a fixed width) */
 .ed-help .help-btn {
   width: auto;
+}
+
+/* ---------- Comfy account: credits in the title bar and on Settings ---------- */
+.balance-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  padding: 2px 9px;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--cream);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.balance-chip:hover {
+  border-color: var(--pink);
+}
+.balance-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #7fd18b;
+}
+.balance-chip.warn .balance-dot {
+  background: var(--pink);
+}
+.balance-chip.busy .balance-dot {
+  animation: free-urge 1.2s ease-in-out infinite;
+}
+.account-balance b {
+  font-size: 15px;
+  color: var(--cream);
+  margin-right: 4px;
+}
+.titlebar > .brand-text {
+  white-space: nowrap;
+}
+/* narrower windows: the chip drops its "Comfy ·" first, then its padding */
+@media (max-width: 1500px) {
+  .balance-pre {
+    display: none;
+  }
+}
+@media (max-width: 1180px) {
+  .balance-chip {
+    padding: 2px 6px;
+    margin-left: 4px;
+  }
 }

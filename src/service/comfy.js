@@ -2,6 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { cleanFolder, outputsUnder } from './paths.js'
+import { checkSpend, infoFor, priceGraph } from './pricing.js'
 
 export class Comfy {
   // token: a cloud ComfyUI sits behind IV Studio's gate (resources/cloud/gate.py), which wants it as a
@@ -105,10 +106,18 @@ export class Comfy {
   objectInfo = (cls) => this.req(cls ? `/object_info/${encodeURIComponent(cls)}` : '/object_info', { timeout: 60000 })
 
   // front: put it ahead of waiting renders (used for quick jobs such as writing a prompt).
-  async submit(prompt, extra = {}, { front = false } = {}) {
+  // spend: the person's OK for paid partner nodes ({ approvedUsd, unknownOk }, see pricing.js checkSpend). A graph
+  // that can spend Comfy.org credits (a key attached, or Comfy Cloud) is priced first and refused without it.
+  async submit(prompt, extra = {}, { front = false, spend = null } = {}) {
     outputsUnder(prompt, this.folders.output)
     renameFiles(prompt, await this.filesFor())
+    let price = null
+    if (extra.api_key_comfy_org || this.hosted) {
+      price = await priceGraph(prompt, await infoFor(this, prompt))
+      checkSpend(price, spend)
+    }
     const r = await this.req('/prompt', { method: 'POST', json: { prompt, client_id: this.clientId, extra_data: extra, ...(front ? { front: true } : {}) } })
+    if (price?.paid) Comfy.onPaid?.({ comfy: this, promptId: r.prompt_id, price })
     return r.prompt_id
   }
 

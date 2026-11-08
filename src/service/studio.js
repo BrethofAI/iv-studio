@@ -589,7 +589,8 @@ export class Studio {
     const staged = []
     for (const m of files) staged.push({ kind: m.kind, name: await this.stage(m.file, 'iv_studio') })
     const graph = contextIrGraph({ idea, mode, seconds, aspect, character, media: staged, sequence })
-    const promptId = await this.comfy.submit(graph, { api_key_comfy_org: apiKey, iv_studio: { kind: 'write_prompt' } }, { front: true })
+    // Choosing Context IR in Settings (which shows its price, a few cents a prompt) is the OK for each prompt.
+    const promptId = await this.comfy.submit(graph, { api_key_comfy_org: apiKey, iv_studio: { kind: 'write_prompt' } }, { front: true, spend: { approvedUsd: 0.25 } })
     for (let i = 0; i < 150; i++) {
       await new Promise((r) => setTimeout(r, 2000))
       const h = (await this.comfy.history(promptId))[promptId]

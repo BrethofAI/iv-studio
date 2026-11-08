@@ -44,6 +44,8 @@ import { Images } from '../service/images'
 import { RefMods } from '../service/refmods'
 import { Civitai, CIVITAI_SITES, LORA_SORTS, LORA_TAGS } from '../service/civitai'
 import { Comfy } from '../service/comfy'
+import { afterPrompt, getBalance } from '../service/comfyaccount'
+import { infoFor, priceGraph } from '../service/pricing'
 import { checkKey as checkComfyCloudKey, COMFY_CLOUD, summarise as summariseComfyCloud } from '../service/comfycloud'
 
 // An app opened from Finder gets a short PATH (/usr/bin:/bin:/usr/sbin:/sbin), so the tools IV Studio runs (Claude
@@ -380,13 +382,62 @@ app.whenReady().then(() => {
   handle('settings:setComfyKey', (key) => {
     const k = String(key || '').trim()
     if (k && !keysSafe()) throw new Error(KEY_STORE_MISSING)
-    return publicSettings(writeSettings({ comfyApiKey: seal(k) }, BASE))
+    const saved = publicSettings(writeSettings({ comfyApiKey: seal(k) }, BASE))
+    refreshAccount()
+    return saved
   })
   handle('settings:setCivitaiKey', (key) => {
     const k = String(key || '').trim()
     if (k && !keysSafe()) throw new Error(KEY_STORE_MISSING)
     return publicSettings(writeSettings({ civitaiKey: seal(k) }, BASE))
   })
+  // ---------- Comfy.org account (credits for partner nodes) ----------
+  // account: { hasKey, balance, error, checking }. The balance is read on open, on a click and after each paid run.
+  let account = { hasKey: !!readSettings(BASE).comfyApiKey, balance: null, error: null, checking: false }
+  // IV_STUDIO_COMFY_API points a test copy at a stand-in for api.comfy.org (test only).
+  const accountApi = { base: process.env.IV_STUDIO_COMFY_API || undefined }
+  const pushAccount = () => send('account:state', account)
+  const refreshAccount = async () => {
+    const key = comfyKey()
+    if (!key) return (account = { hasKey: false, balance: null, error: null, checking: false }), pushAccount(), account
+    account = { ...account, hasKey: true, checking: true }
+    pushAccount()
+    try {
+      account = { hasKey: true, balance: await getBalance(key, accountApi), error: null, checking: false }
+    } catch (e) {
+      account = { ...account, hasKey: true, error: e.message, errorCode: e.code, checking: false }
+    }
+    pushAccount()
+    return account
+  }
+  Comfy.onPaid = ({ comfy, promptId }) => afterPrompt(comfy, promptId, () => refreshAccount())
+  handle('account:state', () => account)
+  handle('account:refresh', () => refreshAccount())
+  // A key is checked against Comfy.org before it's kept: a refused key isn't saved; with no answer it's kept.
+  handle('account:setKey', async (key) => {
+    const k = String(key || '').trim()
+    if (!k) throw new Error('Paste your Comfy.org API key first.')
+    if (!keysSafe()) throw new Error(KEY_STORE_MISSING)
+    let balance = null
+    try {
+      balance = await getBalance(k, accountApi)
+    } catch (e) {
+      if (e.code === 'bad_key') throw e
+    }
+    writeSettings({ comfyApiKey: seal(k) }, BASE)
+    account = { hasKey: true, balance, error: balance ? null : 'Saved, but Comfy.org could not be reached to check it.', checking: false }
+    pushAccount()
+    return account
+  })
+  handle('account:clearKey', () => {
+    writeSettings({ comfyApiKey: null }, BASE)
+    account = { hasKey: false, balance: null, error: null, checking: false }
+    pushAccount()
+    return account
+  })
+  // What a graph would cost on the person's Comfy.org credits (for the confirm before a paid run).
+  handle('account:price', async (graph) => priceGraph(graph, await infoFor(studio.comfy, graph)))
+  setTimeout(() => readSettings(BASE).comfyApiKey && refreshAccount(), 3000)
   // ---------- edits (the timeline editor) ----------
   const unpacked = (p) => p.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
   const edits = new Edits({
