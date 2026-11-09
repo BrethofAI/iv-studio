@@ -10,7 +10,10 @@ import { resolveModel } from './setup.js'
 
 // What IV Studio offers, and which Freefield app each runs.
 export const CLIP_FX = {
-  reshoot: { app: 'reshoot', label: 'New angle', what: 'The same clip filmed from another angle (MiniMax H3 + MoGe + CrossView)', media: 'video', preview: '41' },
+  // New angle starts gentler than Freefield's app (-30° / 20°, a 50° lens): tested on a 4090 with 64 GB, a 15° / 5° move
+  // with the lens read from the clip gave a warp H3 follows, while 30° / 15° left most of the frame for H3 to invent
+  // and it fell back to the original shot. 0.35 MP fits 5 s in 64 GB of RAM; 0.5 MP ran out of memory there.
+  reshoot: { app: 'reshoot', label: 'New angle', what: 'The same clip filmed from another angle (MiniMax H3 + MoGe + CrossView)', media: 'video', preview: '41', defaults: { azimuth: -15, elevation: 5 }, cameraDefaults: { hfov: 0, keep_source_aim: true }, size: { node: '2', field: 'megapixels', choices: [[0.35, 'Standard'], [0.5, 'Sharper']], default: 0.35 } },
   dub: { app: 'dub', label: 'Dub', what: 'The person says new words, in any language, with new lip movement (LTX-2.5 + DubIt)', media: 'video' },
   cleanplate: { app: 'vfx-clean-plate', label: 'Clean plate', what: 'People and moving things taken out, the background rebuilt (LTX-2.5)', media: 'video' },
   night: { app: 'vfx-day-to-night', label: 'Day to night', what: 'The same shot at night (LTX-2.5)', media: 'video' },
@@ -69,6 +72,12 @@ export function cameraOverrides(camera = {}) {
 
 // Only the nodes an output needs: the output and everything upstream of it (New angle's preview stops at the warp,
 // before H3).
+// The picture size an effect renders at: one of its size choices, else its default.
+export function sizeOf(spec, size) {
+  const n = Number(size)
+  return spec.size?.choices?.some(([v]) => v === n) ? n : spec.size?.default
+}
+
 export function upstream(graph, outIds) {
   const keep = new Set()
   const walk = (id) => {
@@ -211,7 +220,9 @@ export class FreefieldApps {
     const cam = spec.preview && graph[CAMERA_NODE]?.class_type === 'CrossViewWarp' ? graph[CAMERA_NODE].inputs : null
     // New angle: the warp node's own settings as Freefield's graph has them, which the live preview must repeat
     const camera = cam ? Object.fromEntries(LIVE_PARAMS.filter((k) => k in cam).map((k) => [k, cam[k]])) : undefined
-    return { fx, ...spec, name: app.name, summary: app.summary, inputs: app.inputs, outputs: app.outputs, models: app.models, nodes: (app.custom_nodes || []).map((n) => n.repo), camera }
+    // IV Studio's own starting values (spec.defaults, cameraDefaults) over the app's
+    const inputs = (app.inputs || []).map((i) => (spec.defaults && i.id in spec.defaults ? { ...i, default: spec.defaults[i.id] } : i))
+    return { fx, ...spec, name: app.name, summary: app.summary, inputs, outputs: app.outputs, models: app.models, nodes: (app.custom_nodes || []).map((n) => n.repo), camera: camera && { ...camera, ...(spec.cameraDefaults || {}) } }
   }
 
   // New angle's live picture: once a preview has run, CrossView's own render route (comfyrob/ComfyUI-CrossViewWarp,
@@ -254,7 +265,7 @@ export class FreefieldApps {
 
   // New angle's preview: only the depth and warp half of the graph (MoGe + CrossView Warp), the guide H3 is given,
   // on the first seconds of the clip. Seconds, not minutes; shows the new camera position and the gaps H3 will fill.
-  async previewAngle({ fx = 'reshoot', file, values = {}, camera = null, seconds = 2, onProgress = () => {} }) {
+  async previewAngle({ fx = 'reshoot', file, values = {}, camera = null, size = null, seconds = 2, onProgress = () => {} }) {
     const spec = CLIP_FX[fx]
     if (!spec?.preview) throw new Error(`${spec?.label || fx} has no preview.`)
     if (!file || !fs.existsSync(file)) throw new Error('Pick a clip.')
@@ -262,14 +273,15 @@ export class FreefieldApps {
     if (studio.comfy.remote) throw new Error(`${spec.label} runs on this PC’s ComfyUI.`)
     const { app, graph } = loadApp(this.resourcesDir, spec.app)
     const info = await studio.comfy.objectInfo()
-    const vals = { ...values }
+    const vals = { ...(spec.defaults || {}), ...values }
     const media = (app.inputs || []).find((i) => i.type === 'video')
     vals[media.id] = await studio.comfy.upload(file, 'iv_studio/clipfx')
     // the preview's own length: the input's slider minimum or more, never past what was asked for
     const dur = (app.inputs || []).find((i) => i.id === 'duration')
     if (dur) vals.duration = Math.max(dur.min ?? 1, Math.min(Number(vals.duration ?? dur.default ?? seconds), seconds))
     const filled = fillGraph(app, graph, vals)
-    if (camera && filled[CAMERA_NODE]?.class_type === 'CrossViewWarp') Object.assign(filled[CAMERA_NODE].inputs, cameraOverrides(camera))
+    if (filled[CAMERA_NODE]?.class_type === 'CrossViewWarp') Object.assign(filled[CAMERA_NODE].inputs, cameraOverrides({ ...(spec.cameraDefaults || {}), ...(camera || {}) }))
+    if (spec.size && filled[spec.size.node]) filled[spec.size.node].inputs[spec.size.field] = sizeOf(spec, size)
     const part = upstream(filled, spec.preview)
     const missingNodes = [...new Set(Object.values(part).map((n) => n.class_type).filter((c) => !info[c]))]
     if (missingNodes.length) throw new Error(`The preview needs ComfyUI nodes this one doesn’t have (${missingNodes.join(', ')}). Install missing node packs on Setup, then restart ComfyUI.`)
@@ -309,7 +321,7 @@ export class FreefieldApps {
 
   // Runs one: file (a video or a picture on this PC), last (transitions: the last frame), values (the app's inputs).
   // Resolves when ComfyUI finishes, with { files: [{ label, file, kind }] } copied into clipfx/.
-  async run({ fx, file, last = null, values = {}, camera = null, name, onProgress = () => {} }) {
+  async run({ fx, file, last = null, values = {}, camera = null, size = null, name, onProgress = () => {} }) {
     const spec = CLIP_FX[fx]
     if (!spec) throw new Error(`Unknown effect "${fx}".`)
     if (!file || !fs.existsSync(file)) throw new Error(spec.media === 'image' ? 'Pick a picture.' : 'Pick a clip.')
@@ -320,7 +332,7 @@ export class FreefieldApps {
     const missingNodes = [...new Set(Object.values(graph).map((n) => n.class_type).filter((c) => !info[c]))]
     if (missingNodes.length) throw new Error(`${spec.label} needs ComfyUI nodes this one doesn’t have (${missingNodes.slice(0, 4).join(', ')}). Install missing node packs on Setup, then restart ComfyUI.`)
     // the media inputs: the first video or image input takes the file, a second image input the last frame
-    const vals = { ...values }
+    const vals = { ...(spec.defaults || {}), ...values }
     const media = (app.inputs || []).filter((i) => i.type === 'video' || i.type === 'image')
     if (!media.length) throw new Error(`${spec.label} takes no picture or clip.`)
     vals[media[0].id] = await studio.comfy.upload(file, 'iv_studio/clipfx')
@@ -329,7 +341,8 @@ export class FreefieldApps {
       vals[media[1].id] = await studio.comfy.upload(last, 'iv_studio/clipfx')
     }
     const filled = fillGraph(app, graph, vals)
-    if (camera && filled[CAMERA_NODE]?.class_type === 'CrossViewWarp') Object.assign(filled[CAMERA_NODE].inputs, cameraOverrides(camera))
+    if (filled[CAMERA_NODE]?.class_type === 'CrossViewWarp') Object.assign(filled[CAMERA_NODE].inputs, cameraOverrides({ ...(spec.cameraDefaults || {}), ...(camera || {}) }))
+    if (spec.size && filled[spec.size.node]) filled[spec.size.node].inputs[spec.size.field] = sizeOf(spec, size)
     const swapped = swapModels(filled, info, studio.manifest)
     const missing = swapped.missing
     const g = withFreeMemory(swapped.graph, info)

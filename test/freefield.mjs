@@ -3,7 +3,7 @@
 // another build are swapped in.
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import { CLIP_FX, cameraOverrides, fillGraph, loadApp, swapModels, upstream, withFreeMemory } from '../src/service/freefield.js'
+import { CLIP_FX, cameraOverrides, fillGraph, loadApp, sizeOf, swapModels, upstream, withFreeMemory } from '../src/service/freefield.js'
 
 let n = 0
 const ok = (name, fn) => (fn(), n++, console.log('ok ', name))
@@ -106,6 +106,17 @@ ok('the GPU is cleared before the first sampler loads its model, and only when C
   const g = withFreeMemory(graph, { IVFreeMemory: {} })
   assert.deepEqual(g['33'].inputs.conditioning, ['ivfree_33', 0])
   assert.deepEqual(g.ivfree_33.inputs.value, graph['33'].inputs.conditioning)
+})
+
+ok('New angle starts gentle: 15° / 5°, the lens read from the clip, 0.35 MP', () => {
+  const spec = CLIP_FX.reshoot
+  assert.deepEqual(spec.defaults, { azimuth: -15, elevation: 5 })
+  assert.equal(spec.cameraDefaults.hfov, 0)
+  assert.equal(sizeOf(spec, null), 0.35)
+  assert.equal(sizeOf(spec, 0.5), 0.5)
+  assert.equal(sizeOf(spec, 2), 0.35, 'only its own choices')
+  const { graph } = loadApp(RES, 'reshoot')
+  assert.equal(graph['2'].inputs.megapixels, 0.5, 'the vendored graph is unchanged')
 })
 
 console.log(`\n${n} passed`)

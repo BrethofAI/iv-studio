@@ -511,15 +511,15 @@ app.whenReady().then(() => {
     if (!fs.existsSync(src)) await edits.run(['-y', '-hide_banner', '-loglevel', 'error', '-ss', String(start || 0), '-i', file, '-t', String(length), '-c:v', 'libx264', '-crf', '14', '-preset', 'fast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', src])
     return src
   }
-  handle('clipfx:preview', async ({ fx = 'reshoot', file, start = null, length = null, values = {}, camera = null }) => {
+  handle('clipfx:preview', async ({ fx = 'reshoot', file, start = null, length = null, values = {}, camera = null, size = null }) => {
     await voices.release()
-    return clipfx.previewAngle({ fx, file: await clipStretch(file, start, length), values, camera, onProgress: (j) => send('clipfx:progress', { fx, preview: true, status: j.status, progress: j.progress }) })
+    return clipfx.previewAngle({ fx, file: await clipStretch(file, start, length), values, camera, size, onProgress: (j) => send('clipfx:progress', { fx, preview: true, status: j.status, progress: j.progress }) })
   })
   handle('clipfx:live', (opts) => clipfx.liveAngle(opts))
-  handle('clipfx:run', async ({ fx, file, last = null, start = null, length = null, values = {}, camera = null, name }) => {
+  handle('clipfx:run', async ({ fx, file, last = null, start = null, length = null, values = {}, camera = null, size = null, name }) => {
     await voices.release()
     const src = await clipStretch(file, start, length)
-    const r = await clipfx.run({ fx, file: src, last, values, camera, name, onProgress: (j) => send('clipfx:progress', { fx, status: j.status, progress: j.progress }) })
+    const r = await clipfx.run({ fx, file: src, last, values, camera, size, name, onProgress: (j) => send('clipfx:progress', { fx, status: j.status, progress: j.progress }) })
     const main = r.files.find((f) => f.kind === 'video') || r.files[0]
     return { ...r, media: main ? await edits.addMedia(main.file, { type: 'clipfx', fx, from: file, label: r.title }) : null }
   })

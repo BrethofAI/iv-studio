@@ -34,9 +34,10 @@ export function cameraWords({ azimuth = 0, elevation = 0, distance = 1, hfov = 5
 }
 
 export function zoneWords(az, el) {
-  if (Math.abs(az) < 8 && Math.abs(el) < 8) return { tone: 'pink', text: 'A very small move. The model misbehaves when the new view is almost the same as the original.' }
+  if (Math.abs(az) < 6 && Math.abs(el) < 6) return { tone: 'pink', text: 'A very small move. The model misbehaves when the new view is almost the same as the original.' }
   const z = zoneOf(az, el)
-  if (z === 'in') return { tone: 'ok', text: 'Inside the range the CrossView LoRA was checked on.' }
+  if (z === 'in' && Math.abs(az) <= 20 && Math.abs(el) <= 10) return { tone: 'ok', text: 'A move H3 follows well. Check the preview: magenta is what it has to invent.' }
+  if (z === 'in') return { tone: 'pink', text: 'Inside the range the CrossView LoRA was checked on, but a big move for most shots: the more magenta in the preview, the more H3 invents or falls back to the original angle.' }
   if (z === 'edge') return { tone: 'pink', text: el < -20 ? 'Looking up from below is thin in the training set: expect more invention.' : 'Past the checked range, inside what it was trained on: expect more invention.' }
   return { tone: 'red', text: 'Past the training set: the hidden side is invented.' }
 }
@@ -199,7 +200,7 @@ const LENSES = [
   [90, '90° very wide']
 ]
 
-export function CameraRig({ values, camera, defaults = {}, clip, previewStatus, onValues, onCamera }) {
+export function CameraRig({ values, camera, defaults = {}, clip, previewStatus, onValues, onCamera, size = null, sizeChoices = null, onSize = () => {} }) {
   const az = Number(values.azimuth ?? -30)
   const el = Number(values.elevation ?? 20)
   const dist = Number(values.distance ?? 1)
@@ -243,7 +244,7 @@ export function CameraRig({ values, camera, defaults = {}, clip, previewStatus, 
     setState({ phase: 'running' })
     const t0 = Date.now()
     try {
-      const r = await window.ivstudio.clipfx.preview({ fx: 'reshoot', file: clip.file, start: clip.start, length: clip.length, values, camera })
+      const r = await window.ivstudio.clipfx.preview({ fx: 'reshoot', file: clip.file, start: clip.start, length: clip.length, values, camera, size })
       setState({ phase: 'live', file: r.file, seconds: Math.round((Date.now() - t0) / 1000) })
       setFrame(1)
     } catch (err) {
@@ -319,6 +320,19 @@ export function CameraRig({ values, camera, defaults = {}, clip, previewStatus, 
       </button>
       {adv && (
         <div className="rig-adv">
+          {sizeChoices && (
+            <div className="create-field">
+              <span className="create-label mono">Picture size</span>
+              <div className="segmented wrap">
+                {sizeChoices.map(([v, l]) => (
+                  <button key={v} className={Number(size) === v ? 'on' : ''} onClick={() => onSize(v)}>
+                    {l} · {v} MP
+                  </button>
+                ))}
+              </div>
+              <span className="small dim">Standard fits a 5 s clip on a PC with 64 GB of RAM. Sharper needs a good deal more memory; on 64 GB keep it to about 2 seconds.</span>
+            </div>
+          )}
           <div className="create-field">
             <span className="create-label mono">Lens (horizontal field of view)</span>
             <div className="segmented wrap">

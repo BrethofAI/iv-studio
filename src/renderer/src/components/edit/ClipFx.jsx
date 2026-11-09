@@ -78,6 +78,7 @@ export function ClipFxDialog({ clipName, length, clip = null, onRun, onClose }) 
   const [fx, setFx] = useState(null)
   const [values, setValues] = useState({})
   const [camera, setCamera] = useState({})
+  const [size, setSize] = useState(null)
   useEffect(() => {
     window.ivstudio.clipfx.meta().then((all) => setMetas(all.filter((m) => VIDEO_FX.includes(m.fx))))
     window.ivstudio.clipfx.status().then(setStatus, () => {})
@@ -91,6 +92,7 @@ export function ClipFxDialog({ clipName, length, clip = null, onRun, onClose }) 
     const m = metas.find((x) => x.fx === id)
     setFx(id)
     setCamera({})
+    setSize(m.size?.default ?? null)
     setValues(Object.fromEntries((m.inputs || []).filter((i) => i.default !== undefined && !['video', 'image'].includes(i.type)).map((i) => [i.id, i.default])))
   }
   const st = fx && status[fx]
@@ -128,7 +130,7 @@ export function ClipFxDialog({ clipName, length, clip = null, onRun, onClose }) 
         ) : (
           <div className={fx === 'reshoot' ? 'fx-split' : undefined}>
             {fx === 'reshoot' && (
-              <CameraRig values={values} camera={camera} defaults={meta.camera} clip={clip} previewStatus={st?.preview} onValues={(v) => setValues((s) => ({ ...s, ...v }))} onCamera={(c) => setCamera((s) => ({ ...s, ...c }))} />
+              <CameraRig values={values} camera={camera} defaults={meta.camera} clip={clip} previewStatus={st?.preview} onValues={(v) => setValues((s) => ({ ...s, ...v }))} onCamera={(c) => setCamera((s) => ({ ...s, ...c }))} size={size} sizeChoices={meta.size?.choices} onSize={setSize} />
             )}
             <div className="fx-form">
               <p className="small dim">{meta.summary}</p>
@@ -150,7 +152,7 @@ export function ClipFxDialog({ clipName, length, clip = null, onRun, onClose }) 
             Cancel
           </button>
           {meta && (
-            <button className="btn btn-small btn-primary" disabled={!st?.ready} onClick={() => (onRun({ fx, values, camera, label: meta.label }), onClose())}>
+            <button className="btn btn-small btn-primary" disabled={!st?.ready} onClick={() => (onRun({ fx, values, camera, size, label: meta.label }), onClose())}>
               {meta.label}
             </button>
           )}
