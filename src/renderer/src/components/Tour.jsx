@@ -34,6 +34,8 @@ export default function TourHost() {
   const [i, setI] = useState(0)
   const [rect, setRect] = useState(null)
   const [card, setCard] = useState({ top: 0, left: 0, ready: false })
+  // true while a step's page is still opening (go): the card waits, then shows beside the part or in the middle
+  const [seeking, setSeeking] = useState(false)
   const cardRef = useRef(null)
   const elRef = useRef(null)
 
@@ -57,6 +59,7 @@ export default function TourHost() {
     if (tour) markTourSeen(tour.id)
     setTour(null)
     setRect(null)
+    setSeeking(false)
   }
   const go = (d) => setI((n) => Math.max(0, Math.min(tour.steps.length - 1, n + d)))
 
@@ -65,13 +68,15 @@ export default function TourHost() {
     if (!step) return
     let gone = false
     const show = (el) => {
+      setSeeking(false)
       elRef.current = el
       if (!el) return setRect(null)
       const r = el.getBoundingClientRect()
+      const top = Math.max(r.top, 48)
+      setRect({ top, left: r.left, width: r.width, height: Math.max(0, Math.min(r.bottom, window.innerHeight - 12) - top) })
       const tall = r.height > window.innerHeight - 260
       if (r.top < 60 || r.bottom > window.innerHeight - 20 || tall) el.scrollIntoView({ block: tall ? 'start' : 'center', behavior: 'smooth' })
     }
-    setCard((c) => ({ ...c, ready: false }))
     if (!step.go) {
       show(targetOf(step))
       return
@@ -80,6 +85,7 @@ export default function TourHost() {
     // in the middle instead
     elRef.current = null
     setRect(null)
+    setSeeking(true)
     window.dispatchEvent(new CustomEvent('iv:go', { detail: step.go }))
     const t0 = Date.now()
     const look = () => {
@@ -118,6 +124,9 @@ export default function TourHost() {
   useLayoutEffect(() => {
     const c = cardRef.current
     if (!c || !tour) return
+    // placed here, never hidden from a later effect: a step with nothing to light (rect stays null) used to leave
+    // the card invisible behind the dimmed window
+    if (seeking) return setCard((o) => (o.ready ? { ...o, ready: false } : o))
     const W = window.innerWidth
     const H = window.innerHeight
     const cw = c.offsetWidth
@@ -137,7 +146,7 @@ export default function TourHost() {
     else if (l - GAP >= cw + EDGE) pos = { top: clampY(rect.top), left: l - GAP - cw, side: 'left' }
     else pos = { top: clampY(Math.min(b, H) - ch - 20), left: clampX(cx), side: 'over' }
     setCard((o) => (o.ready && Math.abs(o.top - pos.top) < 1 && Math.abs(o.left - pos.left) < 1 ? o : { ...pos, ready: true }))
-  }, [rect, i, tour])
+  }, [rect, i, tour, seeking])
 
   useEffect(() => {
     if (!tour) return
