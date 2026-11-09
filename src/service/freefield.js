@@ -13,7 +13,7 @@ export const CLIP_FX = {
   // New angle starts gentler than Freefield's app (-30° / 20°, a 50° lens): tested on a 4090 with 64 GB, a 15° / 5° move
   // with the lens read from the clip gave a warp H3 follows, while 30° / 15° left most of the frame for H3 to invent
   // and it fell back to the original shot. 0.35 MP fits 5 s in 64 GB of RAM; 0.5 MP ran out of memory there.
-  reshoot: { app: 'reshoot', label: 'New angle', what: 'The same clip filmed from another angle (MiniMax H3 + MoGe + CrossView)', media: 'video', preview: '41', defaults: { azimuth: -15, elevation: 5 }, cameraDefaults: { hfov: 0, keep_source_aim: true }, size: { node: '2', field: 'megapixels', choices: [[0.35, 'Standard'], [0.5, 'Sharper']], default: 0.35 } },
+  reshoot: { app: 'reshoot', label: 'New angle', what: 'The same clip filmed from another angle (MiniMax H3 + MoGe + CrossView)', media: 'video', preview: '41', off: 'New angle is left out of 1.1: on a 24 GB card with 64 GB of RAM it fits only short clips at low size, and moves big enough to matter left H3 inventing or falling back to the original angle.', defaults: { azimuth: -15, elevation: 5 }, cameraDefaults: { hfov: 0, keep_source_aim: true }, size: { node: '2', field: 'megapixels', choices: [[0.35, 'Standard'], [0.5, 'Sharper']], default: 0.35 } },
   dub: { app: 'dub', label: 'Dub', what: 'The person says new words, in any language, with new lip movement (LTX-2.5 + DubIt)', media: 'video' },
   cleanplate: { app: 'vfx-clean-plate', label: 'Clean plate', what: 'People and moving things taken out, the background rebuilt (LTX-2.5)', media: 'video' },
   night: { app: 'vfx-day-to-night', label: 'Day to night', what: 'The same shot at night (LTX-2.5)', media: 'video' },
@@ -114,6 +114,9 @@ export function withFreeMemory(graph, info = null) {
   }
   return g
 }
+
+// The effects IV Studio offers (CLIP_FX minus those switched off)
+export const offeredFx = () => Object.keys(CLIP_FX).filter((k) => !CLIP_FX[k].off)
 
 export function loadApp(resourcesDir, id) {
   const dir = path.join(resourcesDir, 'workflows', 'freefield', id)
@@ -315,7 +318,7 @@ export class FreefieldApps {
 
   async statusAll() {
     const out = {}
-    for (const fx of Object.keys(CLIP_FX)) out[fx] = await this.status(fx).catch((err) => ({ fx, ready: false, error: err.message }))
+    for (const fx of offeredFx()) out[fx] = await this.status(fx).catch((err) => ({ fx, ready: false, error: err.message }))
     return out
   }
 
@@ -324,6 +327,7 @@ export class FreefieldApps {
   async run({ fx, file, last = null, values = {}, camera = null, size = null, name, onProgress = () => {} }) {
     const spec = CLIP_FX[fx]
     if (!spec) throw new Error(`Unknown effect "${fx}".`)
+    if (spec.off) throw new Error(spec.off)
     if (!file || !fs.existsSync(file)) throw new Error(spec.media === 'image' ? 'Pick a picture.' : 'Pick a clip.')
     const studio = this.studio()
     if (studio.comfy.remote) throw new Error(`${spec.label} runs on this PC’s ComfyUI.`)

@@ -48,7 +48,7 @@ import { Remake, REMAKE_KINDS } from '../service/remake'
 import { VOICE_ENGINES, Voices } from '../service/voices'
 import { ACE_KEYS, monoDecoder, Music, MUSIC_DEFAULTS, MUSIC_ENGINES, REMIX } from '../service/music'
 import { SOUND_KINDS, SOUND_LIMITS, Sounds } from '../service/sounds'
-import { CLIP_FX, FreefieldApps } from '../service/freefield'
+import { offeredFx, CLIP_FX, FreefieldApps } from '../service/freefield'
 import { IMAGE_ASPECTS, IMAGE_FAMILIES, Images } from '../service/images'
 import { RefMods } from '../service/refmods'
 import { Civitai, LORA_FAMILIES, LORA_SORTS, LORA_TAGS } from '../service/civitai'
@@ -564,9 +564,9 @@ tool('reframe', `Put a video or picture in a new frame shape (9:16, 1:1, 4:5 or 
 const cutouts = new Cutouts({ dataDir: DATA, studio: () => studio, edits })
 // ---------- Clip effects and Workflows -> Effects: Freefield's apps (freefield.js) on this PC's ComfyUI ----------
 const clipfx = new FreefieldApps({ resourcesDir: resourcesDir(), dataDir: DATA, studio: () => studio })
-tool('effects_list', `The video and photo effects IV Studio can run (Freefield's apps): ${Object.entries(CLIP_FX).map(([k, v]) => `${k} (${v.label.toLowerCase()}; takes a ${v.media})`).join(', ')}. Give fx to get one effect's inputs (ids, types, options with their values, limits, defaults) and whether this ComfyUI can run it (missing node packs or models).`, { fx: z.enum(Object.keys(CLIP_FX)).optional() }, async ({ fx }) => (fx ? { ...clipfx.meta(fx), status: await clipfx.status(fx) } : { items: Object.keys(CLIP_FX).map((k) => ({ fx: k, ...CLIP_FX[k] })), status: await clipfx.statusAll() }))
-tool('run_effect', 'Run one effect on this PC (free, local; a few minutes) and wait for it. file: a video (reshoot, dub, cleanplate, night, water, hdr, removebg, smooth) or a picture (effects, morph, transitions; transitions also takes last). values: the effect’s own inputs by id (effects_list fx=...), select inputs by their option value. Returns the result files (the first is the main video; a matte or a warp guide may follow). Put a result on an edit with add_media. reshoot (New angle): small moves hold best (about 15° orbit, 5° height, the defaults); bigger ones leave more for H3 to invent.', {
-  fx: z.enum(Object.keys(CLIP_FX)),
+tool('effects_list', `The video and photo effects IV Studio can run (Freefield's apps): ${offeredFx().map((k) => [k, CLIP_FX[k]]).map(([k, v]) => `${k} (${v.label.toLowerCase()}; takes a ${v.media})`).join(', ')}. Give fx to get one effect's inputs (ids, types, options with their values, limits, defaults) and whether this ComfyUI can run it (missing node packs or models).`, { fx: z.enum(offeredFx()).optional() }, async ({ fx }) => (fx ? { ...clipfx.meta(fx), status: await clipfx.status(fx) } : { items: offeredFx().map((k) => ({ fx: k, ...CLIP_FX[k] })), status: await clipfx.statusAll() }))
+tool('run_effect', 'Run one effect on this PC (free, local; a few minutes) and wait for it. file: a video (dub, cleanplate, night, water, hdr, removebg, smooth) or a picture (effects, morph, transitions; transitions also takes last). values: the effect’s own inputs by id (effects_list fx=...), select inputs by their option value. Returns the result files (the first is the main video; a matte or a warp guide may follow). Put a result on an edit with add_media.', {
+  fx: z.enum(offeredFx()),
   file: z.string().describe('Absolute path of the clip or picture'),
   last: z.string().optional().describe('transitions: absolute path of the last frame'),
   values: z.record(z.any()).optional(),

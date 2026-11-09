@@ -38,14 +38,9 @@ Simple words for people new to AI video. See [what's new in 1.1](#whats-new-in-1
 
 ## What's new in 1.1
 
-- **Effects on any clip.** Right-click a clip in the editor → Effects…: New angle (the same clip from another
-  camera position: MiniMax H3 with MoGe depth and CrossView Warp), Dub (new words in any language, with new lip
+- **Effects on any clip.** Right-click a clip in the editor → Effects…: Dub (new words in any language, with new lip
   movement), Clean plate, Day to night, Add water, SDR to HDR, Remove background and Smooth or slow motion. The
   result takes the clip's place, and Undo brings it back. Built on [Freefield](https://github.com/neuregex/freefield)'s apps (MIT).
-- **See the new angle before you render it.** New angle draws the camera from above and from the side against
-  the original, says the move in words, and marks the range the CrossView LoRA was trained on. Preview this
-  angle runs only the depth and warp (seconds, free), then re-warps live as you drag the sliders or the picture;
-  magenta shows what H3 will have to invent. Advanced camera has the lens, lens shift, depth relief and aim.
 - **Effects, Sounds and picture tools.** Workflows → Effects turns a photo into an effect clip, a transformation
   or a transition. Audio → Sounds makes sound effects, ambiences, one-shots and loops with Stable Audio 3.
   Create → Image → Tools inpaints (paint over a part and describe it), relights, removes backgrounds, upscales

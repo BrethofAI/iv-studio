@@ -467,7 +467,7 @@
         "reshoot"
       ],
       "optional": true,
-      "optionalFor": "Depth maps and Reshoot"
+      "optionalFor": "Depth maps"
     },
     {
       "id": "ff_ltx_2_5_22b_distilled_transformer_comfy_int8_convrot",
@@ -995,36 +995,6 @@
       "optionalFor": "Transformations, Transitions"
     },
     {
-      "id": "ff_minimax_h3_ref2va_lora_crossview_warp_v1_3500",
-      "label": "H3 CrossView Warp LoRA (Reshoot)",
-      "loader": "LoraLoaderModelOnly.lora_name",
-      "match": "MiniMax-H3_Ref2VA-LoRA-CrossView-Warp_v1_3500.safetensors",
-      "folder": "loras",
-      "url": "https://huggingface.co/Cseti/MiniMax-H3_Ref2VA-LoRA-CrossView-Warp_v1/resolve/94dc2a07c5a3f7e10b7c1d053cc700762d15c35d/MiniMax-H3_Ref2VA-LoRA-CrossView-Warp_v1_3500.safetensors",
-      "size": 596452584,
-      "sha256": "aab492964261f6611ced672c70866ce9d64bab66fbd28fd39d26bcd09c852f91",
-      "needed_for": [
-        "effects"
-      ],
-      "optional": true,
-      "optionalFor": "Reshoot (new angle)"
-    },
-    {
-      "id": "ff_minimax_h3_ref2v_turbo_8step_v1_0_768p_comfyui_bf16",
-      "label": "H3 ref2v Turbo 8-step LoRA (Reshoot)",
-      "loader": "LoraLoaderModelOnly.lora_name",
-      "match": "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
-      "folder": "loras",
-      "url": "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/30f485ed874aa44c8183348ad361c5eabad318da/minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
-      "size": 1956193000,
-      "sha256": "6a56f41ab4229c9dd845b9501bbd475ee57e112d846cf2e819d534a1ae928c5a",
-      "needed_for": [
-        "effects"
-      ],
-      "optional": true,
-      "optionalFor": "Reshoot (new angle)"
-    },
-    {
       "id": "ff_ltx_2_5_22b_ic_lora_sdr_to_hdr_1_0",
       "label": "LTX IC-LoRA: SDR to HDR",
       "loader": "LTXICLoRALoaderModelOnly.lora_name",
@@ -1409,18 +1379,6 @@
       "git": "https://github.com/Lightricks/ComfyUI-LTXVideo",
       "commit": "44c8a36b7c31ee00b4271daed11dc2a4aa481140",
       "for": "Dub and VFX"
-    },
-    {
-      "label": "CrossView Warp",
-      "classes": [
-        "CrossViewPrepareClip",
-        "CrossViewWarp"
-      ],
-      "url": "https://github.com/comfyrob/ComfyUI-CrossViewWarp",
-      "dir": "ComfyUI-CrossViewWarp",
-      "git": "https://github.com/comfyrob/ComfyUI-CrossViewWarp",
-      "commit": "fbb1e93c7193329ff3ce7c17f95166b539687876",
-      "for": "Reshoot"
     }
   ]
 }

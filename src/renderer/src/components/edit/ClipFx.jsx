@@ -3,7 +3,7 @@ import { CameraRig } from './CameraRig'
 
 // Edit → right-click a clip → Effects…: Freefield's video apps on the clip's own stretch (freefield.js). Pick an
 // effect, set what it asks for (drawn from the app's own inputs), and run it; the result takes the clip's place.
-const VIDEO_FX = ['reshoot', 'dub', 'cleanplate', 'night', 'water', 'hdr', 'removebg', 'smooth']
+const VIDEO_FX = ['dub', 'cleanplate', 'night', 'water', 'hdr', 'removebg', 'smooth']
 const ICON = {
   reshoot: 'M5 22l7-7 4 4 9-9M19 10h6v6M4 26h24',
   dub: 'M9 13a3 3 0 016 0v4a3 3 0 01-6 0zM6 17a6 6 0 0012 0M12 23v3M19 9c2 1 3 3 3 6s-1 5-3 6M23 6c3 2 5 5 5 9s-2 7-5 9',

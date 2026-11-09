@@ -4,8 +4,7 @@ export const NEWS = [
   {
     version: '1.1.0',
     items: [
-      { text: 'Effects on any clip in the editor (right-click → Effects…): a new camera angle, dubbing into any language with new lip movement, clean plates, day to night, water, SDR to HDR, background removal and smooth or slow motion. Built on Freefield’s apps.' },
-      { text: 'New angle shows the camera move from above and from the side, says it in words, and previews the shot from the new angle live before H3 renders it. Lens, lens shift and depth relief sit under Advanced camera.' },
+      { text: 'Effects on any clip in the editor (right-click → Effects…): dubbing into any language with new lip movement, clean plates, day to night, water, SDR to HDR, background removal and smooth or slow motion. Built on Freefield’s apps.' },
       { text: 'Workflows → Effects turns a photo into an effect clip, a transformation or a transition. Audio → Sounds makes sound effects, ambiences and loops with Stable Audio 3, ready for A2.' },
       { text: 'Picture tools in Create → Image: inpaint by painting over a part, relight, remove the background, upscale 2× or 4×, and depth or normal maps.' },
       { text: 'LoRAs for every model, not just H3: pick MiniMax H3, LTX-2.5, Wan 2.1, Flux 3 Klein, Flux.2 Klein, Krea 2, Qwen Image 2.1, Z-Image, SDXL or Moss, find its LoRAs on Civitai and use them in that model’s tray.' },

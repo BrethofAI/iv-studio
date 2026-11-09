@@ -23,7 +23,7 @@ import { Productions } from '../service/productions'
 import { Reels } from '../service/reel'
 import { Cutouts } from '../service/cutout'
 import { Reframes } from '../service/reframe'
-import { CLIP_FX, FreefieldApps } from '../service/freefield'
+import { offeredFx, CLIP_FX, FreefieldApps } from '../service/freefield'
 import { DEFAULT_TRACKS } from '../service/timeline'
 import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
 import { initUpdater, updateState, MANUAL as UPDATE_MANUAL } from './updater'
@@ -498,7 +498,7 @@ app.whenReady().then(() => {
   // Clip effects and Workflows → Effects: Freefield's apps (freefield.js) on this PC's ComfyUI. A clip's own stretch
   // (start, length in its file) is cut out first, so the effect sees only what the timeline shows.
   const clipfx = new FreefieldApps({ resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), dataDir: DATA, studio: () => studio })
-  handle('clipfx:meta', (fx) => (fx ? clipfx.meta(fx) : Object.keys(CLIP_FX).map((k) => clipfx.meta(k))))
+  handle('clipfx:meta', (fx) => (fx ? clipfx.meta(fx) : offeredFx().map((k) => clipfx.meta(k))))
   handle('clipfx:status', (fx) => (fx ? clipfx.status(fx) : clipfx.statusAll()))
   handle('clipfx:runs', () => clipfx.runs())
   handle('clipfx:deleteRun', (id) => clipfx.deleteRun(id))

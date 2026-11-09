@@ -42,7 +42,6 @@ export const CREDITS = [
       { name: 'Wan 2.1 image-to-video 14B', by: 'Wan (Alibaba)', covers: ['ff_wan2_1_i2v_480p_14b_fp8_scaled', 'ff_umt5_xxl_fp8_e4m3fn_scaled', 'ff_clip_vision_h', 'ff_wan_2_1_vae'], use: 'The Effects gallery', licence: 'Apache-2.0', url: 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged' },
       { name: 'Wan 2.1 effect LoRAs', by: 'Remade-AI, joyfox, lvfengchun and ostris', covers: ['ff_cakeify_16_epochs', 'ff_angry_face_5_epochs', 'ff_crying_20_epochs', 'ff_laughing_15_epochs', 'ff_puppy_50_epochs', 'ff_wan21_penqi_000003500', 'ff_money_000003000', 'ff_crush_20_epochs', 'ff_deflate_20_epochs', 'ff_electrify_50_epochs', 'ff_explode_30_epochs', 'ff_inflate_20_epochs', 'ff_rotate_20_epochs', 'ff_squish_18', 'ff_360_orbit', 'ff_arc_shot', 'ff_wan21_i2v_rotation_000003750', 'ff_car_chase', 'ff_crane_down', 'ff_crane_overhead', 'ff_crane_up', 'ff_crash_zoom_in', 'ff_wan_21_i2v_dolly_zoom', 'ff_hero_run'], use: 'The 24 effects: Cakeify, Explode, Money rain, 360° orbit and the rest', licence: 'Apache-2.0', url: 'https://huggingface.co/Remade-AI' },
       { name: 'Wan 2.1 step-distill LoRA', by: 'lightx2v', covers: ['ff_lightx2v_i2v_14b_480p_cfg_step_distill_rank64_bf16'], use: 'Fast Effects', licence: 'Apache-2.0', url: 'https://huggingface.co/Kijai/WanVideo_comfy' },
-      { name: 'MiniMax H3 CrossView Warp LoRA', by: 'Cseti', covers: ['ff_minimax_h3_ref2va_lora_crossview_warp_v1_3500'], use: 'Reshoot: the clip from a new angle', licence: 'MiniMax H3 Community License', url: 'https://huggingface.co/Cseti/MiniMax-H3_Ref2VA-LoRA-CrossView-Warp_v1' },
       { name: 'MiniMax H3 Turbo (ref2v, 8 steps)', by: 'lightx2v', covers: ['ff_minimax_h3_ref2v_turbo_8step_v1_0_768p_comfyui_bf16'], use: 'Reshoot in 8 steps', url: 'https://huggingface.co/lightx2v/Minimax-h3-Turbo' },
       { name: 'FILM frame interpolation', by: 'Google Research', covers: ['ff_film_net_fp16'], use: 'Smooth and slow motion', licence: 'Apache-2.0', url: 'https://github.com/google-research/frame-interpolation' },
       { name: 'Real-ESRGAN and RIFE', use: 'Upscaling and frame interpolation for finals in the cloud and on Linux', url: 'https://github.com/xinntao/Real-ESRGAN' }
@@ -53,7 +52,7 @@ export const CREDITS = [
     items: [
       { name: 'ComfyUI', by: 'Comfy Org', use: 'Everything that renders: IV Studio is a front end for ComfyUI', licence: 'GPL-3.0', url: 'https://github.com/comfyanonymous/ComfyUI' },
       { name: 'Fizgig', by: 'shootthesound', use: 'Character LoRA training, on this PC, Modal and RunPod. RunPod training pods start from Fizgig’s own template.', url: 'https://github.com/shootthesound/Fizgig' },
-      { name: 'Freefield', by: 'Sammir Femat (neuregex)', use: 'The workflows behind Sounds, the picture tools, the editor’s Effects (new angle, dub, VFX, slow motion) and Workflows → Effects', licence: 'MIT', url: 'https://github.com/neuregex/freefield' },
+      { name: 'Freefield', by: 'Sammir Femat (neuregex)', use: 'The workflows behind Sounds, the picture tools, the editor’s Effects (dub, VFX, slow motion) and Workflows → Effects', licence: 'MIT', url: 'https://github.com/neuregex/freefield' },
       { name: 'OpenKatana', by: 'rk0neki', use: 'Shinobi, the motion-graphics films', licence: 'Apache-2.0', url: 'https://github.com/rk0neki/OpenKatana' },
       { name: 'OpenJutsu', by: 'D3voz', use: 'Replace’s earlier engine, and Finish (faces and colours)', licence: 'MIT', url: 'https://github.com/D3voz/openjutsu' },
       { name: 'Ollama', use: 'Runs the local prompt writer', licence: 'MIT', url: 'https://ollama.com' },
@@ -89,7 +88,6 @@ export const CREDITS = [
       { name: 'ComfyUI Frame Interpolation (RIFE)', by: 'Fannovel16', use: 'Frame interpolation for finals on Linux and in the cloud', url: 'https://github.com/Fannovel16/ComfyUI-Frame-Interpolation' },
       { name: 'Viggle Remake nodes and prompt guide', by: 'Viggle AI', use: 'Replace (Remake)', licence: 'Apache-2.0', url: 'https://huggingface.co/Viggle/Viggle-Remake/tree/main/comfyui/ComfyUI-Viggle-Remake' },
       { name: 'ComfyUI-LTXVideo', by: 'Lightricks', use: 'Dub, VFX and SDR to HDR', url: 'https://github.com/Lightricks/ComfyUI-LTXVideo' },
-      { name: 'ComfyUI-CrossViewWarp', by: 'comfyrob', use: 'Reshoot', url: 'https://github.com/comfyrob/ComfyUI-CrossViewWarp' },
       { name: 'IV Studio nodes', by: 'Infinite Variance', use: 'The latent cache, picks that survive restarts, the shot list', licence: 'MIT', url: 'https://github.com/hollisorg/iv-studio/tree/main/resources/comfy-nodes/ComfyUI-IV-Studio' }
     ]
   },
