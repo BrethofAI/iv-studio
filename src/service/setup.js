@@ -1,6 +1,8 @@
 // Readiness check: is ComfyUI up, is there a capable GPU, are the node packs and models IV Studio needs there?
 // Everything is read from ComfyUI itself (/system_stats and /object_info), so it works with any install.
 
+import fs from 'node:fs'
+import path from 'node:path'
 import { findComfyElsewhere } from './comfylauncher.js'
 
 // Why a ComfyUI request failed, as a Setup item's status, detail and fix:
@@ -89,6 +91,16 @@ export async function checkSetup({ comfy, template, manifest, characters, chosen
   const needed = [...new Set(Object.values(template).map((n) => n.class_type))].filter((c) => !TEMPLATE_SKIP.has(c))
   const missingClasses = needed.filter((c) => !info[c])
   const linux = !['nt', 'win32'].includes(stats.system?.os)
+  // A pack whose folder is already in custom_nodes but whose nodes ComfyUI lacks was installed after ComfyUI started:
+  // it loads on the next restart. Only this PC's ComfyUI says where its custom_nodes are.
+  let customNodes = null
+  if (!comfy.remote) {
+    try {
+      const paths = await comfy.req('/internal/folder_paths', { timeout: 8000 })
+      customNodes = (paths.custom_nodes || []).map((x) => (Array.isArray(x) ? x[0] : x)).filter(Boolean)
+    } catch {}
+  }
+  const onDisk = (dir) => !!dir && !!customNodes?.some((d) => fs.existsSync(path.join(d, dir)))
   // Shots need the packs in the workflow; the others are for one feature each (Sequences, Replace, SeedVR2...).
   for (const pack of manifest.node_packs) {
     if ((linux && pack.windowsOnly) || (!linux && pack.linuxOnly)) {
@@ -103,6 +115,10 @@ export async function checkSetup({ comfy, template, manifest, characters, chosen
       continue
     }
     const core = pack.classes.some((c) => needed.includes(c))
+    if (miss.length && onDisk(pack.dir)) {
+      items.push({ id: `pack:${pack.label}`, label: pack.label, status: core ? 'missing' : 'warn', detail: 'Installed. ComfyUI loads it when it restarts.', fix: 'Restart ComfyUI to load it.', kind: 'node_pack', for: pack.for, dir: pack.dir, restartNeeded: true })
+      continue
+    }
     const status = !miss.length ? 'ok' : core ? 'missing' : 'warn'
     items.push({ id: `pack:${pack.label}`, label: pack.label, status, detail: miss.length ? `Missing nodes: ${miss.join(', ')}` : 'Installed', fix: miss.length ? (core ? 'Needed for every shot. Install the missing node packs above, then restart ComfyUI.' : `Needed for ${pack.for}.`) : undefined, kind: 'node_pack', for: pack.for, dir: pack.dir, url: /^https:/.test(pack.url) ? pack.url : undefined })
   }

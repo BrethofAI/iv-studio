@@ -276,7 +276,7 @@ export class Studio {
     if (!packs.length) return { results: [], restart: false }
     const place = await comfyPlace(this.comfy, folder)
     const results = await installPacks(packs, { ...place, resourcesDir: this.resourcesDir, onProgress })
-    return { customNodes: place.customNodes, python: place.python, results, restart: results.some((r) => r.status === 'installed') }
+    return { customNodes: place.customNodes, python: place.python, results, restart: results.some((r) => r.status === 'installed' || r.status === 'skipped') }
   }
 
   // ---------- updating ComfyUI, its node packs and ComfyUI-Manager (comfyupdate.js) ----------

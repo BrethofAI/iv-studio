@@ -204,7 +204,8 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
   const chars = items.filter((i) => i.kind === 'character')
   const missingModels = remote ? [] : required.filter((i) => i.status !== 'ok' && !ACTIVE.includes(dl[i.model]?.status))
   const missingBytes = missingModels.reduce((n, i) => n + (i.size || 0), 0)
-  const missingPacks = remote ? [] : packs.filter((i) => i.status !== 'ok' && i.dir)
+  const missingPacks = remote ? [] : packs.filter((i) => i.status !== 'ok' && i.dir && !i.restartNeeded)
+  const waitingPacks = remote ? [] : packs.filter((i) => i.restartNeeded)
   const downloading = Object.values(dl).filter((s) => ACTIVE.includes(s.status)).length
   const errors = Object.entries(dl).filter(([, s]) => s.status === 'error')
 
@@ -277,7 +278,14 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
             </button>
           )}
           {!remote && !comfyUp && !comfyItem?.busy && !comfyItem?.address && <StartComfy className="btn btn-primary" notify={notify} recheck={recheck} />}
-          {!remote && (comfyUp || comfyItem?.busy) && <RestartComfy className="btn" notify={notify} recheck={recheck} />}
+          {!remote && (comfyUp || comfyItem?.busy) && (
+            <RestartComfy
+              className={waitingPacks.length && !missingModels.length && !missingPacks.length ? 'btn btn-primary' : 'btn'}
+              notify={notify}
+              recheck={recheck}
+              label={waitingPacks.length ? `Restart ComfyUI to load ${waitingPacks.length} node pack${waitingPacks.length === 1 ? '' : 's'}` : 'Restart ComfyUI'}
+            />
+          )}
           <button className="btn" disabled={checking} onClick={recheck}>
             {checking ? 'Checking…' : 'Check again'}
           </button>
@@ -316,6 +324,14 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
             {x.id === 'packs' && (
               <>
                 {!remote && <NodeInstaller missing={missingPacks.length} recheck={recheck} notify={notify} />}
+                {!remote && waitingPacks.length > 0 && (
+                  <div className="setup-restart notice">
+                    <span>
+                      {waitingPacks.map((i) => i.label).join(', ')} {waitingPacks.length === 1 ? 'is' : 'are'} installed. ComfyUI loads new node packs when it starts.
+                    </span>
+                    <RestartComfy className="btn btn-small btn-primary" notify={notify} recheck={recheck} label="Restart ComfyUI now" />
+                  </div>
+                )}
                 {shown.length ? rows(shown) : <p className="dim small">Every node pack is installed.</p>}
               </>
             )}

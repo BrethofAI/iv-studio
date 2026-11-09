@@ -114,7 +114,7 @@ export async function installPacks(packs, { customNodes, python, resourcesDir, o
       const result = { dir: p.dir, label: p.label }
       results.push(result)
       if (fs.existsSync(target)) {
-        Object.assign(result, { status: 'skipped', detail: `A folder named ${p.dir} is already in custom_nodes, so it was left alone. If ComfyUI still lacks its nodes, restart ComfyUI or check that folder.` })
+        Object.assign(result, { status: 'skipped', detail: `Already in custom_nodes (${p.dir}), so it was left alone. ComfyUI loads it when it restarts.` })
         say('skipped', result.detail)
         continue
       }
