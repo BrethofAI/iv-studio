@@ -59,6 +59,8 @@ Simple words for people new to AI video. See [what's new in 1.1](#whats-new-in-1
 - **Simple words.** Check my PC asks how much you know about AI video. New to it? IV Studio says
   "trained look" for LoRA, "variation number" for seed, "quick sharpen" for DLSS and so on. Only the words
   change; switch it in Settings → Words.
+- **Get ComfyUI for me.** No ComfyUI yet? Setup downloads ComfyUI's official portable build for your graphics
+  card into a folder you choose, checks it, unpacks it and starts it. Already have one? IV Studio keeps using it.
 - **Cloud setup you can follow.** Setting up RunPod or Modal shows each step with a timer and the time left,
   and tells you when it's ready (1.0.6). Modal's sign-in, sign-out and new accounts work (1.0.3 to 1.0.5).
 
@@ -240,7 +242,11 @@ Simple words for people new to AI video. See [what's new in 1.1](#whats-new-in-1
   IV Studio talks to it at `http://127.0.0.1:8188` (change it in Settings). It can start ComfyUI for you: it
   finds your ComfyUI shortcut, the ComfyUI Desktop app or a portable install's `run_nvidia_gpu.bat` (or you pick one
   in Settings → ComfyUI, or pick your ComfyUI folder and the start file in it), starts it when IV Studio opens, and
-  offers **Start ComfyUI** whenever it isn't running.
+  offers **Start ComfyUI** whenever it isn't running. **No ComfyUI yet?** On Windows with an NVIDIA card,
+  Settings → Setup → **Get ComfyUI for me** downloads ComfyUI's official portable build (about 2 GB, its own Python
+  inside, nothing else installed) into a folder you choose, checks it against the checksum ComfyUI publishes,
+  unpacks it and starts it. It picks the build for your card (the CUDA 12.6 one for 10-series and older) and says
+  if your driver needs updating first.
 - **Disk space.** About 60 GB for the H3 models. Music adds about 14 GB (MiniMax Music 3) or 10 GB
   (ACE-Step); voices add about 12 GB. Each is a one-click download inside the app.
 - **Optional:** [Ollama](https://ollama.com) for the free local prompt writer;

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Hero from './Hero'
 import { SettingsTabs } from './Settings'
 import StartComfy from './StartComfy'
+import GetComfy from './GetComfy'
 import ComfyUpdates from './ComfyUpdates'
 
 const ICON = { ok: '●', warn: '▲', missing: '✕' }
@@ -115,7 +116,7 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
       <Hero art="settings" title="Settings" kicker="Infinite Variance" help="setup" />
       <SettingsTabs tab="setup" go={go} setup={setup} />
       <p className="lede">
-        IV Studio reuses the ComfyUI you already have, wherever it is (a portable ComfyUI on another drive works too); it never installs a second one. This checks it has everything the workflow needs.
+        IV Studio reuses the ComfyUI you already have, wherever it is (a portable ComfyUI on another drive works too), and never installs a second one. No ComfyUI yet? It can get the official one for you. This checks it has everything the workflow needs.
         <span className="lede-small dim">Models download from their upstream hosts straight into that ComfyUI's models folder, on its drive, and are checked against the SHA-256 the host publishes. A paused download picks up where it stopped. Node packs install with one click, each at the version IV Studio is tested with.</span>
       </p>
       <div className="setup-actions">
@@ -171,6 +172,7 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
                         </button>
                       )}
                       {i.id === 'comfyui' && i.status !== 'ok' && !i.busy && !i.address && !remote && <StartComfy notify={notify} recheck={recheck} />}
+                      {i.id === 'comfyui' && i.status !== 'ok' && !i.busy && !i.address && !remote && <GetComfy notify={notify} recheck={recheck} />}
                       {i.status !== 'ok' && (i.url || i.page) && (
                         <button className="link-btn mono" onClick={() => window.ivstudio.links.open(i.url || i.page)}>
                           {i.url ? 'Open its GitHub page' : 'Model page and licence'}

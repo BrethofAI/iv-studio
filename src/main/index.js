@@ -14,6 +14,7 @@ import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
 import { isSpeed } from '../service/speed'
 import { comboOptions } from '../service/setup'
 import { comfyUp, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launcherFor, launchersIn, waitUp } from '../service/comfylauncher'
+import { ComfyInstaller, checkFolder, latestAsset, pickBuild, suggestFolder } from '../service/comfyinstall'
 import { randomBytes } from 'node:crypto'
 import { Edits, FORMATS, LOUDNESS } from '../service/edits'
 import { EditGen } from '../service/editgen'
@@ -1283,7 +1284,12 @@ app.whenReady().then(() => {
     studio.comfy.folders = comfyFolders(readSettings(BASE), INCOGNITO)
     return s
   })
-  handle('setup:check', () => studio.checkSetup())
+  handle('setup:check', async () => {
+    const r = await studio.checkSetup()
+    // IV_STUDIO_PRETEND_NO_COMFY (test copies only): as if no ComfyUI answered anywhere on this PC
+    if (TEST_COPY && process.env.IV_STUDIO_PRETEND_NO_COMFY) for (const i of r.items || []) if (i.id === 'comfyui') delete i.address
+    return r
+  })
   // Create → Advanced: the samplers and schedulers this ComfyUI offers
   handle('h3:samplers', async () => {
     const [k, b] = await Promise.all([studio.comfy.objectInfo('KSamplerSelect'), studio.comfy.objectInfo('BasicScheduler')])
@@ -1392,6 +1398,59 @@ app.whenReady().then(() => {
     return dir
   })
   handle('comfy:start', () => startComfy())
+
+  // ---------- Get ComfyUI for me (comfyinstall.js): the official portable build, for a PC with no ComfyUI ----------
+  // The window hears comfy:install ({ phase: download | check | unpack | start | done | error, got, total, rate,
+  // left, files, error }). It keeps going if the window is closed or reloaded; cloud and other ComfyUIs are untouched.
+  const comfyInstaller = new ComfyInstaller({ onProgress: (s) => send('comfy:install', s) })
+  const installPlan = async () => {
+    const scan = await scanHardware({ electronGpu: await app.getGPUInfo('complete').catch(() => null) })
+    const build = pickBuild(scan)
+    let asset = null
+    if (build.ok) asset = await latestAsset(build.asset).catch((err) => ({ error: err.message }))
+    return { build, asset, scan }
+  }
+  handle('comfy:installPlan', async () => {
+    const s = readSettings(BASE)
+    const { build, asset, scan } = await installPlan()
+    const folder = suggestFolder(scan.drives || [])
+    return {
+      build,
+      asset,
+      folder,
+      free: folder ? freeBytes(folder) : null,
+      state: comfyInstaller.state,
+      // a ComfyUI IV Studio can already start: the button isn't offered then
+      // IV_STUDIO_PRETEND_NO_COMFY (test copies only): show the button on a PC that has a ComfyUI
+      found: TEST_COPY && process.env.IV_STUDIO_PRETEND_NO_COMFY ? false : findLaunchers().length > 0 || !!(s.comfyFolder && fs.existsSync(s.comfyFolder)) || !!s.comfyLauncher
+    }
+  })
+  handle('comfy:chooseInstallFolder', async () => {
+    const r = await dialog.showOpenDialog(win, { title: 'Where to put ComfyUI', properties: ['openDirectory', 'createDirectory'] })
+    return r.canceled || !r.filePaths[0] ? null : r.filePaths[0]
+  })
+  handle('comfy:installCheck', async ({ folder, size } = {}) => checkFolder(folder, { size, freeOf: freeBytes }))
+  handle('comfy:install', async ({ folder } = {}) => {
+    const { build, asset } = await installPlan()
+    if (!build.ok) throw new Error(build.reason)
+    if (!asset || asset.error) throw new Error(asset?.error || 'Couldn’t find ComfyUI’s download.')
+    const problem = checkFolder(folder, { size: asset.size, freeOf: freeBytes })
+    if (problem) throw new Error(problem)
+    const dir = await comfyInstaller.install({ folder, asset })
+    // IV Studio starts it the way it starts any ComfyUI: with the folder's run_nvidia_gpu.bat
+    writeSettings({ comfyFolder: dir, comfyLauncher: '' }, BASE)
+    // IV_STUDIO_COMFY_INSTALL_NOSTART (test copies only): stop before starting it (a second ComfyUI on this PC's port)
+    if (TEST_COPY && process.env.IV_STUDIO_COMFY_INSTALL_NOSTART) return (send('comfy:install', { ...comfyInstaller.state, phase: 'done', done: true, started: false, startError: 'Not started (test copy).' }), { dir, version: asset.version })
+    send('comfy:install', { ...comfyInstaller.state, phase: 'start', done: false })
+    try {
+      await startComfy()
+      send('comfy:install', { ...comfyInstaller.state, phase: 'done', done: true, started: true })
+    } catch (err) {
+      send('comfy:install', { ...comfyInstaller.state, phase: 'done', done: true, started: false, startError: err.message })
+    }
+    return { dir, version: asset.version }
+  })
+  handle('comfy:installCancel', () => comfyInstaller.cancel())
 
   // ---------- the data folder (Settings → Data folder; datafolder.js) ----------
   // Moves IV Studio's own data (not ComfyUI's models or renders, which live in ComfyUI) to another folder:

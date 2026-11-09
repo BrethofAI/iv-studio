@@ -1,6 +1,7 @@
 // Starting ComfyUI from IV Studio (Settings → ComfyUI, the title bar's Start button, and on launch when
-// "Start ComfyUI when IV Studio opens" is on). IV Studio doesn't install or own ComfyUI: it starts the
-// person's own launcher, the same thing they'd double-click, and waits until ComfyUI answers.
+// "Start ComfyUI when IV Studio opens" is on). It starts the person's own launcher, the same thing they'd
+// double-click, and waits until ComfyUI answers. (A PC with no ComfyUI can get the official portable build from
+// Setup: comfyinstall.js. That one is then started the same way, from its run_nvidia_gpu.bat.)
 // A launcher is a shortcut (.lnk), a portable install's .bat, or the ComfyUI Desktop app's .exe. On Linux it's a
 // shell script beside ComfyUI, or ComfyUI's main.py, run with the venv's Python. On a Mac it's also the ComfyUI
 // Desktop app (ComfyUI.app), opened as Finder would.

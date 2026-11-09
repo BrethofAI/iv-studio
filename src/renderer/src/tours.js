@@ -276,6 +276,7 @@ export const TOURS = {
     steps: [
       { at: '.setup-actions', title: 'Check again', text: 'Checks ComfyUI, its node packs and every model IV Studio uses.' },
       { at: '.setup .group', title: 'What’s ready', text: 'Each group lists what is ready and what is missing, with a button to download or install it. Downloads are checked against their published hashes.' },
+      { at: '.get-comfy', title: 'No ComfyUI yet?', text: 'Get ComfyUI for me downloads ComfyUI’s official portable build for your graphics card into a folder you choose, checks it, unpacks it and starts it. Already have one? Choose its folder instead.' },
       { at: '.comfy-updates', title: 'Updates', text: 'Keeps ComfyUI and its node packs up to date, with a snapshot first so you can undo.' }
     ]
   },
