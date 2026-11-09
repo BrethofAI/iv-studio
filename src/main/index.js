@@ -13,7 +13,7 @@ import { RunPod, GPUS as RUNPOD_GPUS } from '../service/runpod'
 import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
 import { isSpeed } from '../service/speed'
 import { comboOptions } from '../service/setup'
-import { comfyHome, comfyUp, findComfyElsewhere, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launcherFor, launchersIn, waitUp } from '../service/comfylauncher'
+import { comfyHome, comfyProcesses, comfyUp, findComfyElsewhere, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launcherFor, launchersIn, noteLaunch, recentLaunch, sameComfy, waitUp } from '../service/comfylauncher'
 import { ComfyInstaller, checkFolder, latestAsset, pickBuild, suggestFolder } from '../service/comfyinstall'
 import { randomBytes } from 'node:crypto'
 import { Edits, FORMATS, LOUDNESS } from '../service/edits'
@@ -1378,10 +1378,17 @@ app.whenReady().then(() => {
       if (await comfyUp(s.comfyUrl)) return { seconds: 0, already: true }
       const file = launcherOf(s)
       if (!file) throw new Error('No ComfyUI launcher found. Pick one in Settings → ComfyUI.')
-      send('comfy:state', { state: 'starting', detail: path.basename(file) })
+      // already starting (IV Studio reopened while it booted, another window, or started by hand): wait for that one
+      const marker = path.join(BASE, 'comfy-launch.json')
+      const running = recentLaunch(marker) ? null : sameComfy(await comfyProcesses(), { home: comfyHome(file, { readLink: (p) => shell.readShortcutLink(p) }), url: s.comfyUrl, launcher: file })
+      const joining = !!(recentLaunch(marker) || running)
+      send('comfy:state', { state: 'starting', detail: joining ? 'ComfyUI is already starting' : path.basename(file) })
       try {
-        launchComfy(file, { logFile: path.join(DATA, 'comfyui.log') })
-        const up = await waitUp(s.comfyUrl)
+        if (!joining) {
+          noteLaunch(marker, file)
+          launchComfy(file, { logFile: path.join(DATA, 'comfyui.log') })
+        }
+        const up = { ...(await waitUp(s.comfyUrl)), joined: joining }
         send('comfy:state', { state: 'up', detail: `ComfyUI started in ${up.seconds} s.` })
         return up
       } catch (err) {

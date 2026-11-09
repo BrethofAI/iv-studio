@@ -5,7 +5,7 @@
 // A launcher is a shortcut (.lnk), a portable install's .bat, or the ComfyUI Desktop app's .exe. On Linux it's a
 // shell script beside ComfyUI, or ComfyUI's main.py, run with the venv's Python. On a Mac it's also the ComfyUI
 // Desktop app (ComfyUI.app), opened as Finder would.
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -138,6 +138,75 @@ export function comfyHome(file, { readLink = null, appData = process.env.APPDATA
 
 // The ComfyUI Desktop app updates ComfyUI and ComfyUI-Manager itself (comfyupdate.js updates only its node packs).
 export const isDesktopLauncher = (file) => !!file && /^ComfyUI\.(exe|app)$/i.test(path.basename(file))
+
+// ---------- a ComfyUI that is already starting ----------
+// ComfyUI answers only once it has loaded (often a minute or more), so "nothing answers" doesn't mean "not
+// running". Before starting one, IV Studio looks for a ComfyUI of the same install that is already running but
+// not answering yet (another IV Studio window, one closed and reopened while ComfyUI booted, or one started by
+// hand), and waits for it instead of starting a second.
+
+// The processes that could be a ComfyUI: Python running main.py, or the Desktop app. [{ pid, exe, cmd }]
+export async function comfyProcesses({ platform = process.platform, run = execFileText } = {}) {
+  try {
+    if (platform === 'win32') {
+      const ps = "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'main\\.py' -or $_.Name -eq 'ComfyUI.exe' } | Select-Object ProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress"
+      const out = (await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps])).trim()
+      if (!out) return []
+      const list = [].concat(JSON.parse(out))
+      return list.map((p) => ({ pid: p.ProcessId, exe: p.ExecutablePath || '', cmd: p.CommandLine || '' }))
+    }
+    const out = await run('ps', ['-axo', 'pid=,command='])
+    return out
+      .split('\n')
+      .map((l) => l.trim().match(/^(\d+)\s+(.*)$/))
+      .filter(Boolean)
+      .map(([, pid, cmd]) => ({ pid: Number(pid), exe: cmd.split(/\s+/)[0], cmd }))
+      .filter((p) => /main\.py\b/.test(p.cmd) || /ComfyUI\.app\/Contents\/MacOS\//.test(p.cmd))
+  } catch {
+    return [] // can't tell: IV Studio starts ComfyUI as before
+  }
+}
+
+const execFileText = (cmd, args) =>
+  new Promise((resolve, reject) => execFile(cmd, args, { windowsHide: true, timeout: 20000, maxBuffer: 8 << 20 }, (err, out) => (err ? reject(err) : resolve(String(out)))))
+
+// The port a ComfyUI command line listens on: its --port, else ComfyUI's default.
+export const portOf = (cmd) => Number((/--port[=\s]+(\d+)/.exec(cmd || '') || [])[1]) || 8188
+
+// The ComfyUI process that would answer at this address, or null: a main.py on the same port that is this install's
+// (its Python or path is in the launcher's folder, from comfyHome) or mentions ComfyUI. Two ComfyUIs can't share a
+// port, so starting another there would fail anyway. The Desktop app is matched by its own program, whatever its port.
+export function sameComfy(procs, { home = null, url = 'http://127.0.0.1:8188', launcher = null } = {}) {
+  const norm = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  const h = norm(home)
+  let port = 8188
+  try {
+    port = Number(new URL(url).port) || 8188
+  } catch {}
+  const desktop = isDesktopLauncher(launcher)
+  const app = (p) => desktop && /(^|\/)comfyui\.(exe|app)/.test(norm(p.exe) + ' ' + norm(p.cmd)) && !/main\.py/.test(norm(p.cmd))
+  const onPort = (p) => /main\.py/.test(norm(p.cmd)) && (desktop || portOf(p.cmd) === port)
+  const mine = (p) => !!h && (norm(p.exe).startsWith(h + '/') || norm(p.cmd).includes(h + '/'))
+  // this install's own first, then any ComfyUI on that port
+  return procs.find(app) || procs.find((p) => onPort(p) && mine(p)) || procs.find((p) => onPort(p) && /comfy/.test(norm(p.exe) + ' ' + norm(p.cmd))) || null
+}
+
+// IV Studio notes when it last started ComfyUI (a launcher's Python takes a moment to appear), so a window
+// opened straight after doesn't start another in that gap.
+export const LAUNCH_GRACE_MS = 90 * 1000
+export function recentLaunch(file, now = Date.now()) {
+  try {
+    const at = JSON.parse(fs.readFileSync(file, 'utf8')).at
+    return now - at < LAUNCH_GRACE_MS ? at : null
+  } catch {
+    return null
+  }
+}
+export function noteLaunch(file, launcher, now = Date.now()) {
+  try {
+    fs.writeFileSync(file, JSON.stringify({ at: now, launcher }))
+  } catch {}
+}
 
 // Starts a launcher as a double-click would, in its own window, so ComfyUI keeps running when IV Studio
 // closes. Through PowerShell's Start-Process (the Windows shell), not as IV Studio's child: a child process
