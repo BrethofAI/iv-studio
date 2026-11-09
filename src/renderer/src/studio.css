@@ -13022,3 +13022,23 @@ button.set-chip:hover {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.wel-a11y {
+  margin-top: 18px;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.wel-a11y .switch-track {
+  margin-top: 3px;
+  flex: none;
+}
+.wel-a11y strong {
+  color: var(--paper);
+  font-weight: 600;
+}
+.wel-a11y > span:last-child {
+  display: grid;
+  gap: 3px;
+}

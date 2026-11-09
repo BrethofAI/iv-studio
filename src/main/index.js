@@ -107,6 +107,9 @@ const DATA = INCOGNITO ? incognitoDir(BASE) : BASE
 const videosDir = () => videosFolderOf(readSettings(BASE), { incognito: INCOGNITO, dataDir: DATA, videos: app.getPath('videos') })
 let win = null
 let studio = null
+// Settings → Accessibility → Text size: the whole window scales, like browser zoom
+const TEXT_SIZES = { normal: 1, large: 1.15, larger: 1.3 }
+let refitZoom = () => {}
 let stopWatch = null
 let installer = null
 let trainings = null
@@ -262,7 +265,9 @@ function createWindow() {
   const fitZoom = () => {
     if (!win || win.isDestroyed()) return
     const [w, h] = win.getContentSize()
-    const z = Math.round(Math.min(1.5, Math.max(1, Math.min(w / 1600, h / 1000))) * 20) / 20
+    // Settings → Accessibility → Text size scales on top
+    const scale = TEXT_SIZES[readSettings(BASE).textSize] || 1
+    const z = Math.round(Math.min(1.5, Math.max(1, Math.min(w / 1600, h / 1000))) * scale * 20) / 20
     if (Math.abs(win.webContents.getZoomFactor() - z) < 0.01) return
     win.webContents.setZoomFactor(z)
     // the window buttons are drawn by the system over the 40 px bar: keep them the bar's (scaled) height
@@ -273,6 +278,7 @@ function createWindow() {
   }
   for (const ev of ['resize', 'maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) win.on(ev, () => (clearTimeout(zoomTimer), (zoomTimer = setTimeout(fitZoom, 120))))
   win.webContents.on('did-finish-load', fitZoom)
+  refitZoom = fitZoom
   if (TEST_COPY) win.on('page-title-updated', (e) => e.preventDefault())
   win.on('close', () => writeSettings({ window: win.getBounds() }, BASE))
   if (process.env.IV_STUDIO_SMOKE) smokeTest(win, process.env.IV_STUDIO_SMOKE)
@@ -1277,7 +1283,9 @@ app.whenReady().then(() => {
         throw new Error('That isn’t an address. Use host:port, like 192.168.1.20:11434 or http://ollama:11434.')
       }
     }
+    if ('textSize' in safe && !(safe.textSize in TEXT_SIZES)) delete safe.textSize
     const s = publicSettings(writeSettings(safe, BASE))
+    if ('textSize' in safe) refitZoom()
     if ('comfyUrl' in (patch || {})) makeStudio()
     if ('models' in (patch || {})) studio.models = s.models || {}
     // the render folders apply to the next render

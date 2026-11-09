@@ -18,6 +18,7 @@ const open = (url) => window.ivstudio.links.open(url)
 const SECTIONS = [
   ['pc', 'Your PC'],
   ['words', 'Words'],
+  ['access', 'Accessibility'],
   ['comfy', 'ComfyUI'],
   ['folders', 'Folders'],
   ['data', 'Data folder'],
@@ -107,15 +108,10 @@ function WordsCard({ n, settings, setSettings }) {
     window.dispatchEvent(new CustomEvent('iv:settings'))
   }
   return (
-    <SetCard id="words" n={n} title="Words" sub="How IV Studio talks to you, and how easy its text is to read." aside={settings.plainWords ? <Pill tone="ok">Simple</Pill> : <Pill>Standard</Pill>}>
+    <SetCard id="words" n={n} title="Words" sub="How IV Studio talks to you." aside={settings.plainWords ? <Pill tone="ok">Simple</Pill> : <Pill>Standard</Pill>}>
       <SetField label="Simple words" hint="For people new to AI video and pictures: the app explains itself in everyday words. Only the words change; every page, control and setting stays the same.">
         <SetSwitch checked={settings.plainWords} onChange={(on) => set({ plainWords: on })}>
           {settings.plainWords ? 'On' : 'Off'}
-        </SetSwitch>
-      </SetField>
-      <SetField label="Higher contrast text" hint="Makes the grey secondary text close to white, and lines stronger. Easier to read on any screen.">
-        <SetSwitch checked={settings.highContrast} onChange={(on) => set({ highContrast: on })}>
-          {settings.highContrast ? 'On' : 'Off'}
         </SetSwitch>
       </SetField>
       <SetField label="For example">
@@ -126,6 +122,57 @@ function WordsCard({ n, settings, setSettings }) {
             </span>
           ))}
         </div>
+      </SetField>
+    </SetCard>
+  )
+}
+
+// Accessibility (a11y.js and styles.css; text size is the window's zoom, in main). Each applies at once.
+const TEXT_SIZE = [
+  ['normal', 'Normal'],
+  ['large', 'Large'],
+  ['larger', 'Larger']
+]
+function AccessCard({ n, settings, setSettings, notify }) {
+  const set = async (patch) => {
+    try {
+      setSettings(await window.ivstudio.settings.set(patch))
+      window.dispatchEvent(new CustomEvent('iv:settings'))
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  const on = ['highContrast', 'reduceMotion', 'focusRings', 'underlineLinks'].filter((k) => settings[k]).length + (settings.textSize && settings.textSize !== 'normal' ? 1 : 0)
+  return (
+    <SetCard id="access" n={n} title="Accessibility" sub="Make IV Studio easier to read and to use. Each change applies straight away." aside={on ? <Pill tone="ok">{on} on</Pill> : null}>
+      <SetField label="Text size" hint="Makes everything bigger: text, buttons and pictures, the way browser zoom does.">
+        <div className="segmented" role="radiogroup" aria-label="Text size">
+          {TEXT_SIZE.map(([id, label]) => (
+            <button key={id} role="radio" aria-checked={(settings.textSize || 'normal') === id} className={(settings.textSize || 'normal') === id ? 'on' : ''} onClick={() => set({ textSize: id })}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </SetField>
+      <SetField label="Higher contrast text" hint="Grey secondary text turns close to white, and lines are stronger.">
+        <SetSwitch checked={settings.highContrast} onChange={(v) => set({ highContrast: v })}>
+          {settings.highContrast ? 'On' : 'Off'}
+        </SetSwitch>
+      </SetField>
+      <SetField label="Reduce motion" hint="Stops animations, sliding panels and the moving pictures on the Workflows pages. Also follows your system’s own setting.">
+        <SetSwitch checked={settings.reduceMotion} onChange={(v) => set({ reduceMotion: v })}>
+          {settings.reduceMotion ? 'On' : 'Off'}
+        </SetSwitch>
+      </SetField>
+      <SetField label="Clear focus outlines" hint="A thick yellow ring shows which control the keyboard is on (Tab moves it).">
+        <SetSwitch checked={settings.focusRings} onChange={(v) => set({ focusRings: v })}>
+          {settings.focusRings ? 'On' : 'Off'}
+        </SetSwitch>
+      </SetField>
+      <SetField label="Underline links" hint="Links are underlined, so they don’t rely on colour alone.">
+        <SetSwitch checked={settings.underlineLinks} onChange={(v) => set({ underlineLinks: v })}>
+          {settings.underlineLinks ? 'On' : 'Off'}
+        </SetSwitch>
       </SetField>
     </SetCard>
   )
@@ -939,6 +986,7 @@ export default function Settings({ info, recheck, notify, go, setup }) {
         <div className="set-cards">
           <PcCard n={n('pc')} {...common} />
           <WordsCard n={n('words')} {...common} />
+          <AccessCard n={n('access')} {...common} />
           <ComfyCard n={n('comfy')} {...common} recheck={recheck} comfyUp={comfyUp} comfyBusy={comfyBusy} />
           <FolderCard n={n('folders')} {...common} incognito={!!info?.incognito} />
           <DataCard n={n('data')} notify={notify} />

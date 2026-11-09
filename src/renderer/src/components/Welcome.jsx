@@ -5,7 +5,8 @@ import Hero from './Hero'
 import GetComfy from './GetComfy'
 import { StepHead } from './CreateKit'
 import { startTour } from '../tours'
-import { highContrast, setContrast, setSimpleWords, simpleWords } from '../words'
+import { setSimpleWords, simpleWords } from '../words'
+import { highContrast, setContrast } from '../a11y'
 
 // The welcome wizard (Check my PC): opens on first launch, and again from Settings. It reads this computer
 // (hardware:scan; nothing leaves the PC), says plainly what it can do, suggests a way of working (this PC, the
@@ -290,7 +291,7 @@ function Hello({ level, knows, simple, words, hc, contrast }) {
           </span>
           <span>
             <strong>Higher contrast text</strong>
-            <span className="dim small">Grey text turns close to white, so it’s easier to read. Change it any time in Settings → Words.</span>
+            <span className="dim small">Grey text turns close to white, so it’s easier to read. Settings → Accessibility also has bigger text, less motion and clearer focus outlines.</span>
           </span>
         </label>
       </div>

@@ -526,3 +526,27 @@ select {
     transition: none !important;
   }
 }
+
+/* Settings → Accessibility → Reduce motion: no animations or transitions (the canvas stages stand still too) */
+:root.rm *,
+:root.rm *::before,
+:root.rm *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Settings → Accessibility → Clear focus outlines: a thick ring on whatever the keyboard is on */
+:root.fr :focus-visible {
+  outline: 3px solid #ffd166 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 6px rgba(16, 12, 14, 0.85) !important;
+}
+
+/* Settings → Accessibility → Underline links */
+:root.ul a,
+:root.ul .link-btn {
+  text-decoration: underline !important;
+  text-underline-offset: 3px;
+}

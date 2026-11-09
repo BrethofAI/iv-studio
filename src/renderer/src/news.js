@@ -2,6 +2,16 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.0.8',
+    items: [
+      { text: 'Settings → Accessibility: bigger text, higher contrast text, reduce motion, clear focus outlines and underlined links. Secondary text is easier to read for everyone, too.' },
+      { text: 'A ComfyUI address typed the way a browser takes it (localhost:8000) works now. Check my PC finds a ComfyUI running on another port, like the Desktop app’s 8000, and offers Use it, an address box and Check again.' },
+      { text: 'Check my PC measures free space on the drive your ComfyUI keeps its models on, not always C:.' },
+      { text: 'Choose where finished videos go, on any drive: Settings → Folders → Finished videos, or in Check my PC.' },
+      { text: 'Live step pictures need H3’s small preview model, now a one-click download in Settings → Setup. Without it, the live panel says so instead of promising a picture.' }
+    ]
+  },
+  {
     version: '1.0.7',
     items: [
       { text: 'Show details during a cloud setup no longer turns the window blank. The setup itself always kept going; now the window does too.' },

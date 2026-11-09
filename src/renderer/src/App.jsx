@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { setContrast, setSimpleWords } from './words'
+import { setSimpleWords } from './words'
+import { applyA11y } from './a11y'
 import { SetupPill } from './components/SetupProgress'
 import { CharacterList, CharacterTrainer } from './components/Characters'
 import Create from './components/Create'
@@ -310,9 +311,9 @@ export default function App() {
   const [welcome, setWelcome] = useState(null)
   const [cloudWiz, setCloudWiz] = useState(false)
   useEffect(() => {
-    window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), setContrast(s.highContrast), !s.onboarded && setWelcome('first')), () => {})
-    // Simple words (words.js), whenever the settings change (Settings, Check my PC)
-    const words = () => window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), setContrast(s.highContrast)), () => {})
+    window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), applyA11y(s), !s.onboarded && setWelcome('first')), () => {})
+    // Simple words (words.js) and Settings → Accessibility (a11y.js), whenever the settings change (Settings, Check my PC)
+    const words = () => window.ivstudio.settings.get().then((s) => (setSimpleWords(s.plainWords), applyA11y(s)), () => {})
     window.addEventListener('iv:settings', words)
     const open = () => setWelcome('again')
     window.addEventListener('iv:welcome', open)

@@ -234,7 +234,7 @@ function Canvas({ effect }) {
     const fx = EFFECTS[effect]
     if (!canvas || !fx) return
     const ctx = canvas.getContext('2d')
-    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const still = document.documentElement.classList.contains('rm') || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     let w = 0
     let h = 0
     let state = null

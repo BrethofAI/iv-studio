@@ -239,7 +239,8 @@ Simple words for people new to AI video. See [what's new in 1.1](#whats-new-in-1
   sequences can render on a cloud GPU in your own RunPod or Modal account; pictures, music and voices still need a
   local NVIDIA GPU (see [Cloud](#cloud)).
 - **[ComfyUI](https://github.com/comfyanonymous/ComfyUI)**, version 0.33 or newer, running on the same PC.
-  IV Studio talks to it at `http://127.0.0.1:8188` (change it in Settings). It can start ComfyUI for you: it
+  IV Studio talks to it at `http://127.0.0.1:8188` (change it in Settings → ComfyUI; `localhost:8000` for the
+  ComfyUI Desktop app is fine, and Check my PC finds a ComfyUI on another usual port by itself). It can start ComfyUI for you: it
   finds your ComfyUI shortcut, the ComfyUI Desktop app or a portable install's `run_nvidia_gpu.bat` (or you pick one
   in Settings → ComfyUI, or pick your ComfyUI folder and the start file in it), starts it when IV Studio opens, and
   offers **Start ComfyUI** whenever it isn't running. **No ComfyUI yet?** On Windows with an NVIDIA card,
@@ -683,6 +684,14 @@ Words** has the same switch. With **Simple words** on, IV Studio explains itself
 "description", and the main help lines are rewritten in plain language. Only the words change: every page,
 control and setting stays the same, and names, prompts and file paths are never touched.
 
+## Accessibility
+
+**Settings → Accessibility** makes IV Studio easier to read and use, and each change applies at once:
+**Text size** (Normal, Large, Larger: everything scales, like browser zoom), **Higher contrast text** (grey
+secondary text close to white, stronger lines; also offered on Check my PC's first page), **Reduce motion**
+(no animations, and the Workflows stages stand still; your system's own setting is followed too), **Clear
+focus outlines** (a thick yellow ring on whatever the keyboard is on) and **Underline links**.
+
 ## Incognito
 
 The **Incognito** switch in the title bar restarts IV Studio into a separate, private space, and the eye
@@ -693,7 +702,9 @@ settings, keys and models are shared. ComfyUI saves Incognito renders into its `
 (uploads into `input\IV Private`), and leaving Incognito clears them from ComfyUI's history. Switch back
 the same way.
 
-**Settings → Folders** picks where in ComfyUI's output folder renders save, one folder for normal renders
+**Settings → Folders → Finished videos** picks where exported films and edits, and cloud renders brought to
+this PC, go: any folder on any drive (`Videos\IV Studio` unless you change it; Check my PC asks too).
+It also picks where in ComfyUI's output folder renders save, one folder for normal renders
 (straight into `output` unless you name one) and one for Incognito (`IV Private` unless you change it). They
 can't be the same folder, and they always stay inside ComfyUI's folders.
 
