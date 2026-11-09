@@ -25,9 +25,10 @@ VOL = "/vol"
 volume = modal.Volume.from_name("iv-studio-train", create_if_missing=True)
 
 # Fizgig's own published image (Ubuntu 22.04, CUDA 12.8 PyTorch in /opt/venv), with Fizgig baked in at a
-# pinned commit and the entrypoint cleared so Modal can start its own process.
+# pinned commit and the entrypoint cleared so Modal can start its own process. The image is pinned too (8.9.5, the build
+# just after that commit): :latest is Fizgig 9 on CUDA 13.4. Keep in step with RP_IMAGE in src/service/training.js.
 image = (
-    modal.Image.from_registry("ghcr.io/shootthesound/fizgig:latest")
+    modal.Image.from_registry("ghcr.io/shootthesound/fizgig:8.9.5@sha256:eb834ab503eb148d77f4604acfcae828613748e6f885f365154317a2a0d4f25e")
     .entrypoint([])
     .run_commands(
         "git clone https://github.com/shootthesound/Fizgig /opt/Fizgig",

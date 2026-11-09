@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { RunPod } from '../src/service/runpod.js'
-import { Trainings, trainScript } from '../src/service/training.js'
+import { RP_IMAGE, Trainings, trainScript } from '../src/service/training.js'
 
 const RES = path.resolve('resources')
 const PY =
@@ -117,7 +117,9 @@ try {
   await tr.runs.get(id)
   const t = tr.get(id)
   ok(t.train.state === 'done', `run: ends done (${t.train.state} ${t.train.error || ''})`)
-  ok(calls.includes('POST /network-volumes') && calls.some((c) => c.startsWith('pod NVIDIA L40S ghcr.io/shootthesound/fizgig:latest train run=theo_x_abc123_1')), 'run: makes the training volume, and a pod from Fizgig’s image on the next free GPU')
+  ok(calls.includes('POST /network-volumes') && calls.some((c) => c.startsWith(`pod NVIDIA L40S ${RP_IMAGE} train run=theo_x_abc123_1`)), 'run: makes the training volume, and a pod from Fizgig’s image on the next free GPU')
+  // the image is pinned by digest, and Modal trains on the same one
+  ok(/^ghcr\.io\/shootthesound\/fizgig:[\d.]+@sha256:[0-9a-f]{64}$/.test(RP_IMAGE) && fs.readFileSync(new URL('../resources/cloud/train_app.py', import.meta.url), 'utf8').includes(`from_registry("${RP_IMAGE}")`), 'Fizgig’s image is pinned by digest, the same on RunPod and Modal')
   ok(t.train.gpu === 'NVIDIA L40S' && t.train.pod?.id === 'pod1', 'run: records the GPU it got and the pod')
   // the files the pod got
   const runDir = path.join(ws, 'train', 'theo_x_abc123_1')

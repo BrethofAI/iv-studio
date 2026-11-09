@@ -34,7 +34,10 @@ const VOLUME = 'iv-studio-train'
 // RunPod: the training volume (the H3 training files are about 42 GB; datasets and checkpoints take the rest) and
 // Fizgig's own published image, which has its Python and CUDA ready.
 const RP_VOLUME_GB = 80
-const RP_IMAGE = 'ghcr.io/shootthesound/fizgig:latest'
+// Fizgig's own image, pinned: 8.9.5 is the build 6 commits after the Fizgig commit the recipe was checked against
+// (4b3f07f), with its CUDA 12.8 PyTorch. :latest moved on to Fizgig 9 (Ubuntu 24.04, CUDA 13.4), which doesn't match
+// that commit or the CUDA 12.8 hosts asked for below. Keep in step with train_app.py.
+export const RP_IMAGE = 'ghcr.io/shootthesound/fizgig:8.9.5@sha256:eb834ab503eb148d77f4604acfcae828613748e6f885f365154317a2a0d4f25e'
 const RP_PREFIX = 'iv-train'
 
 // Where each design still is set. Clothes and light vary so neither welds to the trigger.

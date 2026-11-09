@@ -933,6 +933,13 @@ function Train({ t, act, meta, log, go, trainingId, next, pcCanTrain }) {
 
       <section className="block create-step">
         <StepHead n={2} title="The recipe" sub="Fizgig’s own H3 recipes. Standard suits most characters." />
+        <p className="small dim train-credit">
+          Training runs on{' '}
+          <button className="link-btn" onClick={() => window.ivstudio.links.open('https://github.com/shootthesound/Fizgig')}>
+            Fizgig
+          </button>{' '}
+          by shootthesound, free and open source, on this PC, Modal and RunPod alike.
+        </p>
         <div className="train-presets">
           {PRESET_ORDER.map((k) => {
             const pe = est?.presets?.[k]
