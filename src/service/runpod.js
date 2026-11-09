@@ -12,6 +12,8 @@ import os from 'node:os'
 import path from 'node:path'
 
 export const API = 'https://api.runpod.io/v2'
+// REST v1, only to create a pod from a template and keep it linked to that template (training pods from Fizgig's)
+export const API_V1 = 'https://rest.runpod.io/v1'
 export const IMAGE = 'runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404'
 export const VOLUME_NAME = 'iv-studio'
 export const VOLUME_GB = 100 // the H3 models are about 60 GB; ComfyUI, its Python and renders take the rest
@@ -43,10 +45,10 @@ export class RunPod {
     this.api = api
   }
 
-  async req(route, { method = 'GET', json } = {}) {
+  async req(route, { method = 'GET', json, v1 = false } = {}) {
     const key = this.key()
     if (!key) throw new Error('Add your RunPod API key first.')
-    const res = await this.fetch(this.api + route, {
+    const res = await this.fetch((v1 ? API_V1 : this.api) + route, {
       method,
       headers: { Authorization: `Bearer ${key}`, ...(json ? { 'Content-Type': 'application/json' } : {}) },
       body: json ? JSON.stringify(json) : undefined

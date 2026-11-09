@@ -41,7 +41,8 @@ WS = Path(os.environ.get("IV_WORKSPACE", "/workspace"))
 IDLE = int(os.environ.get("IV_IDLE_SECONDS", "1800"))
 START_LIMIT = int(os.environ.get("IV_START_LIMIT", "1800"))  # nothing started this long after boot: gone
 MAX_HOURS = float(os.environ.get("IV_MAX_HOURS", "12"))  # a stuck run still ends
-FIZGIG_COMMIT = os.environ.get("IV_FIZGIG_COMMIT", "4b3f07f")
+# the commit comes from IV Studio (FIZGIG in src/service/training.js); this default is only for running it by hand
+FIZGIG_COMMIT = os.environ.get("IV_FIZGIG_COMMIT", "8630fca0c5d7932d73fe7387fd7c8a4dc99d9467")
 FIZGIG = Path(os.environ.get("IV_FIZGIG_DIR", "/opt/Fizgig"))
 MODELS = {
     "minimax_h3_fl2va_pruned_int8_convrot.safetensors": 20_970_379_616,
