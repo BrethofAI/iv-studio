@@ -3,7 +3,7 @@
 // another build are swapped in.
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import { CLIP_FX, cameraOverrides, fillGraph, loadApp, swapModels, upstream } from '../src/service/freefield.js'
+import { CLIP_FX, cameraOverrides, fillGraph, loadApp, swapModels, upstream, withFreeMemory } from '../src/service/freefield.js'
 
 let n = 0
 const ok = (name, fn) => (fn(), n++, console.log('ok ', name))
@@ -86,6 +86,26 @@ ok('New angle preview: only the depth and warp half, and the advanced camera is 
   assert.equal(part['5'].inputs.azimuth, 40)
   assert.deepEqual(cameraOverrides({ hfov: 35, keep_source_aim: 0, vertical_shift: '0.2', nope: 1 }), { hfov: 35, keep_source_aim: false, vertical_shift: 0.2 })
   assert.throws(() => cameraOverrides({ hfov: 200 }), /0 to 120/)
+})
+
+ok('the GPU is cleared before the first sampler loads its model, and only when ComfyUI has the node', () => {
+  for (const spec of Object.values(CLIP_FX)) {
+    const { graph } = loadApp(RES, spec.app)
+    assert.equal(withFreeMemory(graph, {}), graph, `${spec.app}: unchanged without the node`)
+    const g = withFreeMemory(graph, { IVFreeMemory: {} })
+    const frees = Object.entries(g).filter(([, n]) => n.class_type === 'IVFreeMemory')
+    const samplers = Object.values(graph).filter((n) => /Guider$|^KSampler|^SamplerCustom$/.test(n.class_type))
+    if (samplers.length) assert.ok(frees.length >= 1, `${spec.app}: a free step before sampling`)
+    for (const [fid, f] of frees) {
+      const user = Object.values(g).find((n) => Object.values(n.inputs || {}).some((v) => Array.isArray(v) && v[0] === fid))
+      assert.ok(user && /Guider$|^KSampler|^SamplerCustom/.test(user.class_type), `${spec.app}: ${fid} feeds the sampler`)
+      assert.ok(!Object.values(upstream(graph, f.inputs.value[0])).some((n) => /^(KSampler|SamplerCustom)/.test(n.class_type)), `${spec.app}: only before the first stage`)
+    }
+  }
+  const { graph } = loadApp(RES, 'reshoot')
+  const g = withFreeMemory(graph, { IVFreeMemory: {} })
+  assert.deepEqual(g['33'].inputs.conditioning, ['ivfree_33', 0])
+  assert.deepEqual(g.ivfree_33.inputs.value, graph['33'].inputs.conditioning)
 })
 
 console.log(`\n${n} passed`)

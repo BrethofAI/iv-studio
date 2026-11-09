@@ -81,6 +81,31 @@ export function upstream(graph, outIds) {
   return Object.fromEntries(Object.entries(graph).filter(([k]) => keep.has(k)))
 }
 
+// Unload before the video model loads: an IV Free Memory node (IV Studio's own pack) on the first sampling
+// stage's conditioning, waiting for every prompt branch, so the text encoder (and MoGe, a VAE...) leave the GPU
+// before the sampler loads the big model. Later stages (an upscale pass with the same model) are left alone, so
+// that model isn't loaded twice. Only when this ComfyUI has the node (info), else the graph is unchanged.
+// any guider (BasicGuider, CFGGuider, LTXVDualCFGGuider...) or KSampler-like node, by its conditioning inputs
+const SAMPLING_NODE = /Guider$|^KSampler(Advanced)?$|^SamplerCustom$/
+const COND_FIELDS = ['positive', 'conditioning', 'cond1', 'cond2', 'negative']
+const SAMPLERS = /^(KSampler|KSamplerAdvanced|SamplerCustom|SamplerCustomAdvanced)$/
+export function withFreeMemory(graph, info = null) {
+  if (info && !info.IVFreeMemory) return graph
+  const g = { ...graph }
+  for (const [id, n] of Object.entries(graph)) {
+    if (!SAMPLING_NODE.test(n.class_type || '')) continue
+    const linked = COND_FIELDS.filter((f) => Array.isArray(n.inputs?.[f]))
+    if (!linked.length) continue
+    // a later stage: something upstream of it already samples
+    const above = upstream(graph, linked.map((f) => n.inputs[f][0]))
+    if (Object.values(above).some((x) => SAMPLERS.test(x.class_type))) continue
+    const fid = `ivfree_${id}`
+    g[fid] = { class_type: 'IVFreeMemory', inputs: { value: n.inputs[linked[0]], ...(linked[1] ? { after_1: n.inputs[linked[1]] } : {}), ...(linked[2] ? { after_2: n.inputs[linked[2]] } : {}) } }
+    g[id] = { ...n, inputs: { ...n.inputs, [linked[0]]: [fid, 0] } }
+  }
+  return g
+}
+
 export function loadApp(resourcesDir, id) {
   const dir = path.join(resourcesDir, 'workflows', 'freefield', id)
   const app = JSON.parse(fs.readFileSync(path.join(dir, 'app.json'), 'utf8'))
@@ -305,7 +330,9 @@ export class FreefieldApps {
     }
     const filled = fillGraph(app, graph, vals)
     if (camera && filled[CAMERA_NODE]?.class_type === 'CrossViewWarp') Object.assign(filled[CAMERA_NODE].inputs, cameraOverrides(camera))
-    const { graph: g, missing } = swapModels(filled, info, studio.manifest)
+    const swapped = swapModels(filled, info, studio.manifest)
+    const missing = swapped.missing
+    const g = withFreeMemory(swapped.graph, info)
     if (missing.length) throw new Error(`${spec.label} needs ${missing.join(', ')}. Download on Setup.`)
     const stamp = Date.now().toString(36)
     const title = String(name || '').trim() || `${spec.label} · ${path.basename(file).replace(/\.[^.]+$/, '')}`.slice(0, 60)

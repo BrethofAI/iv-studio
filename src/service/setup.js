@@ -4,6 +4,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { findComfyElsewhere } from './comfylauncher.js'
+import { packVersion } from './nodepacks.js'
 
 // Why a ComfyUI request failed, as a Setup item's status, detail and fix:
 // - busy: ComfyUI took the connection but didn't answer in time (loading, rendering or short on memory); it's running,
@@ -115,6 +116,11 @@ export async function checkSetup({ comfy, template, manifest, characters, chosen
       continue
     }
     const core = pack.classes.some((c) => needed.includes(c))
+    const outdated = pack.bundled && pack.version && customNodes?.some((d) => fs.existsSync(path.join(d, pack.dir)) && packVersion(path.join(d, pack.dir)) < pack.version)
+    if (miss.length && outdated) {
+      items.push({ id: `pack:${pack.label}`, label: pack.label, status: 'warn', detail: `A newer version comes with IV Studio (missing nodes: ${miss.join(', ')})`, fix: 'Install the missing node packs to update it, then restart ComfyUI.', kind: 'node_pack', for: pack.for, dir: pack.dir })
+      continue
+    }
     if (miss.length && onDisk(pack.dir)) {
       items.push({ id: `pack:${pack.label}`, label: pack.label, status: core ? 'missing' : 'warn', detail: 'Installed. ComfyUI loads it when it restarts.', fix: 'Restart ComfyUI to load it.', kind: 'node_pack', for: pack.for, dir: pack.dir, restartNeeded: true })
       continue

@@ -1247,10 +1247,12 @@
       "label": "IV Studio nodes (latent cache, shot list)",
       "classes": [
         "IVLatentCache",
-        "IVShotList"
+        "IVShotList",
+        "IVFreeMemory"
       ],
       "dir": "ComfyUI-IV-Studio",
       "bundled": "comfy-nodes/ComfyUI-IV-Studio",
+      "version": 2,
       "url": "https://github.com/hollisorg/iv-studio/tree/main/resources/comfy-nodes/ComfyUI-IV-Studio",
       "for": "Shots"
     },
