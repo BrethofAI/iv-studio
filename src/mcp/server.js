@@ -27,7 +27,7 @@ import { Cutouts } from '../service/cutout'
 import { Reframes } from '../service/reframe'
 import { MediaTools } from '../service/media'
 import { applyFinishSpeed, applySpeed, savedSpeed, SPEED_IDS, SPEEDS } from '../service/speed'
-import { comfyFolders, contentDir, dataLocation, readSettings, resourcesDir, writerOf, writeSettings } from '../service/paths'
+import { comfyFolders, contentDir, dataLocation, readSettings, resourcesDir, videosFolderOf, writerOf, writeSettings } from '../service/paths'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
@@ -71,7 +71,7 @@ setOllamaSource(() => readSettings(BASE).ollamaUrl)
 const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(BASE).comfyUrl, models: readSettings(BASE).models })
 const server = new McpServer({ name: 'iv-studio', version: '0.1.0' }, { instructions: INSTRUCTIONS })
 // Where the app puts downloads and exports (Electron's videos folder; this process has no Electron app).
-const VIDEOS = INCOGNITO ? path.join(DATA, 'videos') : path.join(process.env.USERPROFILE || os.homedir(), 'Videos', 'IV Studio')
+const VIDEOS = () => videosFolderOf(readSettings(BASE), { incognito: INCOGNITO, dataDir: DATA, videos: path.join(process.env.USERPROFILE || os.homedir(), 'Videos') })
 // Packaged, the ffmpeg binaries sit outside the asar archive.
 const unpacked = (p) => p.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
 
@@ -370,7 +370,7 @@ tool('add_media', `Add files to an edit's media bin: local video, picture or aud
   for (const key of renders) {
     const item = lib.find((i) => i.key === key)
     if (!item) throw new Error(`No render ${key}. list_renders gives the keys.`)
-    added.push(await edits.addMedia(await studio.localCopy(item.file, VIDEOS), { type: 'iv', label: item.label }))
+    added.push(await edits.addMedia(await studio.localCopy(item.file, VIDEOS()), { type: 'iv', label: item.label }))
   }
   if (!added.length) throw new Error('Give files or renders.')
   const media = { ...e.media, ...Object.fromEntries(added.map((m) => [m.id, m])) }
@@ -435,7 +435,7 @@ tool('grab_frame', 'A picture of one moment, to check an edit or a render by eye
 
 // ---------- Projects: a short film from script to rough cut (the app's Projects page; "films" here, because
 // list_projects already means shots) ----------
-const films = new Productions({ dataDir: DATA, studio: () => studio, voices: () => voices, images: () => images, previs: () => previs, catalog: () => catalog, edits, localCopy: (f) => studio.localCopy(f, VIDEOS), model: () => readSettings(BASE).ollamaModel || undefined, writer: () => writerOf(readSettings(BASE)) })
+const films = new Productions({ dataDir: DATA, studio: () => studio, voices: () => voices, images: () => images, previs: () => previs, catalog: () => catalog, edits, localCopy: (f) => studio.localCopy(f, VIDEOS()), model: () => readSettings(BASE).ollamaModel || undefined, writer: () => writerOf(readSettings(BASE)) })
 const stageSchema = z
   .object({
     people: z.array(z.object({ name: z.string(), x: z.number(), y: z.number(), facing: z.number().describe('degrees on the floor: 0 into the room (away from a camera at the front), 90 to the room\'s right, 180 toward the front'), to: z.object({ x: z.number(), y: z.number() }).nullable().optional().describe('where they walk to'), lookAt: z.string().nullable().optional() })).max(4),
@@ -521,7 +521,7 @@ tool('use_film_recording', `Use a recording (any sound file: the person's own vo
 tool('build_rough_cut', `Put every shot of a film in script order on V1 of its edit (made the first time): the finished take, else the picked or first preview. Rebuilding replaces V1 only. Returns the edit id, how many shots went in, and which are missing; get_edit and export_edit take it from there. ${LIVE}`, { filmId: z.string() }, ({ filmId }) => films.roughCut(filmId))
 
 // New footage from inside an edit: the same Extend, Fill/Bridge and Retake as the editor's right-click menu.
-const editgen = new EditGen({ edits, studio: () => studio, localCopy: (f) => studio.localCopy(f, VIDEOS) })
+const editgen = new EditGen({ edits, studio: () => studio, localCopy: (f) => studio.localCopy(f, VIDEOS()) })
 const genView = (editId) => editgen.advance(editId).then(() => ({ items: editgen.view(editId) }))
 tool('generate_in_edit', `Make new footage on an edit's timeline with H3, the way the editor's right-click menu does. kind extend: carry clip on for seconds (5, 10 or 15) from its last frames (Continue a video); it is finished by itself and inserted after the clip. kind bridge: a new shot from clip's last frame to next's first frame (inserted between them, seconds long), or fill gap {track, from, to} (up to 15 s, over the gap); it makes 3 previews, then call pick_generation. kind retake: render from..to (timeline seconds inside clip) again, mode both (picture and sound), video (keep the performance) or audio (keep the picture); it replaces that stretch. Each takes GPU minutes; follow with list_generations every 20-30 s. The prompt is an H3 prompt ({char} for the character); write_prompt can write it. ${LIVE}`, {
   editId: z.string(),
@@ -587,7 +587,7 @@ tool('export_edit', `Render the whole edit to one MP4 (H.264 + AAC) in Videos\\I
   const st = { state: 'running', progress: 0, file: null, error: null, startedAt: new Date().toISOString(), seconds: +editLength(e).toFixed(2) }
   exporting.set(editId, st)
   edits
-    .export(editId, outDir || path.join(VIDEOS, 'Edits'), (p) => (st.progress = +p.toFixed(3)))
+    .export(editId, outDir || path.join(VIDEOS(), 'Edits'), (p) => (st.progress = +p.toFixed(3)))
     .then((f) => Object.assign(st, { state: 'done', progress: 1, file: f }))
     .catch((err) => Object.assign(st, { state: /cancel/i.test(err.message) ? 'cancelled' : 'failed', error: err.message }))
   return st

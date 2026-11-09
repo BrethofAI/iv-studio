@@ -47,6 +47,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
     onChanged: on('productions:changed')
   },
   settings: { get: call('settings:get'), set: call('settings:set'), setComfyKey: call('settings:setComfyKey'), setCivitaiKey: call('settings:setCivitaiKey') },
+  // where finished videos go: { path, custom, incognito, free }
+  folders: { videos: call('folders:videos'), chooseVideos: call('folders:chooseVideos'), resetVideos: call('folders:resetVideos') },
   // The Comfy.org account: credits for paid partner nodes, the key, and what a graph would cost.
   account: { state: call('account:state'), refresh: call('account:refresh'), setKey: call('account:setKey'), clearKey: call('account:clearKey'), price: call('account:price'), onState: on('account:state') },
   // pathFor: the path of a file dropped on the window.

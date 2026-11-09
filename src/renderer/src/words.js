@@ -228,3 +228,9 @@ export function setSimpleWords(next) {
   }
   window.dispatchEvent(new CustomEvent('iv:words', { detail: on }))
 }
+
+// Higher contrast text (Settings → Words, Check my PC): styles.css :root.hc
+export function setContrast(on) {
+  document.documentElement.classList.toggle('hc', !!on)
+}
+export const highContrast = () => document.documentElement.classList.contains('hc')

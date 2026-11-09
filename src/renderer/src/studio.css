@@ -12978,3 +12978,47 @@ button.set-chip:hover {
   gap: 12px;
   flex-wrap: wrap;
 }
+
+/* Check my PC: finding a ComfyUI that isn't at the saved address, and where finished videos go */
+.wel-callout.wel-find {
+  flex-direction: column;
+  align-items: stretch;
+}
+.wel-find > p {
+  flex: none;
+}
+.wel-find > .btn,
+.wel-find-btns {
+  align-self: flex-start;
+}
+.wel-find-btns {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.wel-find-addr {
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.wel-find-addr input {
+  max-width: 320px;
+}
+.wel-find .get-comfy {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.wel-videos {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border: 1px dashed var(--line-strong);
+}
+.wel-videos-path {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

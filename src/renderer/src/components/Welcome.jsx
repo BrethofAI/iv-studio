@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { finishFor, previewFor, SPEED_IDS, SPEEDS } from '../../../service/speed'
 import { createPortal } from 'react-dom'
 import Hero from './Hero'
+import GetComfy from './GetComfy'
 import { StepHead } from './CreateKit'
 import { startTour } from '../tours'
-import { setSimpleWords, simpleWords } from '../words'
+import { highContrast, setContrast, setSimpleWords, simpleWords } from '../words'
 
 // The welcome wizard (Check my PC): opens on first launch, and again from Settings. It reads this computer
 // (hardware:scan; nothing leaves the PC), says plainly what it can do, suggests a way of working (this PC, the
@@ -61,6 +62,8 @@ export default function Welcome({ onClose, go, notify, first }) {
   const [level, setLevel] = useState(null)
   const [simple, setSimple] = useState(simpleWords)
   const words = (on) => (setSimple(on), setSimpleWords(on))
+  const [hc, setHc] = useState(highContrast)
+  const contrast = (on) => (setHc(on), setContrast(on))
   const knows = (id) => (setLevel(id), words(id === 'new'))
   const body = useRef(null)
   const at = STEPS.findIndex(([id]) => id === step)
@@ -106,7 +109,7 @@ export default function Welcome({ onClose, go, notify, first }) {
 
   async function finish(target, cloudWizard = false) {
     try {
-      await window.ivstudio.hardware.apply({ shotPrefs: prefs, promptEngine: writer !== data?.promptEngine ? writer : undefined, hardware: summaryOf(data), plainWords: simple, ...(level ? { aiLevel: level } : {}) })
+      await window.ivstudio.hardware.apply({ shotPrefs: prefs, promptEngine: writer !== data?.promptEngine ? writer : undefined, hardware: summaryOf(data), plainWords: simple, highContrast: hc, ...(level ? { aiLevel: level } : {}) })
     } catch (e) {
       notify?.(e.message)
     }
@@ -119,7 +122,7 @@ export default function Welcome({ onClose, go, notify, first }) {
   async function skip() {
     if (stepRef.current === 'done') return finish()
     try {
-      await window.ivstudio.hardware.apply({ plainWords: simple, ...(level ? { aiLevel: level } : {}) })
+      await window.ivstudio.hardware.apply({ plainWords: simple, highContrast: hc, ...(level ? { aiLevel: level } : {}) })
     } catch {}
     window.dispatchEvent(new CustomEvent('iv:settings'))
     onClose()
@@ -183,11 +186,11 @@ export default function Welcome({ onClose, go, notify, first }) {
           </ol>
 
           <div className="welcome-body" key={`b-${step}`}>
-            {step === 'hello' && <Hello level={level} knows={knows} simple={simple} words={words} />}
+            {step === 'hello' && <Hello level={level} knows={knows} simple={simple} words={words} hc={hc} contrast={contrast} />}
             {step === 'scan' && <Scan rows={rows} shown={shown} error={error} retry={scan} />}
             {step === 'pc' && rec && <YourPc rec={rec} scan={data.scan} />}
-            {step === 'way' && rec && <Way rec={rec} way={way} setWay={setWay} prefs={prefs} setPrefs={setPrefs} writer={writer} setWriter={setWriter} installs={installs} scan={data.scan} />}
-            {step === 'get' && rec && <Get rec={rec} way={way} pick={pick} setPick={setPick} packs={packs} setPacks={setPacks} installs={installs} scan={data.scan} started={started} download={download} startComfy={startComfy} comfyStarting={comfyStarting} />}
+            {step === 'way' && rec && <Way rec={rec} way={way} setWay={setWay} prefs={prefs} setPrefs={setPrefs} writer={writer} setWriter={setWriter} installs={installs} scan={data.scan} notify={notify} />}
+            {step === 'get' && rec && <Get rec={rec} way={way} pick={pick} setPick={setPick} packs={packs} setPacks={setPacks} installs={installs} scan={data.scan} started={started} download={download} startComfy={startComfy} comfyStarting={comfyStarting} rescan={scan} notify={notify} />}
             {step === 'done' && rec && <Done rec={rec} way={way} prefs={prefs} writer={writer} started={started} onTour={() => finish('tour')} />}
           </div>
         </div>
@@ -239,7 +242,7 @@ const LEVELS = [
   ['lots', 'Know it well', 'LoRAs, seeds and samplers are old friends.']
 ]
 
-function Hello({ level, knows, simple, words }) {
+function Hello({ level, knows, simple, words, hc, contrast }) {
   const what = [
     ['Shots', 'Write an idea, hunt a few takes, pick one and finish it at full size.'],
     ['Characters and voices', 'Your own cast, with faces, voices and trained looks.'],
@@ -280,6 +283,16 @@ function Hello({ level, knows, simple, words }) {
             <span className="dim small words-exact">The app says “trained look” for LoRA, “variation number” for seed, “quick sharpen” for DLSS and so on. Everything else stays the same. Change it any time in Settings.</span>
           </span>
         </label>
+        <label className="switch-toggle wel-simple">
+          <input type="checkbox" checked={hc} onChange={(e) => contrast(e.target.checked)} />
+          <span className="switch-track">
+            <span className="switch-knob" />
+          </span>
+          <span>
+            <strong>Higher contrast text</strong>
+            <span className="dim small">Grey text turns close to white, so it’s easier to read. Change it any time in Settings → Words.</span>
+          </span>
+        </label>
       </div>
     </section>
   )
@@ -294,7 +307,7 @@ function scanRows({ scan, rec }) {
     { icon: 'ram', label: 'Memory', value: v.ram?.value, state: v.ram?.state },
     { icon: 'cpu', label: 'Processor', value: v.cpu?.value, state: v.cpu?.state },
     { icon: 'disk', label: 'Drives', value: (scan.drives || []).map((d) => `${d.path.replace(/\\$/, '')} ${gbs(d.free)} free`).join(' · ') || 'Unknown', state: v.disk?.state || 'ok' },
-    { icon: 'pc', label: 'ComfyUI', value: i.comfyRunning ? 'Running' : i.comfyFound ? 'Installed, not running' : 'Not found', state: i.comfyRunning ? 'great' : i.comfyFound ? 'ok' : 'weak' },
+    { icon: 'pc', label: 'ComfyUI', value: i.comfyRunning ? 'Running' : i.comfyElsewhere ? `Running at ${i.comfyElsewhere.replace(/^https?:\/\//, '')}` : i.comfyFound ? 'Installed, not running' : 'Not found', state: i.comfyRunning ? 'great' : i.comfyElsewhere ? 'good' : i.comfyFound ? 'ok' : 'weak' },
     { icon: 'writer', label: 'Prompt writers', value: [i.claude && 'Claude Code', i.codex && 'Codex', i.ollama && 'Ollama'].filter(Boolean).join(' · ') || 'None yet', state: i.claude || i.codex || i.ollama ? 'good' : 'ok' },
     { icon: 'ram', label: 'Voices', value: i.voices ? 'Set up' : 'Not set up yet', state: i.voices ? 'good' : 'ok' },
     { icon: 'cloud', label: 'Cloud', value: i.cloud ? 'Set up' : 'Not set up yet', state: i.cloud ? 'good' : 'ok' }
@@ -403,8 +416,20 @@ function prefsForSpeed(id) {
   return { speed: id, previewMp: p.megapixels, quality: p.steps === 4 ? 'draft' : 'standard', finalMp: finishFor(id).megapixels }
 }
 
-function Way({ rec, way, setWay, prefs, setPrefs, writer, setWriter, installs, scan }) {
+function Way({ rec, way, setWay, prefs, setPrefs, writer, setWriter, installs, scan, notify }) {
   const set = (p) => setPrefs((x) => ({ ...x, ...p }))
+  const [videos, setVideos] = useState(null)
+  useEffect(() => {
+    window.ivstudio.folders.videos().then(setVideos, () => {})
+  }, [])
+  async function chooseVideos() {
+    try {
+      const v = await window.ivstudio.folders.chooseVideos()
+      if (v) setVideos(v)
+    } catch (e) {
+      notify?.(e.message)
+    }
+  }
   const dlssOk = scan.os?.platform === 'win32' && (scan.gpus || []).some((g) => g.vendor === 'nvidia')
   return (
     <>
@@ -442,11 +467,84 @@ function Way({ rec, way, setWay, prefs, setPrefs, writer, setWriter, installs, s
           <strong>Training a character:</strong> {rec.training.say}
         </p>
       </section>
+      <section className="block create-step">
+        <StepHead title="Where finished videos go" sub="Films and edits you export, and cloud renders brought to this PC. Change it any time in Settings → Folders." />
+        <div className="wel-videos">
+          <span className="mono wel-videos-path">{videos?.path || '…'}</span>
+          {videos?.free != null && <span className="mono small dim">{gbs(videos.free)} free</span>}
+          <button className="btn btn-small" disabled={!videos || videos.incognito} onClick={chooseVideos}>
+            Change…
+          </button>
+        </div>
+        <p className="wel-note dim small">Renders made on this PC are kept in ComfyUI’s own output folder, on the drive ComfyUI is on{scan.modelsDrive ? ` (${scan.modelsDrive.path.replace(/\\$/, '')})` : ''}.</p>
+      </section>
     </>
   )
 }
 
-function Get({ rec, way, pick, setPick, packs, setPacks, installs, scan, started, download, startComfy, comfyStarting }) {
+// No ComfyUI answering at the saved address: one found on another port ("Use it"), its address typed in, a check
+// again for a ComfyUI still loading, Start ComfyUI, or (none on this PC) Get ComfyUI for me.
+function FindComfy({ installs, startComfy, comfyStarting, rescan, notify }) {
+  const [addr, setAddr] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function use(url) {
+    setBusy(true)
+    try {
+      await window.ivstudio.settings.set({ comfyUrl: url })
+      window.dispatchEvent(new CustomEvent('iv:settings'))
+      await rescan()
+    } catch (e) {
+      notify?.(e.message)
+    }
+    setBusy(false)
+  }
+  async function again() {
+    setBusy(true)
+    await rescan()
+    setBusy(false)
+  }
+  const at = installs.comfyElsewhere
+  return (
+    <div className="wel-callout wel-find">
+      {at ? (
+        <>
+          <p>
+            ComfyUI is running at <span className="mono">{at.replace(/^http:\/\//, '')}</span>, not at the address IV Studio had saved.
+          </p>
+          <button className="btn btn-primary" onClick={() => use(at)} disabled={busy}>
+            Use it
+          </button>
+        </>
+      ) : (
+        <>
+          <p>{installs.comfyFound ? 'ComfyUI isn’t answering, so IV Studio can’t see which models you already have, or download into it. If it’s still starting up, wait for it to finish loading, then check again.' : 'No ComfyUI found on this PC.'}</p>
+          <div className="wel-find-btns">
+            {installs.comfyFound && (
+              <button className="btn btn-primary" onClick={startComfy} disabled={comfyStarting || busy}>
+                {comfyStarting ? 'Starting ComfyUI…' : 'Start ComfyUI'}
+              </button>
+            )}
+            <button className="btn" onClick={again} disabled={busy || comfyStarting}>
+              {busy ? 'Checking…' : 'Check again'}
+            </button>
+          </div>
+        </>
+      )}
+      <div className="wel-find-addr">
+        <span className="small dim">Already running at another address? Type it as you would in a browser:</span>
+        <div className="set-inline grow">
+          <input value={addr} placeholder="localhost:8000" onChange={(e) => setAddr(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addr.trim() && use(addr.trim())} />
+          <button className="btn btn-small" disabled={!addr.trim() || busy} onClick={() => use(addr.trim())}>
+            Use this address
+          </button>
+        </div>
+      </div>
+      {!installs.comfyFound && !at && <GetComfy notify={notify} recheck={rescan} />}
+    </div>
+  )
+}
+
+function Get({ rec, way, pick, setPick, packs, setPacks, installs, scan, started, download, startComfy, comfyStarting, rescan, notify }) {
   if (way === 'cloud')
     return (
       <section className="block create-step">
@@ -464,17 +562,8 @@ function Get({ rec, way, pick, setPick, packs, setPacks, installs, scan, started
   return (
     <section className="block create-step">
       <StepHead n={5} title="What to download" sub="The ones for how you’ll work are ticked. Each is checked against its published fingerprint." />
-      <p className="wel-lede">IV Studio uses the ComfyUI already on this PC, wherever it is (the Desktop app, or a portable ComfyUI on another drive); it never installs one of its own. These download into that ComfyUI’s models folder, so they go on its drive.</p>
-      {!installs.modelsKnown && (
-        <div className="wel-callout">
-          <p>{installs.comfyFound ? 'ComfyUI isn’t running, so IV Studio can’t see which models you already have, or download into it.' : 'No ComfyUI on this PC yet. Install ComfyUI first (the Desktop app or the portable build), then come back here from Settings → Check my PC.'}</p>
-          {installs.comfyFound && (
-            <button className="btn btn-primary" onClick={startComfy} disabled={comfyStarting}>
-              {comfyStarting ? 'Starting ComfyUI…' : 'Start ComfyUI'}
-            </button>
-          )}
-        </div>
-      )}
+      <p className="wel-lede">IV Studio uses the ComfyUI already on this PC, wherever it is (the Desktop app, or a portable ComfyUI on another drive), or gets one for you. These download into that ComfyUI’s models folder, so they go on its drive.</p>
+      {!installs.modelsKnown && <FindComfy installs={installs} startComfy={startComfy} comfyStarting={comfyStarting} rescan={rescan} notify={notify} />}
       {allHere && (
         <div className="wel-allhere">
           <Icon name="check" />

@@ -173,6 +173,21 @@
       "optionalFor": "more angles of a place (Projects)"
     },
     {
+      "id": "taeh3",
+      "label": "H3 live preview decoder (Kijai's TAEH3, Apache-2.0)",
+      "loader": "ModelPreviewOverrideKJ.tiny_vae",
+      "match": "taeh3.safetensors",
+      "folder": "vae_approx",
+      "url": "https://huggingface.co/Kijai/MiniMax-H3-TAE/resolve/a213ac8bf2f148b4f32372279a7f207846978900/vae_approx/taeh3.safetensors",
+      "sha256": "f0f60fa072089997f817402098c2fd90777cb2660dd79cf5df42fc1e3e08e527",
+      "size": 9791388,
+      "needed_for": [
+        "live"
+      ],
+      "optional": true,
+      "optionalFor": "live step pictures while a shot renders"
+    },
+    {
       "id": "sam31",
       "label": "SAM 3.1 (tracks people and objects)",
       "loader": "CheckpointLoaderSimple.ckpt_name",

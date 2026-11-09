@@ -6,7 +6,7 @@
   --line: rgba(241, 237, 229, 0.12);
   --line-strong: rgba(241, 237, 229, 0.28);
   --paper: #f1ede5;
-  --paper-dim: rgba(241, 237, 229, 0.58);
+  --paper-dim: rgba(241, 237, 229, 0.7);
   --pink: #f19dac;
   --red: #f44859;
   --display: 'Barlow Condensed', 'Barlow', Impact, sans-serif;
@@ -14,6 +14,13 @@
   --body: 'DM Sans', Arial, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, monospace;
   color-scheme: dark;
+}
+
+/* Settings → Words → Higher contrast text: secondary text close to white, and stronger lines */
+:root.hc {
+  --paper-dim: rgba(241, 237, 229, 0.92);
+  --line: rgba(241, 237, 229, 0.22);
+  --line-strong: rgba(241, 237, 229, 0.5);
 }
 
 * {

@@ -107,10 +107,15 @@ function WordsCard({ n, settings, setSettings }) {
     window.dispatchEvent(new CustomEvent('iv:settings'))
   }
   return (
-    <SetCard id="words" n={n} title="Words" sub="How IV Studio talks to you." aside={settings.plainWords ? <Pill tone="ok">Simple</Pill> : <Pill>Standard</Pill>}>
+    <SetCard id="words" n={n} title="Words" sub="How IV Studio talks to you, and how easy its text is to read." aside={settings.plainWords ? <Pill tone="ok">Simple</Pill> : <Pill>Standard</Pill>}>
       <SetField label="Simple words" hint="For people new to AI video and pictures: the app explains itself in everyday words. Only the words change; every page, control and setting stays the same.">
         <SetSwitch checked={settings.plainWords} onChange={(on) => set({ plainWords: on })}>
           {settings.plainWords ? 'On' : 'Off'}
+        </SetSwitch>
+      </SetField>
+      <SetField label="Higher contrast text" hint="Makes the grey secondary text close to white, and lines stronger. Easier to read on any screen.">
+        <SetSwitch checked={settings.highContrast} onChange={(on) => set({ highContrast: on })}>
+          {settings.highContrast ? 'On' : 'Off'}
         </SetSwitch>
       </SetField>
       <SetField label="For example">
@@ -160,10 +165,10 @@ function ComfyCard({ n, settings, setSettings, notify, recheck, comfyUp, comfyBu
       id="comfy"
       n={n}
       title="ComfyUI"
-      sub="IV Studio uses the ComfyUI you already have, on any drive; it never installs one of its own. H3 models, LoRAs from Civitai and your renders all go into that ComfyUI’s own folders."
+      sub="IV Studio uses the ComfyUI you already have, on any drive (or gets one for you: Setup → Get ComfyUI for me). H3 models, LoRAs from Civitai and your renders all go into that ComfyUI’s own folders."
       aside={comfyUp ? <Pill tone="ok">Ready</Pill> : comfyBusy ? <Pill tone="warn">Busy</Pill> : <Pill tone="warn">Not running</Pill>}
     >
-      <SetField label="Address" hint="Where ComfyUI answers. On this PC it's usually http://127.0.0.1:8188.">
+      <SetField label="Address" hint="Where ComfyUI answers, such as localhost:8188 (portable) or localhost:8000 (the Desktop app). Typing http:// is optional.">
         <div className="set-inline grow">
           <input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && url.trim() !== settings.comfyUrl && saveUrl()} />
           <button className="btn btn-small" disabled={url.trim() === settings.comfyUrl} onClick={saveUrl}>
@@ -245,15 +250,40 @@ function FolderCard({ n, settings, setSettings, notify, incognito }) {
     }
   }
   const enter = (e) => e.key === 'Enter' && changed && save()
+  const [videos, setVideos] = useState(null)
+  useEffect(() => {
+    window.ivstudio.folders.videos().then(setVideos, () => {})
+  }, [])
+  async function chooseVideos() {
+    try {
+      const v = await window.ivstudio.folders.chooseVideos()
+      if (v) (setVideos(v), notify('Saved. Finished videos go there from now on.', 'info'))
+    } catch (err) {
+      notify(err.message)
+    }
+  }
   return (
     <SetCard
       id="folders"
       n={n}
       title="Folders"
-      sub="Where in ComfyUI’s output folder renders save. Renders already made stay where they are."
+      sub="Where finished videos go, and where in ComfyUI’s output folder renders save. Files already made stay where they are."
       aside={incognito ? <Pill tone="warn">In Incognito now</Pill> : null}
       foot={`Use a folder name, or a path such as Studio\\Private; it always stays inside ComfyUI’s folders. Pictures, videos and sounds you add in Incognito go into input\\${hidden.trim() || 'IV Private'}.`}
     >
+      <SetField label="Finished videos" hint={`Films and edits you export, and cloud renders brought to this PC.${videos?.free != null ? ` ${(videos.free / 1024 ** 3).toFixed(0)} GB free there.` : ''} Renders made on this PC stay in ComfyUI’s output folder, on its drive.`}>
+        <div className="set-inline grow">
+          <SetPath path={videos?.path} />
+          <button className="btn btn-small" disabled={videos?.incognito} onClick={chooseVideos}>
+            Choose folder…
+          </button>
+          {videos?.custom && (
+            <button className="link-btn" onClick={async () => setVideos(await window.ivstudio.folders.resetVideos())}>
+              Back to Videos
+            </button>
+          )}
+        </div>
+      </SetField>
       <SetField label="Normal renders">
         <div className="set-prefixed">
           <span className="mono">output\</span>
