@@ -261,7 +261,9 @@ export const TOURS = {
       { at: '.settings-tabs', title: 'Settings and Setup', text: 'Settings is how IV Studio works for you. Setup checks what ComfyUI has and downloads what it needs.' },
       { at: '.set-nav', title: 'Jump around', text: 'Every topic in one list. Click one to jump to it.' },
       { at: '#set-pc', title: 'Your PC', text: 'What your computer can do. Check again re-runs the scan and its recommended defaults.' },
-      { at: '#set-comfy', title: 'ComfyUI', text: 'Where ComfyUI is, and whether IV Studio starts it for you when it opens.' },
+      { at: '#set-access', title: 'Accessibility', text: 'Bigger text, higher contrast, less motion, clear focus outlines and underlined links. Each applies at once.' },
+      { at: '#set-comfy', title: 'ComfyUI', text: 'Where ComfyUI is (typing localhost:8000 is fine), and whether IV Studio starts it for you when it opens.' },
+      { at: '#set-folders', title: 'Folders', text: 'Where finished videos go, on any drive, and where renders save inside ComfyUI.' },
       { at: '#set-writer', title: 'Prompt writer', text: 'Who writes your prompts: a free local model, your own Claude Code or Codex, or MiniMax’s paid rewriter.' },
       { at: '#set-agents', title: 'Agents', text: 'Connect Claude Code, Codex or any MCP agent, so it can make shots and edits in IV Studio with you.' }
     ]

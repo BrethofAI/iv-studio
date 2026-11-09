@@ -80,13 +80,14 @@ export function driveOf(folder, ds) {
 
 // The parts of this computer. installs: what main already knows (ComfyUI, Ollama, the harnesses, the voice
 // engine, the setup check's models, the cloud); passed in so this stays free of the app's classes.
-export async function scanHardware({ electronGpu = null, platform = process.platform, installs = {}, comfyFolder = '' } = {}) {
+export async function scanHardware({ electronGpu = null, platform = process.platform, installs = {}, comfyFolder = '', videosFolder = '' } = {}) {
   const smi = nvidiaSmi(platform)
   const nvidia = smi ? parseNvidiaSmi(await run(smi, ['--query-gpu=name,memory.total,driver_version,compute_cap', '--format=csv,noheader,nounits'])) : []
   const others = electronGpus(electronGpu).filter((g) => g.vendor !== 'nvidia' || !nvidia.length)
   const cpus = os.cpus()
   const ds = drives(platform)
   const models = driveOf(comfyFolder, ds)
+  const videos = driveOf(videosFolder, ds)
   return {
     at: new Date().toISOString(),
     os: { platform, release: os.release(), arch: process.arch },
@@ -95,6 +96,7 @@ export async function scanHardware({ electronGpu = null, platform = process.plat
     gpus: nvidia.length ? nvidia : others,
     drives: ds,
     modelsDrive: models ? { ...models, folder: comfyFolder } : null,
+    videosDrive: videos ? { ...videos, folder: videosFolder } : null,
     installs
   }
 }

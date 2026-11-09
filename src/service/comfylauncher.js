@@ -111,6 +111,30 @@ export function launcherFor(s = {}) {
   return findLaunchers()[0]?.path || null
 }
 
+// The folder a launcher's ComfyUI keeps its models in, to measure the right drive before ComfyUI is running.
+// A shortcut is followed to its target (readLink: Electron's shell.readShortcutLink); the Desktop app keeps its
+// ComfyUI wherever its installer was pointed (basePath in its config.json); a .bat, .sh or main.py lives in it.
+export function comfyHome(file, { readLink = null, appData = process.env.APPDATA || '', home = os.homedir(), platform = process.platform } = {}) {
+  if (!file) return null
+  if (/\.lnk$/i.test(file)) {
+    let target = null
+    try {
+      target = readLink?.(file)?.target || null
+    } catch {}
+    return target && !/\.lnk$/i.test(target) ? comfyHome(target, { readLink, appData, home, platform }) : null
+  }
+  if (isDesktopLauncher(file)) {
+    const conf = platform === 'darwin' ? path.join(home, 'Library', 'Application Support', 'ComfyUI', 'config.json') : path.join(appData, 'ComfyUI', 'config.json')
+    try {
+      const base = JSON.parse(fs.readFileSync(conf, 'utf8')).basePath
+      return base && fs.existsSync(base) ? base : null
+    } catch {
+      return null
+    }
+  }
+  return path.dirname(file)
+}
+
 // The ComfyUI Desktop app updates ComfyUI and ComfyUI-Manager itself (comfyupdate.js updates only its node packs).
 export const isDesktopLauncher = (file) => !!file && /^ComfyUI\.(exe|app)$/i.test(path.basename(file))
 

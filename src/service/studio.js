@@ -9,7 +9,7 @@ import { Comfy } from './comfy.js'
 import { probe } from './media.js'
 import { buildPrompt, checkPrompt } from './graph.js'
 import { planFinish, planPreviews } from './plan.js'
-import { adaptGraph, capabilities, withLivePreview } from './remote.js'
+import { adaptGraph, capabilities, LIVE_NODE, withLivePreview } from './remote.js'
 import { Cast, resolveMentions } from './cast.js'
 import { contextIrGraph, fromContextIr, writeHarness, writeLocal, writeStoryLocal } from './prompter.js'
 import { cleanSequenceLoras, renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
@@ -1072,6 +1072,9 @@ export class Studio {
         state,
         position: n + 1,
         ours: !!ours,
+        // whether this prompt sends step pictures (withLivePreview added its node): not in the cloud, and not
+        // without H3's small preview model (taeh3) on this PC
+        live: !!i[2]?.[LIVE_NODE],
         jobId: job?.id || null,
         kind: job?.kind || ours?.kind || null,
         name: job?.name || null,

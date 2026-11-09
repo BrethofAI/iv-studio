@@ -1,6 +1,7 @@
 // Where IV Studio keeps its data and finds its bundled resources, for both the app and the MCP server.
 import fs from 'node:fs'
 import path from 'node:path'
+import os from 'node:os'
 
 // Where the data folder is, in this order:
 //   env       IV_STUDIO_DATA names it (tests, and anyone who wants to set it by hand)
@@ -80,7 +81,7 @@ export function resourcesDir(hint) {
 // outputFolder / privateFolder: the folder inside ComfyUI's output where renders save, normally and in
 // Incognito ('' = straight into output). Incognito uploads go into the same folder name under input.
 export const PRIVATE_FOLDER = 'IV Private'
-const DEFAULT_SETTINGS = { comfyUrl: 'http://127.0.0.1:8188', window: null, promptEngine: 'local', ollamaUrl: '', ollamaModel: 'huihui_ai/qwen3-vl-abliterated:8b-instruct', claudeModel: '', codexModel: '', comfyApiKey: null, target: 'local', cloud: null, cloudToken: null, cloudProvider: 'modal', runpod: null, runpodKey: null, runpodToken: null, models: {}, comfyFolder: '', comfyLauncher: '', comfyAutoStart: true, civitaiKey: null, civitaiMature: false, civitaiUnblur: false, incognito: false, outputFolder: '', privateFolder: PRIVATE_FOLDER, onboarded: null, hardware: null, shotPrefs: null, fizgigFolder: '' }
+const DEFAULT_SETTINGS = { comfyUrl: 'http://127.0.0.1:8188', window: null, promptEngine: 'local', ollamaUrl: '', ollamaModel: 'huihui_ai/qwen3-vl-abliterated:8b-instruct', claudeModel: '', codexModel: '', comfyApiKey: null, target: 'local', cloud: null, cloudToken: null, cloudProvider: 'modal', runpod: null, runpodKey: null, runpodToken: null, models: {}, comfyFolder: '', comfyLauncher: '', comfyAutoStart: true, civitaiKey: null, civitaiMature: false, civitaiUnblur: false, incognito: false, outputFolder: '', privateFolder: PRIVATE_FOLDER, onboarded: null, hardware: null, shotPrefs: null, fizgigFolder: '', videosFolder: '', highContrast: false, textSize: 'normal', reduceMotion: false, focusRings: false, underlineLinks: false }
 
 // A folder name as ComfyUI takes it: relative to its output (or input) folder, forward slashes, nothing
 // that climbs out of it or that Windows won't allow.
@@ -161,16 +162,50 @@ export function outputsUnder(graph, folder) {
   return graph
 }
 
+// A ComfyUI address as people type it ("localhost:8000", "127.0.0.1:8188/", "0.0.0.0:8188") made into one fetch can
+// use: a scheme added, a trailing slash dropped, and 0.0.0.0 (ComfyUI's "listen everywhere") read as this PC.
+// Throws when it isn't an address.
+export function normalizeComfyUrl(value) {
+  let v = String(value ?? '').trim()
+  if (!v) return DEFAULT_SETTINGS.comfyUrl
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(v)) v = `http://${v.replace(/^\/+/, '')}`
+  const u = new URL(v)
+  if (!/^https?:$/.test(u.protocol) || !u.hostname) throw new Error('not an address')
+  if (u.hostname === '0.0.0.0') u.hostname = '127.0.0.1'
+  return `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, '')}`
+}
+
+// Where finished videos go (edit and film exports, cloud renders brought home): Settings → Folders → Finished videos,
+// else Videos\IV Studio. Incognito keeps its own inside its data folder.
+export function videosFolderOf(settings, { incognito = false, dataDir: data = '', videos = path.join(os.homedir(), 'Videos') } = {}) {
+  if (incognito) return path.join(data, 'videos')
+  const v = String(settings?.videosFolder || '').trim()
+  return v && path.isAbsolute(v) ? v : path.join(videos, 'IV Studio')
+}
+
 export function readSettings(dir = dataDir()) {
+  let s
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8')) }
+    s = { ...DEFAULT_SETTINGS, ...JSON.parse(fs.readFileSync(path.join(dir, 'settings.json'), 'utf8')) }
   } catch {
     return { ...DEFAULT_SETTINGS }
   }
+  // an address saved before addresses were cleaned up ("localhost:8000") still works
+  try {
+    s.comfyUrl = normalizeComfyUrl(s.comfyUrl)
+  } catch {}
+  return s
 }
 
 export function writeSettings(patch, dir = dataDir()) {
   const next = { ...readSettings(dir), ...Object.fromEntries(Object.entries(patch || {}).filter(([k]) => k in DEFAULT_SETTINGS)) }
+  if ('comfyUrl' in (patch || {})) {
+    try {
+      next.comfyUrl = normalizeComfyUrl(next.comfyUrl)
+    } catch {
+      throw new Error('That isn’t an address. Use host:port, like localhost:8000 or 127.0.0.1:8188.')
+    }
+  }
   next.outputFolder = cleanFolder(next.outputFolder)
   // Incognito always has a folder of its own
   next.privateFolder = cleanFolder(next.privateFolder) || PRIVATE_FOLDER

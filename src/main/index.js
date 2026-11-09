@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { Readable } from 'node:stream'
-import { comfyFolders, dataLocation, incognitoDir, readSettings, resourcesDir, writerOf, writeSettings } from '../service/paths'
+import { comfyFolders, dataLocation, incognitoDir, readSettings, resourcesDir, videosFolderOf, writerOf, writeSettings } from '../service/paths'
 import { chooseTarget, copyData, discardCopy, freeBytes, listData, movableEntries, oldCopy, removeOldCopy, verifyCopy, writePointer } from '../service/datafolder'
 import { EXTRA_BIN, harnessStatus } from '../service/harness'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
@@ -12,7 +12,7 @@ import { SetupProgress, about } from '../service/setupprogress'
 import { RunPod, GPUS as RUNPOD_GPUS } from '../service/runpod'
 import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
 import { comboOptions } from '../service/setup'
-import { comfyUp, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launcherFor, launchersIn, waitUp } from '../service/comfylauncher'
+import { comfyHome, comfyUp, findComfyElsewhere, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launcherFor, launchersIn, waitUp } from '../service/comfylauncher'
 import { randomBytes } from 'node:crypto'
 import { Edits, FORMATS, LOUDNESS } from '../service/edits'
 import { EditGen } from '../service/editgen'
@@ -100,9 +100,12 @@ setOllamaSource(() => readSettings(BASE).ollamaUrl)
 const INCOGNITO = !!readSettings(BASE).incognito
 const DATA = INCOGNITO ? incognitoDir(BASE) : BASE
 // Downloads and exports: Videos\IV Studio, or a folder inside the Incognito data
-const videosDir = () => (INCOGNITO ? path.join(DATA, 'videos') : path.join(app.getPath('videos'), 'IV Studio'))
+const videosDir = () => videosFolderOf(readSettings(BASE), { incognito: INCOGNITO, dataDir: DATA, videos: app.getPath('videos') })
 let win = null
 let studio = null
+// Settings → Accessibility → Text size: the whole window scales, like browser zoom
+const TEXT_SIZES = { normal: 1, large: 1.15, larger: 1.3 }
+let refitZoom = () => {}
 let stopWatch = null
 let installer = null
 let trainings = null
@@ -256,7 +259,9 @@ function createWindow() {
   const fitZoom = () => {
     if (!win || win.isDestroyed()) return
     const [w, h] = win.getContentSize()
-    const z = Math.round(Math.min(1.5, Math.max(1, Math.min(w / 1600, h / 1000))) * 20) / 20
+    // Settings → Accessibility → Text size scales on top
+    const scale = TEXT_SIZES[readSettings(BASE).textSize] || 1
+    const z = Math.round(Math.min(1.5, Math.max(1, Math.min(w / 1600, h / 1000))) * scale * 20) / 20
     if (Math.abs(win.webContents.getZoomFactor() - z) < 0.01) return
     win.webContents.setZoomFactor(z)
     // the window buttons are drawn by the system over the 40 px bar: keep them the bar's (scaled) height
@@ -267,6 +272,7 @@ function createWindow() {
   }
   for (const ev of ['resize', 'maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) win.on(ev, () => (clearTimeout(zoomTimer), (zoomTimer = setTimeout(fitZoom, 120))))
   win.webContents.on('did-finish-load', fitZoom)
+  refitZoom = fitZoom
   if (TEST_COPY) win.on('page-title-updated', (e) => e.preventDefault())
   win.on('close', () => writeSettings({ window: win.getBounds() }, BASE))
   if (process.env.IV_STUDIO_SMOKE) smokeTest(win, process.env.IV_STUDIO_SMOKE)
@@ -1222,7 +1228,9 @@ app.whenReady().then(() => {
         throw new Error('That isn’t an address. Use host:port, like 192.168.1.20:11434 or http://ollama:11434.')
       }
     }
+    if ('textSize' in safe && !(safe.textSize in TEXT_SIZES)) delete safe.textSize
     const s = publicSettings(writeSettings(safe, BASE))
+    if ('textSize' in safe) refitZoom()
     if ('comfyUrl' in (patch || {})) makeStudio()
     if ('models' in (patch || {})) studio.models = s.models || {}
     // the render folders apply to the next render
@@ -1241,20 +1249,29 @@ app.whenReady().then(() => {
     const local = s.target !== 'cloud' && isLocalUrl(s.comfyUrl)
     const [gpuInfo, ollama, running] = await Promise.all([app.getGPUInfo('complete').catch(() => null), ollamaStatus().catch(() => null), local ? comfyUp(s.comfyUrl).catch(() => false) : false])
     const setup = running ? await studio.checkSetup().catch(() => null) : null
+    // nothing at the saved address: a ComfyUI on another usual port (the Desktop app's 8000, say), offered as "Use it"
+    const elsewhere = local && !running ? await findComfyElsewhere(s.comfyUrl).catch(() => null) : null
+    const foldersOf = async (url) => {
+      const paths = url ? await fetch(`${url}/internal/folder_paths`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json()) : await studio.comfy.req('/internal/folder_paths', { timeout: 5000 })
+      return (paths.diffusion_models || paths.checkpoints || []).map((p) => (Array.isArray(p) ? p[0] : p)).find((p) => p && fs.existsSync(p)) || null
+    }
     let modelsFolder = null
-    if (running) {
+    if (running || elsewhere) {
       try {
-        const paths = await studio.comfy.req('/internal/folder_paths', { timeout: 5000 })
-        modelsFolder = (paths.diffusion_models || paths.checkpoints || []).map((p) => (Array.isArray(p) ? p[0] : p)).find((p) => p && fs.existsSync(p)) || null
+        modelsFolder = await foldersOf(running ? null : elsewhere)
       } catch {}
     }
     const launchers = findLaunchers()
-    const comfyFolder = modelsFolder || s.comfyFolder || (launchers[0] ? path.dirname(launchers[0].path) : '')
+    // the drive to measure: the running ComfyUI's models folder, else the chosen folder, else the folder the launcher
+    // IV Studio would start keeps its ComfyUI in (a shortcut's target, the Desktop app's install folder)
+    const home = (f) => comfyHome(f, { readLink: (p) => shell.readShortcutLink(p) })
+    const comfyFolder = modelsFolder || s.comfyFolder || home(launcherFor(s)) || launchers.map((l) => home(l.path)).find(Boolean) || ''
     const harness = harnessStatus()
     const ids = new Set(MODEL_GROUPS.flatMap((g) => g.ids))
     const installs = {
       comfyRunning: !!running,
-      comfyFound: !!(running || s.comfyFolder || launchers.length),
+      comfyElsewhere: elsewhere,
+      comfyFound: !!(running || elsewhere || s.comfyFolder || launchers.length),
       ollama: !!(ollama?.running || ollama?.installed),
       claude: !!harness.claude.installed,
       codex: !!harness.codex.installed,
@@ -1264,7 +1281,7 @@ app.whenReady().then(() => {
       modelsPresent: (setup?.items || []).filter((i) => i.kind === 'model' && i.status === 'ok').map((i) => i.model),
       modelSizes: Object.fromEntries((studio.manifest?.models || []).filter((m) => ids.has(m.id)).map((m) => [m.id, m.size || 0]))
     }
-    const scan = await scanHardware({ electronGpu: gpuInfo, installs, comfyFolder })
+    const scan = await scanHardware({ electronGpu: gpuInfo, installs, comfyFolder, videosFolder: videosDir() })
     // testing: IV_STUDIO_FAKE_HARDWARE=<json file> swaps in made-up parts ({ gpus, ram, os, installs }) to see other tiers
     if (process.env.IV_STUDIO_FAKE_HARDWARE) {
       const fake = JSON.parse(fs.readFileSync(process.env.IV_STUDIO_FAKE_HARDWARE, 'utf8'))
@@ -1273,8 +1290,9 @@ app.whenReady().then(() => {
     return { scan, rec: recommend(scan), promptEngine: s.promptEngine, onboarded: s.onboarded }
   })
   // what the wizard chose: the shot defaults and the writer, and that it's been done (so it doesn't open again)
-  handle('hardware:apply', ({ shotPrefs, promptEngine, hardware } = {}) => {
+  handle('hardware:apply', ({ shotPrefs, promptEngine, hardware, highContrast } = {}) => {
     const patch = { onboarded: new Date().toISOString() }
+    if (typeof highContrast === 'boolean') patch.highContrast = highContrast
     if (shotPrefs) patch.shotPrefs = shotPrefs
     if (hardware) patch.hardware = hardware
     if (promptEngine && ['local', 'claude', 'codex'].includes(promptEngine)) patch.promptEngine = promptEngine
@@ -1324,6 +1342,29 @@ app.whenReady().then(() => {
     return r.filePaths[0]
   })
   // The main ComfyUI folder: IV Studio starts it with the best launcher in it (or the one picked from it).
+  // Settings → Folders → Finished videos (and Check my PC): where exports and cloud renders brought home go
+  const videosState = () => {
+    const s = readSettings(BASE)
+    const dir = videosDir()
+    let free = null
+    try {
+      let p = dir
+      while (!fs.existsSync(p) && path.dirname(p) !== p) p = path.dirname(p)
+      free = freeBytes(p)
+    } catch {}
+    return { path: dir, custom: !!s.videosFolder && !INCOGNITO, incognito: INCOGNITO, free }
+  }
+  handle('folders:videos', async () => videosState())
+  handle('folders:chooseVideos', async () => {
+    const r = await dialog.showOpenDialog(win, { title: 'Where finished videos go', defaultPath: videosDir(), properties: ['openDirectory', 'createDirectory'] })
+    if (r.canceled || !r.filePaths[0]) return null
+    const dir = r.filePaths[0]
+    fs.mkdirSync(dir, { recursive: true })
+    fs.accessSync(dir, fs.constants.W_OK)
+    writeSettings({ videosFolder: dir }, BASE)
+    return videosState()
+  })
+  handle('folders:resetVideos', async () => (writeSettings({ videosFolder: '' }, BASE), videosState()))
   handle('comfy:chooseFolder', async () => {
     const r = await dialog.showOpenDialog(win, { title: 'Your ComfyUI folder', properties: ['openDirectory'] })
     if (r.canceled || !r.filePaths[0]) return null

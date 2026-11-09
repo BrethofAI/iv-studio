@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { applyA11y } from './a11y'
 import { SetupPill } from './components/SetupProgress'
 import { CharacterList, CharacterTrainer } from './components/Characters'
 import Create from './components/Create'
@@ -308,13 +309,16 @@ export default function App() {
   const [welcome, setWelcome] = useState(null)
   const [cloudWiz, setCloudWiz] = useState(false)
   useEffect(() => {
-    window.ivstudio.settings.get().then((s) => !s.onboarded && setWelcome('first'), () => {})
+    window.ivstudio.settings.get().then((s) => (applyA11y(s), !s.onboarded && setWelcome('first')), () => {})
+    // Settings → Accessibility (a11y.js), whenever the settings change (Settings, Check my PC)
+    const a11y = () => window.ivstudio.settings.get().then(applyA11y, () => {})
+    window.addEventListener('iv:settings', a11y)
     const open = () => setWelcome('again')
     window.addEventListener('iv:welcome', open)
     // the cloud setup wizard: from Check my PC and the Cloud page
     const cloud = () => setCloudWiz(true)
     window.addEventListener('iv:cloud-wizard', cloud)
-    return () => (window.removeEventListener('iv:welcome', open), window.removeEventListener('iv:cloud-wizard', cloud))
+    return () => (window.removeEventListener('iv:welcome', open), window.removeEventListener('iv:cloud-wizard', cloud), window.removeEventListener('iv:settings', a11y))
   }, [])
   const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, editRun, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle, openRebuild,remakeClip, replaceSeed }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0

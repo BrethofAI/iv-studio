@@ -47,6 +47,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
     onChanged: on('productions:changed')
   },
   settings: { get: call('settings:get'), set: call('settings:set'), setComfyKey: call('settings:setComfyKey'), setCivitaiKey: call('settings:setCivitaiKey') },
+  // where finished videos go: { path, custom, incognito, free }
+  folders: { videos: call('folders:videos'), chooseVideos: call('folders:chooseVideos'), resetVideos: call('folders:resetVideos') },
   // pathFor: the path of a file dropped on the window.
   replace: {
     meta: call('replace:meta'),

@@ -35,7 +35,7 @@ const clock = (ms) => {
   const s = Math.max(0, Math.floor(ms / 1000))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
-const still = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+const still = () => document.documentElement.classList.contains('rm') || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)
 
 export default function LivePip({ items, now, kindLabel, open, onOff }) {
   const [corner, setCorner] = useState(() => (CORNERS.includes(load('iv.livePipCorner')) ? load('iv.livePipCorner') : 'br'))
@@ -371,9 +371,11 @@ export default function LivePip({ items, now, kindLabel, open, onOff }) {
           <div className="live-pip-empty mono small dim">
             {!item.ours
               ? 'Started outside IV Studio: no picture to show.'
-              : item.kind === 'previews' || item.kind === 'finish'
+              : item.live
                 ? 'The first step’s picture shows here in a few seconds.'
-                : 'This kind of render shows its progress, not a picture, until it’s done.'}
+                : item.kind === 'previews' || item.kind === 'finish'
+                  ? 'No step pictures for this render: they need ComfyUI on this PC and H3’s small preview model (Settings → Setup → H3 live preview decoder).'
+                  : 'This kind of render shows its progress, not a picture, until it’s done.'}
           </div>
         )}
       </div>
