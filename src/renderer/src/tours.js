@@ -280,8 +280,10 @@ export const TOURS = {
   setup: {
     title: 'Setup',
     steps: [
-      { at: '.setup-actions', title: 'Check again', text: 'Checks ComfyUI, its node packs and every model IV Studio uses.' },
-      { at: '.setup .group', title: 'What’s ready', text: 'Each group lists what is ready and what is missing, with a button to download or install it. Downloads are checked against their published hashes.' },
+      { at: '.setup-summary', title: 'Is this PC ready?', text: 'The answer first: whether shots can render, and the one or two buttons that fix it. Restart ComfyUI is here too, for after you install node packs or models.' },
+      { at: '.setup-view', title: 'Needs you, or everything', text: 'Needs you shows only what to fix. Everything lists every model, node pack and character, ready or not.' },
+      { at: '.setup-section', title: 'One card per part', text: 'ComfyUI, the models shots need, node packs, optional tools and characters. A card opens by itself when something in it needs you; click a card’s title to open or fold it.' },
+      { at: '[data-setup="extras"] .setup-section-head', title: 'Optional tools', text: 'Models for the extra tools (effects, pictures, music, Replace), grouped by tool. Download a whole group at once, only for the tools you’ll use. Every download is checked against its published hash.' },
       { at: '.get-comfy', title: 'No ComfyUI yet?', text: 'Get ComfyUI for me downloads ComfyUI’s official portable build for your graphics card into a folder you choose, checks it, unpacks it and starts it. Already have one? Choose its folder instead.' },
       { at: '.comfy-updates', title: 'Updates', text: 'Keeps ComfyUI and its node packs up to date, with a snapshot first so you can undo.' }
     ]

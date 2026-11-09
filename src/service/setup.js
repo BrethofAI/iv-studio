@@ -115,7 +115,7 @@ export async function checkSetup({ comfy, template, manifest, characters, chosen
     const r = resolveModel(m, opts, chosen)
     const found = r?.file
     const detail = !r ? `Not found (${m.match})` : r.how === 'version' ? `${found} · another version of ${m.match}, used in its place` : r.how === 'picked' ? `${found} · your pick in Settings → Models` : found
-    items.push({ id: `model:${m.id}`, label: m.optional ? `${m.label} · for ${m.optionalFor || 'optional tools'}` : m.label, status: found ? 'ok' : m.optional ? 'warn' : 'missing', detail, fix: found ? undefined : `Download into models/${m.folder}`, kind: 'model', model: m.id, size: m.size, optional: !!m.optional, page: m.url.match(/^https:\/\/huggingface\.co\/[^/]+\/[^/]+/)?.[0] })
+    items.push({ id: `model:${m.id}`, label: m.optional ? `${m.label} · for ${m.optionalFor || 'optional tools'}` : m.label, status: found ? 'ok' : m.optional ? 'warn' : 'missing', detail, fix: found ? undefined : `Download into models/${m.folder}`, kind: 'model', model: m.id, size: m.size, optional: !!m.optional, name: m.label, for: m.optional ? m.optionalFor || 'Optional tools' : undefined, page: m.url.match(/^https:\/\/huggingface\.co\/[^/]+\/[^/]+/)?.[0] })
   }
 
   const loras = comboOptions(info, 'LoraLoaderModelOnly', 'lora_name') || []

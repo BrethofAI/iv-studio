@@ -13496,3 +13496,161 @@ button.set-chip:hover {
   margin-left: auto;
   margin-right: 16px;
 }
+
+/* ---------- Setup: a status card, then folding cards ---------- */
+.setup {
+  display: grid;
+  gap: 14px;
+}
+.setup-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px 28px;
+  align-items: center;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  background: var(--ink-2);
+  border-left: 3px solid var(--line-strong);
+}
+.setup-summary.ok {
+  border-left-color: #6ee7a8;
+}
+.setup-summary.warn {
+  border-left-color: var(--red);
+}
+.setup-summary h2 {
+  margin: 4px 0 4px;
+  font: 800 32px/1 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.setup-summary p {
+  margin: 0;
+}
+.setup-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.setup-summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+  max-width: 560px;
+}
+@media (max-width: 1000px) {
+  .setup-summary {
+    grid-template-columns: 1fr;
+  }
+  .setup-summary-actions {
+    justify-content: flex-start;
+  }
+}
+.setup-view {
+  justify-self: start;
+}
+.setup-section-head {
+  width: 100%;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+.setup-section-head .set-card-title {
+  display: grid;
+  gap: 4px;
+}
+.setup-chevron {
+  font-size: 14px;
+  color: var(--paper-dim);
+  width: 14px;
+}
+.setup-section .set-card-body {
+  padding: 0 22px 18px 22px;
+  display: grid;
+  gap: 12px;
+}
+.setup-section.open::before {
+  transform: scaleY(1);
+}
+.setup-section.open .set-card-n {
+  color: var(--red);
+}
+.setup-rows li {
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 9px 0;
+}
+.setup-rows li:last-child {
+  border-bottom: 0;
+}
+.setup-rows .check-icon {
+  padding-top: 0;
+}
+.setup-row-text {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+}
+.setup-row-detail {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.setup-area {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.setup-area:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.setup-area-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.setup-area-head h3 {
+  margin: 0;
+  font: 700 18px/1.1 var(--display);
+  text-transform: uppercase;
+}
+.setup-area-head .btn {
+  margin-left: auto;
+}
+.setup-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.setup-restart {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.restart-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.btn.danger {
+  border-color: var(--red);
+  color: var(--red);
+}
+.setup-row-link {
+  margin-left: 10px;
+  font-size: 11px;
+}

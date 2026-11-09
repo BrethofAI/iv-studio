@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import StartComfy from './StartComfy'
+import StartComfy, { RestartComfy } from './StartComfy'
 import { UpdateSettings } from './Update'
 import Hero, { ART } from './Hero'
 import { ask } from './Confirm'
@@ -258,6 +258,7 @@ function ComfyCard({ n, settings, setSettings, notify, recheck, comfyUp, comfyBu
                 Choose…
               </button>
               {!comfyUp && !comfyBusy && <StartComfy notify={notify} recheck={recheck} />}
+              {(comfyUp || comfyBusy) && <RestartComfy notify={notify} recheck={recheck} />}
             </div>
             {!l.chosen && !l.folder && l.found.length > 1 && (
               <div className="set-found">

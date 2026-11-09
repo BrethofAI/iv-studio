@@ -299,3 +299,50 @@ export async function waitUp(url, { timeoutMs = 6 * 60 * 1000, every = 2000 } = 
   }
   throw new Error('ComfyUI didn’t answer within 6 minutes. Check its window for errors.')
 }
+
+// ---------- restarting (Setup and Settings → Restart ComfyUI) ----------
+// What to stop for a ComfyUI process: on Windows a portable ComfyUI runs inside the console of its .bat, which
+// would sit on "Press any key" after Python ends, so the .bat's cmd.exe goes too (with everything under it).
+// parent: { pid, name, cmd } of the process's parent, or null.
+export function stopTarget(proc, parent = null, platform = process.platform) {
+  if (!proc?.pid) return null
+  if (platform === 'win32' && parent?.pid && /^cmd\.exe$/i.test(parent.name || '') && /\.(bat|cmd)\b/i.test(parent.cmd || '')) return parent.pid
+  return proc.pid
+}
+
+// Stops one ComfyUI (a comfyProcesses entry) and its console. Resolves when the command ran.
+export async function stopComfy(proc, { platform = process.platform, run = execFileText } = {}) {
+  if (!proc?.pid) throw new Error('No ComfyUI process to stop.')
+  if (platform === 'win32') {
+    let parent = null
+    try {
+      const ps = `$p = Get-CimInstance Win32_Process -Filter "ProcessId=${Number(proc.pid)}"; if ($p) { Get-CimInstance Win32_Process -Filter "ProcessId=$($p.ParentProcessId)" | Select-Object ProcessId,Name,CommandLine | ConvertTo-Json -Compress }`
+      const out = (await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps])).trim()
+      if (out) {
+        const j = JSON.parse(out)
+        parent = { pid: j.ProcessId, name: j.Name || '', cmd: j.CommandLine || '' }
+      }
+    } catch {}
+    const pid = stopTarget(proc, parent, platform)
+    await run('taskkill', ['/PID', String(pid), '/T', '/F']).catch(() => {})
+    return { pid, console: pid !== proc.pid }
+  }
+  try {
+    process.kill(proc.pid, 'SIGTERM')
+  } catch {}
+  await new Promise((r) => setTimeout(r, 4000))
+  try {
+    process.kill(proc.pid, 'SIGKILL')
+  } catch {}
+  return { pid: proc.pid, console: false }
+}
+
+// Until nothing answers at the address (ComfyUI has stopped), or false after timeoutMs.
+export async function waitDown(url, { timeoutMs = 30000, every = 1000, up = comfyUp } = {}) {
+  const t0 = Date.now()
+  while (Date.now() - t0 < timeoutMs) {
+    if (!(await up(url, 2000))) return true
+    await new Promise((r) => setTimeout(r, every))
+  }
+  return false
+}

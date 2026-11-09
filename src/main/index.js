@@ -13,7 +13,8 @@ import { RunPod, GPUS as RUNPOD_GPUS } from '../service/runpod'
 import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
 import { isSpeed } from '../service/speed'
 import { comboOptions } from '../service/setup'
-import { comfyHome, comfyProcesses, comfyUp, findComfyElsewhere, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launcherFor, launchersIn, noteLaunch, recentLaunch, sameComfy, waitUp } from '../service/comfylauncher'
+import { managerReq } from '../service/comfyupdate'
+import { comfyHome, comfyProcesses, comfyUp, findComfyElsewhere, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launcherFor, launchersIn, noteLaunch, recentLaunch, sameComfy, stopComfy, waitDown, waitUp } from '../service/comfylauncher'
 import { ComfyInstaller, checkFolder, latestAsset, pickBuild, suggestFolder } from '../service/comfyinstall'
 import { randomBytes } from 'node:crypto'
 import { Edits, FORMATS, LOUDNESS } from '../service/edits'
@@ -1484,6 +1485,67 @@ app.whenReady().then(() => {
     return dir
   })
   handle('comfy:start', () => startComfy())
+  // Restart: ComfyUI-Manager's own restart when it's there (ComfyUI keeps its window and flags), else IV Studio
+  // stops this ComfyUI (and the console of its .bat) and starts it again with the person's launcher. A ComfyUI
+  // that is rendering or has work waiting isn't restarted unless force: the window asks first.
+  let comfyRestarting = null
+  const restartComfy = ({ force = false } = {}) =>
+    (comfyRestarting ||= (async () => {
+      const s = readSettings(BASE)
+      if (!isLocalUrl(s.comfyUrl) || s.target === 'cloud') throw new Error('ComfyUI isn’t on this PC (Settings → ComfyUI), so IV Studio can’t restart it.')
+      const t0 = Date.now()
+      if (!(await comfyUp(s.comfyUrl))) return { ...(await startComfy()), restarted: false }
+      if (!force) {
+        const q = await fetch(`${s.comfyUrl}/queue`, { signal: AbortSignal.timeout(8000) }).then((r) => r.json()).catch(() => null)
+        const busy = (q?.queue_running?.length || 0) + (q?.queue_pending?.length || 0)
+        if (busy) {
+          const err = new Error(`ComfyUI is working on ${busy} job${busy === 1 ? '' : 's'}. Restarting stops ${busy === 1 ? 'it' : 'them'}.`)
+          err.code = 'busy'
+          throw err
+        }
+      }
+      send('comfy:state', { state: 'restarting', detail: 'Restarting ComfyUI' })
+      try {
+        let via = null
+        const comfy = { url: s.comfyUrl, headers: (h = {}) => h }
+        for (const route of ['/manager/reboot', '/v2/manager/reboot']) {
+          try {
+            await managerReq(comfy, route, { method: 'POST', json: {}, timeout: 8000 })
+            via = 'manager'
+          } catch (err) {
+            if (err.code === 'missing') continue
+            if (err.code === 'down' || /did not answer/.test(err.message)) via = 'manager' // the restart drops the connection
+          }
+          break
+        }
+        if (via === 'manager' && !(await waitDown(s.comfyUrl, { timeoutMs: 20000 }))) via = null
+        if (via !== 'manager') {
+          const file = launcherOf(s)
+          if (!file) throw new Error('No ComfyUI launcher found to start it again. Pick one in Settings → ComfyUI.')
+          const proc = sameComfy(await comfyProcesses(), { home: comfyHome(file, { readLink: (p) => shell.readShortcutLink(p) }), url: s.comfyUrl, launcher: file })
+          if (!proc) throw new Error('IV Studio can’t tell which program is this ComfyUI, so it can’t restart it. Close ComfyUI’s window, then press Start ComfyUI.')
+          await stopComfy(proc)
+          if (!(await waitDown(s.comfyUrl, { timeoutMs: 30000 }))) throw new Error('ComfyUI didn’t stop. Close its window, then press Start ComfyUI.')
+          via = 'launcher'
+          fs.rmSync(path.join(BASE, 'comfy-launch.json'), { force: true }) // a fresh start, not a join
+          await startComfy()
+        } else await waitUp(s.comfyUrl)
+        const seconds = Math.round((Date.now() - t0) / 1000)
+        send('comfy:state', { state: 'up', detail: `ComfyUI restarted in ${seconds} s.` })
+        return { restarted: true, via, seconds }
+      } catch (err) {
+        send('comfy:state', { state: 'failed', detail: err.message })
+        throw err
+      }
+    })().finally(() => (comfyRestarting = null)))
+  handle('comfy:restart', async (opts) => {
+    try {
+      return await restartComfy(opts || {})
+    } catch (err) {
+      if (err.code === 'busy') return { busy: true, message: err.message } // the window asks, then sends force
+      throw err
+    }
+  })
 
   // ---------- Get ComfyUI for me (comfyinstall.js): the official portable build, for a PC with no ComfyUI ----------
   // The window hears comfy:install ({ phase: download | check | unpack | start | done | error, got, total, rate,
