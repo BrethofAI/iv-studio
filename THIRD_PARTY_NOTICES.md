@@ -1,6 +1,6 @@
 # Third-party notices
 
-IV Studio ships these components. Their licence texts are in `resources/licenses/` and are installed
+IV Studio ships these components. Settings → About → Credits lists everything it's built on, including the models and tools it downloads. Their licence texts are in `resources/licenses/` and are installed
 with the app.
 
 | Component | Licence | Use |
@@ -10,6 +10,8 @@ with the app.
 | @modelcontextprotocol/sdk | MIT | MCP server |
 | zod | MIT | MCP tool schemas |
 | electron-updater | MIT | Updates from GitHub Releases |
+| JSONata | MIT | Working out partner-node prices |
+| js-yaml | MIT | Reading the Mac update feed (bundled into the app's main script) |
 | Barlow and Barlow Condensed (Jeremy Tribby) | SIL OFL 1.1 | Display type |
 | DM Sans (Colophon Foundry) | SIL OFL 1.1 | Body type |
 | JetBrains Mono (JetBrains) | SIL OFL 1.1 | Monospace type |

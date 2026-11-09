@@ -13042,3 +13042,67 @@ button.set-chip:hover {
   display: grid;
   gap: 3px;
 }
+
+/* Settings -> About -> Credits */
+.modal.credits {
+  width: min(860px, 100%);
+  max-height: min(860px, 100%);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+.modal.credits .modal-head .spacer {
+  flex: 1;
+}
+.credits-search {
+  width: 100%;
+}
+.credits-body {
+  overflow: auto;
+  display: grid;
+  gap: 22px;
+  padding-right: 6px;
+}
+.credits-group h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+.credits-group > p {
+  margin: 0 0 8px;
+}
+.credits-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0;
+}
+.credits-group li {
+  display: grid;
+  gap: 3px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+.credits-name {
+  font-weight: 600;
+  color: var(--cream);
+}
+.credits-name .link-btn {
+  font-weight: 600;
+  color: var(--cream);
+}
+.credits-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.credits-licence {
+  font-size: 11px;
+}
+.credits-foot {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}

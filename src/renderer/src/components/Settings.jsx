@@ -7,6 +7,7 @@ import { setUnblurred } from './Loras'
 import { SetCard, SetField, SetSwitch, Pill, SetPath, SetCode } from './SettingsKit'
 import { startTour } from '../tours'
 import { AccountCard } from './ComfyAccount'
+import Credits from './Credits'
 import { SpeedCards } from './Speed'
 import { savedSpeed } from '../../../service/speed'
 
@@ -736,6 +737,7 @@ function AgentCard({ n, mcp, notify }) {
 }
 
 function AboutCard({ n, info }) {
+  const [credits, setCredits] = useState(false)
   return (
     <SetCard id="about" n={n} title="About">
       <SetField label="IV Studio">
@@ -759,6 +761,14 @@ function AboutCard({ n, info }) {
           </button>
         </div>
       </SetField>
+      <SetField label="Credits" hint="Every model, tool, node pack and library IV Studio is built on: who made it, what it does here and its licence.">
+        <div className="set-inline">
+          <button className="btn btn-small about-credits" onClick={() => setCredits(true)}>
+            Credits
+          </button>
+        </div>
+      </SetField>
+      {credits && <Credits onClose={() => setCredits(false)} />}
     </SetCard>
   )
 }
