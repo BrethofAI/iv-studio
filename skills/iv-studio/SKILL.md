@@ -291,16 +291,19 @@ a recording. A spoken line is the shot's voice line: H3 lip-syncs to it.
 
 ## LoRAs (Civitai and this PC)
 
-LoRAs change how H3 looks and moves: styles, motion, camera, speed. IV Studio finds them on Civitai and keeps
-track of the ones already in ComfyUI.
-1. `list_my_loras` shows the installed H3 LoRAs with their Civitai names, trigger words and the person's
-   favourites; `identify_lora` looks one up on Civitai by its file hash.
-2. `search_loras` (query, tag, sort) finds more; `get_lora` shows a LoRA's versions, trigger words, preview
-   clips and licence. Check the licence before commercial work.
+LoRAs change how a model looks and moves: styles, motion, camera, speed. A LoRA only works with the model family
+it was trained for: `h3` (MiniMax H3: shots, sequences, films, H3 stills), the picture families `flux3`, `flux2`,
+`krea2`, `qwen21`, `zimage`, `sdxl` (with Pony and Illustrious) and `moss` (make_image), and `ltx` and `wan`
+(kept for the person's own ComfyUI workflows; IV Studio's effects bring their own LoRAs).
+1. `list_my_loras` (family, default h3; or all) shows the installed LoRAs with their family, Civitai names,
+   trigger words and the person's favourites; `identify_lora` looks one up on Civitai by its file hash, and
+   `set_lora_family` says which model one is for when IV Studio couldn't tell.
+2. `search_loras` (family, query, tag, sort) finds more; `get_lora` shows a LoRA's versions, trigger words,
+   preview clips and licence. Check the licence before commercial work. Civitai has no Moss category.
 3. `download_lora` installs one (ask the person first; needs `CIVITAI_API_KEY` in this server's
-   environment). It returns the LoRA name.
-4. Use a LoRA by passing `extraLoras: [{ name, strength }]` to `generate_previews` (strength about 0.6 to 1),
-   and put its trigger words in the prompt.
+   environment). It returns the LoRA name and its family.
+4. Use an H3 LoRA by passing `extraLoras: [{ name, strength }]` to `generate_previews` (strength about 0.6 to
+   1), a picture family's in `make_image` `loras` with that family, and put its trigger words in the prompt.
 Real-person LoRAs are never shown. Mature LoRAs appear only if the person turned them on in the app.
 
 ## Images (Create -> Image)

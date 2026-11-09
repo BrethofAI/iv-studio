@@ -515,7 +515,8 @@ export class Images {
     if (tool === 'removebg') graph = removeBgGraph({ image: up, model: st.files.birefnet, prefix })
     else if (tool === 'depth') {
       if (!DEPTH_OUTPUTS.some(([v]) => v === output)) throw new Error(`Output is one of ${DEPTH_OUTPUTS.map(([v]) => v).join(', ')}.`)
-      graph = depthGraph({ image: up, model: st.files.moge, output, prefix })
+      const size = await probe(FFPROBE, image).catch(() => null)
+      graph = depthGraph({ image: up, model: st.files.moge, output, longest: Math.max(size?.width || 0, size?.height || 0), prefix })
       request.output = output
     } else if (tool === 'upscale') {
       const factor = Number(scale) === 4 ? 4 : 2

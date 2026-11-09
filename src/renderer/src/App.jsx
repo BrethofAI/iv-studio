@@ -95,6 +95,7 @@ export default function App() {
   const [lineForCreate, setLineForCreate] = useState(null)
   // a LoRA on its way to Create's LoRA tray (LoRAs > Use in a shot)
   const [loraForCreate, setLoraForCreate] = useState(null)
+  const [loraForImage, setLoraForImage] = useState(null)
   // a picture from Create -> Image on its way to a shot's first frame (Use in a shot)
   const [pictureForCreate, setPictureForCreate] = useState(null)
   // a character picked on the dashboard (New shot with them)
@@ -257,8 +258,12 @@ export default function App() {
     switchSection('video')
     setPage('create')
   }
+  // a LoRA for a picture model goes to Create -> Image (that model's tray); H3's to the shot tray
   const addLoraToCreate = (lora) => {
-    setLoraForCreate(lora)
+    const picture = lora.family && lora.family !== 'h3'
+    if (picture) setLoraForImage(lora)
+    else setLoraForCreate(lora)
+    pickCreateKind(picture ? 'image' : 'video')
     switchSection('video')
     setPage('create')
   }
@@ -410,7 +415,7 @@ export default function App() {
         {page === 'home' && <Dashboard {...ctx} start={startTool} startShotWith={startShotWith} news={unseenNews(info?.version, seenNews)} dismissNews={() => markNewsSeen(info?.version)} />}
         {page === 'create' &&
           (createKind === 'image' ? (
-            <Images {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} />
+            <Images {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} incomingLora={loraForImage} clearIncomingLora={() => setLoraForImage(null)} />
           ) : (
             <Create {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} incomingLine={lineForCreate} clearIncomingLine={() => setLineForCreate(null)} incomingLora={loraForCreate} clearIncomingLora={() => setLoraForCreate(null)} incomingPicture={pictureForCreate} clearIncomingPicture={() => setPictureForCreate(null)} incomingCharacter={characterForCreate} clearIncomingCharacter={() => setCharacterForCreate(null)} incomingRun={runForCreate} clearIncomingRun={() => setRunForCreate(null)} />
           ))}

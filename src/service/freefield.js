@@ -10,7 +10,7 @@ import { resolveModel } from './setup.js'
 
 // What IV Studio offers, and which Freefield app each runs.
 export const CLIP_FX = {
-  reshoot: { app: 'reshoot', label: 'New angle', what: 'The same clip filmed from another angle (MiniMax H3 + MoGe + CrossView)', media: 'video' },
+  reshoot: { app: 'reshoot', label: 'New angle', what: 'The same clip filmed from another angle (MiniMax H3 + MoGe + CrossView)', media: 'video', preview: '41' },
   dub: { app: 'dub', label: 'Dub', what: 'The person says new words, in any language, with new lip movement (LTX-2.5 + DubIt)', media: 'video' },
   cleanplate: { app: 'vfx-clean-plate', label: 'Clean plate', what: 'People and moving things taken out, the background rebuilt (LTX-2.5)', media: 'video' },
   night: { app: 'vfx-day-to-night', label: 'Day to night', what: 'The same shot at night (LTX-2.5)', media: 'video' },
@@ -39,6 +39,48 @@ const SAME_LIKE = [
 const MODEL_FILE = /\.(safetensors|gguf|pt|pth|ckpt|bin|onnx)$/i
 const base = (p) => String(p).replace(/\\/g, '/').split('/').pop()
 
+// New angle's advanced camera: CrossView Warp's own settings (node 5 of Freefield's reshoot graph) a filmmaker may
+// set beyond orbit, height and distance. Field: [min, max] for numbers, or 'bool'.
+export const CAMERA_NODE = '5'
+// what CrossView's live preview route reads (its _PARAMS)
+export const LIVE_PARAMS = ['azimuth', 'elevation', 'distance', 'hfov', 'vertical_shift', 'depth_ratio', 'smooth_depth', 'invert_depth', 'pivot_override', 'pivot_x', 'pivot_y', 'pivot_z', 'keep_source_aim']
+export const CAMERA_FIELDS = {
+  hfov: [0, 120], // the assumed lens, horizontal field of view in degrees (50 is normal; 0 reads it from MoGe)
+  vertical_shift: [-1, 1], // the camera raised or lowered without tilting
+  depth_ratio: [1, 20], // how deep the scene reads: lower flattens, higher exaggerates parallax
+  keep_source_aim: 'bool', // keep looking at what the original shot looked at
+  smooth_depth: 'bool',
+  roll_lock: 'bool'
+}
+export function cameraOverrides(camera = {}) {
+  const out = {}
+  for (const [k, v] of Object.entries(camera || {})) {
+    const rule = CAMERA_FIELDS[k]
+    if (!rule || v === undefined || v === null || v === '') continue
+    if (rule === 'bool') out[k] = !!v
+    else {
+      const n = Number(v)
+      if (!Number.isFinite(n) || n < rule[0] || n > rule[1]) throw new Error(`Camera ${k} is ${rule[0]} to ${rule[1]}.`)
+      out[k] = n
+    }
+  }
+  return out
+}
+
+// Only the nodes an output needs: the output and everything upstream of it (New angle's preview stops at the warp,
+// before H3).
+export function upstream(graph, outIds) {
+  const keep = new Set()
+  const walk = (id) => {
+    id = String(id)
+    if (keep.has(id) || !graph[id]) return
+    keep.add(id)
+    for (const v of Object.values(graph[id].inputs || {})) if (Array.isArray(v) && v.length === 2 && graph[String(v[0])]) walk(v[0])
+  }
+  for (const id of [].concat(outIds)) walk(id)
+  return Object.fromEntries(Object.entries(graph).filter(([k]) => keep.has(k)))
+}
+
 export function loadApp(resourcesDir, id) {
   const dir = path.join(resourcesDir, 'workflows', 'freefield', id)
   const app = JSON.parse(fs.readFileSync(path.join(dir, 'app.json'), 'utf8'))
@@ -46,23 +88,37 @@ export function loadApp(resourcesDir, id) {
   return { app, graph }
 }
 
-// Fill a workflow from values { inputId: value }: each input's bind sets node.field (a template puts it into a
-// sentence: "crossview. {prompt}"). Select inputs take one of their options' values. Seeds of -1 become random.
+// Fill a workflow from values { inputId: value }, as Freefield's schema says (schema/app.schema.json): every input's
+// value is settled first (its default when not given; a seed of -1 becomes random; a multiple select is joined),
+// then each input's binds write it (a template writes a sentence instead, its {input_id} placeholders filled with
+// any input's value), then the chosen option of each select writes its sets (the LoRA and the prompt that go with
+// an effect), placeholders filled the same way.
 export function fillGraph(app, graph, values = {}) {
   const g = JSON.parse(JSON.stringify(graph))
-  for (const input of app.inputs || []) {
-    let v = values[input.id] !== undefined ? values[input.id] : input.default
-    if (v === undefined) continue
-    if (input.type === 'seed' && (v === -1 || v === '' || v == null)) v = Math.floor(Math.random() * 2 ** 31)
-    if (input.type === 'select' && input.options && !input.options.some((o) => o.value === v)) throw new Error(`${input.label || input.id} is one of: ${input.options.map((o) => o.label || o.value).join(', ')}.`)
-    if (input.type === 'slider' && (Number(v) < input.min || Number(v) > input.max)) throw new Error(`${input.label || input.id} is ${input.min} to ${input.max}.`)
-    for (const b of input.bind || []) {
-      const node = g[b.node]
-      if (!node) throw new Error(`${app.id}: no node ${b.node} for ${input.id}`)
-      let val = input.type === 'slider' || input.type === 'seed' ? Number(v) : v
-      if (b.template) val = b.template.replace(/\{(\w+)\}/g, (_, k) => (k === input.id ? String(v) : String(values[k] ?? app.inputs.find((i) => i.id === k)?.default ?? '')))
-      node.inputs[b.field] = val
-    }
+  const inputs = app.inputs || []
+  const v = {}
+  for (const input of inputs) {
+    let x = values[input.id] !== undefined ? values[input.id] : input.default
+    if (input.type === 'seed' && (x === -1 || x === '' || x == null)) x = Math.floor(Math.random() * 2 ** 31)
+    if (x === undefined) continue
+    if (input.type === 'select' && input.options && !input.multiple && !input.options.some((o) => o.value === x)) throw new Error(`${input.label || input.id} is one of: ${input.options.map((o) => o.label || o.value).join(', ')}.`)
+    if (input.type === 'slider' && (Number(x) < input.min || Number(x) > input.max)) throw new Error(`${input.label || input.id} is ${input.min} to ${input.max}.`)
+    if (input.multiple && Array.isArray(x)) x = x.length ? `${input.multiple.prefix || ''}${x.join(input.multiple.join ?? ', ')}${input.multiple.suffix || ''}` : ''
+    v[input.id] = ['slider', 'seed', 'number'].includes(input.type) ? Number(x) : x
+  }
+  const fill = (s) => (typeof s === 'string' ? s.replace(/\{([a-z][a-z0-9_]*)\}/g, (all, k) => (k in v ? String(v[k] ?? '') : all)) : s)
+  const write = (nodeId, field, val, why) => {
+    const node = g[nodeId]
+    if (!node) throw new Error(`${app.id}: no node ${nodeId} for ${why}`)
+    node.inputs[field] = val
+  }
+  for (const input of inputs) {
+    if (!(input.id in v)) continue
+    for (const b of input.bind || []) write(b.node, b.field, b.template ? fill(b.template) : v[input.id], input.id)
+  }
+  for (const input of inputs) {
+    const chosen = input.type === 'select' && (input.options || []).find((o) => o.value === v[input.id])
+    for (const s of chosen?.sets || []) write(s.node, s.field, fill(s.value), `${input.id}=${chosen.value}`)
   }
   return g
 }
@@ -126,8 +182,29 @@ export class FreefieldApps {
   meta(fx) {
     const spec = CLIP_FX[fx]
     if (!spec) throw new Error(`Unknown effect "${fx}". One of: ${Object.keys(CLIP_FX).join(', ')}.`)
-    const { app } = loadApp(this.resourcesDir, spec.app)
-    return { fx, ...spec, name: app.name, summary: app.summary, inputs: app.inputs, outputs: app.outputs, models: app.models, nodes: (app.custom_nodes || []).map((n) => n.repo) }
+    const { app, graph } = loadApp(this.resourcesDir, spec.app)
+    const cam = spec.preview && graph[CAMERA_NODE]?.class_type === 'CrossViewWarp' ? graph[CAMERA_NODE].inputs : null
+    // New angle: the warp node's own settings as Freefield's graph has them, which the live preview must repeat
+    const camera = cam ? Object.fromEntries(LIVE_PARAMS.filter((k) => k in cam).map((k) => [k, cam[k]])) : undefined
+    return { fx, ...spec, name: app.name, summary: app.summary, inputs: app.inputs, outputs: app.outputs, models: app.models, nodes: (app.custom_nodes || []).map((n) => n.repo), camera }
+  }
+
+  // New angle's live picture: once a preview has run, CrossView's own render route (comfyrob/ComfyUI-CrossViewWarp,
+  // crossview_preview_node.py) re-warps its cached clip for any camera in ~50 ms, the same code as a full run.
+  async liveAngle({ fx = 'reshoot', frame = 1, params = {} } = {}) {
+    const c = this.studio().comfy
+    if (c.remote) return { unavailable: true }
+    const body = { node_id: CAMERA_NODE, frame, params: Object.fromEntries(Object.entries(params).filter(([k]) => LIVE_PARAMS.includes(k))) }
+    const res = await fetch(`${c.url}/crossview_preview/render`, { method: 'POST', headers: c.headers({ 'Content-Type': 'application/json' }), body: JSON.stringify(body), signal: AbortSignal.timeout(10000) })
+    if (res.status === 409) return { stale: true } // no cached clip: run the preview again
+    if (res.status === 404) return { unavailable: true } // an older CrossView without the route
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `The live preview failed (${res.status}).`)
+    const buf = Buffer.from(await res.arrayBuffer())
+    let info = {}
+    try {
+      info = JSON.parse(res.headers.get('x-preview-info') || '{}')
+    } catch {}
+    return { image: `data:image/jpeg;base64,${buf.toString('base64')}`, frame: info.frame ?? frame, count: info.count ?? null }
   }
 
   // Whether this ComfyUI can run it: missing node classes and model files.
@@ -139,7 +216,64 @@ export class FreefieldApps {
     const { graph } = loadApp(this.resourcesDir, spec.app)
     const missingNodes = [...new Set(Object.values(graph).map((n) => n.class_type).filter((c) => !info[c]))]
     const { missing } = swapModels(graph, info, studio.manifest)
-    return { fx, ready: !missingNodes.length && !missing.length, missingNodes, missingModels: missing }
+    const out = { fx, ready: !missingNodes.length && !missing.length, missingNodes, missingModels: missing }
+    if (spec.preview) {
+      // the preview needs only the warp half (MoGe + CrossView), not H3
+      const part = upstream(graph, spec.preview)
+      const pn = [...new Set(Object.values(part).map((n) => n.class_type).filter((c) => !info[c]))]
+      const pm = swapModels(part, info, studio.manifest).missing
+      out.preview = { ready: !pn.length && !pm.length, missingNodes: pn, missingModels: pm }
+    }
+    return out
+  }
+
+  // New angle's preview: only the depth and warp half of the graph (MoGe + CrossView Warp), the guide H3 is given,
+  // on the first seconds of the clip. Seconds, not minutes; shows the new camera position and the gaps H3 will fill.
+  async previewAngle({ fx = 'reshoot', file, values = {}, camera = null, seconds = 2, onProgress = () => {} }) {
+    const spec = CLIP_FX[fx]
+    if (!spec?.preview) throw new Error(`${spec?.label || fx} has no preview.`)
+    if (!file || !fs.existsSync(file)) throw new Error('Pick a clip.')
+    const studio = this.studio()
+    if (studio.comfy.remote) throw new Error(`${spec.label} runs on this PC’s ComfyUI.`)
+    const { app, graph } = loadApp(this.resourcesDir, spec.app)
+    const info = await studio.comfy.objectInfo()
+    const vals = { ...values }
+    const media = (app.inputs || []).find((i) => i.type === 'video')
+    vals[media.id] = await studio.comfy.upload(file, 'iv_studio/clipfx')
+    // the preview's own length: the input's slider minimum or more, never past what was asked for
+    const dur = (app.inputs || []).find((i) => i.id === 'duration')
+    if (dur) vals.duration = Math.max(dur.min ?? 1, Math.min(Number(vals.duration ?? dur.default ?? seconds), seconds))
+    const filled = fillGraph(app, graph, vals)
+    if (camera && filled[CAMERA_NODE]?.class_type === 'CrossViewWarp') Object.assign(filled[CAMERA_NODE].inputs, cameraOverrides(camera))
+    const part = upstream(filled, spec.preview)
+    const missingNodes = [...new Set(Object.values(part).map((n) => n.class_type).filter((c) => !info[c]))]
+    if (missingNodes.length) throw new Error(`The preview needs ComfyUI nodes this one doesn’t have (${missingNodes.join(', ')}). Install missing node packs on Setup, then restart ComfyUI.`)
+    const { graph: g, missing } = swapModels(part, info, studio.manifest)
+    if (missing.length) throw new Error(`The preview needs ${missing.join(', ')}. Download on Setup.`)
+    const stamp = Date.now().toString(36)
+    for (const n of Object.values(g)) if (n.inputs && 'filename_prefix' in n.inputs) n.inputs.filename_prefix = `iv_studio/clipfx/preview_${stamp}`
+    const job = await studio.submitGraph({ kind: `clipfx:${fx}-preview`, graph: g, name: `${spec.label} preview`, plan: { clipfx: { fx, app: spec.app, from: file, outputs: app.outputs, preview: true } } })
+    let j = job
+    for (const end = Date.now() + 10 * 60e3; Date.now() < end; await new Promise((r) => setTimeout(r, 1000))) {
+      j = await studio.refreshJob(job.id)
+      onProgress(j)
+      if (['success', 'error', 'cancelled'].includes(j.status)) break
+    }
+    if (j.status !== 'success') throw new Error(j.error || `The preview ${j.status || 'took too long'}.`)
+    const dir = path.join(this.dir, '_previews')
+    fs.mkdirSync(dir, { recursive: true })
+    for (const o of j.outputs || []) {
+      const src = await studio.localCopy(o, path.join(this.dir, '_comfy'))
+      if (!src || !fs.existsSync(src)) continue
+      const dest = path.join(dir, `angle_${stamp}${path.extname(src)}`)
+      fs.copyFileSync(src, dest)
+      if (path.dirname(src) === path.join(this.dir, '_comfy')) fs.rmSync(src, { force: true })
+      // keep the last 12 previews
+      const old = fs.readdirSync(dir).map((f) => path.join(dir, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs).slice(12)
+      for (const f of old) fs.rmSync(f, { force: true })
+      return { file: dest, seconds: j.seconds, camera: { ...values, ...cameraOverrides(camera) } }
+    }
+    throw new Error('The preview finished but saved nothing.')
   }
 
   async statusAll() {
@@ -150,7 +284,7 @@ export class FreefieldApps {
 
   // Runs one: file (a video or a picture on this PC), last (transitions: the last frame), values (the app's inputs).
   // Resolves when ComfyUI finishes, with { files: [{ label, file, kind }] } copied into clipfx/.
-  async run({ fx, file, last = null, values = {}, name, onProgress = () => {} }) {
+  async run({ fx, file, last = null, values = {}, camera = null, name, onProgress = () => {} }) {
     const spec = CLIP_FX[fx]
     if (!spec) throw new Error(`Unknown effect "${fx}".`)
     if (!file || !fs.existsSync(file)) throw new Error(spec.media === 'image' ? 'Pick a picture.' : 'Pick a clip.')
@@ -170,6 +304,7 @@ export class FreefieldApps {
       vals[media[1].id] = await studio.comfy.upload(last, 'iv_studio/clipfx')
     }
     const filled = fillGraph(app, graph, vals)
+    if (camera && filled[CAMERA_NODE]?.class_type === 'CrossViewWarp') Object.assign(filled[CAMERA_NODE].inputs, cameraOverrides(camera))
     const { graph: g, missing } = swapModels(filled, info, studio.manifest)
     if (missing.length) throw new Error(`${spec.label} needs ${missing.join(', ')}. Download on Setup.`)
     const stamp = Date.now().toString(36)

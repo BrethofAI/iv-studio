@@ -38,6 +38,22 @@ Simple words for people new to AI video. See [what's new in 1.1](#whats-new-in-1
 
 ## What's new in 1.1
 
+- **Effects on any clip.** Right-click a clip in the editor → Effects…: New angle (the same clip from another
+  camera position: MiniMax H3 with MoGe depth and CrossView Warp), Dub (new words in any language, with new lip
+  movement), Clean plate, Day to night, Add water, SDR to HDR, Remove background and Smooth or slow motion. The
+  result takes the clip's place, and Undo brings it back. Built on [Freefield](https://github.com/neuregex/freefield)'s apps (MIT).
+- **See the new angle before you render it.** New angle draws the camera from above and from the side against
+  the original, says the move in words, and marks the range the CrossView LoRA was trained on. Preview this
+  angle runs only the depth and warp (seconds, free), then re-warps live as you drag the sliders or the picture;
+  magenta shows what H3 will have to invent. Advanced camera has the lens, lens shift, depth relief and aim.
+- **Effects, Sounds and picture tools.** Workflows → Effects turns a photo into an effect clip, a transformation
+  or a transition. Audio → Sounds makes sound effects, ambiences, one-shots and loops with Stable Audio 3.
+  Create → Image → Tools inpaints (paint over a part and describe it), relights, removes backgrounds, upscales
+  and makes depth or normal maps.
+- **LoRAs for every model.** The LoRAs page and every LoRA picker cover MiniMax H3, LTX-2.5, Wan 2.1, Flux 3
+  Klein, Flux.2 Klein, Krea 2, Qwen Image 2.1, Z-Image Turbo, SDXL (with Pony and Illustrious) and Moss: find a
+  model's LoRAs on Civitai, see yours sorted by model, and send one to that model's tray. A LoRA IV Studio
+  can't place can be assigned by hand.
 - **Seedance 2.5 in Create.** A model switch beside MiniMax H3: the same shots on ByteDance's Seedance 2.5,
   through ComfyUI's partner nodes, on your Comfy.org credits. Cheap 480p drafts to try ideas, or 720p and
   1080p takes, 4 to 30 seconds. The price shows on the button and you confirm before anything is charged.
@@ -63,6 +79,12 @@ Simple words for people new to AI video. See [what's new in 1.1](#whats-new-in-1
   card into a folder you choose, checks it, unpacks it and starts it. Already have one? IV Studio keeps using it.
 - **Cloud setup you can follow.** Setting up RunPod or Modal shows each step with a timer and the time left,
   and tells you when it's ready (1.0.6). Modal's sign-in, sign-out and new accounts work (1.0.3 to 1.0.5).
+- **Updates on a Mac.** Mac copies now download and install new versions themselves, like Windows and Linux:
+  **Restart to update**, or it installs when you quit. (IV Studio needs to be in your Applications folder.)
+- **Training on Fizgig 9.** Character training uses Fizgig 9.3.2, on this PC, Modal and RunPod. RunPod training
+  pods start from Fizgig's own RunPod template, so your training time supports Fizgig too.
+- **Credits.** Settings → About → Credits lists every model, tool, node pack and library IV Studio is built on:
+  who made it, what it does here and its licence.
 
 ## What's new in 1.0
 
@@ -935,7 +957,7 @@ cloud renders don't see them yet. Training a character runs on your PC, RunPod o
 
 ## Agents (MCP)
 
-IV Studio includes a local MCP server (stdio) with 172 tools. It uses the same projects, characters, voices
+IV Studio includes a local MCP server (stdio) with 184 tools. It uses the same projects, characters, voices
 and songs as the window, so Claude Code or any MCP client can render shots and sequences, make pictures,
 speak lines, make music, cut them together and export. **Settings → Agents** has the command for your
 install, a message to paste into any agent, and a button that adds the IV Studio skill to Claude Code.

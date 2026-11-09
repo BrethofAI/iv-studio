@@ -2,6 +2,26 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.0',
+    items: [
+      { text: 'Effects on any clip in the editor (right-click → Effects…): a new camera angle, dubbing into any language with new lip movement, clean plates, day to night, water, SDR to HDR, background removal and smooth or slow motion. Built on Freefield’s apps.' },
+      { text: 'New angle shows the camera move from above and from the side, says it in words, and previews the shot from the new angle live before H3 renders it. Lens, lens shift and depth relief sit under Advanced camera.' },
+      { text: 'Workflows → Effects turns a photo into an effect clip, a transformation or a transition. Audio → Sounds makes sound effects, ambiences and loops with Stable Audio 3, ready for A2.' },
+      { text: 'Picture tools in Create → Image: inpaint by painting over a part, relight, remove the background, upscale 2× or 4×, and depth or normal maps.' },
+      { text: 'LoRAs for every model, not just H3: pick MiniMax H3, LTX-2.5, Wan 2.1, Flux 3 Klein, Flux.2 Klein, Krea 2, Qwen Image 2.1, Z-Image, SDXL or Moss, find its LoRAs on Civitai and use them in that model’s tray.' },
+      { text: 'Closing and reopening IV Studio while ComfyUI starts no longer starts a second ComfyUI.' },
+      { text: 'Seedance 2.5 in Create: a model switch beside MiniMax H3, on your Comfy.org credits. Cheap 480p drafts or 720p and 1080p takes, 4 to 30 seconds; the price shows first and you confirm before anything is charged.' },
+      { text: 'Your Comfy account in Settings and the title bar, with every paid partner model priced before it runs.' },
+      { text: 'Free finishes for Seedance takes on your own graphics card (SeedVR2, DLSS 5, or an H3 redraw), and a strength for each upscaler.' },
+      { text: 'Speed presets (Quality, Balanced, Fast, Low memory) so smaller cards render too. Check my PC picks one for you.' },
+      { text: 'Compare up to four versions in sync: side by side, as a wipe or in a grid, zoomed on the same spot.' },
+      { text: 'The Library shows how each render was made: model, size, seed, finish, render time, cost and the prompt.' },
+      { text: 'Simple words for people new to AI video, and Get ComfyUI for me when there isn’t one yet.' },
+      { text: 'Mac copies now install their own updates, like Windows and Linux.' },
+      { text: 'Character training moves to Fizgig 9; RunPod training starts from Fizgig’s own template. Settings → About → Credits lists everything IV Studio is built on.' }
+    ]
+  },
+  {
     version: '1.0.8',
     items: [
       { text: 'Settings → Accessibility: bigger text, higher contrast text, reduce motion, clear focus outlines and underlined links. Secondary text is easier to read for everyone, too.' },

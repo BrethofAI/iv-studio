@@ -32,7 +32,7 @@ const sizeOf = (aspect, mp) => {
 }
 
 // Create -> Image: Generate and Edit with the person's own image models, their LoRAs, and a gallery.
-export default function Images({ kindSwitch, notify, go, pictureToShot }) {
+export default function Images({ kindSwitch, notify, go, pictureToShot, incomingLora = null, clearIncomingLora = () => {} }) {
   const [status, setStatus] = useState(null)
   const [form, setForm] = useState(savedForm)
   const [sets, setSets] = useState([])
@@ -71,6 +71,18 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
   // a stale saved form from before Tools, or Tools picked: the model steps below stay on generate/edit
   const usable = families.filter((f) => f.ready && (form.mode !== 'edit' || f.edit))
   const fam = families.find((f) => f.id === form.family && f.ready) || null
+  // a LoRA sent from the LoRAs page: switch to its model and put it in the tray
+  useEffect(() => {
+    if (!incomingLora || !status) return
+    const f = families.find((x) => x.id === incomingLora.family && x.ready)
+    clearIncomingLora()
+    if (!f) return notify(`${incomingLora.title || loraTitle(incomingLora.name)} is for a picture model that isn’t set up on this PC yet (Setup).`)
+    const info = loraInfo(incomingLora.name)
+    const words = info?.prefs?.autoTrigger !== false ? (incomingLora.words || []).filter((w) => w && !form.prompt.includes(w)) : []
+    const keep = f.id === form.family ? form.loras.filter((l) => l.name !== incomingLora.name) : []
+    set({ mode: form.mode === 'edit' && f.edit ? 'edit' : 'generate', family: f.id, model: f.models.includes(form.model) ? form.model : f.models[0], loras: [...keep, { name: incomingLora.name, strength: info?.prefs?.strength ?? 1 }], prompt: words.length ? `${words.join(', ')}. ${form.prompt}` : form.prompt })
+    notify(`${incomingLora.title || loraTitle(incomingLora.name)} is on, with ${f.label}.`, 'info')
+  }, [incomingLora, status])
   // keep a family and checkpoint that fit the mode
   useEffect(() => {
     if (!status) return
@@ -81,7 +93,6 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
   }, [status, form.mode, form.family])
 
   const loraInfo = (name) => yours?.find((x) => x.name === name)
-  const familyFilter = useMemo(() => (fam ? { label: fam.label, test: (name) => new RegExp(fam.loraPattern, 'i').test(name) } : null), [fam])
   function addLora({ name, words = [], title }) {
     if (form.loras.some((l) => l.name === name)) return notify(`${title || loraTitle(name)} is already on.`, 'info')
     const info = loraInfo(name)
@@ -229,7 +240,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
                 </button>
               </div>
             </div>
-            {picking && <LoraPicker family={familyFilter} notify={notify} go={go} onClose={() => setPicking(false)} onPick={addLora} />}
+            {picking && <LoraPicker family={fam?.id || 'h3'} notify={notify} go={go} onClose={() => setPicking(false)} onPick={addLora} />}
           </section>
 
           {editMode && (

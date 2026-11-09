@@ -283,7 +283,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
     tool: call('images:tool'),
     saveMask: call('images:saveMask')
   },
-  clipfx: { meta: call('clipfx:meta'), status: call('clipfx:status'), run: call('clipfx:run'), runs: call('clipfx:runs'), deleteRun: call('clipfx:deleteRun'), onProgress: on('clipfx:progress') },
+  clipfx: { meta: call('clipfx:meta'), status: call('clipfx:status'), run: call('clipfx:run'),
+    preview: call('clipfx:preview'), live: call('clipfx:live'), runs: call('clipfx:runs'), deleteRun: call('clipfx:deleteRun'), onProgress: on('clipfx:progress') },
   library: { all: call('library:all'), toEdit: call('library:toEdit') },
   loras: {
     meta: call('loras:meta'),

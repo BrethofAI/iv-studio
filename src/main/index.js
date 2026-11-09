@@ -47,7 +47,7 @@ import { ACE_KEYS, monoDecoder, Music, MUSIC_DEFAULTS, MUSIC_ENGINES, REMIX } fr
 import { SOUND_ENGINE, SOUND_KINDS, SOUND_LIMITS, Sounds } from '../service/sounds'
 import { Images } from '../service/images'
 import { RefMods } from '../service/refmods'
-import { Civitai, CIVITAI_SITES, LORA_SORTS, LORA_TAGS } from '../service/civitai'
+import { Civitai, CIVITAI_SITES, LORA_FAMILIES, LORA_SORTS, LORA_TAGS } from '../service/civitai'
 import { Comfy } from '../service/comfy'
 import { afterPrompt, getBalance } from '../service/comfyaccount'
 import { infoFor, priceGraph } from '../service/pricing'
@@ -501,16 +501,24 @@ app.whenReady().then(() => {
   handle('clipfx:status', (fx) => (fx ? clipfx.status(fx) : clipfx.statusAll()))
   handle('clipfx:runs', () => clipfx.runs())
   handle('clipfx:deleteRun', (id) => clipfx.deleteRun(id))
-  handle('clipfx:run', async ({ fx, file, last = null, start = null, length = null, values = {}, name }) => {
+  // a clip's own stretch (the edit's in point and length) as its own file, made once
+  const clipStretch = async (file, start, length) => {
+    if (!length || /\.(png|jpe?g|webp|bmp)$/i.test(file)) return file
+    const dir = path.join(DATA, 'clipfx', '_sources')
+    fs.mkdirSync(dir, { recursive: true })
+    const src = path.join(dir, `${path.basename(file).replace(/\.[^.]+$/, '')}_${Math.round((start || 0) * 1000)}_${Math.round(length * 1000)}.mp4`)
+    if (!fs.existsSync(src)) await edits.run(['-y', '-hide_banner', '-loglevel', 'error', '-ss', String(start || 0), '-i', file, '-t', String(length), '-c:v', 'libx264', '-crf', '14', '-preset', 'fast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', src])
+    return src
+  }
+  handle('clipfx:preview', async ({ fx = 'reshoot', file, start = null, length = null, values = {}, camera = null }) => {
     await voices.release()
-    let src = file
-    if (length && !/\.(png|jpe?g|webp|bmp)$/i.test(file)) {
-      const dir = path.join(DATA, 'clipfx', '_sources')
-      fs.mkdirSync(dir, { recursive: true })
-      src = path.join(dir, `${path.basename(file).replace(/\.[^.]+$/, '')}_${Math.round((start || 0) * 1000)}_${Math.round(length * 1000)}.mp4`)
-      if (!fs.existsSync(src)) await edits.run(['-y', '-hide_banner', '-loglevel', 'error', '-ss', String(start || 0), '-i', file, '-t', String(length), '-c:v', 'libx264', '-crf', '14', '-preset', 'fast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', src])
-    }
-    const r = await clipfx.run({ fx, file: src, last, values, name, onProgress: (j) => send('clipfx:progress', { fx, status: j.status, progress: j.progress }) })
+    return clipfx.previewAngle({ fx, file: await clipStretch(file, start, length), values, camera, onProgress: (j) => send('clipfx:progress', { fx, preview: true, status: j.status, progress: j.progress }) })
+  })
+  handle('clipfx:live', (opts) => clipfx.liveAngle(opts))
+  handle('clipfx:run', async ({ fx, file, last = null, start = null, length = null, values = {}, camera = null, name }) => {
+    await voices.release()
+    const src = await clipStretch(file, start, length)
+    const r = await clipfx.run({ fx, file: src, last, values, camera, name, onProgress: (j) => send('clipfx:progress', { fx, status: j.status, progress: j.progress }) })
     const main = r.files.find((f) => f.kind === 'video') || r.files[0]
     return { ...r, media: main ? await edits.addMedia(main.file, { type: 'clipfx', fx, from: file, label: r.title }) : null }
   })
@@ -617,7 +625,7 @@ app.whenReady().then(() => {
   handle('images:saveMask', (dataUrl) => images.saveMask(dataUrl))
   // ---------- LoRAs: Civitai's H3 LoRAs and the ones on this PC ----------
   civitai = new Civitai({ dataDir: DATA, comfy: new Comfy(readSettings(BASE).comfyUrl), key: () => unseal(readSettings(BASE).civitaiKey), mature: () => !!readSettings(BASE).civitaiMature, onProgress: (u) => send('loras:progress', u) })
-  handle('loras:meta', () => ({ tags: LORA_TAGS, sorts: LORA_SORTS, sites: CIVITAI_SITES, mature: !!readSettings(BASE).civitaiMature, hasKey: !!readSettings(BASE).civitaiKey }))
+  handle('loras:meta', () => ({ tags: LORA_TAGS, sorts: LORA_SORTS, families: LORA_FAMILIES, sites: CIVITAI_SITES, mature: !!readSettings(BASE).civitaiMature, hasKey: !!readSettings(BASE).civitaiKey }))
   handle('loras:search', (opts) => civitai.search(opts))
   handle('loras:model', (id) => civitai.model(id))
   handle('loras:download', (opts) => civitai.download(opts))

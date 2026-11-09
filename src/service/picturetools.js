@@ -53,13 +53,14 @@ export function removeBgGraph({ image, model = 'birefnet.safetensors', prefix })
   }
 }
 
-export function depthGraph({ image, model = 'moge_2_vitl_normal_fp16.safetensors', output = 'depth_colored', prefix }) {
+// longest: the picture's longer side; over 2048 px it is brought down first (as Freefield's app does), never up
+export function depthGraph({ image, model = 'moge_2_vitl_normal_fp16.safetensors', output = 'depth_colored', longest = 0, prefix }) {
+  const big = longest > 2048
   return {
     1: { class_type: 'LoadImage', inputs: { image } },
-    // pictures over 2048 px on the long side are brought down first, as Freefield's app does
-    2: { class_type: 'ImageScaleToMaxDimension', inputs: { image: ['1', 0], upscale_method: 'lanczos', largest_size: 2048 } },
+    ...(big ? { 2: { class_type: 'ImageScaleToMaxDimension', inputs: { image: ['1', 0], upscale_method: 'lanczos', largest_size: 2048 } } } : {}),
     3: { class_type: 'LoadMoGeModel', inputs: { model_name: model } },
-    4: { class_type: 'MoGeInference', inputs: { moge_model: ['3', 0], image: ['2', 0], resolution_level: 2, fov_x_degrees: 0, batch_size: 4, force_projection: true, apply_mask: true, refine_steps: 3 } },
+    4: { class_type: 'MoGeInference', inputs: { moge_model: ['3', 0], image: [big ? '2' : '1', 0], resolution_level: 2, fov_x_degrees: 0, batch_size: 4, force_projection: true, apply_mask: true, refine_steps: 3 } },
     5: { class_type: 'MoGeRender', inputs: { moge_geometry: ['4', 0], output } },
     6: save(['5', 0], prefix)
   }

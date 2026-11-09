@@ -101,6 +101,7 @@ export default function PictureTools({ modeStep, notify, onQueued, incoming, cle
   const [mask, setMask] = useState(null) // a PNG data URL
   const [busy, setBusy] = useState(false)
   const [dl, setDl] = useState({})
+  const [shape, setShape] = useState([1, 1]) // the picture's own width and height, for the summary frame
   const set = (p) => setForm((f) => ({ ...f, ...p }))
   const check = () => I().toolsStatus().then(setSt, (err) => setSt({ error: err.message, tools: [] }))
   useEffect(() => {
@@ -134,7 +135,8 @@ export default function PictureTools({ modeStep, notify, onQueued, incoming, cle
     setBusy(true)
     try {
       const maskFile = form.tool === 'inpaint' && mask ? await I().saveMask(mask) : null
-      const rec = await I().tool({ ...form, mask: maskFile, seed: form.seed === '' ? null : Number(form.seed), scale: Number(form.scale) })
+      const { picture, ...rest } = form
+      const rec = await I().tool({ ...rest, image: picture, mask: maskFile, seed: form.seed === '' ? null : Number(form.seed), scale: Number(form.scale) })
       onQueued(rec)
       notify(`${tool.label} started: it lands in Your pictures below.`, 'info')
     } catch (err) {
@@ -216,9 +218,11 @@ export default function PictureTools({ modeStep, notify, onQueued, incoming, cle
             </div>
           )}
           {form.picture && form.tool === 'inpaint' && (
-            <button className="link-btn small" onClick={() => (set({ picture: null }), setMask(null))}>
-              Another picture
-            </button>
+            <div className="media-actions flow-left">
+              <button className="btn btn-small" onClick={() => (set({ picture: null }), setMask(null))}>
+                Another picture
+              </button>
+            </div>
           )}
         </section>
 
@@ -277,7 +281,9 @@ export default function PictureTools({ modeStep, notify, onQueued, incoming, cle
           <span className="dim">{tool?.label || 'Tools'}</span>
         </div>
         <div className="shot-frame-wrap">
-          <div className="shot-frame">{form.picture ? <img src={fileUrl(form.picture)} alt="" /> : <span className="shot-frame-empty mono">no picture yet</span>}</div>
+          <div className="shot-frame" style={{ aspectRatio: `${shape[0]} / ${shape[1]}`, '--ar': shape[0] / shape[1] }}>
+            {form.picture ? <img src={fileUrl(form.picture)} alt="" onLoad={(e) => setShape([e.target.naturalWidth, e.target.naturalHeight])} /> : <span className="shot-frame-empty mono">no picture yet</span>}
+          </div>
         </div>
         <dl className="shot-facts">
           <div>

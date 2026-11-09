@@ -3,7 +3,7 @@
 // another build are swapped in.
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import { CLIP_FX, fillGraph, loadApp, swapModels } from '../src/service/freefield.js'
+import { CLIP_FX, cameraOverrides, fillGraph, loadApp, swapModels, upstream } from '../src/service/freefield.js'
 
 let n = 0
 const ok = (name, fn) => (fn(), n++, console.log('ok ', name))
@@ -35,6 +35,26 @@ ok('filling: values, templates, random seeds, and select and slider checks', () 
   assert.doesNotThrow(() => fillGraph(fx.app, fx.graph, { effect: effect.options[0].value }))
 })
 
+ok('a chosen option writes its sets: the effect’s LoRA and its prompt, with {subject} and {details} filled', () => {
+  const { app, graph } = loadApp(RES, 'effects')
+  const opt = app.inputs.find((i) => i.id === 'effect').options.find((o) => o.value === 'crying')
+  const g = fillGraph(app, graph, { effect: 'crying', subject: 'an old fisherman', details: 'Rain on the window.' })
+  for (const s of opt.sets) {
+    const got = g[s.node].inputs[s.field]
+    if (/\{subject\}/.test(s.value)) {
+      assert.ok(got.includes('an old fisherman') && got.includes('Rain on the window.') && !/\{\w+\}/.test(got), `the prompt is filled: ${got}`)
+    } else assert.equal(got, s.value)
+  }
+  assert.equal(g.ff_effect.inputs.lora_name, 'crying_20_epochs.safetensors')
+  // another choice, another LoRA
+  assert.notEqual(fillGraph(app, graph, { effect: 'laughing' }).ff_effect.inputs.lora_name, 'crying_20_epochs.safetensors')
+  // every app's options' sets point at real nodes
+  for (const spec of Object.values(CLIP_FX)) {
+    const a = loadApp(RES, spec.app)
+    for (const i of a.app.inputs) for (const o of i.options || []) for (const s of o.sets || []) assert.ok(a.graph[s.node], `${spec.app}: ${i.id}=${o.value} sets missing node ${s.node}`)
+  }
+})
+
 ok('model files this PC has as another build are swapped in; the rest are reported', () => {
   const { app, graph } = loadApp(RES, 'reshoot')
   const te = Object.values(graph).find((nd) => /qwen3vl_32b_minimax_h3/.test(JSON.stringify(nd.inputs)))
@@ -55,6 +75,17 @@ ok('model files this PC has as another build are swapped in; the rest are report
   assert.equal(Object.values(r.graph).find((nd) => nd.class_type === te.class_type && nd.inputs[field]).inputs[field], ivTe, 'the int8 encoder is swapped for IV Studio’s')
   info[te.class_type].input.required[field] = [['something_else.safetensors']]
   assert.ok(swapModels(graph, info, manifest).missing.some((m) => /qwen3vl_32b/.test(m)), 'nothing to swap in: reported missing')
+})
+
+ok('New angle preview: only the depth and warp half, and the advanced camera is checked', () => {
+  const { app, graph } = loadApp(RES, 'reshoot')
+  const part = upstream(fillGraph(app, graph, { clip: 'a.mp4', azimuth: 40 }), CLIP_FX.reshoot.preview)
+  const kinds = Object.values(part).map((n) => n.class_type)
+  for (const k of ['LoadVideo', 'CrossViewPrepareClip', 'MoGeInference', 'CrossViewWarp', 'SaveVideo']) assert.ok(kinds.includes(k), k)
+  assert.ok(!kinds.some((k) => /MiniMax|UNETLoader|KSampler|SamplerCustom/.test(k)), 'no H3 in the preview')
+  assert.equal(part['5'].inputs.azimuth, 40)
+  assert.deepEqual(cameraOverrides({ hfov: 35, keep_source_aim: 0, vertical_shift: '0.2', nope: 1 }), { hfov: 35, keep_source_aim: false, vertical_shift: 0.2 })
+  assert.throws(() => cameraOverrides({ hfov: 200 }), /0 to 120/)
 })
 
 console.log(`\n${n} passed`)

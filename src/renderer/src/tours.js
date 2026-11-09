@@ -244,10 +244,11 @@ export const TOURS = {
   loras: {
     title: 'LoRAs',
     steps: [
-      { at: '.lora-tabs', title: 'Discover or yours', text: 'Discover finds LoRAs on Civitai. Yours shows the LoRAs already in ComfyUI.' },
+      { at: '.lora-families', title: 'Pick a model', text: 'LoRAs only work with the model they were trained for. Pick one: MiniMax H3 for shots, or a picture model (Flux, Krea, Qwen, Z-Image, SDXL, Moss) for Create → Image. The number is how many you already have.' },
+      { at: '.lora-tabs', title: 'Discover or yours', text: 'Discover finds that model’s LoRAs on Civitai. Yours shows the ones already in ComfyUI; open All to tell IV Studio which model an unknown LoRA is for.' },
       { at: '.lora-bar', title: 'Search', text: 'Search by name and sort by downloads, rating or newest.' },
       { at: '.lora-tags', title: 'Kinds', text: 'Narrow it down to styles, concepts, camera moves and more.' },
-      { at: '.lora-card', title: 'A LoRA', text: 'Hover to play its clip. Click for its details, licence and trigger words, and download it or use it in a shot. Downloads need your Civitai key in Settings.' }
+      { at: '.lora-card', title: 'A LoRA', text: 'Hover to play its clip. Click for its details, licence and trigger words, and download it or use it in a shot or a picture. Downloads need your Civitai key in Settings.' }
     ]
   },
   cloud: {

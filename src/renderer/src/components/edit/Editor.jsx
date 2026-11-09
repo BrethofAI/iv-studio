@@ -373,11 +373,11 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
   }
   // Effects… (Freefield's apps, freefield.js) on the clip's own stretch. The result takes the clip's place, keeping
   // its start; one longer than the clip (slow motion) goes on the track above instead, so nothing after it moves.
-  async function runFx(clip, { fx, values, label }) {
+  async function runFx(clip, { fx, values, camera = null, label }) {
     const m = edit.media[clip.media]
     notify(`${label}: working on ${m.name}. It takes the clip's place when it's done (a few minutes).`, 'info')
     try {
-      const r = await window.ivstudio.clipfx.run({ fx, file: m.path, start: clip.in || 0, length: clipLength(clip), values, name: `${label} · ${m.name}` })
+      const r = await window.ivstudio.clipfx.run({ fx, file: m.path, start: clip.in || 0, length: clipLength(clip), values, camera, name: `${label} · ${m.name}` })
       if (!r.media) throw new Error(`${label} made no video.`)
       const e = editRef.current
       const len = clipLength(clip)
@@ -689,7 +689,7 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
           onGen={genClicked}
         />
         {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
-        {fxFor && <ClipFxDialog clipName={edit.media[fxFor.media]?.name || 'Clip'} length={clipLength(fxFor)} onRun={(spec) => runFx(fxFor, spec)} onClose={() => setFxFor(null)} />}
+        {fxFor && <ClipFxDialog clipName={edit.media[fxFor.media]?.name || 'Clip'} length={clipLength(fxFor)} clip={{ file: edit.media[fxFor.media]?.path, start: fxFor.in || 0, length: clipLength(fxFor) }} onRun={(spec) => runFx(fxFor, spec)} onClose={() => setFxFor(null)} />}
         {genSpec && <GenDialog edit={edit} spec={genSpec} characters={characters} notify={notify} onStart={startGen} onClose={() => setGenSpec(null)} />}
         {picking && (
           <PickDialog

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { CameraRig } from './CameraRig'
 
 // Edit → right-click a clip → Effects…: Freefield's video apps on the clip's own stretch (freefield.js). Pick an
 // effect, set what it asks for (drawn from the app's own inputs), and run it; the result takes the clip's place.
@@ -71,11 +72,12 @@ function Field({ input, value, onChange }) {
 }
 
 export { Field }
-export function ClipFxDialog({ clipName, length, onRun, onClose }) {
+export function ClipFxDialog({ clipName, length, clip = null, onRun, onClose }) {
   const [metas, setMetas] = useState(null)
   const [status, setStatus] = useState({})
   const [fx, setFx] = useState(null)
   const [values, setValues] = useState({})
+  const [camera, setCamera] = useState({})
   useEffect(() => {
     window.ivstudio.clipfx.meta().then((all) => setMetas(all.filter((m) => VIDEO_FX.includes(m.fx))))
     window.ivstudio.clipfx.status().then(setStatus, () => {})
@@ -88,13 +90,14 @@ export function ClipFxDialog({ clipName, length, onRun, onClose }) {
   function pick(id) {
     const m = metas.find((x) => x.fx === id)
     setFx(id)
+    setCamera({})
     setValues(Object.fromEntries((m.inputs || []).filter((i) => i.default !== undefined && !['video', 'image'].includes(i.type)).map((i) => [i.id, i.default])))
   }
   const st = fx && status[fx]
   const why = (s) => (!s ? 'Checking…' : s.ready ? null : s.missingNodes?.length ? 'Needs node packs: Setup → Install missing node packs' : s.missingModels?.length ? `Needs ${s.missingModels.length} model${s.missingModels.length > 1 ? 's' : ''}: Setup` : s.error || 'Not set up')
   return (
     <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal clipfx" role="dialog" aria-modal="true" aria-labelledby="clipfx-title">
+      <div className={`modal clipfx${fx === 'reshoot' ? ' wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby="clipfx-title">
         <div className="modal-head">
           <h2 id="clipfx-title">{meta ? meta.label : 'Effects'}</h2>
           <span className="small dim">
@@ -123,12 +126,17 @@ export function ClipFxDialog({ clipName, length, onRun, onClose }) {
             {!metas && <span className="dim small">Loading…</span>}
           </div>
         ) : (
-          <div className="fx-form">
-            <p className="small dim">{meta.summary}</p>
-            {fields.map((input) => (
-              <Field key={input.id} input={input} value={values[input.id]} onChange={(v) => setValues((s) => ({ ...s, [input.id]: v }))} />
-            ))}
-            {st && !st.ready && <p className="small pink">{why(st)}{st.missingModels?.length ? ` (${st.missingModels.join(', ')})` : ''}.</p>}
+          <div className={fx === 'reshoot' ? 'fx-split' : undefined}>
+            {fx === 'reshoot' && (
+              <CameraRig values={values} camera={camera} defaults={meta.camera} clip={clip} previewStatus={st?.preview} onValues={(v) => setValues((s) => ({ ...s, ...v }))} onCamera={(c) => setCamera((s) => ({ ...s, ...c }))} />
+            )}
+            <div className="fx-form">
+              <p className="small dim">{meta.summary}</p>
+              {fields.map((input) => (
+                <Field key={input.id} input={input} value={values[input.id]} onChange={(v) => setValues((s) => ({ ...s, [input.id]: v }))} />
+              ))}
+              {st && !st.ready && <p className="small pink">{why(st)}{st.missingModels?.length ? ` (${st.missingModels.join(', ')})` : ''}.</p>}
+            </div>
           </div>
         )}
         <div className="modal-foot">
@@ -142,7 +150,7 @@ export function ClipFxDialog({ clipName, length, onRun, onClose }) {
             Cancel
           </button>
           {meta && (
-            <button className="btn btn-small btn-primary" disabled={!st?.ready} onClick={() => (onRun({ fx, values, label: meta.label }), onClose())}>
+            <button className="btn btn-small btn-primary" disabled={!st?.ready} onClick={() => (onRun({ fx, values, camera, label: meta.label }), onClose())}>
               {meta.label}
             </button>
           )}

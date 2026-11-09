@@ -51,7 +51,7 @@ import { SOUND_KINDS, SOUND_LIMITS, Sounds } from '../service/sounds'
 import { CLIP_FX, FreefieldApps } from '../service/freefield'
 import { IMAGE_ASPECTS, IMAGE_FAMILIES, Images } from '../service/images'
 import { RefMods } from '../service/refmods'
-import { Civitai, LORA_SORTS, LORA_TAGS } from '../service/civitai'
+import { Civitai, LORA_FAMILIES, LORA_SORTS, LORA_TAGS } from '../service/civitai'
 import { Comfy } from '../service/comfy'
 import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
 import { Reader } from '../service/reader'
@@ -1303,16 +1303,23 @@ tool('delete_rebuild', 'Delete a rebuild and its frames, takes and cut pieces (r
 // Downloads use CIVITAI_API_KEY from this server's environment (the app keeps its own key encrypted).
 // Mature LoRAs only when the person has turned them on in the app (Settings > Civitai).
 const civitai = new Civitai({ dataDir: DATA, comfy: new Comfy(readSettings(BASE).comfyUrl), key: () => process.env.CIVITAI_API_KEY || null, mature: () => !!readSettings(BASE).civitaiMature })
-tool('search_loras', `Search Civitai for MiniMax H3 LoRAs (styles, looks, motion, speed). Returns cards: name, file size, downloads, trigger words, preview clip URLs and whether it's installed. tag: ${LORA_TAGS.filter(([t]) => t).map(([t]) => t).join(', ')}. Real-person LoRAs are never returned; mature ones only if the person turned them on in the app.`, {
+const FAMILY_IDS = LORA_FAMILIES.map((f) => f.id)
+const FAMILY_HELP = LORA_FAMILIES.map((f) => `${f.id} (${f.label}: ${f.uses})`).join('; ')
+tool('search_loras', `Search Civitai for LoRAs for one of IV Studio's model families (styles, looks, motion, speed): ${FAMILY_HELP}; or all. Defaults to MiniMax H3. Returns cards: name, file size, downloads, trigger words, preview clip URLs and whether it's installed. tag: ${LORA_TAGS.filter(([t]) => t).map(([t]) => t).join(', ')}. Real-person LoRAs are never returned; mature ones only if the person turned them on in the app.`, {
   query: z.string().optional(),
   tag: z.string().optional(),
   sort: z.enum(LORA_SORTS).default(LORA_SORTS[0]),
   cursor: z.string().optional().describe('next from the previous page'),
-  limit: z.number().int().min(1).max(50).default(12)
+  limit: z.number().int().min(1).max(50).default(12),
+  family: z.enum([...FAMILY_IDS, 'all']).default('h3')
 }, (a) => civitai.search(a))
 tool('get_lora', 'One Civitai LoRA in full: versions (each with its file, trigger words and preview clips), licence (commercial use, credit) and the maker’s notes.', { modelId: z.number().int() }, ({ modelId }) => civitai.model(modelId))
-tool('download_lora', 'Download a Civitai LoRA version into ComfyUI’s loras folder (Civitai/<model>/), checked against Civitai’s SHA-256. Needs CIVITAI_API_KEY in this server’s environment; ask the person first, and check the licence (get_lora) for commercial work. Returns the LoRA name to use in generate_previews extraLoras, and its trigger words.', { modelId: z.number().int(), versionId: z.number().int().optional() }, (a) => civitai.download(a))
-tool('list_my_loras', 'The LoRAs ComfyUI can load, with what IV Studio knows about each: H3 or not, Civitai name, trigger words, preview, and the person’s favourite and default strength.', { h3Only: z.boolean().default(true) }, async ({ h3Only }) => ({ items: (await civitai.yours()).filter((x) => !h3Only || x.h3) }))
+tool('download_lora', 'Download a Civitai LoRA version into ComfyUI’s loras folder (Civitai/<model>/ for H3, Civitai/<family>/<model>/ for the others), checked against Civitai’s SHA-256. Needs CIVITAI_API_KEY in this server’s environment; ask the person first, and check the licence (get_lora) for commercial work. Returns the LoRA name (use it in generate_previews extraLoras for H3, make_image loras for picture families), its family and its trigger words.', { modelId: z.number().int(), versionId: z.number().int().optional() }, (a) => civitai.download(a))
+tool('list_my_loras', `The LoRAs ComfyUI can load, with what IV Studio knows about each: its model family (${FAMILY_IDS.join(', ')}, or null when unknown), Civitai name, trigger words, preview, and the person’s favourite and default strength. family narrows the list; h3Only is the old switch for family h3.`, { family: z.enum([...FAMILY_IDS, 'all']).optional(), h3Only: z.boolean().optional() }, async ({ family, h3Only }) => {
+  const want = family || (h3Only === false ? 'all' : 'h3')
+  return { items: (await civitai.yours()).filter((x) => want === 'all' || x.family === want) }
+})
+tool('set_lora_family', `Say which model family an installed LoRA is for, when IV Studio guessed wrong or couldn't tell (family null puts it back to the guess). One of: ${FAMILY_IDS.join(', ')}.`, { name: z.string(), family: z.enum(FAMILY_IDS).nullable() }, ({ name, family }) => civitai.setPrefs(name, { family }))
 tool('identify_lora', 'Find an installed LoRA on Civitai by its file’s SHA-256 (name from list_my_loras): its Civitai name, base model, trigger words and a preview. Takes a few seconds per GB.', { name: z.string() }, ({ name }) => civitai.identify(name))
 
 const catalog = new CharacterCatalog({ studio, voices, resourcesDir: resourcesDir() })
