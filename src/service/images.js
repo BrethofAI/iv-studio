@@ -9,6 +9,12 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { comboOptions } from './setup.js'
+import ffmpegStatic from 'ffmpeg-ffprobe-static'
+import { probe } from './media.js'
+import { DEPTH_OUTPUTS, PICTURE_TOOLS, RELIGHT, depthGraph, inpaintGraph, relightGraph, relightText, removeBgGraph, upscaleGraph } from './picturetools.js'
+
+// the bundled ffprobe, outside the asar in a packaged app (an upscale reads the picture's size)
+const FFPROBE = ffmpegStatic.ffprobePath?.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
 
 // unet: the family's checkpoints, by their folder or name in ComfyUI's diffusion_models.
 // te / vae: the text encoder and VAE the official template uses, then compatible ones, first found wins.
@@ -437,6 +443,112 @@ export class Images {
       this.saveAll(this.all().map((x) => (x.id === rec.id ? next : x)))
     }
     return next
+  }
+
+  // ---------- Tools: one-step fixes for a picture (picturetools.js) ----------
+  // Which tools this ComfyUI can run, and what each still needs (manifest ids, downloaded on Setup or here).
+  async toolsStatus() {
+    if (this.studio.comfy.remote && !this.studio.comfy.hosted) return { remote: true, tools: PICTURE_TOOLS.map((t) => ({ ...t, ready: false, missing: [] })) }
+    let info, st
+    try {
+      ;[info, st] = await Promise.all([this.studio.comfy.objectInfo(), this.status()])
+    } catch (err) {
+      return { error: err.message, tools: PICTURE_TOOLS.map((t) => ({ ...t, ready: false, missing: [] })) }
+    }
+    const opt = (cls, input) => comboOptions(info, cls, input) || []
+    const find = (id) => {
+      const m = this.studio.manifest.models.find((x) => x.id === id)
+      if (!m) return null
+      const [cls, input] = m.loader.split('.')
+      const opts = opt(cls, input)
+      return [m.match, ...(m.alt || [])].map((n) => opts.find((o) => o.split(/[\\/]/).pop() === n)).find(Boolean) || null
+    }
+    const need = (ids) => ids.map((id) => ({ id, file: find(id) })).filter((x) => !x.file).map((x) => {
+      const m = this.studio.manifest.models.find((y) => y.id === x.id)
+      return { id: x.id, label: m?.label || x.id, size: m?.size || 0, folder: m?.folder }
+    })
+    const flux3 = st.families?.find((f) => f.id === 'flux3')
+    const dits = opt('SeedVR2LoadDiTModel', 'model')
+    const tools = PICTURE_TOOLS.map((t) => {
+      if (t.id === 'inpaint') return { ...t, ready: !!flux3?.ready && !!info.ReferenceMultiLatent, missing: [], note: flux3?.ready ? null : 'Needs Flux 3 Klein (its model, text encoder and VAE), as for pictures.' }
+      if (t.id === 'relight') {
+        const missing = need(['relight_unet', 'relight_te', 'relight_vae', 'relight_lightning', 'relight_lora'])
+        return { ...t, ready: !missing.length && !!info.TextEncodeQwenImageEditPlus, missing }
+      }
+      if (t.id === 'removebg') {
+        const missing = need(['birefnet'])
+        return { ...t, ready: !missing.length && !!info.RemoveBackground, missing }
+      }
+      if (t.id === 'depth') {
+        const missing = need(['moge'])
+        return { ...t, ready: !missing.length && !!info.MoGeInference, missing }
+      }
+      if (t.id === 'upscale') return { ...t, ready: !!info.SeedVR2VideoUpscaler && dits.length > 0, missing: [], note: info.SeedVR2VideoUpscaler ? null : 'Needs the SeedVR2 node pack: Install missing node packs on Setup.' }
+      return { ...t, ready: false, missing: [] }
+    })
+    return { tools, files: { birefnet: find('birefnet'), moge: find('moge'), relight_unet: find('relight_unet'), relight_te: find('relight_te'), relight_vae: find('relight_vae'), relight_lightning: find('relight_lightning'), relight_lora: find('relight_lora'), dit: ['seedvr2_ema_3b_fp16.safetensors', 'seedvr2_ema_3b_fp8_e4m3fn.safetensors', 'seedvr2_ema_3b-Q8_0.gguf'].find((d) => dits.includes(d)) || dits[0] || null }, flux3: flux3 ? { unet: flux3.models[0], te: flux3.te, vae: flux3.vae } : null, relight: RELIGHT, depthOutputs: DEPTH_OUTPUTS }
+  }
+
+  // Runs one tool on a picture. request: { tool, image (a local picture), mask (inpaint: a picture, white = change),
+  // prompt (inpaint), light/direction/quality/brightness/color/details (relight), scale 2|4 (upscale),
+  // output (depth), seed, name }. The result joins the gallery like any set (mode 'tool').
+  async tool({ tool, image, mask = null, prompt = '', light, direction, quality, brightness, color, details, scale = 2, output = 'depth_colored', seed = null, name } = {}) {
+    const t = PICTURE_TOOLS.find((x) => x.id === tool)
+    if (!t) throw new Error(`Tool is one of ${PICTURE_TOOLS.map((x) => x.id).join(', ')}.`)
+    if (!image || !fs.existsSync(image)) throw new Error('Pick the picture first.')
+    const st = await this.toolsStatus()
+    if (st.remote) throw new Error('Picture tools run on this PC’s ComfyUI. Switch to "This PC" on the Cloud page.')
+    if (st.error) throw new Error(st.error)
+    const ts = st.tools.find((x) => x.id === tool)
+    if (!ts.ready) throw new Error(ts.missing?.length ? `${t.label} needs ${ts.missing.map((m) => m.label).join(', ')}. Download on Setup.` : ts.note || `${t.label} can’t run on this ComfyUI.`)
+    const text = String(prompt || '').trim()
+    if (tool === 'inpaint' && !text) throw new Error('Say what the painted part should become.')
+    if (tool === 'inpaint' && (!mask || !fs.existsSync(mask))) throw new Error('Paint over the part to change first.')
+    const s = seed == null || seed === '' ? Math.floor(Math.random() * 2 ** 31) : Math.floor(Number(seed))
+    const id = randomUUID().slice(0, 8)
+    const src = path.basename(image).replace(/\.[^.]+$/, '')
+    const title = String(name || '').trim() || `${t.label} · ${src}`.slice(0, 60)
+    const prefix = `iv_studio/images/${slug(title)}_${id}`
+    const up = await this.studio.comfy.upload(image, 'iv_studio/images')
+    let graph
+    let request = { tool }
+    if (tool === 'removebg') graph = removeBgGraph({ image: up, model: st.files.birefnet, prefix })
+    else if (tool === 'depth') {
+      if (!DEPTH_OUTPUTS.some(([v]) => v === output)) throw new Error(`Output is one of ${DEPTH_OUTPUTS.map(([v]) => v).join(', ')}.`)
+      graph = depthGraph({ image: up, model: st.files.moge, output, prefix })
+      request.output = output
+    } else if (tool === 'upscale') {
+      const factor = Number(scale) === 4 ? 4 : 2
+      const size = await probe(FFPROBE, image).catch(() => null)
+      const short = Math.min(size?.width || 1024, size?.height || 1024)
+      const resolution = Math.min(4096, Math.round((short * factor) / 16) * 16)
+      graph = upscaleGraph({ image: up, dit: st.files.dit, resolution, prefix })
+      request = { ...request, scale: factor, resolution }
+    } else if (tool === 'relight') {
+      const words = relightText({ light, direction, quality, brightness, color, details })
+      graph = relightGraph({ image: up, unet: st.files.relight_unet, te: st.files.relight_te, vae: st.files.relight_vae, lightning: st.files.relight_lightning, relight: st.files.relight_lora, text: words, seed: s, prefix })
+      request.prompt = words
+    } else if (tool === 'inpaint') {
+      const m = await this.studio.comfy.upload(mask, 'iv_studio/images')
+      graph = inpaintGraph({ image: up, mask: m, unet: st.flux3.unet, te: st.flux3.te, vae: st.flux3.vae, text, seed: s, prefix })
+      request.prompt = text
+    }
+    const project = this.studio.createProject(`Image · ${title}`, null, null, 'image')
+    const job = await this.studio.submitGraph({ kind: `picture:tool-${tool}`, graph, projectId: project.id, name: title, plan: { images: true, request: { prompt: request.prompt || t.label } } })
+    const record = { id, name: title, mode: 'tool', tool, family: `tool-${tool}`, familyLabel: t.label, prompt: request.prompt || '', request, refs: [image], ...(mask ? { mask } : {}), count: 1, seed: s, projectId: project.id, jobId: job.id, status: job.status, files: [], createdAt: now() }
+    this.saveAll([record, ...this.all()])
+    return record
+  }
+
+  // A mask painted in the window (a PNG data URL), saved beside the gallery for an inpaint.
+  saveMask(dataUrl) {
+    const m = /^data:image\/png;base64,(.+)$/.exec(String(dataUrl || ''))
+    if (!m) throw new Error('That mask isn’t a PNG picture.')
+    const dir = path.join(this.dir, '_masks')
+    fs.mkdirSync(dir, { recursive: true })
+    const file = path.join(dir, `mask_${randomUUID().slice(0, 8)}.png`)
+    fs.writeFileSync(file, Buffer.from(m[1], 'base64'))
+    return file
   }
 
   // tagged sets (a film's storyboard sketches) belong to their page and stay out of the gallery

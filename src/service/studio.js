@@ -53,8 +53,9 @@ const PREVIEW_SAVES = { 1: '42', 2: '118', 3: '128' }
 // big models never share the GPU (Z-Image or MiniMax Music next to H3 overflows a 24 GB card and 64 GB of RAM).
 // Jobs of the same family keep their models: a finish reuses its preview's cached latent.
 // Create -> Image jobs are 'picture:<family>' (see images.js), so switching image models unloads too.
-const FAMILIES = { music: 'music', still: 'image', enhance: 'seedvr2', cutout: 'sam' }
-const familyOf = (kind) => FAMILIES[kind] || (String(kind).startsWith('picture:') ? String(kind) : 'h3')
+const FAMILIES = { music: 'music', sound: 'sound', still: 'image', enhance: 'seedvr2', cutout: 'sam', 'clipfx:reshoot': 'h3' }
+// Clip effects (freefield.js) are their own families too: LTX-2.5 or Wan next to H3 would overflow the card.
+const familyOf = (kind) => FAMILIES[kind] || (/^(picture|clipfx):/.test(String(kind)) ? String(kind) : 'h3')
 // The UNETLoader each mode of the IV Studio workflow uses (Settings can swap its model).
 // How hard the free finish's H3 pass works on a take it didn't make (h3refine.js). Likeness to Tess's face on a
 // Seedance draft (2026-11-08): the draft 0.51-0.68; SeedVR2 1080p 0.52-0.64; H3 at 0.1 0.44-0.48, 0.2 0.38-0.44,
@@ -1302,6 +1303,17 @@ export class Studio {
       }
       return list
     }
+    if (job.plan?.clipfx) {
+      // a Freefield app (freefield.js): every saved video or picture, with the node that saved it
+      for (const [nid, out] of Object.entries(outputs)) {
+        for (const f of [...(out.gifs || []), ...(out.videos || []), ...(out.images || [])]) {
+          if (f.type === 'input' || f.type === 'temp') continue
+          if (/\.(mp4|webm|mov|mkv)$/i.test(f.filename)) list.push(file(f, 'video', { node: nid }))
+          else if (/\.(png|jpe?g|webp)$/i.test(f.filename)) list.push(file(f, 'image', { node: nid }))
+        }
+      }
+      return list
+    }
     if (job.plan?.cutout) {
       // a cut-out's mask (cutout.js): a picture from SaveImage, or the mask video
       const o = outputs.mask
@@ -1325,8 +1337,8 @@ export class Studio {
       if (p) list.push(this.fileFromPath(p, 'final'))
       return list
     }
-    if (job.plan?.music) {
-      // a song (Music): the SaveAudio output
+    if (job.plan?.music || job.plan?.sound) {
+      // a song (Music) or a sound (Sounds): the SaveAudio outputs
       for (const nid of Object.keys(outputs).sort()) for (const a of outputs[nid].audio || []) list.push(file(a, 'audio'))
       return list
     }

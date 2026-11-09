@@ -116,6 +116,54 @@ const EFFECTS = {
       })
     }
   },
+  // a picture bursting: every second and a half, confetti and star sparks fly out from the middle and fall
+  burst: {
+    make: () => ({ bits: [], last: -1 }),
+    draw(ctx, s, w, h, t, dt) {
+      const cx = w / 2
+      const cy = h * 0.5
+      const n = Math.floor(t / 1.5)
+      if (n !== s.last) {
+        s.last = n
+        for (let i = 0; i < 70; i++) {
+          const a = rand(0, Math.PI * 2)
+          const v = rand(120, 520)
+          s.bits.push({ x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 80, rot: rand(0, 6), vr: rand(-8, 8), size: rand(4, 11), life: 0, max: rand(1.4, 2.6), star: Math.random() < 0.3, c: [RED, PINK, CREAM][Math.floor(rand(0, 3))] })
+        }
+      }
+      const flash = Math.max(0, 1 - (t / 1.5 - n) * 4)
+      if (flash > 0) {
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, h * 0.6)
+        g.addColorStop(0, rgba(CREAM, 0.25 * flash))
+        g.addColorStop(1, rgba(RED, 0))
+        ctx.fillStyle = g
+        ctx.fillRect(0, 0, w, h)
+      }
+      s.bits = s.bits.filter((b) => (b.life += dt) < b.max)
+      for (const b of s.bits) {
+        b.vy += 260 * dt
+        b.vx *= 1 - 0.8 * dt
+        b.x += b.vx * dt
+        b.y += b.vy * dt
+        b.rot += b.vr * dt
+        const a = 1 - b.life / b.max
+        ctx.save()
+        ctx.translate(b.x, b.y)
+        ctx.rotate(b.rot)
+        ctx.fillStyle = rgba(b.c, 0.85 * a)
+        if (b.star) {
+          ctx.beginPath()
+          for (let k = 0; k < 8; k++) {
+            const r = k % 2 ? b.size * 0.35 : b.size
+            ctx.lineTo(Math.cos((k * Math.PI) / 4) * r, Math.sin((k * Math.PI) / 4) * r)
+          }
+          ctx.closePath()
+          ctx.fill()
+        } else ctx.fillRect(-b.size / 2, -b.size / 4, b.size, b.size / 2)
+        ctx.restore()
+      }
+    }
+  },
   // two strips of film running past, frames lit in turn
   film: {
     make: () => ({}),

@@ -22,6 +22,7 @@ import { Productions } from '../service/productions'
 import { Reels } from '../service/reel'
 import { Cutouts } from '../service/cutout'
 import { Reframes } from '../service/reframe'
+import { CLIP_FX, FreefieldApps } from '../service/freefield'
 import { DEFAULT_TRACKS } from '../service/timeline'
 import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
 import { initUpdater, updateState, MANUAL as UPDATE_MANUAL } from './updater'
@@ -43,6 +44,7 @@ import { Reader } from '../service/reader'
 import { Rebuilds } from '../service/rebuild'
 import { Voices } from '../service/voices'
 import { ACE_KEYS, monoDecoder, Music, MUSIC_DEFAULTS, MUSIC_ENGINES, REMIX } from '../service/music'
+import { SOUND_ENGINE, SOUND_KINDS, SOUND_LIMITS, Sounds } from '../service/sounds'
 import { Images } from '../service/images'
 import { RefMods } from '../service/refmods'
 import { Civitai, CIVITAI_SITES, LORA_SORTS, LORA_TAGS } from '../service/civitai'
@@ -118,6 +120,7 @@ let remake = null
 let catalog = null
 let voices = null
 let music = null
+let sounds = null
 let images = null
 let civitai = null
 let runpodWake = null // starts a RunPod pod when the last one idled off (set up with the cloud handlers)
@@ -165,6 +168,7 @@ function makeStudio() {
   if (remake) remake.studio = studio
   if (catalog) catalog.studio = studio
   if (music) music.studio = studio
+  if (sounds) sounds.studio = studio
   if (images) images.studio = studio
   // LoRAs live on this PC's ComfyUI, also when renders go to the cloud
   if (civitai) civitai.comfy = new Comfy(s.comfyUrl)
@@ -490,6 +494,26 @@ app.whenReady().then(() => {
     const r = await cutouts.make(opts)
     return { ...r, media: await edits.addMedia(r.file, { type: 'cutout', from: opts.file, what: r.what }) }
   })
+  // Clip effects and Workflows → Effects: Freefield's apps (freefield.js) on this PC's ComfyUI. A clip's own stretch
+  // (start, length in its file) is cut out first, so the effect sees only what the timeline shows.
+  const clipfx = new FreefieldApps({ resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), dataDir: DATA, studio: () => studio })
+  handle('clipfx:meta', (fx) => (fx ? clipfx.meta(fx) : Object.keys(CLIP_FX).map((k) => clipfx.meta(k))))
+  handle('clipfx:status', (fx) => (fx ? clipfx.status(fx) : clipfx.statusAll()))
+  handle('clipfx:runs', () => clipfx.runs())
+  handle('clipfx:deleteRun', (id) => clipfx.deleteRun(id))
+  handle('clipfx:run', async ({ fx, file, last = null, start = null, length = null, values = {}, name }) => {
+    await voices.release()
+    let src = file
+    if (length && !/\.(png|jpe?g|webp|bmp)$/i.test(file)) {
+      const dir = path.join(DATA, 'clipfx', '_sources')
+      fs.mkdirSync(dir, { recursive: true })
+      src = path.join(dir, `${path.basename(file).replace(/\.[^.]+$/, '')}_${Math.round((start || 0) * 1000)}_${Math.round(length * 1000)}.mp4`)
+      if (!fs.existsSync(src)) await edits.run(['-y', '-hide_banner', '-loglevel', 'error', '-ss', String(start || 0), '-i', file, '-t', String(length), '-c:v', 'libx264', '-crf', '14', '-preset', 'fast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', src])
+    }
+    const r = await clipfx.run({ fx, file: src, last, values, name, onProgress: (j) => send('clipfx:progress', { fx, status: j.status, progress: j.progress }) })
+    const main = r.files.find((f) => f.kind === 'video') || r.files[0]
+    return { ...r, media: main ? await edits.addMedia(main.file, { type: 'clipfx', fx, from: file, label: r.title }) : null }
+  })
   // Reframe: a shot or picture in a new frame shape, with what lies beyond its edges drawn (H3 / Qwen outpaint).
   const reframes = new Reframes({ dataDir: DATA, studio: () => studio, edits, images: () => images })
   handle('reframes:make', async (opts) => {
@@ -538,11 +562,13 @@ app.whenReady().then(() => {
   handle('music:rename', (id, name) => music.rename(id, name))
   handle('music:cancel', (id) => music.cancel(id))
   handle('music:delete', (id) => music.delete(id))
-  // A file onto the end of a track of an edit (A1 for sound, V1 for video); no edit id makes a new edit.
+  // A file onto the end of a track of an edit (A1 for music and lines, A2 for sound effects, V1 for video); no edit
+  // id makes a new edit.
   const putOnEdit = async (file, name, editId, type) => {
     const e = editId ? edits.get(editId) : edits.create(name)
     const m = await edits.addMedia(file, { type, label: name })
-    const track = m.kind === 'audio' ? 'A1' : 'V1'
+    // sound effects on A2, under a song on A1
+    const track = m.kind === 'audio' ? (type === 'sound' ? 'A2' : 'A1') : 'V1'
     const start = Math.max(0, ...e.clips.filter((c) => c.track === track).map((c) => c.start + (c.out - c.in)))
     const clip = { id: `c${m.id}`, track, media: m.id, start, in: 0, out: m.duration || 4, fadeIn: 0, fadeOut: 0, volume: 1, muted: false }
     return edits.save(e.id, { media: { ...e.media, [m.id]: m }, clips: [...e.clips, clip] })
@@ -551,6 +577,25 @@ app.whenReady().then(() => {
     const song = await music.get(id)
     if (!song.file) throw new Error('That song has not finished yet.')
     return putOnEdit(song.file, song.name, editId, 'music')
+  })
+  // ---------- Audio: sounds (Stable Audio 3 on this PC's ComfyUI) ----------
+  sounds = new Sounds({ studio, dataDir: DATA, probe: (f) => edits.probe(f) })
+  handle('sounds:meta', () => ({ kinds: SOUND_KINDS, limits: SOUND_LIMITS, engine: SOUND_ENGINE }))
+  handle('sounds:status', () => sounds.status())
+  handle('sounds:write', (opts) => sounds.write(opts))
+  handle('sounds:create', async (opts) => {
+    await voices.release()
+    return sounds.create(opts)
+  })
+  handle('sounds:list', () => sounds.list())
+  handle('sounds:rename', (id, name) => sounds.rename(id, name))
+  handle('sounds:cancel', (id) => sounds.cancel(id))
+  handle('sounds:delete', (id) => sounds.delete(id))
+  handle('sounds:toEdit', async (id, take = 0, editId = null) => {
+    const s = await sounds.get(id)
+    const f = s.files?.[take]
+    if (!f) throw new Error('That sound has not finished yet.')
+    return putOnEdit(f.file, s.files.length > 1 ? `${s.name} (take ${take + 1})` : s.name, editId, 'sound')
   })
   // ---------- Create -> Image: pictures from the person's own image models ----------
   images = new Images({ studio, dataDir: DATA })
@@ -564,6 +609,12 @@ app.whenReady().then(() => {
   handle('images:cancel', (id) => images.cancel(id))
   handle('images:delete', (id) => images.delete(id))
   handle('images:toEdit', async (file, name, editId = null) => putOnEdit(file, name, editId, 'iv'))
+  handle('images:toolsStatus', () => images.toolsStatus())
+  handle('images:tool', async (opts) => {
+    await voices.release()
+    return images.tool(opts)
+  })
+  handle('images:saveMask', (dataUrl) => images.saveMask(dataUrl))
   // ---------- LoRAs: Civitai's H3 LoRAs and the ones on this PC ----------
   civitai = new Civitai({ dataDir: DATA, comfy: new Comfy(readSettings(BASE).comfyUrl), key: () => unseal(readSettings(BASE).civitaiKey), mature: () => !!readSettings(BASE).civitaiMature, onProgress: (u) => send('loras:progress', u) })
   handle('loras:meta', () => ({ tags: LORA_TAGS, sorts: LORA_SORTS, sites: CIVITAI_SITES, mature: !!readSettings(BASE).civitaiMature, hasKey: !!readSettings(BASE).civitaiKey }))
@@ -581,6 +632,8 @@ app.whenReady().then(() => {
       for (const x of edits.get(e.id).exports || []) if (x.file && fs.existsSync(x.file)) items.push({ key: `export:${x.file}`, type: 'video', group: 'Edit exports', label: `${e.name} · ${x.format || ''} ${x.fps || ''} fps`.trim(), at: x.at, file: { path: x.file }, set: `edit:${e.id}`, setName: e.name, variant: `${x.format || 'Export'} · ${x.fps || ''} fps`, rank: 0, editId: e.id })
     }
     for (const s of music.all()) if (s.file && fs.existsSync(s.file)) items.push({ key: `music:${s.id}`, type: 'music', group: 'Music', label: s.name, detail: `${s.engine === 'minimax' ? 'MiniMax Music 3' : 'ACE-Step 1.5'}${s.instrumental ? ' · instrumental' : ''}`, duration: s.duration, at: s.finishedAt || s.createdAt, file: { path: s.file }, set: `music:${s.id}`, setName: s.name, variant: 'Song', rank: 0 })
+    for (const r of clipfx.runs()) if (r.status === 'success') (r.files || []).forEach((f, i) => f.kind === 'video' && fs.existsSync(f.file) && items.push({ key: `clipfx:${r.id}:${i}`, type: 'video', group: 'Effects', label: r.title, detail: `${r.label} · ${f.label}`, at: r.finishedAt || r.createdAt, file: { path: f.file }, set: `clipfx:${r.id}`, setName: r.title, variant: f.label, rank: i }))
+    for (const s of sounds.all()) (s.files || []).forEach((f, i) => fs.existsSync(f.file) && items.push({ key: `sound:${s.id}:${i}`, type: 'music', group: 'Sounds', label: s.name, detail: `Stable Audio 3 · ${SOUND_KINDS.find((k) => k.id === s.kind)?.label || 'Sound'}`, duration: f.duration, at: s.finishedAt || s.createdAt, file: { path: f.file }, set: `sound:${s.id}`, setName: s.name, variant: s.files.length > 1 ? `Take ${i + 1}` : 'Sound', rank: i }))
     for (const r of images.all()) (r.files || []).forEach((f, i) => fs.existsSync(f) && items.push({ key: `image:${r.id}:${i}`, type: 'image', group: 'Images', label: r.name, detail: `${r.familyLabel} · ${r.mode === 'edit' ? 'edit' : 'generate'}`, at: r.finishedAt || r.createdAt, file: { path: f }, set: `image:${r.id}`, setName: r.name, variant: `Picture ${i + 1}`, rank: i, imageId: r.id }))
     for (const l of voices.lines()) if (fs.existsSync(l.file)) items.push({ key: `line:${l.id}`, type: 'voice', group: 'Voice lines', label: l.text, detail: l.voice, duration: l.duration, at: l.createdAt, file: { path: l.file }, set: `line:${l.id}`, setName: l.text, variant: `Seed ${l.seed}`, rank: 0 })
     return items.sort((a, b) => String(b.at).localeCompare(String(a.at)))

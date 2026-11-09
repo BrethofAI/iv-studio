@@ -5,6 +5,7 @@ import ProjectBin from './ProjectBin'
 import SourceMonitor from './SourceMonitor'
 import Timeline from './Timeline'
 import { ContextMenu, GenDialog, PickDialog } from './Generate'
+import { ClipFxDialog } from './ClipFx'
 import { ask } from '../Confirm'
 import Help from '../Help'
 import { FRAME, clipEnd, clipFor, clipLength, describeChange, editLength, editPoints, insert, newId, nextTrackId, overwrite, remove, split, timecode, titleClip, tracksOf, videoLayers } from './model'
@@ -71,6 +72,7 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
   const [edit, setEdit] = useState(null)
   const [gens, setGens] = useState([]) // new footage on its way (src/service/editgen.js)
   const [menu, setMenu] = useState(null) // { x, y, items }
+  const [fxFor, setFxFor] = useState(null) // the clip the Effects dialog is open for
   const [genSpec, setGenSpec] = useState(null) // the generate dialog's { kind, clip, next, gap, from, to }
   const [picking, setPicking] = useState(null) // a bridge waiting for its take to be picked
   const [hist, setHist] = useState({ past: [], future: [] })
@@ -342,6 +344,7 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
       items.push({ label: 'Cut out…', hint: 'keep only who or what you name', disabled: !video || !!m.alpha, onClick: () => cutOut(clip) })
       items.push({ label: 'Remake this clip…', hint: 'swap who is in it, or change the scene', disabled: !video || m.kind === 'image' || !!m.alpha || clipLength(clip) > 14.3 || !remakeClip, onClick: () => remakeClip({ path: m.path, section: { start: clip.in || 0, length: clipLength(clip) }, kind: 'swap' }) })
       items.push({ label: `Reframe to ${SHAPE_OF[edit.settings.format] || '9:16'}…`, hint: 'draw what lies beyond its edges', disabled: !video || !!m.alpha || shapeFits(m, edit.settings.format), onClick: () => reframe(clip) })
+      items.push({ label: 'Effects…', hint: 'new angle, dub, day to night, clean plate, slow motion', disabled: !video || m.kind === 'image' || !!m.alpha, onClick: () => setFxFor(clip) })
     } else if (gap?.to != null && gap.to - gap.from > FRAME) {
       items.push({ label: `Fill this gap…`, hint: `${(gap.to - gap.from).toFixed(2)} s`, disabled: gap.to - gap.from > 15, onClick: () => setGenSpec({ kind: 'bridge', gap }) })
     } else if (gap) {
@@ -364,6 +367,37 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
       const len = clipLength(clip)
       commit({ media: { ...e.media, [r.media.id]: r.media }, clips: e.clips.map((x) => (x.id === clip.id ? { ...x, media: r.media.id, in: m.kind === 'image' ? 0 : Math.min(x.in, Math.max(0, (r.media.duration || len) - len)), out: m.kind === 'image' ? len : Math.min(x.in, Math.max(0, (r.media.duration || len) - len)) + Math.min(len, r.media.duration || len) } : x)) })
       notify(`Reframed to ${shape}: ${Math.round(r.filled * 100)}% of the frame drawn.`, 'info')
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  // Effects… (Freefield's apps, freefield.js) on the clip's own stretch. The result takes the clip's place, keeping
+  // its start; one longer than the clip (slow motion) goes on the track above instead, so nothing after it moves.
+  async function runFx(clip, { fx, values, label }) {
+    const m = edit.media[clip.media]
+    notify(`${label}: working on ${m.name}. It takes the clip's place when it's done (a few minutes).`, 'info')
+    try {
+      const r = await window.ivstudio.clipfx.run({ fx, file: m.path, start: clip.in || 0, length: clipLength(clip), values, name: `${label} · ${m.name}` })
+      if (!r.media) throw new Error(`${label} made no video.`)
+      const e = editRef.current
+      const len = clipLength(clip)
+      const dur = r.media.duration || len
+      if (dur > len * 1.3) {
+        const all = tracksOf(e)
+        const layers = videoLayers(all)
+        const free = (t) => !t.locked && !e.clips.some((x) => x.track === t.id && x.start < clip.start + dur - 1e-3 && clipEnd(x) > clip.start + 1e-3)
+        let target = layers.slice(layers.findIndex((t) => t.id === clip.track) + 1).find(free)
+        let tracks = e.tracks
+        if (!target) {
+          target = { id: nextTrackId(all, 'video'), kind: 'video' }
+          tracks = [...all, { ...target, label: target.id }]
+        }
+        commit({ media: { ...e.media, [r.media.id]: r.media }, clips: [...e.clips, { ...clipFor(r.media, target.id, clip.start), in: 0, out: dur }], tracks })
+        notify(`${label} done: ${dur.toFixed(1)} s on ${target.id}, over the original.`, 'info')
+      } else {
+        commit({ media: { ...e.media, [r.media.id]: r.media }, clips: e.clips.map((x) => (x.id === clip.id ? { ...x, media: r.media.id, in: 0, out: Math.min(len, dur) } : x)) })
+        notify(`${label} done. Undo brings the original back.`, 'info')
+      }
     } catch (err) {
       notify(err.message)
     }
@@ -655,6 +689,7 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
           onGen={genClicked}
         />
         {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
+        {fxFor && <ClipFxDialog clipName={edit.media[fxFor.media]?.name || 'Clip'} length={clipLength(fxFor)} onRun={(spec) => runFx(fxFor, spec)} onClose={() => setFxFor(null)} />}
         {genSpec && <GenDialog edit={edit} spec={genSpec} characters={characters} notify={notify} onStart={startGen} onClose={() => setGenSpec(null)} />}
         {picking && (
           <PickDialog

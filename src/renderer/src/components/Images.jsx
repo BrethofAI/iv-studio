@@ -4,11 +4,13 @@ import { LoraPicker, LoraThumb, loraTitle, useYours } from './Loras'
 import { fileUrl } from './edit/model'
 import { ask } from './Confirm'
 import { AspectTiles, DropIcon, ImageModeIcon, StepHead } from './CreateKit'
+import PictureTools from './PictureTools'
 
 const I = () => window.ivstudio.images
 const MODES = [
   ['generate', 'Generate', 'Make pictures from a prompt.'],
-  ['edit', 'Edit', 'Change a picture with an instruction. Only models that can edit.']
+  ['edit', 'Edit', 'Change a picture with an instruction. Only models that can edit.'],
+  ['tools', 'Tools', 'Inpaint, relight, remove the background, upscale, depth map.']
 ]
 const ASPECTS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9']
 const SIZES = [0.5, 1, 1.5, 2]
@@ -37,6 +39,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
   const [busy, setBusy] = useState(false)
   const [picking, setPicking] = useState(false)
   const [viewing, setViewing] = useState(null) // { set, i }
+  const [toFix, setToFix] = useState(null) // a picture handed to Tools from the viewer
   const [more, setMore] = useState(false)
   const [yours, , reloadYours] = useYours()
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
@@ -65,6 +68,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
   }, [running])
 
   const families = status?.families || []
+  // a stale saved form from before Tools, or Tools picked: the model steps below stay on generate/edit
   const usable = families.filter((f) => f.ready && (form.mode !== 'edit' || f.edit))
   const fam = families.find((f) => f.id === form.family && f.ready) || null
   // keep a family and checkpoint that fit the mode
@@ -134,6 +138,21 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
   const n = editMode ? { model: 2, refs: 3, prompt: 4, shape: 5 } : { model: 2, prompt: 3, shape: 4 }
   const makeLabel = busy ? 'Starting…' : editMode ? `Edit${form.count > 1 ? ` · ${form.count} versions` : ''}` : `Make ${form.count} picture${form.count > 1 ? 's' : ''}`
   const canMake = !(busy || blocked || !form.prompt.trim())
+  const toolsMode = form.mode === 'tools'
+  const modeStep = (
+    <section className="create-step">
+      <StepHead n={1} title="What to make" sub="A new picture from words, a picture you have changed by an instruction, or a one-step fix." />
+      <div className="mode-cards create-modes">
+        {MODES.map(([id, label, hint]) => (
+          <button key={id} className={`mode-card ${form.mode === id ? 'on' : ''}`} onClick={() => set({ mode: id })}>
+            <ImageModeIcon id={id} />
+            <span className="mode-name">{label}</span>
+            <span className="dim small">{hint}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  )
   return (
     <div className="images-page create-v2">
       <Hero art="create" title="Create" kicker="New image" help="image" />
@@ -141,20 +160,12 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
       {status?.remote && <p className="notice">Pictures render on this PC’s ComfyUI. Switch to “This PC” on the Cloud page to make them.</p>}
       {status?.error && <p className="notice">{status.error}</p>}
 
+      {toolsMode ? (
+        <PictureTools modeStep={modeStep} notify={notify} onQueued={(rec) => setSets((all) => [rec, ...all])} incoming={toFix} clearIncoming={() => setToFix(null)} />
+      ) : (
       <div className="create-layout">
         <div className="create-steps">
-          <section className="create-step">
-            <StepHead n={1} title="What to make" sub="A new picture from words, or a picture you already have, changed by an instruction." />
-            <div className="mode-cards create-modes two">
-              {MODES.map(([id, label, hint]) => (
-                <button key={id} className={`mode-card ${form.mode === id ? 'on' : ''}`} onClick={() => set({ mode: id })}>
-                  <ImageModeIcon id={id} />
-                  <span className="mode-name">{label}</span>
-                  <span className="dim small">{hint}</span>
-                </button>
-              ))}
-            </div>
-          </section>
+          {modeStep}
 
           <section className="create-step">
             <StepHead n={n.model} title="The model" sub={editMode ? 'Only models that can edit are on.' : 'Your image models in ComfyUI. Each has its own look.'} />
@@ -351,6 +362,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
           </button>
         </aside>
       </div>
+      )}
 
       {sets.length > 0 && (
         <section className="audio-section image-gallery">
@@ -367,7 +379,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
                     {s.name}
                   </span>
                   <span className="mono small dim">
-                    {s.familyLabel} · {s.mode === 'edit' ? 'edit' : 'generate'} · seed {s.seed}
+                    {s.mode === 'tool' ? `${s.familyLabel} · tool` : `${s.familyLabel} · ${s.mode === 'edit' ? 'edit' : 'generate'} · seed ${s.seed}`}
                   </span>
                   <button className="link-btn small" onClick={() => remove(s)}>
                     Delete
@@ -393,6 +405,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
       )}
 
       {/* Narrow windows: what will be made, and the button, as a bar at the bottom of the window. */}
+      {!toolsMode && (
       <section className="go-dock create-dock">
         <div className="go-info">
           <span className="mono">{fam ? `${form.count} picture${form.count > 1 ? 's' : ''} · ${editMode ? `about ${form.megapixels} MP, the picture's shape` : `${w} × ${h}`} · ${fam.label}` : status ? 'No image model is ready' : 'Checking your image models…'}</span>
@@ -402,6 +415,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
           {makeLabel}
         </button>
       </section>
+      )}
 
       {viewing && (
         <ImageViewer
@@ -410,6 +424,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
           onIndex={(i) => setViewing({ ...viewing, i })}
           onClose={() => setViewing(null)}
           onEdit={editThis}
+          onFix={(f) => (setToFix(f), set({ mode: 'tools' }), setViewing(null), document.querySelector('.images-page')?.scrollIntoView({ behavior: 'smooth' }))}
           onShot={(f) => (setViewing(null), pictureToShot?.(f))}
           onEditTimeline={async (f) => {
             try {
@@ -419,7 +434,14 @@ export default function Images({ kindSwitch, notify, go, pictureToShot }) {
               notify(err.message)
             }
           }}
-          onAgain={() => (set({ mode: viewing.set.mode, family: viewing.set.family, model: viewing.set.model, prompt: viewing.set.prompt, negative: viewing.set.negative || '', loras: viewing.set.loras || [], aspect: viewing.set.aspect, megapixels: viewing.set.megapixels, count: viewing.set.count, seed: '', refs: viewing.set.refs || [] }), setViewing(null))}
+          onAgain={() => {
+            const v = viewing.set
+            if (v.mode === 'tool') {
+              setToFix(v.refs?.[0] || null)
+              set({ mode: 'tools' })
+            } else set({ mode: v.mode, family: v.family, model: v.model, prompt: v.prompt, negative: v.negative || '', loras: v.loras || [], aspect: v.aspect, megapixels: v.megapixels, count: v.count, seed: '', refs: v.refs || [] })
+            setViewing(null)
+          }}
         />
       )}
     </div>
@@ -443,7 +465,7 @@ function PictureFrame({ aspect, picture, count }) {
 }
 
 // A picture large, with what to do next. ← → move through the set, Esc closes.
-function ImageViewer({ set, index, onIndex, onClose, onEdit, onShot, onEditTimeline, onAgain }) {
+function ImageViewer({ set, index, onIndex, onClose, onEdit, onFix, onShot, onEditTimeline, onAgain }) {
   const file = set.files[index]
   useEffect(() => {
     const key = (e) => {
@@ -462,7 +484,7 @@ function ImageViewer({ set, index, onIndex, onClose, onEdit, onShot, onEditTimel
           <p className="image-set-name">{set.name}</p>
           <p className="small dim">{set.prompt}</p>
           <p className="mono small dim">
-            {set.familyLabel} · {shortName(set.model)} · seed {set.seed}
+            {set.mode === 'tool' ? set.familyLabel : `${set.familyLabel} · ${shortName(set.model)} · seed ${set.seed}`}
             {set.files.length > 1 ? ` · ${index + 1} of ${set.files.length}` : ''}
           </p>
           <div className="image-viewer-actions">
@@ -471,6 +493,9 @@ function ImageViewer({ set, index, onIndex, onClose, onEdit, onShot, onEditTimel
             </button>
             <button className="btn" onClick={() => onEdit(file)}>
               Edit this
+            </button>
+            <button className="btn" onClick={() => onFix(file)} title="Inpaint, relight, remove the background, upscale or make a depth map">
+              Fix this…
             </button>
             <button className="btn" onClick={() => onEditTimeline(file)}>
               Add to edit

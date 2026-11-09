@@ -13106,3 +13106,161 @@ button.set-chip:hover {
   padding-top: 8px;
   border-top: 1px solid var(--line);
 }
+
+/* Audio -> Sounds */
+.sound-kinds .engine-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sound-kinds .engine-card svg {
+  flex: none;
+  color: var(--red);
+}
+.sound-set {
+  display: grid;
+}
+.sound-set > .track + .track {
+  border-top: 1px dashed var(--line);
+}
+
+/* Create -> Image -> Tools */
+.tool-cards {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+.tool-cards .mode-card .mode-icon {
+  color: var(--red);
+}
+.segmented.wrap {
+  flex-wrap: wrap;
+}
+.mask-painter {
+  display: grid;
+  gap: 8px;
+}
+.mask-stage {
+  position: relative;
+  max-width: 100%;
+  width: fit-content;
+  border: 1px solid var(--line);
+  touch-action: none;
+}
+.mask-stage img {
+  display: block;
+  max-width: 100%;
+  max-height: 60vh;
+  user-select: none;
+}
+.mask-stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+.mask-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+.mask-tools label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Edit -> right-click -> Effects */
+.modal.clipfx {
+  width: min(820px, 100%);
+}
+.fx-cards {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+.fx-cards .mode-icon {
+  color: var(--red);
+}
+.fx-form {
+  display: grid;
+  gap: 12px;
+}
+.fx-slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fx-slider input {
+  flex: 1;
+}
+.fx-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Workflows -> Effects */
+.effects-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+.effects-photo {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+  margin: 0 auto 10px;
+  object-fit: contain;
+}
+.effect-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.effect-chip {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--paper);
+  font: inherit;
+  cursor: pointer;
+}
+.effect-chip:hover {
+  border-color: var(--line-strong);
+}
+.effect-chip.on {
+  box-shadow: inset 0 0 0 2px var(--red);
+  border-color: var(--red);
+  color: var(--cream);
+}
+.effects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+.effects-run {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  padding: 8px;
+}
+.effects-run video {
+  width: 100%;
+  max-height: 340px;
+  background: #000;
+}
+.effects-run-wait {
+  aspect-ratio: 9 / 16;
+  max-height: 340px;
+  display: grid;
+  place-items: center;
+}
+.effects-run-foot {
+  display: grid;
+  gap: 6px;
+}
+.effects-run-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}

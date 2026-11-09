@@ -31,6 +31,20 @@ export const CREDITS = [
       { name: 'Qwen3-VL', covers: ['describer'], by: 'Qwen (Alibaba)', use: 'Describing clips for Replace’s prompts', url: 'https://huggingface.co/Comfy-Org/Qwen3-VL' },
       { name: 'Qwen3-VL 8B abliterated', by: 'huihui-ai', use: 'The local prompt writer (through Ollama)', licence: 'Apache-2.0', url: 'https://ollama.com/huihui_ai/qwen3-vl-abliterated' },
       { name: 'InsightFace buffalo_l', by: 'InsightFace', use: 'Likeness scores for takes and training checkpoints', licence: 'Non-commercial', url: 'https://github.com/deepinsight/insightface' },
+      { name: 'Stable Audio 3 (medium)', by: 'Stability AI', covers: ['sa3', 'sa3_te'], use: 'Sounds: sound effects, ambiences, one-shots and loops', licence: 'Stable Audio Community License', url: 'https://huggingface.co/Comfy-Org/stable-audio-3' },
+      { name: 'Qwen Image Edit 2509 and its Relight LoRA', by: 'Qwen (Alibaba)', covers: ['relight_unet', 'relight_te', 'relight_vae', 'relight_lora'], use: 'Relight, in Create → Image → Tools', licence: 'Apache-2.0', url: 'https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI' },
+      { name: 'Qwen Image Lightning', by: 'lightx2v', covers: ['relight_lightning'], use: 'Relight in 4 steps', licence: 'Apache-2.0', url: 'https://huggingface.co/lightx2v/Qwen-Image-Lightning' },
+      { name: 'BiRefNet', by: 'ZhengPeng7', covers: ['birefnet'], use: 'Remove background, for pictures and clips', licence: 'MIT', url: 'https://github.com/ZhengPeng7/BiRefNet' },
+      { name: 'MoGe-2', by: 'Microsoft Research', covers: ['moge'], use: 'Depth maps, and the geometry behind Reshoot', licence: 'MIT', url: 'https://github.com/microsoft/MoGe' },
+      { name: 'LTX-2.5 (22B distilled, with its Gemma text encoder)', by: 'Lightricks', covers: ['ff_ltx_2_5_22b_distilled_transformer_comfy_int8_convrot', 'ff_gemma4_12b_with_proj_ltx_2_5_comfy_int8_convrot', 'ff_ltx_2_5_video_vae_bf16', 'ff_ltx_2_5_audio_vae_bf16'], use: 'Dub, the VFX passes, SDR to HDR, Transformations and Transitions', licence: 'LTX-2.x Community License', url: 'https://huggingface.co/Lightricks/LTX-2.5' },
+      { name: 'LTX IC-LoRAs: DubIt, Clean Plate, Day to Night, Water Simulation, SDR to HDR', by: 'Lightricks', covers: ['ff_ltx_2_3_22b_ic_lora_dubit_0_9', 'ff_ltx_2_5_22b_ic_lora_clean_plate_1_0', 'ff_ltx_2_5_22b_ic_lora_day_to_night_0_9', 'ff_ltx_2_5_22b_ic_lora_water_simulation_0_9', 'ff_ltx_2_5_22b_ic_lora_sdr_to_hdr_1_0', 'ff_ltx_2_5_22b_ic_lora_sdr_to_hdr_scene_emb'], use: 'The editor’s Dub and VFX effects', licence: 'LTX-2.x Community License', url: 'https://huggingface.co/Lightricks' },
+      { name: 'LTX transition LoRA', by: 'joyfox', covers: ['ff_ltx2_3_transition'], use: 'Transformations and Transitions', licence: 'Apache-2.0', url: 'https://huggingface.co/joyfox/LTX-2.3-Transition-LORA' },
+      { name: 'Wan 2.1 image-to-video 14B', by: 'Wan (Alibaba)', covers: ['ff_wan2_1_i2v_480p_14b_fp8_scaled', 'ff_umt5_xxl_fp8_e4m3fn_scaled', 'ff_clip_vision_h', 'ff_wan_2_1_vae'], use: 'The Effects gallery', licence: 'Apache-2.0', url: 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged' },
+      { name: 'Wan 2.1 effect LoRAs', by: 'Remade-AI, joyfox, lvfengchun and ostris', covers: ['ff_cakeify_16_epochs', 'ff_angry_face_5_epochs', 'ff_crying_20_epochs', 'ff_laughing_15_epochs', 'ff_puppy_50_epochs', 'ff_wan21_penqi_000003500', 'ff_money_000003000', 'ff_crush_20_epochs', 'ff_deflate_20_epochs', 'ff_electrify_50_epochs', 'ff_explode_30_epochs', 'ff_inflate_20_epochs', 'ff_rotate_20_epochs', 'ff_squish_18', 'ff_360_orbit', 'ff_arc_shot', 'ff_wan21_i2v_rotation_000003750', 'ff_car_chase', 'ff_crane_down', 'ff_crane_overhead', 'ff_crane_up', 'ff_crash_zoom_in', 'ff_wan_21_i2v_dolly_zoom', 'ff_hero_run'], use: 'The 24 effects: Cakeify, Explode, Money rain, 360° orbit and the rest', licence: 'Apache-2.0', url: 'https://huggingface.co/Remade-AI' },
+      { name: 'Wan 2.1 step-distill LoRA', by: 'lightx2v', covers: ['ff_lightx2v_i2v_14b_480p_cfg_step_distill_rank64_bf16'], use: 'Fast Effects', licence: 'Apache-2.0', url: 'https://huggingface.co/Kijai/WanVideo_comfy' },
+      { name: 'MiniMax H3 CrossView Warp LoRA', by: 'Cseti', covers: ['ff_minimax_h3_ref2va_lora_crossview_warp_v1_3500'], use: 'Reshoot: the clip from a new angle', licence: 'MiniMax H3 Community License', url: 'https://huggingface.co/Cseti/MiniMax-H3_Ref2VA-LoRA-CrossView-Warp_v1' },
+      { name: 'MiniMax H3 Turbo (ref2v, 8 steps)', by: 'lightx2v', covers: ['ff_minimax_h3_ref2v_turbo_8step_v1_0_768p_comfyui_bf16'], use: 'Reshoot in 8 steps', url: 'https://huggingface.co/lightx2v/Minimax-h3-Turbo' },
+      { name: 'FILM frame interpolation', by: 'Google Research', covers: ['ff_film_net_fp16'], use: 'Smooth and slow motion', licence: 'Apache-2.0', url: 'https://github.com/google-research/frame-interpolation' },
       { name: 'Real-ESRGAN and RIFE', use: 'Upscaling and frame interpolation for finals in the cloud and on Linux', url: 'https://github.com/xinntao/Real-ESRGAN' }
     ]
   },
@@ -39,6 +53,7 @@ export const CREDITS = [
     items: [
       { name: 'ComfyUI', by: 'Comfy Org', use: 'Everything that renders: IV Studio is a front end for ComfyUI', licence: 'GPL-3.0', url: 'https://github.com/comfyanonymous/ComfyUI' },
       { name: 'Fizgig', by: 'shootthesound', use: 'Character LoRA training, on this PC, Modal and RunPod. RunPod training pods start from Fizgig’s own template.', url: 'https://github.com/shootthesound/Fizgig' },
+      { name: 'Freefield', by: 'Sammir Femat (neuregex)', use: 'The workflows behind Sounds, the picture tools, the editor’s Effects (new angle, dub, VFX, slow motion) and Workflows → Effects', licence: 'MIT', url: 'https://github.com/neuregex/freefield' },
       { name: 'OpenKatana', by: 'rk0neki', use: 'Shinobi, the motion-graphics films', licence: 'Apache-2.0', url: 'https://github.com/rk0neki/OpenKatana' },
       { name: 'OpenJutsu', by: 'D3voz', use: 'Replace’s earlier engine, and Finish (faces and colours)', licence: 'MIT', url: 'https://github.com/D3voz/openjutsu' },
       { name: 'Ollama', use: 'Runs the local prompt writer', licence: 'MIT', url: 'https://ollama.com' },
@@ -73,6 +88,8 @@ export const CREDITS = [
       { name: 'SeedVR2 Video Upscaler', by: 'numz', use: 'Detail restore (SeedVR2)', url: 'https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler' },
       { name: 'ComfyUI Frame Interpolation (RIFE)', by: 'Fannovel16', use: 'Frame interpolation for finals on Linux and in the cloud', url: 'https://github.com/Fannovel16/ComfyUI-Frame-Interpolation' },
       { name: 'Viggle Remake nodes and prompt guide', by: 'Viggle AI', use: 'Replace (Remake)', licence: 'Apache-2.0', url: 'https://huggingface.co/Viggle/Viggle-Remake/tree/main/comfyui/ComfyUI-Viggle-Remake' },
+      { name: 'ComfyUI-LTXVideo', by: 'Lightricks', use: 'Dub, VFX and SDR to HDR', url: 'https://github.com/Lightricks/ComfyUI-LTXVideo' },
+      { name: 'ComfyUI-CrossViewWarp', by: 'comfyrob', use: 'Reshoot', url: 'https://github.com/comfyrob/ComfyUI-CrossViewWarp' },
       { name: 'IV Studio nodes', by: 'Infinite Variance', use: 'The latent cache, picks that survive restarts, the shot list', licence: 'MIT', url: 'https://github.com/hollisorg/iv-studio/tree/main/resources/comfy-nodes/ComfyUI-IV-Studio' }
     ]
   },

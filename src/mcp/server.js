@@ -47,6 +47,8 @@ import { Replace, RESOLUTIONS } from '../service/replace'
 import { Remake, REMAKE_KINDS } from '../service/remake'
 import { VOICE_ENGINES, Voices } from '../service/voices'
 import { ACE_KEYS, monoDecoder, Music, MUSIC_DEFAULTS, MUSIC_ENGINES, REMIX } from '../service/music'
+import { SOUND_KINDS, SOUND_LIMITS, Sounds } from '../service/sounds'
+import { CLIP_FX, FreefieldApps } from '../service/freefield'
 import { IMAGE_ASPECTS, IMAGE_FAMILIES, Images } from '../service/images'
 import { RefMods } from '../service/refmods'
 import { Civitai, LORA_SORTS, LORA_TAGS } from '../service/civitai'
@@ -560,6 +562,17 @@ tool('reframe', `Put a video or picture in a new frame shape (9:16, 1:1, 4:5 or 
   return /\.(png|jpe?g|webp|bmp)$/i.test(args.file) ? reframes.makePicture(args) : reframes.make(args)
 })
 const cutouts = new Cutouts({ dataDir: DATA, studio: () => studio, edits })
+// ---------- Clip effects and Workflows -> Effects: Freefield's apps (freefield.js) on this PC's ComfyUI ----------
+const clipfx = new FreefieldApps({ resourcesDir: resourcesDir(), dataDir: DATA, studio: () => studio })
+tool('effects_list', `The video and photo effects IV Studio can run (Freefield's apps): ${Object.entries(CLIP_FX).map(([k, v]) => `${k} (${v.label.toLowerCase()}; takes a ${v.media})`).join(', ')}. Give fx to get one effect's inputs (ids, types, options with their values, limits, defaults) and whether this ComfyUI can run it (missing node packs or models).`, { fx: z.enum(Object.keys(CLIP_FX)).optional() }, async ({ fx }) => (fx ? { ...clipfx.meta(fx), status: await clipfx.status(fx) } : { items: Object.keys(CLIP_FX).map((k) => ({ fx: k, ...CLIP_FX[k] })), status: await clipfx.statusAll() }))
+tool('run_effect', 'Run one effect on this PC (free, local; a few minutes) and wait for it. file: a video (reshoot, dub, cleanplate, night, water, hdr, removebg, smooth) or a picture (effects, morph, transitions; transitions also takes last). values: the effect’s own inputs by id (effects_list fx=...), select inputs by their option value. Returns the result files (the first is the main video; a matte or a warp guide may follow). Put a result on an edit with add_media.', {
+  fx: z.enum(Object.keys(CLIP_FX)),
+  file: z.string().describe('Absolute path of the clip or picture'),
+  last: z.string().optional().describe('transitions: absolute path of the last frame'),
+  values: z.record(z.any()).optional(),
+  name: z.string().optional()
+}, async ({ fx, file, last, values, name }) => (readSettings(BASE).target === 'cloud' || (await voices.release()), clipfx.run({ fx, file, last, values: values || {}, name })))
+tool('list_effect_runs', 'Effects run so far, newest first: effect, source, values, status and result files.', {}, () => ({ items: clipfx.runs() }))
 tool('cut_out', `Cut out who or what you name from a picture or video (SAM 3.1 on this PC's ComfyUI, free): what stays is found in every frame and the rest turns see-through. Returns a PNG (pictures) or a WebM with a see-through background and the video's sound, plus coverage (how much of the frame stays). About 15 s for a picture and 30 s for a 5 s clip. Put it on a track above other footage (add_media, then edit_timeline); export_edit keeps it see-through. Use plain words ("person", "dog", "bird"): a fancier name ("bluebird") can catch someone else while the thing is off screen, and when it leaves the frame the track can jump to something nearby, so check the frames. Fails when nothing matching is found: try other words.`, {
   file: z.string().describe('A picture or video on this PC'),
   what: z.string().default('person').describe('Who or what stays: "person", "the woman", "the dog", "the red car"'),
@@ -1018,6 +1031,22 @@ tool('remix_music', `Remix a song on this PC (free, local, ACE-Step 1.5 Turbo, s
 tool('read_song', "A song's length, tempo (BPM) and a guess at its key, read on this PC. Give a sound file or a songId.", { source: z.string().optional(), songId: z.string().optional() }, (args) => music.analyse(args))
 tool('list_music', 'Every song made in IV Studio, newest first, with status, file (once finished), length, engine, style, lyrics, seed, and remix (the song and strength it came from) for remixes.', {}, () => music.list())
 tool('get_music', 'One song, brought up to date: status (queued, running, success, error), progress, and its file once finished.', { songId: z.string() }, ({ songId }) => music.get(songId))
+
+// ---------- Audio: sounds (Stable Audio 3 on this PC's ComfyUI) ----------
+const sounds = new Sounds({ studio, dataDir: DATA, probe: (f) => edits.probe(f) })
+tool('sound_status', "Whether this PC's ComfyUI can make sounds (Stable Audio 3, Stable Audio Community License): its two models and nodes. The person downloads missing ones on Audio > Sounds.", {}, () => sounds.status())
+tool('write_sound', 'Turn a few words into a full sound description and a length, with the person\'s prompt writer (Settings).', { idea: z.string(), kind: z.enum(SOUND_KINDS.map((k) => k.id)).default('sfx') }, (args) => sounds.write(args))
+tool('make_sound', `Make a sound effect, ambience, one-shot or short music loop on this PC (free, local, Stable Audio 3, seconds). Kinds: ${SOUND_KINDS.map((k) => `${k.id} (${k.label.toLowerCase()}, about ${k.seconds} s)`).join(', ')}. Describe the source, material, space and how it moves over time. takes makes 1-${SOUND_LIMITS.takes} variations at once. Returns the sound at once; follow with get_sound until status is success, then each take's file goes on an edit with add_media (A2 under the music).`, {
+  description: z.string(),
+  kind: z.enum(SOUND_KINDS.map((k) => k.id)).default('sfx'),
+  seconds: z.number().min(SOUND_LIMITS.min).max(SOUND_LIMITS.max).optional(),
+  takes: z.number().int().min(1).max(SOUND_LIMITS.takes).default(1),
+  name: z.string().optional(),
+  seed: z.number().int().min(0).optional()
+}, async (args) => (readSettings(BASE).target === 'cloud' || (await voices.release()), sounds.create(Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined)))))
+tool('list_sounds', 'Every sound made in IV Studio, newest first: status, kind, description, length, seed and its takes (files) once finished.', {}, async () => ({ items: await sounds.list() }))
+tool('get_sound', 'One sound, brought up to date: status, progress, and its takes (files) once finished.', { soundId: z.string() }, ({ soundId }) => sounds.get(soundId))
+tool('delete_sound', 'Delete a sound and its files (a sound still being made is stopped).', { soundId: z.string() }, ({ soundId }) => sounds.delete(soundId))
 tool('cancel_music', 'Stop a song that is still being made. Never touches other ComfyUI work.', { songId: z.string() }, ({ songId }) => music.cancel(songId))
 tool('rename_music', 'Rename a song.', { songId: z.string(), name: z.string().min(1) }, ({ songId, name }) => music.rename(songId, name))
 tool('delete_music', "Delete a song and its file in IV Studio's music folder (ComfyUI's own output copy stays). Ask the person first.", { songId: z.string() }, ({ songId }) => music.delete(songId))
@@ -1104,6 +1133,23 @@ tool('make_image', "Make pictures on this PC (free, local). mode generate: from 
   cfg: z.number().min(0).max(20).optional(),
   name: z.string().optional()
 }, async (args) => (readSettings(BASE).target === 'cloud' || (await voices.release()), images.create(Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined)))))
+tool('picture_tools_status', 'Which one-step picture tools this PC\'s ComfyUI can run (inpaint, relight, removebg, upscale, depth) and what each still needs; also the relight presets and depth outputs.', {}, () => images.toolsStatus())
+tool('picture_tool', 'Run a one-step tool on a picture on this PC (free, local); the result joins the picture gallery (follow with get_image). inpaint: mask is a picture, white where to change, and prompt says what that part becomes (Flux 3 Klein). relight: light is one of the relight presets\' words (picture_tools_status), with optional direction, quality, brightness, color (their words too) and details (Qwen Image Edit 2509 + Relight LoRA). removebg: the subject on transparency, a PNG (BiRefNet). upscale: scale 2 or 4 with restored detail (SeedVR2). depth: output depth_colored, depth, normal_opengl or normal_directx (MoGe-2).', {
+  tool: z.enum(['inpaint', 'relight', 'removebg', 'upscale', 'depth']),
+  image: z.string().describe('Absolute path of the picture'),
+  mask: z.string().optional().describe('inpaint: absolute path of the mask picture, white where to change'),
+  prompt: z.string().optional().describe('inpaint: what the painted part becomes'),
+  light: z.string().optional(),
+  direction: z.string().optional(),
+  quality: z.string().optional(),
+  brightness: z.string().optional(),
+  color: z.string().optional(),
+  details: z.string().optional(),
+  scale: z.union([z.literal(2), z.literal(4)]).optional(),
+  output: z.enum(['depth_colored', 'depth', 'normal_opengl', 'normal_directx']).optional(),
+  seed: z.number().int().min(0).optional(),
+  name: z.string().optional()
+}, async (args) => (readSettings(BASE).target === 'cloud' || (await voices.release()), images.tool(Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined)))))
 tool('list_images', 'Every picture set made in IV Studio, newest first, with status, files (once finished), model, prompt and seed.', {}, () => images.list())
 tool('get_image', 'One picture set, brought up to date: status (queued, running, success, error), progress, and its files once finished.', { imageId: z.string() }, ({ imageId }) => images.get(imageId))
 tool('cancel_image', 'Stop a picture set that is still being made. Never touches other ComfyUI work.', { imageId: z.string() }, ({ imageId }) => images.cancel(imageId))

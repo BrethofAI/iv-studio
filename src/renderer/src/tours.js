@@ -58,13 +58,15 @@ export const TOURS = {
     title: 'Create a picture',
     steps: [
       { at: '.create-kind', title: 'Video or picture', text: 'Image makes still pictures. Switch back to Video for shots with sound.' },
-      { at: 'step:What to make', title: 'Make or edit', text: 'Generate makes new pictures from words. Edit changes a picture you give it.' },
+      { at: 'step:What to make', title: 'Make, edit or fix', text: 'Generate makes new pictures from words. Edit changes a picture you give it. Tools are one-step fixes: inpaint, relight, remove the background, upscale, depth map.' },
+      { at: 'step:The tool', title: 'The tool', text: 'Pick a fix. One that still needs its model says so and downloads it here.' },
+      { at: 'step:The picture', title: 'The picture', text: 'Drop in a picture, or open one of yours below and press Fix this. For Inpaint, paint over the part to change.' },
       { at: 'step:The model', title: 'The model', text: 'Each family has its own look and speed. Makes means it creates pictures; edits means it can also change one.' },
       { at: 'step:The picture to edit', title: 'The picture to edit', text: 'Drop in the picture to change.' },
       { at: ['step:What it shows', 'step:What to change'], title: 'Describe it', text: 'Write what you want to see, or for Edit, what to change. LoRAs for the chosen model add a look or a style.' },
       { at: 'step:Shape and size', title: 'Shape and size', text: 'The picture shape, its size and how many to make at once.' },
       { at: '.shot-card', title: 'Make it', text: 'A summary and the button that makes the pictures.' },
-      { at: '.image-gallery', title: 'Your pictures', text: 'Everything you made. Open one to use it as a shot’s first frame, edit it, or make more like it.' }
+      { at: '.image-gallery', title: 'Your pictures', text: 'Everything you made, fixes included. Open one to use it as a shot’s first frame, edit it, fix it, or make more like it.' }
     ]
   },
   projects: {
@@ -307,6 +309,25 @@ export const TOURS = {
       { at: '.composer-foot', title: 'Make it', text: 'Songs land below. Add one to an edit or use it in a shot.' }
     ]
   },
+  effects: {
+    title: 'Effects',
+    steps: [
+      { at: '.stage-drop', title: 'Start with a photo', text: 'Drop a photo on the banner, or pick one. One clear subject, well lit, works best.' },
+      { at: 'step:What happens', title: 'What happens', text: 'An effect from the gallery, a transformation that keeps the face, or a transition from one picture into another.' },
+      { at: '.effect-gallery', title: 'The effect', text: 'Pick one. Each is its own trained look, from Cakeify to a 360° orbit.' },
+      { at: 'step:Fine-tune', title: 'Fine-tune', text: 'Who is in the photo, extra direction, strength, shape and length. The defaults are a good first try.' },
+      { at: '.shot-card', title: 'Make it', text: 'It renders on this PC in a few minutes and lands below, and in the Library.' }
+    ]
+  },
+  sounds: {
+    title: 'Sounds',
+    steps: [
+      { at: '.sound-kinds', title: 'What kind', text: 'A sound effect, an ambience, a one-shot for music, or a short loop. Each sets a likely length.' },
+      { at: '.composer label.field', title: 'The sound', text: 'What makes it, what it is made of, where it happens. Or a few words and Write it for me: your prompt writer fills in the rest.' },
+      { at: '.composer .field-grid', title: 'Length and takes', text: 'Up to four takes at once, so you can pick the best.' },
+      { at: '.composer-foot', title: 'Make it', text: 'Sounds land below. Add to edit puts a take on A2, under the music.' }
+    ]
+  },
   library: {
     title: 'Library',
     steps: [
@@ -319,7 +340,7 @@ export const TOURS = {
 }
 
 // the page each banner art belongs to, when the page doesn't name its own tour
-export const TOUR_FOR_ART = { create: 'create', shots: 'shots', projects: 'projects', edit: 'edits', characters: 'characters', voices: 'voices', lines: 'lines', music: 'music', workflows: 'workflows', sequences: 'sequences', shinobi: 'shinobi', replace: 'replace', sizzle: 'sizzle', rebuild: 'rebuild', loras: 'loras', library: 'library', settings: 'settings', cloud: 'cloud' }
+export const TOUR_FOR_ART = { create: 'create', shots: 'shots', projects: 'projects', edit: 'edits', characters: 'characters', voices: 'voices', lines: 'lines', music: 'music', sounds: 'sounds', effects: 'effects', workflows: 'workflows', sequences: 'sequences', shinobi: 'shinobi', replace: 'replace', sizzle: 'sizzle', rebuild: 'rebuild', loras: 'loras', library: 'library', settings: 'settings', cloud: 'cloud' }
 
 const SEEN = 'iv.toursSeen'
 export function toursSeen() {

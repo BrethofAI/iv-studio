@@ -260,6 +260,17 @@ contextBridge.exposeInMainWorld('ivstudio', {
     delete: call('music:delete'),
     toEdit: call('music:toEdit')
   },
+  sounds: {
+    meta: call('sounds:meta'),
+    status: call('sounds:status'),
+    write: call('sounds:write'),
+    create: call('sounds:create'),
+    list: call('sounds:list'),
+    rename: call('sounds:rename'),
+    cancel: call('sounds:cancel'),
+    delete: call('sounds:delete'),
+    toEdit: call('sounds:toEdit')
+  },
   images: {
     status: call('images:status'),
     create: call('images:create'),
@@ -267,8 +278,12 @@ contextBridge.exposeInMainWorld('ivstudio', {
     get: call('images:get'),
     cancel: call('images:cancel'),
     delete: call('images:delete'),
-    toEdit: call('images:toEdit')
+    toEdit: call('images:toEdit'),
+    toolsStatus: call('images:toolsStatus'),
+    tool: call('images:tool'),
+    saveMask: call('images:saveMask')
   },
+  clipfx: { meta: call('clipfx:meta'), status: call('clipfx:status'), run: call('clipfx:run'), runs: call('clipfx:runs'), deleteRun: call('clipfx:deleteRun'), onProgress: on('clipfx:progress') },
   library: { all: call('library:all'), toEdit: call('library:toEdit') },
   loras: {
     meta: call('loras:meta'),

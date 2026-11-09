@@ -18,9 +18,11 @@ import Settings from './components/Settings'
 import { ShinobiList, ShinobiProject } from './components/Shinobi'
 import Replace from './components/Replace'
 import Reel from './components/Reel'
+import Effects from './components/Effects'
 import Workflows from './components/Workflows'
 import { LinesPage, VoicesPage } from './components/Voices'
 import { MusicPage } from './components/Music'
+import { SoundsPage } from './components/Sounds'
 import MediaLibrary from './components/MediaLibrary'
 import Dashboard from './components/Dashboard'
 import TourHost from './components/Tour'
@@ -58,11 +60,12 @@ const SECTIONS = {
     ['voices', 'Voices'],
     ['lines', 'Lines'],
     ['music', 'Music'],
+    ['sounds', 'Sounds'],
     ['characters', 'Characters'],
     ['settings', 'Settings']
   ]
 }
-const SUBPAGES = { settings: ['setup'], library: ['shot'], projects: ['project'], edits: ['edit'], characters: ['character'], workflows: ['sequences', 'sequence', 'shinobi', 'shinobi-film', 'replace', 'reel', 'sizzle', 'sizzle-project', 'rebuild', 'rebuild-project'] }
+const SUBPAGES = { settings: ['setup'], library: ['shot'], projects: ['project'], edits: ['edit'], characters: ['character'], workflows: ['sequences', 'sequence', 'shinobi', 'shinobi-film', 'replace', 'reel', 'effects', 'sizzle', 'sizzle-project', 'rebuild', 'rebuild-project'] }
 const savedSection = () => {
   try {
     return localStorage.getItem('iv.section') === 'audio' ? 'audio' : 'video'
@@ -234,9 +237,9 @@ export default function App() {
       switchSection('video')
       return setPage('create')
     }
-    if (item.kind === 'music') {
+    if (item.kind === 'music' || item.kind === 'sound') {
       switchSection('audio')
-      return setPage('music')
+      return setPage(item.kind === 'sound' ? 'sounds' : 'music')
     }
     if (item.kind === 'replace') {
       switchSection('video')
@@ -415,6 +418,7 @@ export default function App() {
         {page === 'voices' && <VoicesPage {...ctx} />}
         {page === 'lines' && <LinesPage {...ctx} />}
         {page === 'music' && <MusicPage {...ctx} />}
+        {page === 'sounds' && <SoundsPage {...ctx} />}
         {page === 'media' && <MediaLibrary {...ctx} />}
         {page === 'library' && <Library {...ctx} />}
         {page === 'shot' && projectId && <Shot key={projectId} projectId={projectId} {...ctx} />}
@@ -427,6 +431,7 @@ export default function App() {
         {page === 'workflows' && <Workflows {...ctx} />}
         {page === 'replace' && <Replace {...ctx} />}
         {page === 'reel' && <Reel {...ctx} />}
+        {page === 'effects' && <Effects {...ctx} />}
         {page === 'shinobi' && <ShinobiList {...ctx} />}
         {page === 'sizzle' && <SizzleList {...ctx} />}
         {page === 'sizzle-project' && sizzleId && <SizzleProject key={sizzleId} sizzleId={sizzleId} {...ctx} />}
