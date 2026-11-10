@@ -5,12 +5,35 @@ import { cameraWords, defaultStage, previsWords, stagingWords } from '../../../s
 
 const HARNESS_NAME = { claude: 'Claude Code', codex: 'Codex' }
 
+// An idea from somewhere else (Create's banner bar, the Dashboard's "What do you want to make?") for Create's own
+// writer: it fills in the idea and, with write, writes the prompt straight away. Kept until a listening writer takes
+// it, so it survives the move from the Dashboard to Create.
+let pendingIdea = null
+export function sendIdea(idea, write = true) {
+  pendingIdea = { idea: String(idea || '').trim(), write }
+  window.dispatchEvent(new CustomEvent('iv:idea'))
+}
+
 // "Write it for me": a plain-words idea in, a finished H3 prompt out. context carries what the writer
 // should respect (mode, seconds, aspect, character, media, sequence, previous shot). names: who can go on the
 // staging board; its exact screen-side words go to the writer with the idea. onPrevis(clip): the board's grey
 // previs clip, for the form to add as a video reference (then the words name it as <Video n>).
-export default function PromptWriter({ context, current, onWritten, notify, go, compact = false, names = null, onPrevis = null }) {
+export default function PromptWriter({ context, current, onWritten, notify, go, compact = false, names = null, onPrevis = null, listen = false }) {
   const [idea, setIdea] = useState('')
+  // listen (Create's writer only): take ideas sent with sendIdea, and write them when asked to
+  const [writeNow, setWriteNow] = useState(false)
+  useEffect(() => {
+    if (!listen) return
+    const take = () => {
+      if (!pendingIdea?.idea) return
+      setIdea(pendingIdea.idea)
+      setWriteNow(!!pendingIdea.write)
+      pendingIdea = null
+    }
+    take()
+    window.addEventListener('iv:idea', take)
+    return () => window.removeEventListener('iv:idea', take)
+  }, [listen])
   const [board, setBoard] = useState(false)
   const [stage, setStage] = useState(null)
   const [previs, setPrevis] = useState(null)
@@ -61,6 +84,10 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
         ? `Looks at your ${visual.length === 1 ? (visual[0].kind === 'video' ? 'video' : 'picture') : `${visual.length} references`} and writes what it sees.`
         : `${status.model} can't see pictures; choose a model marked "sees pictures" in Settings to have it look at your references.`
       : null
+
+  useEffect(() => {
+    if (writeNow && idea.trim() && status) (setWriteNow(false), write())
+  }, [writeNow, idea, status])
 
   async function write() {
     setBusy(true)

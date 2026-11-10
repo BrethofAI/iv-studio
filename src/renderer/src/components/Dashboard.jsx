@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { fileUrl } from './edit/model'
-import Hero, { ART } from './Hero'
+import { ART } from './Hero'
+import Stage from './Stage'
+import QuickBar from './AudioQuick'
+import { sendIdea } from './PromptWriter'
 import { Tile, toSets, Viewer } from './MediaLibrary'
 import Loading from './Loading'
 
@@ -20,6 +23,7 @@ const RECENT = 8
 
 export default function Dashboard(ctx) {
   const { characters, start, startShotWith, go, notify, info, setup } = ctx
+  const [idea, setIdea] = useState('')
   // a Mac has no NVIDIA GPU for H3: until the cloud is on, say where shots render
   const macLocal = info?.platform === 'darwin' && setup && !setup.remote
   const [items, setItems] = useState(null)
@@ -39,7 +43,18 @@ export default function Dashboard(ctx) {
 
   return (
     <div className="dashboard">
-      <Hero title="What if?" kicker="Infinite Variance Studio" help="home" />
+      <Stage effect="pulse" art="eye" title="What if?" kicker="Infinite Variance Studio" help="home">
+        {/* straight into Create, where the prompt writer turns the words into a shot (PromptWriter sendIdea) */}
+        <QuickBar
+          label="What do you want to make?"
+          placeholder="What do you want to make? A fox crossing a frozen lake at dawn…"
+          value={idea}
+          onChange={setIdea}
+          goLabel="Make it"
+          disabled={!idea.trim()}
+          onGo={() => (start('shot'), sendIdea(idea, true), setIdea(''))}
+        />
+      </Stage>
       {/* once after an update: what this version brought (news.js); all of it stays on Settings → Updates */}
       {ctx.news && (
         <section className="news-strip" aria-label="What's new">

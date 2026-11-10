@@ -21,7 +21,7 @@ export const TOURS = {
       { go: { page: 'edits', section: 'video' }, at: '.shelf-bar', title: 'Edit', text: 'A timeline editor for your shots, songs and titles, that can also make new footage right inside the edit.' },
       { go: { page: 'workflows', section: 'video' }, at: '.workflow-cards', title: 'Workflows', text: 'Tools for after a render: one-take sequences, swapping people, reels cut to a song, and agent-made edits.' },
       { go: { page: 'characters', section: 'video' }, at: ['.cast-section', '.train-paths'], title: 'Characters', text: 'Your recurring actors, the same in every shot. Add one you have, or train your own.' },
-      { go: { page: 'voices', section: 'audio' }, at: '.section-switch', title: 'The sound side', text: 'Visual and Audio switch the sidebar. Audio has Voices, Lines and Music.' },
+      { go: { page: 'audio', section: 'audio' }, at: '.section-switch', title: 'The sound side', text: 'Visual and Audio switch the sidebar. Audio has Voices, Lines, Music and Sounds.' },
       { go: { page: 'media', section: 'video' }, at: '.nav-library', title: 'Library', text: 'Everything you made, in one place: videos, pictures, songs and voice lines.' },
       { go: { page: 'cloud', section: 'video' }, at: '.cloud-guided', title: 'Cloud', text: 'No strong graphics card? Render on your own cloud GPU account instead.' },
       { go: { page: 'settings', section: 'video' }, at: '.settings-tabs', title: 'Settings and Setup', text: 'How IV Studio works for you, and what ComfyUI has and needs.' },
@@ -73,7 +73,8 @@ export const TOURS = {
     title: 'Projects',
     steps: [
       { title: 'A short film, step by step', text: 'Projects turns an idea or a script into a finished short film: story, cast, storyboard, filming and the final cut.' },
-      { at: '.shelf-bar', title: 'Find a film, or start one', text: 'Writing, Planning, Filming and Watching show where each film is, with a count. Search, sort, and + New film starts one.' },
+      { at: '.stage-quick', title: 'Find a film, or start one', text: 'Search your films here, and + New film starts one.' },
+      { at: '.shelf-bar', title: 'Where each film is', text: 'Writing, Planning, Filming and Watching, each with a count, and the sort order.' },
       { at: '.shelf-filters', title: 'Narrow it down', text: 'When you worked on it and its shape. Fold the panel away with Filters; Clear puts everything back.' },
       { at: '.shelf-group', title: 'By day', text: 'Films sit under the day you last worked on them. Click a day to fold it away; click a film to carry on where you left off.' }
     ]
@@ -91,7 +92,8 @@ export const TOURS = {
   shots: {
     title: 'Shots',
     steps: [
-      { at: '.shelf-bar', title: 'Find a shot', text: 'All, Finished, or still to pick, each with a count. Search by name, sort, or start a New shot.' },
+      { at: '.stage-quick', title: 'Find a shot', text: 'Search by name or by the words of a prompt, or start a New shot.' },
+      { at: '.shelf-bar', title: 'Which shots', text: 'All, Finished, or still to pick, each with a count, and the sort order.' },
       { at: '.shelf-filters', title: 'Narrow it down', text: 'When it was made, the kind of shot, who is in it and its shape. Counts show what each choice leaves. Fold the panel away with Filters; it remembers, and Clear puts everything back.' },
       { at: '.shelf-group-head', title: 'One day at a time', text: 'Shots sit under the day you last worked on them; older ones by month. The day stays at the top as you scroll, and a click folds it away.' },
       { at: '.shelf-tile', title: 'Open one', text: 'Hover to play its latest take. Inside, you watch the takes, pick the best and finish it at full size.' }
@@ -112,7 +114,7 @@ export const TOURS = {
   edits: {
     title: 'Edit',
     steps: [
-      { at: '.shelf-bar', title: 'Your edits', text: 'Search them, or start a new edit.' },
+      { at: '.stage-quick', title: 'Your edits', text: 'Search them, or start a new edit.' },
       { at: '.shelf-grid', title: 'Open an edit', text: 'Each edit is a timeline of your shots, pictures, songs and titles. Click one to open the editor.' }
     ]
   },
@@ -289,9 +291,17 @@ export const TOURS = {
       { at: '.comfy-updates', title: 'Updates', text: 'Keeps ComfyUI and its node packs up to date, with a snapshot first so you can undo.' }
     ]
   },
+  audio: {
+    title: 'Audio',
+    steps: [
+      { title: 'Everything you hear', text: 'Voices for your characters, the lines they say, songs and sound effects. Everything you make is kept for a shot or an edit.' },
+      { at: '.workflow-cards', title: 'The tools', text: 'Voices to make a voice, Lines to say something in it, Music for songs and scores, Sounds for effects and ambiences. Each card says what it needs.' }
+    ]
+  },
   voices: {
     title: 'Voices',
     steps: [
+      { at: '.stage-quick', title: 'Quick start', text: 'Describe a voice here and make three takes, or use the full form below for more.' },
       { at: '.engine-strip', title: 'The voice engine', text: 'Voices run on this PC, or on your cloud GPU while you render in the cloud. The first time, set them up once (about 12 GB, on this PC or in your cloud storage).' },
       { at: '.voice-grid', title: 'Your voices', text: 'Play each one, rename it, and give it to a character. That character’s shots then speak in it.' },
       { at: '.audio-card', title: 'A new voice', text: 'Describe a voice that doesn’t exist yet, or save one from a recording. Never a real person’s voice without their consent.' }
@@ -300,6 +310,7 @@ export const TOURS = {
   lines: {
     title: 'Lines',
     steps: [
+      { at: '.stage-quick', title: 'Quick start', text: 'Pick a voice, type the line and press Speak. The form below has the same words, plus the seed.' },
       { at: '.composer', title: 'Say a line', text: 'Pick a voice, type the words and press Speak (or Ctrl+Enter).' },
       { at: '.track-list', title: 'Spoken lines', text: 'Play them back. Use in a shot sends a line to Create, where the character lip-syncs it.' }
     ]
@@ -307,6 +318,7 @@ export const TOURS = {
   music: {
     title: 'Music',
     steps: [
+      { at: '.stage-quick', title: 'Quick start', text: 'Describe the music and make it, or Remix a song you already have. Lyrics and length are in the form below.' },
       { at: '.engine-cards', title: 'The engine', text: 'MiniMax Music sings words clearly. ACE-Step is quick for background music.' },
       { at: '.composer label.field', title: 'Style', text: 'Genre, mood, instruments, the voice and how it feels.' },
       { at: '.composer div.field', title: 'Lyrics', text: 'Mark the parts like [Verse] and [Chorus], or switch on Instrumental. A MiniMax song’s length follows its lyrics.' },
@@ -326,6 +338,7 @@ export const TOURS = {
   sounds: {
     title: 'Sounds',
     steps: [
+      { at: '.stage-quick', title: 'Quick start', text: 'Describe a sound and make it. Its kind, length and number of takes are in the form below.' },
       { at: '.sound-kinds', title: 'What kind', text: 'A sound effect, an ambience, a one-shot for music, or a short loop. Each sets a likely length.' },
       { at: '.composer label.field', title: 'The sound', text: 'What makes it, what it is made of, where it happens. Or a few words and Write it for me: your prompt writer fills in the rest.' },
       { at: '.composer .field-grid', title: 'Length and takes', text: 'Up to four takes at once, so you can pick the best.' },
@@ -335,7 +348,8 @@ export const TOURS = {
   library: {
     title: 'Library',
     steps: [
-      { at: '.shelf-bar', title: 'Everything you made', text: 'Videos, pictures, songs and voice lines in one place, each with a count. Search everything, even the words of a prompt, and sort, longest first too.' },
+      { at: '.stage-quick', title: 'Search everything', text: 'Videos, pictures, songs and voice lines in one place. Search them all, even the words of a prompt.' },
+      { at: '.shelf-bar', title: 'Everything you made', text: 'Each kind with a count, and the sort order, longest first too.' },
       { at: '.shelf-filters', title: 'Narrow it down', text: 'When it was made, where it came from, and for shots their kind, who is in them, their shape and the model. Fold the panel away with Filters; it remembers.' },
       { at: '.shelf-group-head', title: 'One day at a time', text: 'Everything sits under the day it was made, older work by month. Click a day to fold it away.' },
       { at: '.lib-tile', title: 'One tile per thing', text: 'A shot’s previews and finals sit in one tile, with its size, length and model. Open it to step through every version with the arrow keys and see how each was made: settings, seed, finish, render time, cost and the prompt.' }
@@ -344,7 +358,7 @@ export const TOURS = {
 }
 
 // the page each banner art belongs to, when the page doesn't name its own tour
-export const TOUR_FOR_ART = { create: 'create', shots: 'shots', projects: 'projects', edit: 'edits', characters: 'characters', voices: 'voices', lines: 'lines', music: 'music', sounds: 'sounds', effects: 'effects', workflows: 'workflows', sequences: 'sequences', shinobi: 'shinobi', replace: 'replace', sizzle: 'sizzle', rebuild: 'rebuild', loras: 'loras', library: 'library', settings: 'settings', cloud: 'cloud' }
+export const TOUR_FOR_ART = { create: 'create', shots: 'shots', projects: 'projects', edit: 'edits', characters: 'characters', audio: 'audio', voices: 'voices', lines: 'lines', music: 'music', sounds: 'sounds', effects: 'effects', workflows: 'workflows', sequences: 'sequences', shinobi: 'shinobi', replace: 'replace', sizzle: 'sizzle', rebuild: 'rebuild', loras: 'loras', library: 'library', settings: 'settings', cloud: 'cloud' }
 
 const SEEN = 'iv.toursSeen'
 export function toursSeen() {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import Hero from './Hero'
+import Stage from './Stage'
+import QuickBar, { showBelow } from './AudioQuick'
 import { ask } from './Confirm'
 import { ListSearch, MoreMenu, Track } from './AudioKit'
 
@@ -316,7 +317,7 @@ function SongRow({ song, edits, notify, sendToCreate, openEdit, reuse, remixThis
   )
 }
 
-export function MusicPage({ notify, sendToCreate, openEdit }) {
+export function MusicPage({ notify, sendToCreate, openEdit, go }) {
   const [meta, setMeta] = useState(null)
   const [status, setStatus] = useState(null)
   const [engine, setEngine] = useState('minimax')
@@ -386,7 +387,25 @@ export function MusicPage({ notify, sendToCreate, openEdit }) {
 
   return (
     <div className="voices music audio-page" ref={top}>
-      <Hero art="music" title="Music" kicker="Audio" />
+      <Stage effect="rings" art="music" title="Music" kicker="Audio" help="music" back={{ label: 'Audio', onClick: () => go('audio') }}>
+        <QuickBar
+          label="Describe the music"
+          placeholder="Describe the music: genre, mood, instruments…"
+          value={form.caption}
+          onChange={(caption) => set({ caption })}
+          goLabel="Make it"
+          busyLabel="Making…"
+          busy={busy}
+          disabled={busy || !spec?.ready || !form.caption.trim()}
+          onGo={() => (setMode('new'), make())}
+          after={
+            <button className="btn" onClick={() => (setMode('remix'), showBelow('.music .composer'))}>
+              Remix a song
+            </button>
+          }
+          note={status && spec && !spec.ready ? { text: `${meta?.engines.find((e) => e.id === engine)?.label || 'This engine'} isn’t ready yet.`, action: { label: 'See what it needs', onClick: () => (setMode('new'), showBelow('.music .composer')) } } : null}
+        />
+      </Stage>
       <p className="lede">
         Songs and scores, made on this PC.
         <span className="lede-small dim">Describe the music, add lyrics or keep it instrumental, or remix a song you already have. Use it under an edit or as the song a character sings in a shot. Every song is kept here.</span>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import SetupProgress, { useSetupProgress } from './SetupProgress'
 import ModalAccount from './ModalAccount'
-import Hero from './Hero'
+import Stage from './Stage'
 import { ask } from './Confirm'
 import { BetaJoin, useUsage } from './Privacy'
 
@@ -414,7 +414,23 @@ export default function Cloud({ notify, recheck, setup, info }) {
 
   return (
     <div className="cloud">
-      <Hero art="cloud" title="Cloud" kicker="Your own GPU · by the second" />
+      <Stage effect="dream" art="cloud" title="Cloud" kicker="Your own GPU · by the second">
+        {/* where renders go, switched here as in Render on below, and the guided setup */}
+        <div className="stage-panel stage-quick stage-cloud">
+          <div className="segmented" role="radiogroup" aria-label="Render on">
+            <button role="radio" aria-checked={!onCloud} className={!onCloud ? 'on' : ''} disabled={!!busy} onClick={() => !onCloud || use('local')}>
+              This PC
+            </button>
+            <button role="radio" aria-checked={onCloud} className={onCloud ? 'on' : ''} disabled={!!busy || !setUpDone} title={setUpDone ? '' : 'Set up a cloud first'} onClick={() => onCloud || use('cloud')}>
+              Cloud
+            </button>
+          </div>
+          <span className="stage-cloud-status mono small">{busy ? `${busy}…` : onCloud ? wake || `Rendering on ${PROVIDERS.find((p) => p.id === st.provider)?.label}` : 'Rendering on this PC'}</span>
+          <button className="btn btn-primary" onClick={() => window.dispatchEvent(new CustomEvent('iv:cloud-wizard'))}>
+            Guided setup
+          </button>
+        </div>
+      </Stage>
       <p className="lede">
         No strong graphics card? Render on a cloud GPU instead.
         <span className="lede-small dim">Pick a cloud service below and set it up once; then switch between this PC and the cloud whenever you like.</span>

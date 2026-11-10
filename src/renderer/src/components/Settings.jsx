@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import StartComfy, { RestartComfy } from './StartComfy'
 import { UpdateSettings } from './Update'
-import Hero, { ART } from './Hero'
+import { ART } from './Hero'
+import Stage from './Stage'
 import { ask } from './Confirm'
 import { setUnblurred } from './Loras'
 import { SetCard, SetField, SetSwitch, Pill, SetPath, SetCode } from './SettingsKit'
@@ -983,7 +984,7 @@ export default function Settings({ info, recheck, notify, go, setup }) {
 
   return (
     <div className="settings settings-v2">
-      <Hero art="settings" title="Settings" kicker="Infinite Variance" />
+      <Stage effect="dial" art="settings" title="Settings" kicker="Infinite Variance" />
       <SettingsTabs tab="settings" go={go} setup={setup} />
 
       <div className="set-layout">

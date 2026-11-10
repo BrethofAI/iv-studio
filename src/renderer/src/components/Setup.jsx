@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import Hero from './Hero'
+import Stage from './Stage'
 import { SettingsTabs } from './Settings'
 import StartComfy, { RestartComfy } from './StartComfy'
 import GetComfy from './GetComfy'
@@ -251,7 +251,7 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
 
   return (
     <div className="setup">
-      <Hero art="settings" title="Settings" kicker="Infinite Variance" help="setup" />
+      <Stage effect="dial" art="settings" title="Settings" kicker="Infinite Variance" help="setup" />
       <SettingsTabs tab="setup" go={go} setup={setup} />
 
       <section className={`setup-summary ${verdict.tone}`}>

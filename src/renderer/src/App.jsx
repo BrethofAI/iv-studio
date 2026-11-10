@@ -24,6 +24,7 @@ import Workflows from './components/Workflows'
 import { LinesPage, VoicesPage } from './components/Voices'
 import { MusicPage } from './components/Music'
 import { SoundsPage } from './components/Sounds'
+import AudioHome from './components/AudioHome'
 import MediaLibrary from './components/MediaLibrary'
 import Dashboard from './components/Dashboard'
 import TourHost from './components/Tour'
@@ -58,6 +59,7 @@ const SECTIONS = {
     ['settings', 'Settings']
   ],
   audio: [
+    ['audio', 'Audio'],
     ['voices', 'Voices'],
     ['lines', 'Lines'],
     ['music', 'Music'],
@@ -91,7 +93,7 @@ export default function App() {
       localStorage.setItem('iv.createKind', kind)
     } catch {}
   }
-  const [page, setPage] = useState(() => (savedSection() === 'audio' ? 'voices' : 'home'))
+  const [page, setPage] = useState(() => (savedSection() === 'audio' ? 'audio' : 'home'))
   // a spoken line or a song on its way to Create's voice line (Lines or Music > Use in a shot)
   const [lineForCreate, setLineForCreate] = useState(null)
   // a LoRA on its way to Create's LoRA tray (LoRAs > Use in a shot)
@@ -421,6 +423,7 @@ export default function App() {
             <Create {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} incomingLine={lineForCreate} clearIncomingLine={() => setLineForCreate(null)} incomingLora={loraForCreate} clearIncomingLora={() => setLoraForCreate(null)} incomingPicture={pictureForCreate} clearIncomingPicture={() => setPictureForCreate(null)} incomingCharacter={characterForCreate} clearIncomingCharacter={() => setCharacterForCreate(null)} incomingRun={runForCreate} clearIncomingRun={() => setRunForCreate(null)} />
           ))}
         {page === 'loras' && <LorasPage {...ctx} />}
+        {page === 'audio' && <AudioHome {...ctx} />}
         {page === 'voices' && <VoicesPage {...ctx} />}
         {page === 'lines' && <LinesPage {...ctx} />}
         {page === 'music' && <MusicPage {...ctx} />}

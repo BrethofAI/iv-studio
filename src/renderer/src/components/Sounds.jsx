@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import Hero from './Hero'
+import Stage from './Stage'
+import QuickBar, { showBelow } from './AudioQuick'
 import { ask } from './Confirm'
 import { ListSearch, MoreMenu, Track } from './AudioKit'
 
@@ -158,7 +159,7 @@ function SoundRow({ sound, kinds, edits, notify, reuse, reload, openEdit }) {
   )
 }
 
-export function SoundsPage({ notify, openEdit }) {
+export function SoundsPage({ notify, openEdit, go }) {
   const [meta, setMeta] = useState(null)
   const [status, setStatus] = useState(null)
   const [form, setForm] = useState(blank)
@@ -221,7 +222,26 @@ export function SoundsPage({ notify, openEdit }) {
   }
   return (
     <div className="voices music sounds audio-page" ref={top}>
-      <Hero art="sounds" title="Sounds" kicker="Audio" />
+      <Stage effect="ripple" art="sounds" title="Sounds" kicker="Audio" help="sounds" back={{ label: 'Audio', onClick: () => go('audio') }}>
+        <QuickBar
+          label="Describe a sound"
+          placeholder={kind?.example || 'Describe a sound: what makes it, where it happens…'}
+          value={form.description}
+          onChange={(description) => set({ description, idea: description })}
+          goLabel="Make it"
+          busyLabel="Making…"
+          busy={busy}
+          disabled={busy || !status?.ready || !form.description.trim()}
+          onGo={make}
+          note={
+            status?.remote
+              ? { text: 'Sounds are made on this PC’s ComfyUI. Switch to This PC on the Cloud page to make them.' }
+              : status && !status.ready && !status.error
+                ? { text: 'Stable Audio 3 isn’t downloaded yet.', action: { label: 'See what it needs', onClick: () => showBelow('.sounds .composer') } }
+                : null
+          }
+        />
+      </Stage>
       <p className="lede">
         Sound effects and ambiences, made on this PC.
         <span className="lede-small dim">Describe a sound, or a few words and Write it for me. Make up to four takes at once and put the one you like under an edit, on A2 beneath the music.</span>

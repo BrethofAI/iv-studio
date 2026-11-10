@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Hero from './Hero'
+import Stage from './Stage'
+import QuickBar, { showBelow } from './AudioQuick'
+import { sendIdea } from './PromptWriter'
 import { MediaEditor, MediaTile } from './MediaEditor'
 import PromptWriter from './PromptWriter'
 import { LoraPicker, LoraThumb, loraTitle, useYours } from './Loras'
@@ -172,6 +174,8 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const sd = form.engine === 'seedance'
   // Seedance: what the hunt would cost, from ComfyUI's own price for each take (pricing.js)
   const [price, setPrice] = useState(null)
+  // the banner bar's idea, handed to the prompt writer below when Write it for me is pressed
+  const [quickIdea, setQuickIdea] = useState('')
   // how long this hunt will take here, from this machine's own renders (src/service/timing.js)
   const [eta, setEta] = useState(null)
   useEffect(() => {
@@ -431,7 +435,18 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
 
   return (
     <div className="create create-v2">
-      <Hero art="create" title="Create" kicker="New shot" />
+      <Stage effect="sparks" art="create" title="Create" kicker="New shot">
+        {/* the idea goes to the prompt writer under What happens, which writes the shot's prompt */}
+        <QuickBar
+          label="Your idea"
+          placeholder="Your idea in plain words: who, where, what happens…"
+          value={quickIdea}
+          onChange={setQuickIdea}
+          goLabel="Write it for me"
+          disabled={!quickIdea.trim()}
+          onGo={() => (sendIdea(quickIdea, true), setQuickIdea(''), showBelow('.create .writer'))}
+        />
+      </Stage>
       {kindSwitch}
 
       {form.projectId && (
@@ -643,6 +658,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
           <section className="create-step">
             <StepHead n={steps.what} title="What happens" sub={sd ? 'Who, what happens, where, the camera and the sound, in plain sentences. Give every reference a job.' : 'Clothes, place, camera, action and the lines. Never the face or voice: the character carries those.'} subPlain={sd ? 'Say who is there, what happens, where, how the camera moves and what we hear. Say what each of your pictures is for.' : 'Describe the clothes, the place, the camera, what happens and what is said. Skip the face and voice: the character already has those.'} />
             <PromptWriter
+              listen
               context={{ engine: form.engine, mode: form.mode, seconds: form.seconds, aspect: form.aspect, character: form.character ?? 'none', media: form.media.map((m) => ({ kind: m.kind, file: m.path })), voiceLine: form.voiceLine || null }}
               current={form.prompt}
               names={char ? [char.name, ...characters.filter((c) => c.id !== char.id).map((c) => c.name), 'Someone'] : ['Someone', ...characters.map((c) => c.name)]}

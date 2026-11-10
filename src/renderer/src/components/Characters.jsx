@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { LoraPicker, loraTitle } from './Loras'
 import { ask } from './Confirm'
 import Hero from './Hero'
+import Stage from './Stage'
+import QuickBar from './AudioQuick'
 import TileDelete from './TileDelete'
 import { MediaEditor, MediaTile } from './MediaEditor'
 import { fileUrl } from './edit/model'
@@ -96,7 +98,10 @@ export function CharacterList({ openCharacter, notify, characters, setCharacters
 
   return (
     <div className="characters">
-      <Hero art="characters" title="Characters" kicker="Your recurring actors" />
+      <Stage effect="halo" art="characters" title="Characters" kicker="Your recurring actors">
+        {/* the same name as Train your own -> Design and train below: a new character to design */}
+        <QuickBar label="A new character's name" placeholder="Name a new character, e.g. Maya Ortiz" value={name} onChange={setName} goLabel="Design them" disabled={!name.trim()} onGo={create} />
+      </Stage>
       <p className="lede cast-lede">
         The people H3 plays, the same in every shot.
         <span className="lede-small dim">

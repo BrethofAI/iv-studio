@@ -13857,3 +13857,75 @@ button.set-chip:hover {
 .ed-share-hint {
   margin: 6px 0 0;
 }
+/* ---------- the audio pages' quick-start bars (AudioQuick.jsx) on their banners ---------- */
+.stage-quick {
+  flex-wrap: wrap;
+}
+.stage-quick input {
+  flex: 1 1 260px;
+}
+.stage-quick .btn {
+  flex: none;
+  min-height: 44px;
+  padding: 0 22px;
+  font-size: 13px;
+}
+.stage-quick-pick {
+  flex: 0 1 200px;
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  border-right: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--cream);
+  padding: 0 12px;
+}
+.stage-quick-pick option {
+  background: #1a1416;
+}
+.stage-quick-note .link-btn {
+  color: var(--cream);
+  text-decoration: underline;
+}
+@media (max-width: 900px) {
+  .stage-quick-pick {
+    flex-basis: 100%;
+    border-right: 0;
+    border-bottom: 1px solid var(--line-strong);
+  }
+  .stage-quick .btn {
+    flex: 1 1 auto;
+  }
+}
+/* ---------- the page banners' motion (Hero.jsx, heroMotion.js): over the picture, faded out towards the title ---------- */
+.hero-motion {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to right, transparent 32%, #000 62%);
+  mask-image: linear-gradient(to right, transparent 32%, #000 62%);
+}
+/* Incognito shuts the eye on every banner, and it stays still */
+.app.incognito .hero-motion {
+  display: none;
+}
+/* the Cloud page's banner bar: where renders go, and the guided setup */
+.stage-cloud {
+  align-items: center;
+}
+.stage-cloud .segmented button {
+  min-height: 40px;
+  padding: 0 18px;
+}
+.stage-cloud-status {
+  flex: 1 1 180px;
+  color: var(--paper);
+  text-align: left;
+  padding: 0 6px;
+}
+/* Incognito shuts the Dashboard's eye on its tall banner too */
+.app.incognito .stage-art-eye .stage-art {
+  background-image: url('./assets/eye-closed.webp') !important;
+}

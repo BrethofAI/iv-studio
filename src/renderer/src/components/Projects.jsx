@@ -5,6 +5,8 @@ import StageBoard from './StageBoard'
 import { needsPrevis } from '../../../service/staging'
 import { fileUrl } from './edit/model'
 import Hero from './Hero'
+import Stage from './Stage'
+import QuickBar from './AudioQuick'
 import Loading from './Loading'
 import { dayGroup, groupBy, WHEN, inWhen, Chips, useMore, Groups, FilterPanel } from './ShelfKit'
 import { LoraPicker } from './Loras'
@@ -155,7 +157,9 @@ export function ProjectsList({ notify, openProject }) {
 
   return (
     <div className="projects shelf-page">
-      <Hero art="projects" title="Projects" kicker="A short film, step by step" />
+      <Stage effect="spotlight" art="projects" title="Projects" kicker="A short film, step by step">
+        <QuickBar search label="Search films" placeholder="Search your films" value={q} onChange={setQ} goLabel="+ New film" disabled={busy} onGo={create} />
+      </Stage>
       <p className="lede">
         Turn an idea into a short film.
         <span className="lede-small dim">Say what it's about, get a script, cast your characters, see it as a storyboard, then film it shot by shot and watch it come together.</span>
@@ -169,7 +173,6 @@ export function ProjectsList({ notify, openProject }) {
               </button>
             ))}
           </div>
-          <input className="list-search" type="search" value={q} placeholder="Search films" onChange={(e) => setQ(e.target.value)} aria-label="Search films" />
           <label className="shelf-sort mono">
             Sort
             <select value={sort} onChange={(e) => setSort(e.target.value)}>
@@ -180,9 +183,6 @@ export function ProjectsList({ notify, openProject }) {
               ))}
             </select>
           </label>
-          <button className="btn btn-primary shelf-new proj-new" disabled={busy} onClick={create}>
-            + New film
-          </button>
         </div>
         {all.length > 0 && (
           <FilterPanel id="projects" total={all.length} shown={shown.length} onClear={() => (setPeriod('any'), setShape('all'))} active={[period !== 'any' && WHEN.find(([w]) => w === period)[1], shape !== 'all' && shape].filter(Boolean)}>

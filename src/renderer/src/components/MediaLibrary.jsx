@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { media } from '../media'
-import Hero from './Hero'
+import Stage from './Stage'
+import QuickBar from './AudioQuick'
 import { fileUrl } from './edit/model'
 import Loading from './Loading'
 import { dayGroup, groupBy, WHEN, inWhen, Chips, Near, useMore, Groups, FilterPanel } from './ShelfKit'
@@ -370,7 +371,9 @@ export default function MediaLibrary(ctx) {
 
   return (
     <div className="media-library">
-      <Hero art="library" title="Library" kicker="Everything you've made" />
+      <Stage effect="photos" art="library" title="Library" kicker="Everything you've made">
+        <QuickBar search label="Search the Library" placeholder="Search everything: videos, pictures, songs, lines, even prompts" value={q} onChange={setQ} />
+      </Stage>
       <p className="lede">
         Every video, picture, song and line you’ve made.
         <span className="lede-small dim">Each tile holds all its versions. Open one to watch them and see how each was made.</span>
@@ -384,7 +387,6 @@ export default function MediaLibrary(ctx) {
               </button>
             ))}
           </div>
-          <input className="list-search" type="search" value={q} placeholder="Search everything" onChange={(e) => setQ(e.target.value)} aria-label="Search the Library" />
           <label className="shelf-sort mono">
             Sort
             <select value={sort} onChange={(e) => setSort(e.target.value)}>

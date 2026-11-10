@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Hero from './Hero'
+import Stage from './Stage'
+import QuickBar from './AudioQuick'
 import { fileUrl } from './edit/model'
 import Loading from './Loading'
 
@@ -110,8 +111,11 @@ function useProgress() {
 }
 
 // ---------- Discover: Civitai ----------
-function Discover({ meta, onOpen, compact = false, family = 'h3' }) {
-  const [query, setQuery] = useState('')
+// query / setQuery: the search words, when the page above owns them (the LoRAs page's banner shares them)
+function Discover({ meta, onOpen, compact = false, family = 'h3', query: shared, setQuery: setShared }) {
+  const [own, setOwn] = useState('')
+  const query = setShared ? shared : own
+  const setQuery = setShared || setOwn
   const [tag, setTag] = useState('')
   const [sort, setSort] = useState('Most Downloaded')
   const [items, setItems] = useState([])
@@ -550,6 +554,7 @@ function Yours({ items, setItems, onPick, onOpenCivitai, compact = false, notify
 // ---------- the page ----------
 export function LorasPage({ notify, go, addLoraToCreate }) {
   const [tab, setTab] = useState('discover')
+  const [query, setQuery] = useState('')
   const [meta, setMeta] = useState(null)
   const [family, setFamilyState] = useState(savedFamily)
   const setFamily = (id) => {
@@ -572,7 +577,9 @@ export function LorasPage({ notify, go, addLoraToCreate }) {
   const fam = meta?.families?.find((f) => f.id === family)
   return (
     <div className="loras">
-      <Hero art="loras" title="LoRAs" kicker="Looks, moves and styles" />
+      <Stage effect="flare" art="loras" title="LoRAs" kicker="Looks, moves and styles">
+        <QuickBar search label="Search Civitai" placeholder={`Search Civitai for ${fam?.label || 'H3'} LoRAs: cinematic, anime, painterly…`} value={query} onChange={(v) => (setQuery(v), setTab('discover'))} />
+      </Stage>
       <p className="lede">
         Change how your models look and move.
         <span className="lede-small dim">Pick a model, then find its LoRAs on Civitai and download them straight into ComfyUI, or browse the ones you already have. Shots use MiniMax H3's; pictures use their own model's.</span>
@@ -590,7 +597,7 @@ export function LorasPage({ notify, go, addLoraToCreate }) {
       <div className="lora-layout">
         <div>
           {tab === 'discover' ? (
-            <Discover meta={meta} family={family} onOpen={(m) => setOpen(m.id)} />
+            <Discover meta={meta} family={family} onOpen={(m) => setOpen(m.id)} query={query} setQuery={setQuery} />
           ) : (
             <Yours meta={meta} family={family} items={items} setItems={setItems} notify={notify} onOpenCivitai={(id) => setOpen(id)} onPick={['ltx', 'wan'].includes(family) ? null : (x) => use({ name: x.name, words: x.prefs.triggers || x.civitai?.trainedWords || [], title: x.civitai?.name || loraTitle(x.name), family: x.family || family })} />
           )}
