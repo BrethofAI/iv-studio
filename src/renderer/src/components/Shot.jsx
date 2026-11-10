@@ -4,6 +4,8 @@ import { finishFor, savedSpeed, SPEEDS } from '../../../service/speed'
 import { media } from '../media'
 import Hero from './Hero'
 import Findings from './Findings'
+import Failure from './Failure'
+import { shapeOfPlan } from '../../../service/timing'
 import { LiveFrame } from './Live'
 import { CompareViewer, PromptDiff, runChanges } from './Compare'
 import { lintPrompt } from '../../../service/lint'
@@ -376,6 +378,16 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote, ownCloud }
   const [busy, setBusy] = useState(false)
   const set = (patch) => setOpts((o) => ({ ...o, ...patch }))
   const single = job.plan.request?.mode === 'continue'
+  // how long this finish will take here, from this machine's own finishes (src/service/timing.js)
+  const [eta, setEta] = useState(null)
+  useEffect(() => {
+    const r = job.plan.resolved || {}
+    const want = { kind: 'finish', megapixels: opts.megapixels, upscale2x: opts.upscale2x, enhancer: opts.enhancer, seconds: (r.frames || 0) / (r.fps || 24), fps: r.fps || 24 }
+    if (!shapeOfPlan(want)) return setEta(null)
+    let alive = true
+    window.ivstudio.timing.estimate(want).then((e) => alive && setEta(e), () => alive && setEta(null))
+    return () => (alive = false)
+  }, [opts.megapixels, opts.upscale2x, opts.enhancer, job.id])
   const hasVoice = !!job.plan.request?.voiceLine
 
   useEffect(() => {
@@ -489,6 +501,7 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote, ownCloud }
         </div>
       )}
       </div>
+      {eta?.line && <p className="eta-line small dim">{eta.line}</p>}
       <div className="finish-go">
         <span className="mono">{size ? `${size.width} × ${size.height} · ${size.fps} fps${single ? ' · single pass' : ''}` : '…'}</span>
         <button className="btn btn-primary" disabled={busy} onClick={go}>
@@ -564,7 +577,7 @@ function VersionsCard({ run, finishes, jobs, remote, ownCloud, caps, notify, mar
           </span>
         </div>
         <Progress job={v.job} />
-        {v.job.status === 'error' && <p className="notice">{v.job.error}</p>}
+        {v.job.status === 'error' && <Failure job={v.job} notify={notify} />}
         {v.out?.url && <video key={v.key} className="final-video" data-take={`${f.id}:final`} src={media(v.out.url)} controls preload="metadata" />}
         <div className="version-actions">
           {v.out?.path && (
@@ -872,7 +885,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
               {changes.length > 0 && <span className="run-changes mono small">Changed: {changes.join(' · ')}</span>}
             </div>
             <Progress job={run} />
-            {run.status === 'error' && <p className="notice">{run.error}</p>}
+            {run.status === 'error' && <Failure job={run} notify={notify} />}
             {req.prompt && (
               <details className="run-prompt">
                 <summary className="mono dim">

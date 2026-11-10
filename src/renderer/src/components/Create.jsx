@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Hero from './Hero'
 import { MediaEditor, MediaTile } from './MediaEditor'
 import PromptWriter from './PromptWriter'
@@ -13,6 +13,8 @@ import { lintSeedance } from '../../../service/seedlint'
 import { confirmSpend, dollars } from './ComfyAccount'
 import { SpeedRow } from './Speed'
 import { finishFor, previewFor, savedSpeed, speedOf } from '../../../service/speed'
+import Starters from './Starters'
+import { starterById, starterForm } from '../starters'
 
 // the preview pass's tested sampler and scheduler (plan.js DEFAULTS)
 const SAMPLER_DEFAULT = 'er_sde'
@@ -170,6 +172,8 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const sd = form.engine === 'seedance'
   // Seedance: what the hunt would cost, from ComfyUI's own price for each take (pricing.js)
   const [price, setPrice] = useState(null)
+  // how long this hunt will take here, from this machine's own renders (src/service/timing.js)
+  const [eta, setEta] = useState(null)
   useEffect(() => {
     if (!sd) return setPrice(null)
     let live = true
@@ -274,6 +278,23 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
     media.forEach((m, i) => window.ivstudio.media.probe(m.path).then((info) => setForm((f) => ({ ...f, media: f.media.map((x, j) => (j === i && x.path === m.path ? { ...x, info } : x)) })), () => {}))
     clearIncomingRun?.()
   }, [incomingRun])
+  // Start from an example (starters.js): the row on this page, or the welcome wizard's "Make your first shot"
+  const [starter, setStarter] = useState(null)
+  const applyStarter = (s) => {
+    setForm((f) => ({ ...f, ...starterForm(s) }))
+    setStarter(s.id)
+  }
+  const promptNow = useRef('')
+  promptNow.current = form.prompt
+  useEffect(() => {
+    const pick = (e) => {
+      const s = starterById(e.detail?.id)
+      // never over words someone has already written
+      if (s && !promptNow.current.trim()) applyStarter(s)
+    }
+    window.addEventListener('iv:starter', pick)
+    return () => window.removeEventListener('iv:starter', pick)
+  }, [])
   // "New shot" with a character from the dashboard
   useEffect(() => {
     if (!incomingCharacter) return
@@ -388,6 +409,15 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const [anyway, setAnyway] = useState(false)
   useEffect(() => setAnyway(false), [form.prompt])
   const r = plan?.resolved
+  useEffect(() => {
+    if (sd || !r?.width || !r?.frames) return setEta(null)
+    let alive = true
+    const fps = r.fps || 24
+    window.ivstudio.timing
+      .estimate({ kind: 'previews', megapixels: (r.width * r.height) / 1e6, seconds: r.frames / fps, fps, previews: r.previews, steps: form.steps })
+      .then((e) => alive && setEta(e), () => alive && setEta(null))
+    return () => (alive = false)
+  }, [sd, r?.width, r?.height, r?.frames, r?.previews, form.steps])
   const comfyOk = setup?.items?.some((i) => i.id === 'comfyui' && i.status === 'ok')
   const blocked = setup && (sd ? !comfyOk : !setup.ready)
 
@@ -609,6 +639,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             </section>
           )}
 
+          {!sd && !form.projectId && (!form.prompt.trim() || starter) && <Starters onPick={applyStarter} current={starter} />}
           <section className="create-step">
             <StepHead n={steps.what} title="What happens" sub={sd ? 'Who, what happens, where, the camera and the sound, in plain sentences. Give every reference a job.' : 'Clothes, place, camera, action and the lines. Never the face or voice: the character carries those.'} subPlain={sd ? 'Say who is there, what happens, where, how the camera moves and what we hear. Say what each of your pictures is for.' : 'Describe the clothes, the place, the camera, what happens and what is said. Skip the face and voice: the character already has those.'} />
             <PromptWriter
@@ -927,6 +958,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
               Render anyway
             </button>
           )}
+          {eta?.line && <p className="eta-line small dim">{eta.line}</p>}
           <button className="btn btn-primary shot-card-go" disabled={!canHunt} onClick={hunt}>
             {huntLabel}
           </button>

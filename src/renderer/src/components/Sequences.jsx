@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { media } from '../media'
 import { Progress } from './Shot'
+import Failure from './Failure'
 import Hero from './Hero'
 import Stage from './Stage'
 import { ToolShelf, ShelfTile, Step, Choices, WorkflowNeeds } from './FlowKit'
@@ -255,8 +256,8 @@ function ShotRow({ seqId, i, shot, state, live, onStart, notify, flush }) {
       </div>
       <Progress job={pj} />
       <Progress job={fj} />
-      {pj?.status === 'error' && <p className="notice">{pj.error}</p>}
-      {fj?.status === 'error' && <p className="notice">{fj.error}</p>}
+      {pj?.status === 'error' && <Failure job={pj} notify={notify} />}
+      {fj?.status === 'error' && <Failure job={fj} notify={notify} />}
       {previews.length > 0 && !state?.fresh && (
         <>
           <div className={`candidates n${previews.length}`}>
@@ -578,7 +579,7 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live,
                 )}
               </div>
               <Progress job={j} />
-              {j?.status === 'error' && <p className="notice">{j.error}</p>}
+              {j?.status === 'error' && <Failure job={j} notify={notify} />}
               {v.prompt && <p className="mono dim small">{v.prompt}</p>}
               {panel?.versionId === v.id && panel.kind === 'retake' ? (
                 <RetakePanel version={ver} onStart={onStart} notify={notify} />
@@ -612,7 +613,7 @@ export function SequenceEditor({ sequenceId, characters, notify, go, jobs: live,
                   )}
                 </div>
                 <Progress job={j} />
-                {j?.status === 'error' && <p className="notice">{j.error}</p>}
+                {j?.status === 'error' && <Failure job={j} notify={notify} />}
                 {r.file && <video className="final-video" src={media(r.file.url)} controls preload="metadata" />}
               </div>
             )

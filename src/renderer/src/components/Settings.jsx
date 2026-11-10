@@ -10,6 +10,7 @@ import { AccountCard } from './ComfyAccount'
 import Credits from './Credits'
 import { SpeedCards } from './Speed'
 import { savedSpeed } from '../../../service/speed'
+import { PrivacyCard } from './Privacy'
 
 const WRITER_MODEL = 'huihui_ai/qwen3-vl-abliterated:8b-instruct'
 const GB = (b) => `${(b / 1e9).toFixed(1)} GB`
@@ -28,6 +29,7 @@ const SECTIONS = [
   ['account', 'Comfy account'],
   ['civitai', 'Civitai'],
   ['agents', 'Agents'],
+  ['privacy', 'Privacy'],
   ['updates', 'Updates'],
   ['about', 'About']
 ]
@@ -1006,6 +1008,7 @@ export default function Settings({ info, recheck, notify, go, setup }) {
           <AccountCard n={n('account')} notify={notify} />
           <CivitaiCard n={n('civitai')} {...common} />
           <AgentCard n={n('agents')} mcp={info?.mcp} notify={notify} />
+          <PrivacyCard n={n('privacy')} notify={notify} />
           <UpdateSettings n={n('updates')} notify={notify} />
           <AboutCard n={n('about')} info={info} />
         </div>

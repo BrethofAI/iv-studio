@@ -13693,3 +13693,167 @@ button.set-chip:hover {
   background: var(--red, #e5484d);
   transition: width 0.4s;
 }
+/* ---------- 1.1: a failed render in plain words (Failure.jsx), time estimates, Privacy ---------- */
+.failure {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 14px 16px;
+  margin: 10px 0;
+  border: 1px solid rgba(244, 72, 89, 0.55);
+  background: rgba(244, 72, 89, 0.08);
+}
+.failure-title {
+  font: 800 18px/1.1 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.failure-why {
+  margin: 0;
+  max-width: 68ch;
+}
+.failure-fixes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.failure-raw {
+  margin: 0;
+  /* ComfyUI's own words, as it wrote them (the mono class would set them in capitals) */
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 10px 12px;
+  max-width: 100%;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: rgba(0, 0, 0, 0.35);
+  justify-self: stretch;
+}
+.eta-line {
+  margin: 8px 0;
+}
+.privacy-what {
+  margin: 10px 0;
+  max-width: 68ch;
+}
+.privacy-what p {
+  margin: 4px 0;
+}
+.privacy-show {
+  justify-self: start;
+  width: auto;
+}
+.privacy-what ul {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+}
+.privacy-ask {
+  margin-top: 14px;
+  align-items: start;
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.03);
+}
+.privacy-ask .wel-tour-q {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--cream);
+}
+.beta-join {
+  display: grid;
+  gap: 8px;
+  max-width: 560px;
+}
+.beta-join p {
+  margin: 0;
+}
+.beta-join-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.beta-join-row input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .privacy-ask {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .privacy-ask .wel-tour-q {
+    display: none;
+  }
+}
+/* ---------- 1.1: Start from an example (Starters.jsx) ---------- */
+.starters {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 22px;
+}
+.starters-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.starters-head strong {
+  font: 800 18px/1 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.starters-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+.starter {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  min-height: 44px;
+  padding: 12px 14px;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+}
+.starter:hover,
+.starter:focus-visible {
+  border-color: var(--red);
+}
+.starter.on {
+  border-color: var(--red);
+  background: rgba(244, 72, 89, 0.1);
+}
+.starter-tag {
+  color: var(--pink, var(--red));
+  text-transform: uppercase;
+}
+.starter-name {
+  font: 800 17px/1.1 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.starter-shape {
+  margin-top: 2px;
+}
+.starter-about {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cloud-beta {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 22px;
+}
+.cloud-beta-title {
+  font: 800 18px/1 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.ed-share-hint {
+  margin: 6px 0 0;
+}

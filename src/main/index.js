@@ -55,6 +55,8 @@ import { Comfy } from '../service/comfy'
 import { afterPrompt, getBalance } from '../service/comfyaccount'
 import { infoFor, priceGraph } from '../service/pricing'
 import { checkKey as checkComfyCloudKey, COMFY_CLOUD, summarise as summariseComfyCloud } from '../service/comfycloud'
+import { Usage } from '../service/usage'
+import { estimate, estimateLine, samples, shapeOfPlan } from '../service/timing'
 
 // An app opened from Finder gets a short PATH (/usr/bin:/bin:/usr/sbin:/sbin), so the tools IV Studio runs (Claude
 // Code, Codex, Ollama, git) and what they need (node) would not be found; add the usual install folders.
@@ -130,6 +132,23 @@ let runpodWake = null // starts a RunPod pod when the last one idled off (set up
 let cloudPrepFor = null // (provider, comfy) => the CloudPrep for the person's own cloud (set up with the cloud handlers)
 let cloudVoice = null // () => the voice engine on the person's own cloud while rendering there, else null (cloud handlers)
 const pending = new Set() // job ids the window is waiting on
+// Opt-in usage counting (src/service/usage.js): a render is counted when the window's watch sees it start and
+// finish. Jobs that were already over when they were first seen (an old shot opened again) are never counted.
+let usage = null
+const OVER = ['success', 'error', 'cancelled']
+const countedStarts = new Set()
+const usageKind = (kind) => (String(kind).startsWith('picture') ? 'image' : String(kind).includes('sequence') ? 'sequence' : kind)
+function noteJob(before, job) {
+  if (!usage || !job?.id || OVER.includes(before)) return
+  if (!countedStarts.has(job.id)) {
+    countedStarts.add(job.id)
+    if (Date.now() - Date.parse(job.createdAt) < 10 * 60 * 1000) usage.count('render_started', usageKind(job.kind))
+  }
+  if (job.status === 'success') {
+    usage.count('render_finished', usageKind(job.kind))
+    usage.flush()
+  }
+}
 let ranker = null // ranks finished previews (ranking.js), set up with the services it reads
 let reviewer = null // reviews a take against its brief (review.js)
 
@@ -204,7 +223,12 @@ async function pump() {
   try {
     for (const id of [...pending]) {
       try {
+        let before = null
+        try {
+          before = studio.getJob(id).status
+        } catch {}
         const job = await studio.refreshJob(id)
+        noteJob(before, job)
         send('jobs:update', job)
         if (['success', 'error', 'cancelled'].includes(job.status)) pending.delete(id)
         // a SeedVR2 finish starts its enhance step (Studio.refreshJob): watch that too
@@ -428,6 +452,55 @@ app.whenReady().then(() => {
     return { ...rest, hasComfyKey: !!comfyApiKey, hasCloudToken: !!cloudToken, hasCivitaiKey: !!civitaiKey, hasRunpodKey: !!runpodKey, hasHfToken: !!hfToken }
   }
   const comfyKey = () => unseal(readSettings(BASE).comfyApiKey)
+  // Anonymous usage counting and the cloud beta signup (usage.js): both off until the person says yes. A test copy
+  // only ever sends to an address given to it (IV_STUDIO_USAGE_URL, IV_STUDIO_BETA_URL), never the real one.
+  usage = new Usage({
+    dataDir: BASE,
+    version: app.getVersion(),
+    platform: process.platform,
+    settings: () => ({ ...readSettings(BASE), incognito: INCOGNITO }),
+    save: (patch) => writeSettings(patch, BASE),
+    links: TEST_COPY ? { usageUrl: process.env.IV_STUDIO_USAGE_URL, betaUrl: process.env.IV_STUDIO_BETA_URL } : links
+  })
+  handle('usage:status', () => usage.status())
+  handle('usage:set', (on) => usage.setChoice(!!on))
+  handle('usage:preview', () => usage.preview())
+  handle('usage:joinBeta', (email) => usage.joinBeta(email))
+  usage.count('app_opened')
+  setTimeout(() => usage.flush(), 20000)
+  setInterval(() => usage.flush(), 6 * 60 * 60 * 1000)
+  // How long a hunt or a finish will take here, from this machine's own finished renders (timing.js).
+  let timed = { at: 0, dir: null, history: [] }
+  handle('timing:estimate', (want) => {
+    const s = readSettings(BASE)
+    const where = s.target === 'cloud' ? 'cloud' : 'local'
+    const plan = shapeOfPlan({ ...(want || {}), where })
+    if (!plan) return null
+    const dir = path.join(DATA, 'jobs')
+    if (Date.now() - timed.at > 30000 || timed.dir !== dir) {
+      let jobs = []
+      try {
+        jobs = fs
+          .readdirSync(dir)
+          .filter((f) => f.endsWith('.json'))
+          .map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs }))
+          .sort((a, b) => b.t - a.t)
+          .slice(0, 200)
+          .map(({ f }) => {
+            try {
+              return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))
+            } catch {
+              return null
+            }
+          })
+      } catch {}
+      timed = { at: Date.now(), dir, history: samples(jobs) }
+    }
+    const provider = s.cloudProvider || 'modal'
+    const perHour = where !== 'cloud' ? null : provider === 'runpod' ? RUNPOD_GPUS.find((g) => g.id === s.runpod?.gpu)?.perHour ?? null : provider === 'modal' ? GPUS.find((g) => g.id === s.cloud?.gpu)?.perHour ?? null : null
+    const e = estimate(plan, timed.history, { perHour })
+    return e ? { ...e, where, line: estimateLine(e, { where }) } : null
+  })
   handle('settings:get', () => publicSettings(readSettings(BASE)))
   handle('settings:setComfyKey', (key) => {
     const k = String(key || '').trim()

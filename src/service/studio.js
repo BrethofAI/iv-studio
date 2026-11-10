@@ -23,6 +23,7 @@ import { finalFrom, finalGraph, graphProblems, NODES as SEEDANCE_NODES, planSeed
 import { infoFor, priceGraph } from './pricing.js'
 import { writeSeedance } from './seedwriter.js'
 import { REFINE_DEFAULTS, refineGraph } from './h3refine.js'
+import { explainFailure } from './failures.js'
 
 const SHOT_BOILERPLATE = [/^there is no (?:writing|text|lettering)/i, /^no (?:signs|text|labels|captions|writing|lettering)\b/i, /^(?:one|a single) (?:continuous|unbroken)\b/i, /^(?:filmed|shot) (?:on|with)\b/i, /^the camera\b/i, /^(?:handheld|static|locked[- ]off)\b/i]
 // A new shot's name from its prompt: the first words of [Shot 1] (not "subject_definitions" or the frames line),
@@ -646,7 +647,7 @@ export class Studio {
 
   // Saves a job record (as submitGraph does for H3 graphs) and returns it as the window sees it.
   recordJob({ kind, projectId, name, promptId, plan, parent = null, status = 'queued', outputs = [] }) {
-    const job = { id: randomUUID().slice(0, 12), kind, projectId, sequenceId: null, parent, name, promptId, status, createdAt: now(), plan, outputs, ...(status === 'success' ? { finishedAt: now() } : {}) }
+    const job = { id: randomUUID().slice(0, 12), kind, projectId, sequenceId: null, parent, name, promptId, status, createdAt: now(), where: this.comfy.remote ? 'cloud' : 'local', plan, outputs, ...(status === 'success' ? { finishedAt: now() } : {}) }
     writeJson(this.jobFile(job.id), job)
     if (projectId) this.touchProject(projectId, job.id)
     return this.publicJob(job)
@@ -711,6 +712,7 @@ export class Studio {
       promptId,
       status: 'queued',
       createdAt: now(),
+      where: this.comfy.remote ? 'cloud' : 'local',
       plan: kind === 'previews' ? plan : { ...plan, preview: undefined },
       previewPlan: previewPlan || undefined,
       outputs: []
@@ -1404,8 +1406,10 @@ export class Studio {
 
   publicJob(job) {
     const { previewPlan, ...rest } = job
+    // a failed job also says what went wrong in plain words (failures.js); job.error stays as ComfyUI wrote it
+    const explain = job.status === 'error' && job.error ? explainFailure(job.error, { where: job.where, kind: job.kind }) : null
     // the request goes out whole: the shot page shows its prompt in full
-    return { ...rest, plan: { resolved: job.plan?.resolved, request: job.plan?.request, finish: job.plan?.finish, asked: job.plan?.asked, enhance: job.plan?.enhance, engine: job.plan?.engine, refs: job.plan?.refs } }
+    return { ...rest, ...(explain ? { explain } : {}), plan: { resolved: job.plan?.resolved, request: job.plan?.request, finish: job.plan?.finish, asked: job.plan?.asked, enhance: job.plan?.enhance, engine: job.plan?.engine, refs: job.plan?.refs } }
   }
 
   listJobs(projectId) {

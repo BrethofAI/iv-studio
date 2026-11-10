@@ -3,6 +3,7 @@ import SetupProgress, { useSetupProgress } from './SetupProgress'
 import ModalAccount from './ModalAccount'
 import Hero from './Hero'
 import { ask } from './Confirm'
+import { BetaJoin, useUsage } from './Privacy'
 
 // The title-bar meter while rendering in the cloud: GPU time and its estimated cost since IV Studio opened,
 // ticking while a GPU is up. Modal is asked every 30 s which containers run; each one counts from its own
@@ -344,6 +345,7 @@ function ComfyCloudSteps({ st, busy, run, notify, refresh }) {
 
 // Cloud mode on the user's own Modal or RunPod account, or on Comfy Cloud: pick one, set it up, then switch.
 export default function Cloud({ notify, recheck, setup, info }) {
+  const [beta, setBeta] = useUsage()
   const [st, setSt] = useState(null)
   const [gpu, setGpu] = useState('L40S')
   const [idle, setIdle] = useState(300)
@@ -417,6 +419,13 @@ export default function Cloud({ notify, recheck, setup, info }) {
         No strong graphics card? Render on a cloud GPU instead.
         <span className="lede-small dim">Pick a cloud service below and set it up once; then switch between this PC and the cloud whenever you like.</span>
       </p>
+      {/* the hosted cloud beta's waitlist (Privacy.jsx); only there while a signup address exists */}
+      {beta?.betaOpen && (
+        <section className="block cloud-beta">
+          <strong className="cloud-beta-title">Rather not set anything up?</strong>
+          <BetaJoin status={beta} setStatus={setBeta} notify={notify} />
+        </section>
+      )}
       <div className="cloud-guided">
         <button className="btn btn-primary" onClick={() => window.dispatchEvent(new CustomEvent('iv:cloud-wizard'))}>
           Guided setup →
