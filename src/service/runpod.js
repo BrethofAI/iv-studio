@@ -17,6 +17,8 @@ export const API_V1 = 'https://rest.runpod.io/v1'
 export const IMAGE = 'runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404'
 export const VOLUME_NAME = 'iv-studio'
 export const VOLUME_GB = 100 // the H3 models are about 60 GB; ComfyUI, its Python and renders take the rest
+// RunPod's network storage price (per GB a month, under 1 TB; runpod.io/pricing, 2026-11-10), for the grow question
+export const VOLUME_PER_GB_MONTH = 0.07
 export const POD_PREFIX = 'iv-studio'
 const PORT = 8189
 const CHUNK = 64 * 1024 * 1024 // RunPod's proxy refuses request bodies over 100 MB
@@ -120,10 +122,10 @@ export class RunPod {
   bundle(only = null) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'iv-runpod-'))
     try {
-      for (const f of only || ['runpod_boot.py', 'gate.py', 'extra_model_paths.yaml', 'cloud.json']) fs.copyFileSync(path.join(this.resourcesDir, 'cloud', f), path.join(dir, f))
+      for (const f of only || ['runpod_boot.py', 'gate.py', 'ivcloud.py', 'extra_model_paths.yaml', 'cloud.json']) fs.copyFileSync(path.join(this.resourcesDir, 'cloud', f), path.join(dir, f))
       if (!only) {
         fs.copyFileSync(path.join(this.resourcesDir, 'models.json'), path.join(dir, 'models.json'))
-        fs.cpSync(path.join(this.resourcesDir, 'comfy-nodes', 'ComfyUI-IV-Studio'), path.join(dir, 'ComfyUI-IV-Studio'), { recursive: true, filter: (s) => !s.includes('__pycache__') })
+        for (const p of bundledPacks(this.resourcesDir)) fs.cpSync(path.join(this.resourcesDir, p.bundled), path.join(dir, p.dir), { recursive: true, filter: (s) => !s.includes('__pycache__') })
       }
       const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar'
       const out = path.join(os.tmpdir(), `iv-runpod-${randomBytes(4).toString('hex')}.tgz`)
@@ -136,7 +138,8 @@ export class RunPod {
     }
   }
 
-  podBody({ gpu, volume, token, idleSeconds }) {
+  // hf: the person's Hugging Face token, for gated model files (the pod's own downloads at boot)
+  podBody({ gpu, volume, token, idleSeconds, hf = null }) {
     return {
       name: `${POD_PREFIX}-${Date.now().toString(36)}`,
       image: IMAGE,
@@ -146,7 +149,7 @@ export class RunPod {
       disk: 40,
       mounts: { network: [{ volumeId: volume.id, path: '/workspace' }] },
       ports: [`${PORT}/http`],
-      env: { IV_TOKEN: token, IV_IDLE_SECONDS: String(idleSeconds), IV_BUNDLE: this.bundle() },
+      env: { IV_TOKEN: token, IV_IDLE_SECONDS: String(idleSeconds), IV_BUNDLE: this.bundle(), ...(hf ? { HF_TOKEN: hf } : {}) },
       entrypoint: ['bash', '-c'],
       cmd: ['mkdir -p /opt/iv && echo "$IV_BUNDLE" | base64 -d | tar -xz -C /opt/iv && exec python3 /opt/iv/runpod_boot.py']
     }
@@ -163,12 +166,12 @@ export class RunPod {
   }
 
   // Starts a pod on the chosen GPU, or the first of ours that's free in the volume's data center.
-  async createPod({ gpu, volume, token, idleSeconds }) {
+  async createPod({ gpu, volume, token, idleSeconds, hf = null }) {
     const order = [gpu, ...GPUS.map((g) => g.id).filter((id) => id !== gpu)]
     let last
     for (const id of order) {
       try {
-        const pod = await this.req('/pods', { method: 'POST', json: this.podBody({ gpu: id, volume, token, idleSeconds }) })
+        const pod = await this.req('/pods', { method: 'POST', json: this.podBody({ gpu: id, volume, token, idleSeconds, hf }) })
         if (id !== gpu) this.onLog(`${GPUS.find((g) => g.id === gpu)?.label || gpu} was taken in ${volume.dataCenter}; started a ${GPUS.find((g) => g.id === id)?.label || id} instead.`)
         return { id: pod.id, gpu: id, perHour: pod.cost, url: RunPod.url(pod.id) }
       } catch (err) {
@@ -223,6 +226,40 @@ export class RunPod {
     return { stopped: running.length }
   }
 
+  // The account's iv-studio volume ({id, size (GB), dataCenter}), or null.
+  async volume(id) {
+    const vols = RunPod.list(await this.req('/network-volumes'), 'networkVolumes', 'items', 'data')
+    return vols.find((v) => v.id === id) || null
+  }
+
+  // Makes the volume bigger (RunPod can't make one smaller). Only with the person's OK: storage bills monthly.
+  async growVolume(id, sizeGb) {
+    this.onLog(`Growing your network volume to ${sizeGb} GB…`)
+    return this.req(`/network-volumes/${id}`, { method: 'PATCH', json: { size: sizeGb } })
+  }
+
+  // The model files on the volume ({path: bytes}), through the running pod's gate.
+  async files(url, token) {
+    const res = await this.fetch(`${url}/iv/files`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(120000) })
+    if (!res.ok) throw new Error(`Listing your cloud storage failed (${res.status}).`)
+    return res.json()
+  }
+
+  // Downloads models (by id) onto the volume in the running pod, and waits. onProgress gets the gate's report.
+  async fetchModels(url, token, ids, { hf = null, onProgress, pollMs = 3000 } = {}) {
+    const start = await this.fetch(`${url}/iv/fetch`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, hf: hf || '' }) })
+    if (!start.ok && start.status !== 409) throw new Error(`Starting the download in the cloud failed (${start.status}): ${(await start.text()).slice(0, 300)}`)
+    for (;;) {
+      await new Promise((r) => setTimeout(r, pollMs))
+      const res = await this.fetch(`${url}/iv/fetch`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30000) }).catch(() => null)
+      if (!res?.ok) continue
+      const f = await res.json()
+      onProgress?.(f)
+      if (f.state === 'done') return f.done || ids
+      if (f.state === 'error') throw new Error(f.error || 'The download in the cloud stopped.')
+    }
+  }
+
   // A local file (a character LoRA or RefMod) into the volume's models folder, through the running pod's
   // gate in 64 MB chunks, then checked against its SHA-256 there.
   async uploadModel(url, token, localFile, remotePath) {
@@ -245,5 +282,15 @@ export class RunPod {
     const res = await this.fetch(`${url}/iv/upload?path=${encodeURIComponent(remotePath)}&sha256=${hash.digest('hex')}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
     if (!res.ok) throw new Error(`Saving ${path.basename(localFile)} in the cloud failed (${res.status}): ${(await res.text()).slice(0, 200)}`)
     return res.json()
+  }
+}
+
+// The node packs that ship inside IV Studio (its own, Viggle Remake's): models.json's node_packs with "bundled".
+export function bundledPacks(resourcesDir) {
+  try {
+    const m = JSON.parse(fs.readFileSync(path.join(resourcesDir, 'models.json'), 'utf8'))
+    return (m.node_packs || []).filter((p) => p.bundled && !p.windowsOnly && p.cloud !== false && fs.existsSync(path.join(resourcesDir, p.bundled)))
+  } catch {
+    return []
   }
 }

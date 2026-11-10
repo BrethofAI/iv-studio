@@ -449,7 +449,7 @@ export class Studio {
     const finish = applyFinishSpeed(given, speed || source.plan.request?.speed || fallbackSpeed, caps)
     if (finish.fps && !caps.fps.includes(finish.fps)) throw new Error(`This ComfyUI can make ${caps.fps.filter(Boolean).join(', ') || 'no other'} fps.`)
     if (finish.upscale2x && !caps.upscale2x && finish.enhancer !== 'seedvr2') throw new Error('This ComfyUI has no 2x upscaler.')
-    if (finish.enhancer === 'seedvr2' && this.comfy.remote) throw new Error('SeedVR2 runs on this PC\'s ComfyUI only; the cloud finishes with its own upscaler.')
+    if (finish.enhancer === 'seedvr2' && this.comfy.hosted) throw new Error('SeedVR2 runs on this PC\'s ComfyUI or your own cloud (RunPod, Modal), not on Comfy Cloud.')
     const plan = planFinish(source.plan, finish)
     plan.values['80'] = source.name
     return this.submit({ kind: 'finish', project: this.getProject(source.projectId), plan, name: source.name, parent: source.id, previewPlan: source.plan })
@@ -568,7 +568,8 @@ export class Studio {
     if (resolved.way === 'local') {
       // the free finish's default: the take becomes the final, and SeedVR2 (or, quicker, DLSS 5) brings it to 1080p
       // or 1440p on this PC
-      if (this.comfy.remote) throw new Error('The free finish runs on this PC\'s ComfyUI. Use Seedance 1080p, or keep the take as it is.')
+      if (this.comfy.hosted) throw new Error('The free finish runs on this PC\'s ComfyUI or your own cloud. Use Seedance 1080p, or keep the take as it is.')
+      if (this.comfy.ownCloud && resolved.refiner === 'dlss') throw new Error('DLSS 5 runs on Windows PCs only. In the cloud, finish with SeedVR2, Seedance 1080p, or keep the take as it is.')
       const final = { ...take, kind: 'final' }
       delete final.candidate
       const short = Math.min(resolved.width, resolved.height)
@@ -601,7 +602,7 @@ export class Studio {
   }
 
   async refineTake(source, take, { candidate, megapixels, strength, upscale2x, useLora = false, dlssStrength = null, dlssStyle = null, then = 'dlss', resolution = 1080, detail = 0 } = {}) {
-    if (this.comfy.remote) throw new Error('The free finish runs on this PC\'s ComfyUI (H3 and DLSS 5). Use Seedance 1080p, or keep the take as it is.')
+    if (this.comfy.remote) throw new Error('The H3 pass runs on this PC\'s ComfyUI. In the cloud, finish with SeedVR2 or Seedance 1080p, or keep the take as it is.')
     if (!take.path || !fs.existsSync(take.path)) throw new Error('That take isn\'t on this PC yet.')
     const caps = await this.capabilities()
     if (then === 'dlss' && !caps.dlss) throw new Error('The free finish needs DLSS 5 in ComfyUI (Settings → Setup).')
@@ -721,17 +722,22 @@ export class Studio {
 
   // ---------- Enhance: SeedVR2 over a finished video ----------
   // A final (or any finished video of a shot) through SeedVR2 3B (numz's ComfyUI-SeedVR2_VideoUpscaler, Apache-2.0)
-  // to a short side of `resolution`, with its sound kept, as a new job of kind enhance in the same shot. On this PC
-  // only: the cloud image has no SeedVR2.
+  // to a short side of `resolution`, with its sound kept, as a new job of kind enhance in the same shot. On this PC or
+  // the person's own cloud (SeedVR2 is downloaded there the first time); DLSS 5 on Windows PCs only.
   // engine dlss: DLSS 5 with the finish's own settings (noise reduction Default 0.8), at scale 1 or 2.
   // strength (DLSS 5): its noise reduction, 0-2 (the finish uses 0.8); style: Default, Natural or Cinematic.
   // detail (SeedVR2): its latent noise, 0-1 (0 restores faithfully; more lets it invent detail).
   async enhanceFinal({ jobId, engine = 'seedvr2', resolution = 1080, scale = 1, strength = null, style = null, detail = 0 }) {
-    if (this.comfy.remote) throw new Error('Enhance runs on this PC\'s ComfyUI only.')
+    if (this.comfy.hosted) throw new Error('Enhance runs on this PC\'s ComfyUI or your own cloud (RunPod, Modal).')
     const source = this.getJob(jobId)
     const out = source.outputs.find((o) => o.kind === 'final') || source.outputs.find((o) => o.kind === 'master')
-    if (!out?.path || !fs.existsSync(out.path)) throw new Error('That render has no finished video on this PC to enhance.')
-    if (engine === 'dlss') return this.enhanceDlss(source, out, scale, { strength, style })
+    const here = !!(out?.path && fs.existsSync(out.path))
+    // in the person's own cloud a render made there is read where it is (its output name); others are uploaded
+    if (!here && !(this.comfy.ownCloud && out?.url)) throw new Error('That render has no finished video on this PC to enhance.')
+    if (engine === 'dlss') {
+      if (this.comfy.ownCloud) throw new Error('DLSS 5 runs on Windows PCs only. In the cloud, enhance with SeedVR2.')
+      return this.enhanceDlss(source, out, scale, { strength, style })
+    }
     const noise = Math.min(1, Math.max(0, Number(detail) || 0))
     const info = await this.comfy.objectInfo('SeedVR2LoadDiTModel').catch(() => null)
     const dits = info?.SeedVR2LoadDiTModel?.input?.required?.model?.[1]?.options || info?.SeedVR2LoadDiTModel?.input?.required?.model?.[0] || []
@@ -740,15 +746,16 @@ export class Studio {
     const fps = source.plan?.resolved?.fps || 24
     const name = `${path.basename(out.path).replace(/\.[^.]+$/, '').replace(/-audio$/, '')}_enhanced_${resolution}`
     const { batch, overlap, swap } = seedvr2Batch(resolution)
+    const src = await this.videoSource(this.comfy.ownCloud && out.url ? out : out.path)
     const graph = {
-      load: { class_type: 'VHS_LoadVideoPath', inputs: { video: out.path, force_rate: 0, custom_width: 0, custom_height: 0, frame_load_cap: 0, skip_first_frames: 0, select_every_nth: 1, format: 'AnimateDiff' } },
+      load: { class_type: src.cls, inputs: { video: src.video, force_rate: 0, custom_width: 0, custom_height: 0, frame_load_cap: 0, skip_first_frames: 0, select_every_nth: 1, format: 'AnimateDiff' } },
       dit: { class_type: 'SeedVR2LoadDiTModel', inputs: { model: dit, device: 'cuda:0', blocks_to_swap: swap, offload_device: 'cpu', cache_model: false, attention_mode: 'sdpa' } },
       vae: { class_type: 'SeedVR2LoadVAEModel', inputs: { model: 'ema_vae_fp16.safetensors', device: 'cuda:0', encode_tiled: true, decode_tiled: true, offload_device: 'cpu', cache_model: false } },
       up: { class_type: 'SeedVR2VideoUpscaler', inputs: { image: ['load', 0], dit: ['dit', 0], vae: ['vae', 0], seed: 42, resolution, max_resolution: 0, batch_size: batch, uniform_batch_size: false, color_correction: 'lab', temporal_overlap: overlap, offload_device: 'cpu', ...(noise ? { latent_noise_scale: noise } : {}) } },
       save: { class_type: 'VHS_VideoCombine', inputs: { images: ['up', 0], audio: ['load', 2], frame_rate: fps, loop_count: 0, filename_prefix: `H3/enhanced/${name}`, format: 'video/h264-mp4', pix_fmt: 'yuv420p', crf: 16, save_metadata: true, trim_to_audio: false, pingpong: false, save_output: true } }
     }
     const project = source.projectId ? this.getProject(source.projectId) : null
-    return this.submitGraph({ kind: 'enhance', graph, projectId: project?.id || null, plan: { enhance: { engine: 'seedvr2', resolution, model: dit, from: out.path, ...(noise ? { detail: noise } : {}) }, resolved: { ...source.plan?.resolved, fps } }, name, parent: source.id })
+    return this.submitGraph({ kind: 'enhance', graph, projectId: project?.id || null, plan: { enhance: { engine: 'seedvr2', resolution, model: dit, from: out.path || out.url, ...(noise ? { detail: noise } : {}) }, resolved: { ...source.plan?.resolved, fps } }, name, parent: source.id })
   }
 
   async enhanceDlss(source, out, scale, { strength = null, style = null } = {}) {
@@ -778,6 +785,21 @@ export class Studio {
   // ---------- renders, files and models (shared by the window and the MCP server) ----------
   // An output as a file on this PC: its own path when local, else downloaded from the (cloud)
   // ComfyUI into dir under the same name.
+  // A video for a graph's video loader: on this PC's ComfyUI, its path (VHS_LoadVideoPath). On the person's own cloud,
+  // a render already there by its output name ("sub/name.mp4 [output]", VHS_LoadVideo reads ComfyUI's folders), or this
+  // PC's file uploaded into ComfyUI's input. file: a path, or an output ({path, url}).
+  async videoSource(file) {
+    const p = typeof file === 'string' ? file : file?.path
+    if (!this.comfy.ownCloud) return { cls: 'VHS_LoadVideoPath', video: p }
+    if (typeof file === 'object' && file?.url) {
+      const q = new URL(file.url).searchParams
+      const sub = q.get('subfolder')
+      return { cls: 'VHS_LoadVideo', video: `${sub ? `${sub}/` : ''}${q.get('filename')} [${q.get('type') || 'output'}]` }
+    }
+    if (!p || !fs.existsSync(p)) throw new Error('That video isn\'t on this PC.')
+    return { cls: 'VHS_LoadVideo', video: await this.comfy.upload(p, 'iv_studio/sources') }
+  }
+
   async localCopy(file, dir) {
     const p = typeof file === 'string' ? file : file?.path
     if (p && fs.existsSync(p)) return p
@@ -1054,11 +1076,14 @@ export class Studio {
   // A retake of any video file (the editor's Retake): the graph Sequences use, at their defaults. The file must
   // be on the PC that runs ComfyUI.
   async retakeFile({ name, sourcePath, start, end, mode = 'both', prompt, character = 'none', seed }) {
-    if (this.comfy.remote) throw new Error('Retake in the editor needs ComfyUI on this PC for now.')
+    if (this.comfy.hosted) throw new Error('Retake in the editor runs on this PC\'s ComfyUI or your own cloud (RunPod, Modal).')
     if (!(end > start)) throw new Error('The retake must end after it starts.')
     const ch = character === 'none' ? null : this.characters().find((c) => c.id === character) || null
     const base = `${slug(name)}_${randomUUID().slice(0, 6)}`
-    const { graph } = retakeGraph({ template: this.template, seq: { ...SEQUENCE_DEFAULTS }, character: ch, name: base, sourcePath, prompt, start, end, mode, seed: seed ?? SEQUENCE_DEFAULTS.seed, unet: this.models.retake })
+    // the person's own cloud reads the clip from ComfyUI's input folder (uploaded), not from this PC's path
+    const src = await this.videoSource(sourcePath)
+    const { graph } = retakeGraph({ template: this.template, seq: { ...SEQUENCE_DEFAULTS }, character: ch, name: base, sourcePath: src.video, prompt, start, end, mode, seed: seed ?? SEQUENCE_DEFAULTS.seed, unet: this.models.retake })
+    graph.src.class_type = src.cls
     return this.submitGraph({ kind: 'retake', graph, name: base, plan: { saves: SAVES, resolved: { start, end, mode } } })
   }
 

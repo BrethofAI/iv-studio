@@ -254,9 +254,10 @@ export const TOURS = {
   cloud: {
     title: 'Cloud',
     steps: [
-      { title: 'Render on a cloud GPU', text: 'No strong graphics card, or want more? Shots can render on your own RunPod, Modal or Comfy Cloud account, billed by the second.' },
+      { title: 'Render on a cloud GPU', text: 'No strong graphics card, or want more? IV Studio can render on your own RunPod, Modal or Comfy Cloud account, billed by the second. On RunPod and Modal nearly everything works: shots, pictures, music, sounds, Replace, Effects and more.' },
       { at: '.cloud-guided', title: 'Guided setup', text: 'The easiest way in: pick a service, connect it, choose a GPU and set it up. Setup shows each step with a timer and how long is left; you can leave the page, and IV Studio tells you when it’s ready.' },
       { at: '.cloud-control', title: 'Where it renders', text: 'Switch between this PC and the cloud whenever you like.' },
+      { at: '.cloud-models', title: 'Models on first use', text: 'Setup brings H3. Everything else brings its own models the first time you use it in the cloud: IV Studio says how big they are and asks before downloading. A Hugging Face token here unlocks the few behind a licence (Flux and the LTX effects).' },
       { at: '.engine-badge', title: 'The meter', text: 'While on the cloud, the title bar shows GPU time and cost. Shut down GPU stops it at once; it also stops by itself when idle.' }
     ]
   },

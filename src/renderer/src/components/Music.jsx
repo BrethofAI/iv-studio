@@ -391,7 +391,6 @@ export function MusicPage({ notify, sendToCreate, openEdit }) {
         Songs and scores, made on this PC.
         <span className="lede-small dim">Describe the music, add lyrics or keep it instrumental, or remix a song you already have. Use it under an edit or as the song a character sings in a shot. Every song is kept here.</span>
       </p>
-      {status?.remote && <p className="notice">Music runs on this PC's ComfyUI. Switch to "This PC" on the Cloud page to make music.</p>}
       {status?.error && <p className="notice">{status.error}</p>}
 
       <section className="audio-card composer">

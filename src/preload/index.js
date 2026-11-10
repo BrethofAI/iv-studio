@@ -218,7 +218,12 @@ contextBridge.exposeInMainWorld('ivstudio', {
     wake: call('cloud:wake'),
     stop: call('cloud:stop'),
     usage: call('cloud:usage'),
-    onLog: on('cloud:log')
+    onLog: on('cloud:log'),
+    // models a cloud render needs: the question (onAsk, then answer) and how the download goes (onPrep)
+    onAsk: on('cloud:ask'),
+    answer: call('cloud:answer'),
+    onPrep: on('cloud:prep'),
+    hfToken: call('cloud:hfToken')
   },
   prompts: { status: call('prompts:status'), write: call('prompts:write'), story: call('prompts:story'), pull: call('prompts:pull'), onPull: on('prompts:pull') },
   setup: {

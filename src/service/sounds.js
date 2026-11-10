@@ -70,7 +70,6 @@ export class Sounds {
 
   // Stable Audio 3's two files on this ComfyUI, by file name (the manifest's name or one of its alts).
   async status() {
-    if (this.studio.comfy.remote && !this.studio.comfy.hosted) return { remote: true, ready: false, missing: [] }
     let info
     try {
       info = await this.studio.comfy.objectInfo()
@@ -118,7 +117,6 @@ export class Sounds {
     const n = Math.round(Number(takes) || 1)
     if (n < 1 || n > SOUND_LIMITS.takes) throw new Error(`Make 1 to ${SOUND_LIMITS.takes} takes at once.`)
     const st = await this.status()
-    if (st.remote) throw new Error('Sounds are made on this PC\'s ComfyUI. Switch to "This PC" on the Cloud page.')
     if (st.error) throw new Error(st.error)
     if (st.missingNodes?.length) throw new Error(`This ComfyUI has no ${st.missingNodes.join(', ')}. Update ComfyUI.`)
     if (st.missing.length) throw new Error(`Stable Audio 3 needs ${st.missing.map((m) => m.label).join(' and ')}. Download ${st.missing.length === 1 ? 'it' : 'them'} on the Sounds page.`)

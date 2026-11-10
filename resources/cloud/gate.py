@@ -6,11 +6,15 @@ token IV Studio created: an `Authorization: Bearer <token>` header, or `?iv_toke
 requests that can't carry headers. HTTP (with Range, so videos seek) and ComfyUI's websocket are both
 proxied. While ComfyUI is still starting, requests get 503 so IV Studio can show "warming up".
 
-On RunPod (IV_PLATFORM=runpod, see runpod_boot.py) the gate does three more things, because a RunPod
-pod neither stops by itself nor has a volume IV Studio can write to directly:
-  /iv/health   also reports the boot stage (installing, downloading models, ready) from /tmp/iv-status.json
-  /iv/upload   takes a character LoRA or RefMod in chunks (RunPod's proxy refuses bodies over 100 MB)
+On RunPod (IV_PLATFORM=runpod, see runpod_boot.py) the gate does more, because a RunPod pod neither stops
+by itself nor has a volume IV Studio can write to directly:
+  /iv/health   also reports the boot stage (installing, downloading models, ready) from /tmp/iv-status.json,
+               and how far a model download (/iv/fetch) has got
+  /iv/upload   takes a LoRA or RefMod in chunks (RunPod's proxy refuses bodies over 100 MB)
                into /workspace/models, checked against its SHA-256 before it is kept
+  /iv/files    lists the model files on the volume ({path: size})
+  /iv/fetch    POST {"ids": [...], "hf": "<Hugging Face token or empty>"}: downloads those models (models.json
+               and cloud.json ids, ivcloud.py) onto the volume in the background, each checked against its SHA-256
   idle         with nothing to do for IV_IDLE_SECONDS the pod deletes itself, so the GPU stops billing;
                ComfyUI, the models and every render stay on the network volume
 """
@@ -24,8 +28,15 @@ import time
 import urllib.request
 from pathlib import Path
 
+import threading
+
 import aiohttp
 from aiohttp import WSMsgType, web
+
+try:  # beside this file on RunPod (runpod_boot.py puts it on PYTHONPATH); Modal's gate doesn't need it
+    import ivcloud
+except ImportError:  # pragma: no cover
+    ivcloud = None
 
 TOKEN = os.environ["IV_TOKEN"]
 UPSTREAM = os.environ.get("IV_UPSTREAM", "http://127.0.0.1:8188")  # settable for tests
@@ -38,6 +49,8 @@ IDLE = int(os.environ.get("IV_IDLE_SECONDS", "300"))
 SETUP_LIMIT = int(os.environ.get("IV_SETUP_LIMIT", str(3 * 3600)))  # a stuck install still ends
 last_seen = time.time()
 started = time.time()
+HERE = Path(os.environ.get("IV_MANIFEST_DIR") or Path(__file__).parent)  # models.json and cloud.json (settable for tests)
+fetching = {}  # the model download /iv/fetch started: {state: running|done|error, ids, current, error}
 
 
 def allowed(req):
@@ -116,15 +129,54 @@ async def upload(req):
     return web.json_response({"saved": dest.relative_to(MODELS).as_posix(), "sha256": h.hexdigest()})
 
 
+def run_fetch(models, token):
+    """In a thread: the models onto the volume, reporting through `fetching` (and /iv/health)."""
+    global last_seen
+    try:
+        def say(e):
+            global last_seen
+            last_seen = time.time()  # a download keeps the pod up
+            fetching.update(current={k: e.get(k) for k in ("id", "label", "state", "percent", "got", "total", "index", "count")})
+
+        done = ivcloud.fetch(models, MODELS, token=token, progress=say)
+        fetching.update(state="done", done=done)
+    except Exception as e:  # noqa: BLE001 - the reason goes back to IV Studio in words
+        fetching.update(state="error", error=str(e)[:600])
+    last_seen = time.time()
+
+
+async def fetch(req):
+    """POST {"ids": [...], "hf": token}: starts the download (one at a time). GET: how it's going."""
+    if req.method == "GET":
+        return web.json_response(fetching or {"state": "idle"})
+    if fetching.get("state") == "running":
+        return web.json_response({"error": "a download is already running", **fetching}, status=409)
+    body = await req.json()
+    cloud, manifest = ivcloud.load(HERE)
+    every = ivcloud.catalog(cloud, manifest)
+    ids = [i for i in body.get("ids", []) if isinstance(i, str)]
+    unknown = [i for i in ids if i not in every]
+    if unknown or not ids:
+        return web.json_response({"error": f"unknown models: {', '.join(unknown) or '(none asked for)'}"}, status=400)
+    fetching.clear()
+    fetching.update(state="running", ids=ids, at=int(time.time()))
+    threading.Thread(target=run_fetch, args=([every[i] for i in ids], body.get("hf") or os.environ.get("HF_TOKEN") or None), daemon=True).start()
+    return web.json_response(fetching)
+
+
 async def handle(req):
     global last_seen
     if req.path == "/iv/health":  # says only that the gate is up, and on RunPod how far the boot got; no token needed
-        return web.json_response({"gate": "ok", **({"platform": "runpod", **stage()} if RUNPOD else {})})
+        return web.json_response({"gate": "ok", **({"platform": "runpod", **stage(), **({"fetch": fetching} if fetching else {})} if RUNPOD else {})})
     if not allowed(req):
         return web.Response(status=401, text="IV Studio token required")
     last_seen = time.time()
     if RUNPOD and req.path == "/iv/upload":
         return await upload(req)
+    if RUNPOD and req.path == "/iv/files":
+        return web.json_response(await asyncio.to_thread(ivcloud.listing, MODELS))
+    if RUNPOD and req.path == "/iv/fetch":
+        return await fetch(req)
     session = req.app["session"]
     try:
         if req.headers.get("Upgrade", "").lower() == "websocket":
@@ -185,7 +237,7 @@ async def idle_watch(app):
             if time.time() - started > SETUP_LIMIT:
                 delete_self()
             continue
-        if time.time() - last_seen < IDLE:
+        if time.time() - last_seen < IDLE or fetching.get("state") == "running":
             continue
         try:
             async with session.get(UPSTREAM + "/queue") as r:

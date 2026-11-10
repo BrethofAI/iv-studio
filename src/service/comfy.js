@@ -24,6 +24,9 @@ export class Comfy {
     // ComfyUI set up from ComfyUI's own templates (an fp8 or NVFP4 build) renders without the exact files.
     this.fileMapper = null
     this.fileMap = null
+    // The person's own cloud (Modal, RunPod): a CloudPrep (cloudprep.js), set by the app. It answers model lists
+    // without waking the GPU and puts a graph's models and LoRAs in the cloud's storage before it's queued.
+    this.prep = null
   }
 
   // The model names to swap into a graph, asked for again after a minute (the person may add files meanwhile).
@@ -35,6 +38,12 @@ export class Comfy {
 
   get remote() {
     return !!(this.token || this.apiKey)
+  }
+
+  // The person's own cloud GPU (Modal, RunPod): ComfyUI behind IV Studio's gate. Asking it anything wakes the GPU,
+  // so model lists come from cloudprep.js instead.
+  get ownCloud() {
+    return !!this.token && !this.apiKey
   }
 
   // Comfy Cloud: always on and billed per run, so asking it what it has costs nothing (unlike waking a GPU of our own)
@@ -103,7 +112,9 @@ export class Comfy {
   queue = () => this.req('/queue')
   // Comfy Cloud keeps ComfyUI's history shape under history_v2 (its /jobs is the newer form)
   history = (id) => this.req(this.hosted ? `/history_v2/${id}` : `/history/${id}`)
-  objectInfo = (cls) => this.req(cls ? `/object_info/${encodeURIComponent(cls)}` : '/object_info', { timeout: 60000 })
+  objectInfo = (cls) => (this.prep ? this.prep.objectInfo(cls) : this.realObjectInfo(cls))
+  // The ComfyUI's own answer (on the cloud, this wakes the GPU; a cold start can take a few minutes).
+  realObjectInfo = (cls) => this.req(cls ? `/object_info/${encodeURIComponent(cls)}` : '/object_info', { timeout: this.remote && !this.hosted ? 600000 : 60000 })
 
   // front: put it ahead of waiting renders (used for quick jobs such as writing a prompt).
   // spend: the person's OK for paid partner nodes ({ approvedUsd, unknownOk }, see pricing.js checkSpend). A graph
@@ -111,6 +122,8 @@ export class Comfy {
   async submit(prompt, extra = {}, { front = false, spend = null } = {}) {
     outputsUnder(prompt, this.folders.output)
     renameFiles(prompt, await this.filesFor())
+    // the person's own cloud: its models downloaded and this PC's LoRAs uploaded first (asks before downloading)
+    if (this.prep) await this.prep.prepare(prompt)
     let price = null
     if (extra.api_key_comfy_org || this.hosted) {
       price = await priceGraph(prompt, await infoFor(this, prompt))

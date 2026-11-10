@@ -166,10 +166,11 @@ function ReviewCard({ review, title, videoKey, before, onRun }) {
 //   local     free on this PC: SeedVR2 restores it to 1080p or 1440p (keeps faces), or H3 refines it at 1-2 MP at a
 //             light strength and DLSS 5 cleans it up (h3refine.js; faces shift a little)
 //   take      the take itself becomes the final, as it is
-function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characters = [] }) {
+function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, ownCloud, characters = [] }) {
   const draft = !!job.plan.resolved?.draft
   // free on this PC first; paid Seedance 1080p is one click away (and asks before it spends)
-  const [way, setWay] = useState(remote ? (draft ? 'seedance' : 'take') : 'local')
+  // (the person's own cloud finishes with SeedVR2 there; Comfy Cloud has no free finish)
+  const [way, setWay] = useState(remote && !ownCloud ? (draft ? 'seedance' : 'take') : 'local')
   const [opts, setOpts] = useState({ engine: 'seedvr2', resolution: 1080, megapixels: 2, strength: 0.1, detail: 0, dlssStrength: 0.8, dlssStyle: 'Default', upscale2x: false, useLora: false })
   const set = (patch) => setOpts((o) => ({ ...o, ...patch }))
   const [price, setPrice] = useState(null)
@@ -197,12 +198,14 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
       setBusy(false)
     }
   }
-  const ways = [...(draft ? [['seedance', 'Seedance 1080p']] : []), ...(remote ? [] : [['local', 'On this PC · free']]), ['take', 'As it is']]
+  const ways = [...(draft ? [['seedance', 'Seedance 1080p']] : []), ...(ownCloud ? [['local', 'In your cloud']] : remote ? [] : [['local', 'On this PC · free']]), ['take', 'As it is']]
   const note =
     way === 'seedance'
       ? `Seedance renders this draft again at 1080p, on your Comfy.org credits. ComfyUI prices it as ${price?.label || '…'}${price?.likelyUsd ? `; at this length it is likely about $${price.likelyUsd.toFixed(2)} (the 1080p rate)` : ''}. You agree to the top of the range.`
       : way === 'local'
-        ? 'Finished on your graphics card, free.'
+        ? ownCloud
+          ? 'Finished with SeedVR2 on your cloud GPU, billed by the second while it runs.'
+          : 'Finished on your graphics card, free.'
         : 'The take becomes the shot’s final now. Enhance (DLSS 5 or SeedVR2) can still run on it afterwards.'
   const enginePlain = {
     seedvr2: 'Makes it bigger and adds back fine detail, keeping the faces, movement and sound. The cleanest result; about 4 minutes for a 5-second shot.',
@@ -247,15 +250,19 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
               <button className={opts.engine === 'seedvr2' ? 'on' : ''} onClick={() => set({ engine: 'seedvr2' })}>
                 SeedVR2
               </button>
-              <button className={opts.engine === 'dlss' ? 'on' : ''} onClick={() => set({ engine: 'dlss' })}>
-                DLSS 5
-              </button>
-              <button className={opts.engine === 'h3' ? 'on' : ''} onClick={() => set({ engine: 'h3' })}>
-                H3 + DLSS 5
-              </button>
-              <button className={opts.engine === 'h3seedvr2' ? 'on' : ''} onClick={() => set({ engine: 'h3seedvr2' })}>
-                H3 + SeedVR2
-              </button>
+              {!ownCloud && (
+                <>
+                  <button className={opts.engine === 'dlss' ? 'on' : ''} onClick={() => set({ engine: 'dlss' })}>
+                    DLSS 5
+                  </button>
+                  <button className={opts.engine === 'h3' ? 'on' : ''} onClick={() => set({ engine: 'h3' })}>
+                    H3 + DLSS 5
+                  </button>
+                  <button className={opts.engine === 'h3seedvr2' ? 'on' : ''} onClick={() => set({ engine: 'h3seedvr2' })}>
+                    H3 + SeedVR2
+                  </button>
+                </>
+              )}
             </div>
             <span className="dim small" data-plain={enginePlain}>
               {engineNote}
@@ -349,7 +356,7 @@ function SeedanceFinishPanel({ job, candidate, onStart, notify, remote, characte
   )
 }
 
-function FinishPanel({ job, candidate, onStart, notify, caps, remote }) {
+function FinishPanel({ job, candidate, onStart, notify, caps, remote, ownCloud }) {
   const FPS = caps?.fps || [0, 30, 50, 60, 120]
   const dlss = caps?.dlss !== false
   const [opts, setOpts] = useState({ megapixels: 2, upscale2x: false, fps: 0, audio: 'pass', enhancer: 'dlss', enhanceResolution: 1080, dlssStrength: 0.8, dlssStyle: 'Default' })
@@ -410,19 +417,19 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote }) {
           {shotSpeed && <span className="dim small finish-speed">Started from the {SPEEDS[shotSpeed].label} speed preset.{opts.megapixels >= 2 ? ' A 2 MP pass is the slowest step on cards under 22 GB.' : ''}</span>}
         </div>
       )}
-      {dlss && !remote && (
+      {((dlss && !remote) || ownCloud) && (
         <div className="row">
           <span className="row-label">Enhancer</span>
           <div className="enhancer-pick">
             <div className="segmented">
               <button className={!seedvr2 ? 'on' : ''} onClick={() => set({ enhancer: 'dlss' })}>
-                DLSS 5
+                {dlss ? 'DLSS 5' : '2× upscale'}
               </button>
               <button className={seedvr2 ? 'on' : ''} onClick={() => set({ enhancer: 'seedvr2', upscale2x: false, fps: 0 })}>
                 SeedVR2
               </button>
             </div>
-            <span className="dim small">{seedvr2 ? 'Restores detail after the finish. Slower; 24 fps.' : 'Cleans up and can upscale 2× and add frames. Quick.'}</span>
+            <span className="dim small">{seedvr2 ? 'Restores detail after the finish. Slower; 24 fps.' : dlss ? 'Cleans up and can upscale 2× and add frames. Quick.' : 'The cloud’s quick 2× upscale and extra frames.'}</span>
           </div>
         </div>
       )}
@@ -495,7 +502,7 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote }) {
 // A run's finished versions in one card: a chip for every final (however it was finished) and every enhanced copy,
 // one player for the chosen one, its actions in one row, and Enhance folded behind a button. Replaces a stack of
 // full-size players, so a shot with several finishes doesn't run on for screens.
-function VersionsCard({ run, finishes, jobs, remote, caps, notify, marks, onMark, onCompare, review, reviewing, enhance, enhancing, written, editRun, project, versionOf }) {
+function VersionsCard({ run, finishes, jobs, remote, ownCloud, caps, notify, marks, onMark, onCompare, review, reviewing, enhance, enhancing, written, editRun, project, versionOf }) {
   const list = []
   for (const f of finishes) {
     list.push({ key: f.id, job: f, finish: f, out: f.outputs.find((o) => o.kind === 'final'), label: shortLabel(f), kind: 'final' })
@@ -575,13 +582,13 @@ function VersionsCard({ run, finishes, jobs, remote, caps, notify, marks, onMark
               {reviewing[`${f.id}:0`] ? 'Reviewing…' : 'Review'}
             </button>
           )}
-          {v.kind === 'final' && v.out?.path && !remote && (
+          {v.kind === 'final' && v.out?.path && (!remote || ownCloud) && (
             <button className={`link-btn mono ${more ? 'pink' : ''}`} onClick={() => setMore(!more)} aria-expanded={more}>
               Enhance {more ? '▴' : '▾'}
             </button>
           )}
         </div>
-        {more && v.kind === 'final' && v.out?.path && !remote && (
+        {more && v.kind === 'final' && v.out?.path && (!remote || ownCloud) && (
           <div className="enhance-drawer">
             <span className="dim small enhance-sub">A sharper copy, added beside this one. Set the strength, then pick the size.</span>
             <div className="finish-grid enhance-grid">
@@ -643,7 +650,7 @@ function FinishDialog({ children, onClose }) {
   )
 }
 
-export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps, remote, editRun, openSequence, characters = [] }) {
+export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps, remote, ownCloud, editRun, openSequence, characters = [] }) {
   const [project, setProject] = useState(null)
   // a sequence's shot-by-shot project: which shot each run is (sequences.runsOf), so edits go back through it
   const [seqRuns, setSeqRuns] = useState(null)
@@ -806,7 +813,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
         const started = (job) => (onStart(job), setFinishing(null))
         return (
           <FinishDialog onClose={() => setFinishing(null)}>
-            {run.plan?.engine === 'seedance' ? <SeedanceFinishPanel job={run} candidate={finishing.candidate} onStart={started} notify={notify} remote={remote} characters={characters} /> : <FinishPanel job={run} candidate={finishing.candidate} onStart={started} notify={notify} caps={caps} remote={remote} />}
+            {run.plan?.engine === 'seedance' ? <SeedanceFinishPanel job={run} candidate={finishing.candidate} onStart={started} notify={notify} remote={remote} ownCloud={ownCloud} characters={characters} /> : <FinishPanel job={run} candidate={finishing.candidate} onStart={started} notify={notify} caps={caps} remote={remote} ownCloud={ownCloud} />}
           </FinishDialog>
         )
       })()}
@@ -942,6 +949,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                 finishes={finishesOf(run.id).slice().reverse()}
                 jobs={jobs}
                 remote={remote}
+                ownCloud={ownCloud}
                 caps={caps}
                 notify={notify}
                 marks={isMarked}

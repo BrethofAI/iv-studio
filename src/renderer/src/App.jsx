@@ -7,6 +7,7 @@ import Create from './components/Create'
 import ivMark from './assets/iv-mark.png'
 import ivMarkClosed from './assets/iv-mark-closed.png'
 import { ConfirmHost, ask } from './components/Confirm'
+import CloudModels from './components/CloudModels'
 import Library from './components/Library'
 import Cloud, { CloudMeter } from './components/Cloud'
 import StartComfy from './components/StartComfy'
@@ -330,7 +331,7 @@ export default function App() {
     window.addEventListener('iv:cloud-wizard', cloud)
     return () => (window.removeEventListener('iv:welcome', open), window.removeEventListener('iv:cloud-wizard', cloud), window.removeEventListener('iv:settings', words))
   }, [])
-  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, recheck, checking, characters, setCharacters, notify, openShot, editRun, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle, openRebuild,remakeClip, replaceSeed }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, ownCloud: !!setup?.remote && !setup?.hosted, recheck, checking, characters, setCharacters, notify, openShot, editRun, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle, openRebuild,remakeClip, replaceSeed }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
   // ComfyUI on this PC isn't there: the title bar offers to start it (not when it's running but busy)
   const comfyDown = !setup?.remote && setup?.items?.some((i) => i.id === 'comfyui' && i.status !== 'ok' && !i.busy)
@@ -450,6 +451,7 @@ export default function App() {
         {page === 'settings' && <Settings {...ctx} />}
       </main>
       <ConfirmHost />
+      <CloudModels />
       {cloudWiz && <CloudWizard onClose={() => (setCloudWiz(false), recheck?.(), window.dispatchEvent(new CustomEvent('iv:cloud-changed')))} notify={notify} recheck={recheck} info={info} />}
       <TourHost />
       {welcome && <Welcome first={welcome === 'first'} onClose={() => (setWelcome(null), recheck?.())} go={setPage} notify={notify} />}

@@ -13654,3 +13654,42 @@ button.set-chip:hover {
   margin-left: 10px;
   font-size: 11px;
 }
+
+/* The person's own cloud getting a render's models ready (CloudModels.jsx) */
+.cloud-prep {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  max-width: min(720px, calc(100vw - 48px));
+  padding: 10px 16px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  border-left: 3px solid var(--red, #e5484d);
+  border-radius: 10px;
+  background: var(--ink, #1b1518);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.cloud-prep.error {
+  border-left-color: #f0a020;
+}
+.cloud-prep-line {
+  flex: 1 1 280px;
+}
+.cloud-prep-bar {
+  flex: 0 0 120px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.cloud-prep-bar span {
+  display: block;
+  height: 100%;
+  background: var(--red, #e5484d);
+  transition: width 0.4s;
+}

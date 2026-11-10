@@ -792,7 +792,6 @@ export class Productions {
     const images = this.images()
     if (!images) throw new Error(`${what} need IV Studio on this PC.`)
     const st = await images.status()
-    if (st.remote) throw new Error(`${what} render on this PC’s ComfyUI. Switch to "This PC" on the Cloud page to make them.`)
     if (st.error) throw new Error(st.error)
     const ready = (ids, edit) => ids.map((f) => st.families.find((x) => x.id === f && x.ready && x.models.length && (!edit || x.edit))).find(Boolean)
     const editor = ready(['flux2', 'flux3'], true)

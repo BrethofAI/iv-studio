@@ -252,9 +252,9 @@ Simple words for people new to AI video. See [what's new in 1.1](#whats-new-in-1
 - **Windows 10 or 11** (64-bit), **64-bit Linux** (the AppImage, from 0.2.8; see [Linux](#linux)), or a **Mac**
   with macOS 12 or newer, Apple Silicon or Intel (from 0.3.2; it renders in the cloud, see [Mac](#mac)).
 - **An NVIDIA GPU, or the cloud.** 24 GB of VRAM is what IV Studio is tested on (an RTX 4090); 16 GB works
-  with smaller previews and finals. 64 GB of system RAM is recommended. Without a suitable card, shots and
-  sequences can render on a cloud GPU in your own RunPod or Modal account; pictures, music and voices still need a
-  local NVIDIA GPU (see [Cloud](#cloud)).
+  with smaller previews and finals. 64 GB of system RAM is recommended. Without a suitable card, nearly
+  everything can render on a cloud GPU in your own RunPod or Modal account; voices still need a local NVIDIA
+  GPU (see [Cloud](#cloud)).
 - **[ComfyUI](https://github.com/comfyanonymous/ComfyUI)**, version 0.33 or newer, running on the same PC.
   IV Studio talks to it at `http://127.0.0.1:8188` (change it in Settings → ComfyUI; `localhost:8000` for the
   ComfyUI Desktop app is fine, and Check my PC finds a ComfyUI on another usual port by itself). It can start ComfyUI for you: it
@@ -914,7 +914,8 @@ shuts off, set it up, switch it on. Check my PC offers the same wizard when it r
 3. **Set up.** IV Studio makes a 100 GB network volume in a RunPod data center that has your GPU and starts a
    pod from RunPod's official PyTorch image with this version's `resources/cloud` folder. The first pod installs
    ComfyUI and the same pinned node packs as Modal onto the volume, downloads the H3 models (each checked
-   against its published SHA-256) and receives your character LoRAs, so later pods start in a few minutes.
+   against its published SHA-256) and receives your character LoRAs, so later pods start in a few minutes. When
+   a new IV Studio changes the cloud setup, the next pod installs it again by itself (your models stay).
 
 RunPod pods don't sleep by themselves, so the pod's gate (`resources/cloud/gate.py`, which also asks for IV
 Studio's token on every request) deletes the pod after your idle time with an empty queue. The volume keeps
@@ -930,7 +931,8 @@ center, IV Studio starts the next H3-ready one that's free. The volume is billed
    with nothing to do before it switches off (3, 5, 10 or 20 minutes). The Cloud page shows each GPU's
    hourly price; billing is by the second, only while the GPU is on.
 4. **Set up.** IV Studio deploys its ComfyUI app to your account and copies the H3 models into a Modal
-   volume (about 60 GB) once.
+   volume (about 60 GB) once. After an IV Studio update that changes the cloud setup, press **Set up again**
+   once (your models stay).
 
 ### Either way
 
@@ -940,15 +942,37 @@ Cloud page, where **Shut down GPU** stops it at once instead of waiting for the 
 render wakes it again (about 1 to 3 minutes on Modal, 2 to 5 on RunPod). The Cloud page estimates a 10-second 2 MP shot at roughly 3 to
 5 minutes of GPU, about $0.13 on an L40S.
 
-**What runs in the cloud:** Create's video shots (hunting previews and finishing), Sequences, and the
-characters you already have. Finals use a 2× AI upscale (Real-ESRGAN) and RIFE frame interpolation (48, 72
-or 120 fps) in place of DLSS, which needs an NVIDIA card on Windows.
+**What runs on RunPod and Modal:** nearly everything. Create's video shots and Sequences, pictures (every
+family, Generate and Edit) and the picture tools, Projects sketches, designing a character's stills and clips,
+Music, Sounds, Cut out, Reframe, Replace (Swap people and Change the scene, on Viggle Remake), Effects on clips
+and photos, Retake in the editor, and the SeedVR2 finish and Enhance. Finals use a 2× AI upscale (Real-ESRGAN)
+and RIFE frame interpolation (48, 72 or 120 fps), or SeedVR2, in place of DLSS 5, which needs an NVIDIA card on
+Windows. The cloud runs ComfyUI v0.44.1 with an exactly pinned torch, and takes its node packs from the same
+pinned list Setup installs on a PC.
+
+**Models on first use.** Setup puts only H3's models in your cloud storage. Everything else brings its own
+models the first time you use it there: IV Studio lists them with their size and asks before downloading
+(on Modal on a CPU, a few cents; on RunPod in the GPU you're already using). Each file is checked against its
+published SHA-256 and kept for next time. Picture families use one pinned model each in the cloud (Flux.2
+Klein 9B, Flux 3 Klein, Krea 2 Turbo, Moss, Qwen Image 2.1, Z-Image Turbo and SDXL base); on a PC your own
+files are used. If a download won't fit on your RunPod volume, IV Studio says how much bigger it must be and
+what that adds a month, and grows it only if you agree (RunPod volumes can grow, never shrink; about $0.07 per
+GB a month). Modal's storage is free up to 1 TiB.
+
+**Gated models.** Flux.2 Klein 9B, Flux 3 Klein and the LTX effects (Dub, Clean plate, Day to night, Add
+water, SDR to HDR, Transformations and Transitions) are behind a licence on Hugging Face. To use them in the
+cloud, accept each licence on its Hugging Face page, then paste a Read token on the Cloud page (stored
+encrypted; used only for those downloads into your own storage).
+
+**Your LoRAs and RefMods.** A cloud render that uses a LoRA or RefMod from this PC uploads it first, once,
+checked by SHA-256 (from your local ComfyUI's folders, or IV Studio's own `models` folder on a PC without
+ComfyUI).
 
 **On Comfy Cloud** the check above decides it: Images and Music run there when Comfy Cloud has their models.
 
-**What still needs a local NVIDIA GPU (on RunPod and Modal):** Images, Music, Voices (and **Speak it**), designing a new
-character's stills and clips, and Replace. LoRAs you download from Civitai go into your local ComfyUI, so
-cloud renders don't see them yet. Training a character runs on your PC, RunPod or Modal, whichever renders.
+**What still needs this PC:** Voices (and **Speak it**), live step pictures while a shot renders (they need a
+connection held open, which would keep the GPU billing), Replace's old engine, the H3 pass of the free
+Seedance finish, and New angle. Training a character runs on your PC, RunPod or Modal, whichever you pick.
 
 ## Agents (MCP)
 
