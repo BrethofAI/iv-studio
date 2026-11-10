@@ -323,6 +323,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     onRecommended: on('recommended:update')
   },
   softMouth: { ready: call('softmouth:ready'), make: call('softmouth:make') },
+  batches: { list: call('batches:list'), dailies: call('batches:dailies') },
   turnaround: { status: call('turnaround:status'), list: call('turnaround:list'), make: call('turnaround:make'), delete: call('turnaround:delete') },
   refmods: { list: call('refmods:list'), ready: call('refmods:ready'), make: call('refmods:make'), onStatus: on('refmods:status') },
   characters: { list: call('characters:list'), save: call('characters:save'), catalog: call('characters:catalog'), install: call('characters:install'), loras: call('characters:loras'), onProgress: on('characters:progress') },
@@ -348,6 +349,6 @@ contextBridge.exposeInMainWorld('ivstudio', {
   cast: { list: call('cast:list'), places: call('cast:places'), savePlace: call('cast:savePlace'), deletePlace: call('cast:deletePlace') },
   render: { plan: call('render:plan'), planFinish: call('render:planFinish'), price: call('render:price'), priceFinish: call('render:priceFinish'), previews: call('render:previews'), finish: call('render:finish'), enhance: call('render:enhance') },
   jobs: { watch: call('jobs:watch'), cancel: call('jobs:cancel'), onUpdate: on('jobs:update'), onLive: on('jobs:live') },
-  files: { pick: call('files:pick'), reveal: call('files:reveal') },
+  files: { pick: call('files:pick'), reveal: call('files:reveal'), open: call('files:open') },
   links: { open: call('links:open') }
 })

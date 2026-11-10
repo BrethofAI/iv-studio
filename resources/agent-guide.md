@@ -51,6 +51,14 @@ Modes: `text` (prompt only), `reference` (pictures, videos or audio named `<Pict
 `prepare_media` crops pictures and trims videos and sounds first (first/last frames should be
 cropped to the shot's aspect, because they're stretched to fit).
 
+Checks on the takes: `rank_takes` also flags a take that cuts away mid-shot (`raw.cuts`, only when the prompt
+asks for one shot; hard cuts only, slow dissolves aren't caught) and, in `frames` mode, whether a take opens and
+ends on the given pictures (`raw.opens`, `raw.ends`). `use_clean_stretch` saves the part without the cut, or cuts
+it to the 17n+5 grid (`forContinue`) as a `continue` source. Don't write "no X" in a prompt: H3 shows the X;
+`check_prompt` lists such phrases (`negative-wording`) with what to say instead. For a `reference` video whose
+person speaks but the new shot doesn't, mark the media `softMouth: true` (or `soften_mouth` first) so the new
+face doesn't mouth their words.
+
 ## Seedance 2.5 (paid, on the person's Comfy.org credits)
 
 Seedance 2.5 is a second model for the same shots, through ComfyUI's ByteDance partner nodes. It runs on the
@@ -260,6 +268,10 @@ edges: the original stays as it is in the middle and the bars are filled (video 
 minutes for 5 s, up to 15 s; pictures with Qwen 2.1's outpaint LoRA, about 30 s). Give `about` a sentence on
 what it shows. The editor's right-click "Reframe to …" fits a clip to the edit's format and swaps it in place.
 
+
+`export_edit_for_editors` hands an edit to Premiere Pro, DaVinci Resolve or Final Cut: FCP 7 XML, FCPXML 1.10 and
+a CMX3600 EDL of V1, with the media copied beside them and zipped. Fades and title styling don't carry over.
+After an overnight batch, `make_dailies` makes (or remakes) its reel of every take and notes.md.
 ## Models and characters
 
 - `list_h3_models` and `set_workflow_model` choose the H3 model per workflow (some suit realism,
@@ -300,6 +312,10 @@ it was trained for: `h3` (MiniMax H3: shots, sequences, films, H3 stills), the p
 4. Use an H3 LoRA by passing `extraLoras: [{ name, strength }]` to `generate_previews` (strength about 0.6 to
    1), a picture family's in `make_image` `loras` with that family, and put its trigger words in the prompt.
 Real-person LoRAs are never shown. Mature LoRAs appear only if the person turned them on in the app.
+`recommended_loras` lists a short shelf of tested H3 LoRAs (camera moves, natural speech, motion repair, physics,
+first-person, 360° orbit, transformation, turnaround) with how to prompt each, its modes, trigger, strength and
+licence; `download_recommended_lora` installs one (ask first). The Turnaround LoRA is only for `make_turnaround`
+(five views of a character from their face picture; `turnaround_status` says if the nodes and LoRA are here).
 
 ## Images (Create -> Image)
 

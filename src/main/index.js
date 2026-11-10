@@ -65,6 +65,7 @@ import { afterPrompt, getBalance } from '../service/comfyaccount'
 import { budgetOf, readLedger, spentToday, startSpendDesk, todayLabel } from '../service/spending'
 import { listRecipes, removeRecipe } from '../service/recipes'
 import { Batches, batchReport, batchState } from '../service/batches'
+import { makeDailies } from '../service/dailies'
 import { infoFor, priceGraph } from '../service/pricing'
 import { checkKey as checkComfyCloudKey, COMFY_CLOUD, summarise as summariseComfyCloud } from '../service/comfycloud'
 import { Usage } from '../service/usage'
@@ -2462,8 +2463,9 @@ app.whenReady().then(() => {
       }
     }
   }
+  const buildDailies = (b, jobs) => makeDailies({ batch: b, jobs, outDir: path.join(videosDir(), 'Dailies'), ffmpeg: edits.ffmpeg, font: path.join(resourcesDir(path.join(app.getAppPath(), 'resources')), 'fonts', 'BarlowCondensed-SemiBold.ttf'), localCopy: (o, dir) => studio.localCopy(o, dir), probe: (f) => edits.probe(f) })
   const reportBatch = (b, report) => {
-    const entry = { kind: 'report', title: report.title, text: report.text, picks: report.picks, batchId: b.id, at: new Date().toISOString() }
+    const entry = { kind: 'report', title: report.title, text: report.text, picks: report.picks, dailies: report.dailies || null, batchId: b.id, at: new Date().toISOString() }
     const target = chat && chat.id === b.chatId ? chat : b.chatId ? loadChat(chatsRoot, b.chatId) : null
     if (target) {
       target.entries.push(entry)
@@ -2495,7 +2497,9 @@ app.whenReady().then(() => {
           }
         }
         const report = batchReport(b, jobs)
-        batchStore.save({ ...b, status: 'reported', reportedAt: new Date().toISOString(), summary: report.text })
+        // the dailies: a reel of every take with a title card each, and notes on what to look at first (dailies.js)
+        report.dailies = await buildDailies(b, jobs).catch(() => null)
+        batchStore.save({ ...b, status: 'reported', reportedAt: new Date().toISOString(), summary: report.text, dailies: report.dailies })
         reportBatch(b, report)
       }
       if (!batchStore.running().length && awake !== null) (powerSaveBlocker.stop(awake), (awake = null))
@@ -2509,6 +2513,21 @@ app.whenReady().then(() => {
   }
   setTimeout(watchBatches, 8000)
   handle('batches:list', () => batchStore.list().slice(0, 20))
+  // the dailies again (or for a batch from before they existed): the reel and the notes, then open the folder
+  handle('batches:dailies', async (id) => {
+    const b = batchStore.get(id)
+    const jobs = {}
+    for (const j of b.jobs) jobs[j.jobId] = await jobOrNull(j.jobId)
+    const d = await buildDailies(b, jobs)
+    batchStore.save({ ...batchStore.get(id), dailies: d })
+    return d
+  })
+  handle('files:open', async (file) => {
+    if (!file || !fs.existsSync(file)) throw new Error('That file is gone.')
+    const err = await shell.openPath(file)
+    if (err) throw new Error(err)
+    return true
+  })
   // "Undo this change" on an edit the agent changed: the edit goes back as it was (an open edit reloads, and the
   // editor's own Ctrl+Z can still step back over it)
   handle('chat:undo', (undoId) => {

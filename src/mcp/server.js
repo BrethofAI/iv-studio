@@ -20,6 +20,7 @@ import { ModelInstaller } from '../service/models'
 import { RECOMMENDED, recommendedManifest, recommendedOnDisk } from '../service/recommended'
 import { Turnarounds } from '../service/turnaround'
 import { SoftMouth } from '../service/softmouth'
+import { makeDailies } from '../service/dailies'
 import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
 import { setOllamaSource, unloadOllama } from '../service/prompter'
@@ -361,6 +362,18 @@ tool('get_batch', 'Where an overnight batch stands: each shot\'s status, and the
   const b = batches.get(batchId)
   const jobs = Object.fromEntries(b.jobs.map((j) => [j.jobId, (() => { try { return studio.getJob(j.jobId, { refresh: false }) } catch { return null } })()]))
   return { name: b.name, status: b.status, state: batchState(b, jobs), shots: b.jobs.map((j, i) => ({ shot: i + 1, label: j.label, status: jobs[j.jobId]?.status || 'gone' })), ...(b.status === 'reported' ? { report: batchReport(b, jobs) } : {}) }
+})
+tool('make_dailies', "An overnight batch's dailies: one reel of every take (the best of each shot first), each after a title card with its shot, take, seed and checks (words heard, likeness, cuts away mid-shot, first and last frames held, freezes), and notes.md saying what to look at first. Into Videos\IV Studio\Dailies. The app makes them by itself when a batch finishes; this makes them again, or for an older batch. Returns the folder, the reel and the notes.", { batchId: z.string() }, async ({ batchId }) => {
+  const b = batches.get(batchId)
+  const jobs = {}
+  for (const j of b.jobs) {
+    try {
+      jobs[j.jobId] = studio.getJob(j.jobId, { refresh: false })
+    } catch {
+      jobs[j.jobId] = null
+    }
+  }
+  return makeDailies({ batch: b, jobs, outDir: path.join(VIDEOS(), 'Dailies'), ffmpeg: edits.ffmpeg, font: path.join(resourcesDir(), 'fonts', 'BarlowCondensed-SemiBold.ttf'), localCopy: (o, dir) => studio.localCopy(o, dir), probe: (f) => edits.probe(f) })
 })
 tool('list_cast', 'Who and what a prompt can mention with @: character presets (@Tess: the picked character becomes {char}; anyone else with a face picture is attached as a reference) and places (@BusStop: attached as the place). A shot that mentions a member with a picture renders in References mode with the pictures attached, as <Subject N>.', {}, () => ({ items: studio.cast.members().map(({ handle, kind, name, picture, description, film }) => ({ mention: `@${handle}`, kind, name, hasPicture: !!picture, description, film })) }))
 tool('save_place', 'Save a place to mention as @Name in any prompt: a name, a picture (an image file path) and a short description of the room or setting.', { name: z.string(), picture: z.string().describe('An image file path'), description: z.string().default(''), id: z.string().optional().describe('To change a saved place') }, (args) => studio.cast.savePlace(args))

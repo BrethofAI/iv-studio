@@ -121,6 +121,41 @@ own RunPod or Modal, speed presets for smaller graphics cards, and a new look th
 - **An end card, if you want one.** The editor can add a "Made with IV Studio" end card to an export (Edit
   settings → End card), off unless you turn it on, and each export shape says where it fits.
 
+### Catch problems sooner, finish anywhere
+
+- **Takes that cut away.** H3 sometimes cuts to a close-up nobody asked for in the middle of a one-shot take. The
+  take card now says "cuts away at 2.4 s", the take scores lower, and **Use 0.0 to 2.4 s** keeps the part
+  before (or after) the cut in an edit; **Carry on from it** starts a Continue shot from that part, cut to H3's
+  frame grid. Only hard cuts are caught, not slow dissolves.
+- **First and last frames held.** In First / last frame mode each take says whether it really opens on your
+  first picture and ends on your last.
+- **"No …" wording.** H3 has no negative prompt, so "No photographs appear anywhere" can hang photographs on the
+  wall. The checker lists every "no / without / never / not …" phrase with what to write instead. IV Studio's own
+  tested lines ("No one speaks.", "There is no writing anywhere in the picture.") stay.
+- **For Premiere / Resolve.** In the editor, the timeline goes out as FCP 7 XML (Premiere Pro and DaVinci
+  Resolve), FCPXML 1.10 (Resolve, Final Cut Pro) and a CMX3600 EDL of V1, with every clip copied into a Media
+  folder beside them and the folder zipped to send. Tracks, trims, pictures, volume, hidden, muted and locked
+  tracks and markers come over; titles come over as markers (and as text in the FCPXML). Fades and title
+  styling don't.
+- **Recommended LoRAs.** LoRAs → Recommended (MiniMax H3): Camera Motion, Natural Face Speech, Motion
+  Continuity Repair, Spatial Physics, Head-mounted FPV, 360° Orbit and Transformation, each fixed to one tested
+  file and checked when it downloads, with what it does, the modes it works in, how to prompt it and its
+  licence. **Use in a shot** puts it in Create's tray with its trigger and strength.
+- **Turnaround sheets.** A character's settings make five views of them turning around from their face
+  picture, with matlod's Turnaround LoRA and the H3 Contact Sheet nodes (both downloads you choose).
+- **Search by what's in a file.** While nothing renders, your local prompt writer (Ollama, or your
+  OpenAI-compatible server when it sees pictures) looks at each new video and picture in the Library and writes
+  a sentence and a few tags, so search finds "red car" or "beach at night". It stops as soon as a render starts;
+  Settings → Prompt writer turns it off.
+- **Soft mouth.** A reference video in References mode (and Replace's Swap people) can have its mouths blurred
+  first, so the new face doesn't mouth the words spoken in it. Off while the shot has a spoken line. It uses the
+  face models from Characters.
+- **Dailies.** When an overnight batch finishes, Videos\IV Studio\Dailies gets a reel of every take, the best
+  of each shot first, each after a card with its seed and checks, and notes.md on what to look at first. The
+  chat's report has **Watch the dailies** and **Read the notes**.
+
+These ideas come from keys and Sam Wasserman's Imagination Studio (Apache-2.0); the code is IV Studio's own.
+
 ### Your own cloud does nearly everything
 
 - **Almost every feature on your RunPod or Modal.** Pictures and picture tools, storyboard sketches, character
@@ -1078,7 +1113,7 @@ Seedance finish, and New angle. Training a character runs on your PC, RunPod or 
 
 ## Agents (MCP)
 
-IV Studio includes a local MCP server (stdio) with 184 tools. It uses the same projects, characters, voices
+IV Studio includes a local MCP server (stdio) with 192 tools. It uses the same projects, characters, voices
 and songs as the window, so Claude Code or any MCP client can render shots and sequences, make pictures,
 speak lines, make music, cut them together and export. **Settings → Agents** has the command for your
 install, a message to paste into any agent, and a button that adds the IV Studio skill to Claude Code.
@@ -1104,7 +1139,7 @@ Agents learn how to use it from `resources/agent-guide.md`: the server's instruc
 - **Images:** `list_image_models`, `make_image`, `list_images`, `get_image`, `cancel_image`, `delete_image`.
 - **This PC:** `scan_hardware` (what Check my PC sees and recommends), `free_memory`.
 - **Shots:** `check_setup`, `install_node_packs`, `check_comfy_updates`, `update_comfy`, `undo_comfy_update`, `list_characters`, `list_projects`, `plan_render`, `check_prompt`,
-  `list_samplers`, `generate_previews`, `finish_candidate`, `enhance_final`, `rank_takes`, `review_take`, `make_previs`.
+  `list_samplers`, `generate_previews`, `finish_candidate`, `enhance_final`, `rank_takes`, `use_clean_stretch`, `review_take`, `make_previs`, `soften_mouth`.
 - **Cast and places:** `list_cast`, `save_place`.
 - **Projects (short films):** `list_films`, `create_film`, `get_film`, `update_film`, `set_film_script`,
   `write_film_script`, `break_down_film`, `sketch_film_shots`, `edit_film_shot`, `write_film_shot_prompt`,
@@ -1113,13 +1148,14 @@ Agents learn how to use it from `resources/agent-guide.md`: the server's instruc
 - **Sequences:** `list_sequences`, `get_sequence`, `save_sequence`, `render_take`, `hunt_shot`,
   `finish_shot`, `retake`, `render_out`.
 - **Prompt writing:** `write_prompt`, `write_shots_from_story`.
-- **Jobs:** `get_job`, `cancel_job`, `get_outputs`.
+- **Jobs:** `get_job`, `cancel_job`, `get_outputs`, `make_dailies` (an overnight batch's reel and notes).
 - **References:** `prepare_media` (crop a picture, trim and crop a video or sound, or fit it to H3's sizes).
 - **Library:** `list_renders`, `rename_project`, `delete_project`, `delete_sequence`.
+- **Recommended LoRAs and turnarounds:** `recommended_loras`, `download_recommended_lora`, `make_turnaround`, `turnaround_status`.
 - **Edit:** `list_edits`, `get_edit`, `create_edit`, `set_edit_settings`, `delete_edit`, `add_media`,
   `edit_timeline` (add, insert, overwrite, move, trim, split, ripple delete, fades, volume, titles, tracks
   and their hide/lock/mute/solo, markers, all checked before anything changes), `grab_frame`, `export_edit`,
-  `get_edit_export`, `cancel_edit_export`.
+  `get_edit_export`, `cancel_edit_export`, `export_edit_for_editors` (Premiere, Resolve, Final Cut).
 - **New footage on the timeline:** `generate_in_edit` (extend, bridge, fill or retake), `list_generations`,
   `pick_generation`, `cancel_generation`, `cut_out`, `reframe`, `make_reel`.
 - **Voices:** `voice_status`, `setup_voices`, `list_voices`, `design_voice`, `create_voice`, `update_voice`,

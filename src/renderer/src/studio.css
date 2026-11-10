@@ -14867,3 +14867,12 @@ html.rm .agent-dot.live {
   min-height: 28px;
   cursor: pointer;
 }
+
+/* an overnight batch's dailies, under its report in the chat (dailies.js) */
+.chat-report-dailies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
