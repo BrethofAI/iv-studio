@@ -226,7 +226,8 @@ export class Cloud {
     const running = await this.containers()
     for (const c of running) {
       this.onLog(`Shutting down cloud GPU ${c.id}…`)
-      await this.modal(['container', 'stop', c.id], { quiet: true, quick: true })
+      // --yes: modal 1.6 asks "Are you sure?" and aborts with no terminal to answer (a Mac user hit it)
+      await this.modal(['container', 'stop', c.id, '--yes'], { quiet: true, quick: true })
     }
     return { stopped: running.length }
   }
