@@ -22,7 +22,9 @@ export const LORA_BASE = 'MiniMax H3'
 // families, so Create -> Image's LoRA tray and the LoRAs page share them. Order matters for names: Flux 3 before
 // Flux.2, whose "klein" would catch it.
 export const LORA_FAMILIES = [
-  { id: 'h3', label: 'MiniMax H3', kind: 'video', bases: ['MiniMax H3'], pattern: 'minimax[ _-]?h3|(^|[\\/_ -])h3([\\/_ -]|$)|mmh3|t3ss4', folder: 'MiniMax H3', uses: 'Shots, sequences, films and H3 stills' },
+  // "H3 Image" names belong to H3 Image below, not to the video model
+  { id: 'h3', label: 'MiniMax H3', kind: 'video', bases: ['MiniMax H3'], pattern: 'minimax[ _-]?h3(?![ _-]?image)|(^|[\\/_ -])h3(?![ _-]?image)([\\/_ -]|$)|mmh3|t3ss4', folder: 'MiniMax H3', uses: 'Shots, sequences, films and H3 stills' },
+  { id: 'h3image', label: 'MiniMax H3 Image', kind: 'image', bases: [], pattern: 'minimax[ _-]?h3[ _-]?image|(^|[\\/_ -])h3[ _-]?image', folder: 'MiniMax H3 Image', uses: 'Pictures: make and edit (Civitai has no H3 Image category yet; yours show under Yours)' },
   { id: 'ltx', label: 'LTX-2.5', kind: 'video', bases: ['LTXV 2.5'], pattern: 'ltx[ _-]?(v|video)?[ _-]?2\\.?5', folder: 'LTX-2.5', uses: 'Your own ComfyUI workflows (IV Studio’s LTX effects bring their own LoRAs)' },
   { id: 'wan', label: 'Wan 2.1', kind: 'video', bases: ['Wan Video 14B i2v 480p', 'Wan Video 14B i2v 720p', 'Wan Video 14B t2v'], pattern: 'wan[ _-]?2\\.?1|wan_?14b', folder: 'Wan 2.1', uses: 'Your own ComfyUI workflows (the Effects gallery brings its own LoRAs)' },
   { id: 'flux3', label: 'Flux 3 Klein', kind: 'image', bases: ['Flux.3 Klein'], pattern: 'flux ?\\.?3', folder: 'Flux 3 Klein', uses: 'Pictures: make and edit, inpaint' },

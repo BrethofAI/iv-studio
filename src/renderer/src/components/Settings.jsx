@@ -816,7 +816,11 @@ function SpendingField({ settings, setSettings, notify }) {
     window.ivstudio.chat.spending?.().then(setToday).catch(() => {})
   }, [b.on, b.daily, b.perStep])
   // the chat spending something changes today's figure
-  useEffect(() => window.ivstudio.chat.onChange(() => window.ivstudio.chat.spending?.().then(setToday).catch(() => {})), [])
+  useEffect(() => {
+    return window.ivstudio.chat.onChange(() => {
+      window.ivstudio.chat.spending?.().then(setToday).catch(() => {})
+    })
+  }, [])
   const whole = (v, fallback) => {
     const x = Math.round(Number(v))
     return v !== '' && Number.isFinite(x) && x >= 0 ? x : fallback

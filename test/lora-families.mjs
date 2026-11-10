@@ -17,6 +17,9 @@ ok('every picture family in Create -> Image has a LoRA family, with the same id'
 ok('names and Civitai base models find the family', () => {
   const by = {
     'MiniMax H3/tess/tess_mmh3-000040.safetensors': 'h3',
+    'MiniMax H3 Image/painterly.safetensors': 'h3image',
+    'h3_image_style.safetensors': 'h3image',
+    'MiniMax H3/Styles/MM-H3 - Disney Renaissance Style v2.safetensors': 'h3',
     'Flux 3/solar.safetensors': 'flux3',
     'Flux3 Klein/x.safetensors': 'flux3',
     'Flux.2/klein_style.safetensors': 'flux2',
