@@ -1423,6 +1423,8 @@ function Turnaround({ c, face, notify, go }) {
               Delete
             </button>
             {sheets.length > 1 && ` · ${sheets.length - 1} older`}
+            <br />
+            Each sheet is different. If the camera tilts instead of turning around, make another.
           </figcaption>
         </figure>
       )}

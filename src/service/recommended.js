@@ -139,7 +139,7 @@ export const RECOMMENDED = [
     sha256: '9bc12ae97d2076b3449f8b1feca1fff52252576d608a84e4625497644f265d35',
     size: 63103776,
     trigger: '',
-    strength: 1,
+    strength: 1.3,
     works: [],
     what: 'Five views of a character, turning around, from one picture: a character sheet.',
     how: 'Used by Characters → Turnaround sheet, with the H3 Contact Sheet node pack. Not for normal shots: it breaks their motion.',

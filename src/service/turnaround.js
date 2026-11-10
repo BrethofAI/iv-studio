@@ -4,6 +4,12 @@
 // and unpack the five pictures around a stock sampler. The graph follows the node pack's own example: ref2va H3,
 // the LoRA through the stock loader, res_multistep / simple, 28 steps. Both downloads are the person's to make
 // (Recommended shelf and Setup); the LoRA keeps MiniMax's H3 Community Licence, the nodes their own (GPL).
+// Tried on Tess and Theo (2026-11-10, 512 px, a 4090, about a minute a sheet): at strength 1 the first views barely
+// turn and hair swings over the face; at 1.3 the camera goes front, three-quarter, profile with the face held. Some
+// seeds roll the camera sideways instead of turning, so each sheet gets a new seed. The studio-background wording
+// also rolls the camera with this checkpoint (the model card says only its s400 checkpoint honours it), so it isn't
+// offered.
+export const DEFAULT_STRENGTH = 1.3
 import fs from 'node:fs'
 import path from 'node:path'
 import { RECOMMENDED } from './recommended.js'
@@ -75,7 +81,7 @@ export class Turnarounds {
     return true
   }
   // characterId (its face picture) or picture; size per view (512 takes about a minute on a 4090)
-  async make({ characterId = null, picture = null, size = 512, seed = 42, strength = 1, studioBackground = false }) {
+  async make({ characterId = null, picture = null, size = 512, seed = Math.floor(Math.random() * 1e9), strength = DEFAULT_STRENGTH, studioBackground = false }) {
     const st = this.studio()
     if (st.comfy.hosted) throw new Error('Turnaround sheets run on this PC’s ComfyUI or your own cloud (RunPod, Modal).')
     const ch = characterId ? st.characters().find((c) => c.id === characterId) : null
