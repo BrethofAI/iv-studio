@@ -605,6 +605,12 @@ input.mini {
 .rank-btn {
   margin: 6px 0;
 }
+/* a take that cuts away: use the stretch without the cut (ranking.js) */
+.take-clean {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
 .enhance-row {
   display: flex;
   align-items: center;
@@ -14985,4 +14991,144 @@ html.rm .agent-dot.live {
   display: grid;
   gap: 6px;
   margin: 8px 0 4px;
+}
+/* LoRAs → Recommended (recommended.js): tested H3 LoRAs, one card each */
+.rec-shelf {
+  display: grid;
+  gap: 14px;
+}
+.rec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+.rec-card {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: var(--ink-2);
+}
+.rec-card.have {
+  border-color: color-mix(in srgb, var(--green, #7fd49a) 45%, var(--line));
+}
+.rec-card header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.rec-card h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.rec-card p {
+  margin: 0;
+}
+.rec-facts {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.rec-facts div {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 8px;
+}
+.rec-facts dd {
+  margin: 0;
+}
+.rec-card footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 44px;
+}
+
+/* Characters → a character's Turnaround sheet (turnaround.js) */
+.turnaround {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.turnaround-head {
+  display: grid;
+  gap: 2px;
+}
+.turnaround-need,
+.turnaround-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.turnaround-sheet {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.turnaround-views {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+.turnaround-views img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: var(--ink-2);
+}
+
+/* Library: what's in a file (describe.js) */
+.describe-status {
+  margin: -6px 0 10px;
+}
+.viewer-about {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.viewer-about p {
+  margin: 0;
+}
+.viewer-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* Create: a reference video's Soft mouth switch (softmouth.js) */
+.soft-mouth {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  cursor: pointer;
+}
+
+/* an overnight batch's dailies, under its report in the chat (dailies.js) */
+.chat-report-dailies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+/* trigger words are typed exactly, so they keep their case */
+.rec-facts dd.mono {
+  text-transform: none;
+  letter-spacing: 0;
+}
+/* a character's settings with a turnaround sheet in them: the settings side scrolls when the window is short */
+.modal.cast-modal {
+  max-height: calc(100vh - 40px);
+}
+.modal.cast-modal .cast-modal-body {
+  max-height: calc(100vh - 44px);
+  overflow-y: auto;
 }

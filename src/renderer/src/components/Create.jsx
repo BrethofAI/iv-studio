@@ -171,13 +171,15 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
 
   const request = useMemo(() => {
     const { projectId, projectName, voiceItem, ...r } = form
-    return { ...r, speed: speedOfForm(form) || undefined, character: r.character ?? 'none', media: r.media.map((m) => ({ kind: m.kind, file: m.path })) }
+    return { ...r, speed: speedOfForm(form) || undefined, character: r.character ?? 'none', media: r.media.map((m) => ({ kind: m.kind, file: m.path, ...(m.softMouth ? { softMouth: true } : {}) })) }
   }, [form])
   const speed = request.speed || null
   // a Custom shot finishes like the saved preset (the Finish panel's default too)
   const finishSpeed = speed || savedId
 
   const sd = form.engine === 'seedance'
+  // the shot has a spoken line (or a voice line): a reference video's mouth can't be softened then (softmouth.js)
+  const talks = !!form.voiceLine || /<d>[\s\S]*?\S[\s\S]*?<\/d>/.test(form.prompt || '')
   // Seedance: what the hunt would cost, from ComfyUI's own price for each take (pricing.js)
   const [price, setPrice] = useState(null)
   // the banner bar's idea, handed to the prompt writer below when Write it for me is pressed
@@ -258,7 +260,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   useEffect(() => {
     if (!incomingRun) return
     const { request: q, asked, projectId, projectName } = incomingRun
-    const media = (asked?.media || q.media || []).map((m) => ({ kind: m.kind, path: m.file || m.path }))
+    const media = (asked?.media || q.media || []).map((m) => ({ kind: m.kind, path: m.file || m.path, ...(m.softMouth ? { softMouth: true } : {}) }))
     setForm((f) => ({
       ...f,
       projectId,
@@ -317,10 +319,11 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const [picking, setPicking] = useState(false)
   const [yours, , reloadYours] = useYours()
   const loraInfo = (name) => yours?.find((x) => x.name === name)
-  function addLora({ name, words = [], title }) {
+  function addLora({ name, words = [], title, strength: suggested }) {
     if (form.extraLoras.some((l) => l.name === name)) return notify(`${title || loraTitle(name)} is already in the shot.`, 'info')
     const info = loraInfo(name)
-    const strength = info?.prefs?.strength ?? 1
+    // the person's own setting, else the strength a Recommended LoRA suggests, else 1
+    const strength = info?.prefs?.strength ?? suggested ?? 1
     const auto = info?.prefs?.autoTrigger !== false
     const add = auto ? words.filter((w) => w && !form.prompt.includes(w)) : []
     const prompt = add.length ? (/\[Shot 1\] /.test(form.prompt) ? form.prompt.replace('[Shot 1] ', `[Shot 1] ${add.join(', ')}. `) : `${add.join(', ')}. ${form.prompt}`) : form.prompt
@@ -614,7 +617,21 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 {form.media.length > 0 ? (
                   <div className="media-tiles">
                     {form.media.map((m, i) => (
-                      <MediaTile key={`${i}:${m.path}`} item={m} label={mediaLabel(m, i)} onEdit={() => setEditing(i)} onRemove={() => set({ media: form.media.filter((_, j) => j !== i) })} />
+                      <MediaTile
+                        key={`${i}:${m.path}`}
+                        item={m}
+                        label={mediaLabel(m, i)}
+                        onEdit={() => setEditing(i)}
+                        onRemove={() => set({ media: form.media.filter((_, j) => j !== i) })}
+                        extra={
+                          form.mode === 'reference' && m.kind === 'video' && !sd ? (
+                            <label className="soft-mouth small" title={talks ? 'This shot has a spoken line, so the mouth has to move: soft mouth is off.' : 'Blurs the mouths in this video before H3 sees it, so the new face doesn’t mouth the words spoken in it. H3 can copy the blur into the first second; trim it in Edit. Needs the face models (Characters).'}>
+                              <input type="checkbox" disabled={talks} checked={!!m.softMouth && !talks} onChange={(e) => set({ media: form.media.map((x, j) => (j === i ? { ...x, softMouth: e.target.checked } : x)) })} />
+                              Soft mouth{talks ? ' (off: the shot speaks)' : ''}
+                            </label>
+                          ) : null
+                        }
+                      />
                     ))}
                   </div>
                 ) : (

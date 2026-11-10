@@ -103,7 +103,10 @@ export class ModelInstaller {
   async download(model, signal) {
     const target = await modelTarget(this.comfy, model)
     if (fs.existsSync(target)) return this.set(model.id, { status: 'done', path: target })
-    const { sha256, size } = await upstreamInfo(model.url)
+    // a pinned SHA-256 in the manifest (the Recommended shelf) wins over the one the host publishes
+    const up = await upstreamInfo(model.url)
+    const sha256 = model.sha256 || up.sha256
+    const size = up.size || model.size
     const part = `${target}.part`
     fs.mkdirSync(path.dirname(target), { recursive: true })
 

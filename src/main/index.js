@@ -35,11 +35,16 @@ import { initUpdater, updateState, MANUAL as UPDATE_MANUAL } from './updater'
 import { MediaTools } from '../service/media'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { ModelInstaller } from '../service/models'
-import { CONTEXT_IR_PRICE, normalizeOllamaUrl, ollamaStatus, pullModel, setOllamaSource, unloadOllama } from '../service/prompter'
+import { CONTEXT_IR_PRICE, localChat, localWriterModel, normalizeOllamaUrl, ollamaStatus, pullModel, setOllamaSource, unloadOllama } from '../service/prompter'
 import { normalizeApiBase, openaiStatus, parseHeaders, setLlmSource } from '../service/llm'
 import { loadSlate, lookbook, promptVariants, rewritePrompt, writerName } from '../service/filmcraft'
 import { Studio } from '../service/studio'
-import { Ranker } from '../service/ranking'
+import { cleanStretchFile, Ranker } from '../service/ranking'
+import { exportInterchange } from '../service/interchange'
+import { RECOMMENDED, recommendedManifest, recommendedOnDisk } from '../service/recommended'
+import { Turnarounds } from '../service/turnaround'
+import { Describer } from '../service/describe'
+import { SoftMouth } from '../service/softmouth'
 import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
 import { findFizgig, LOCAL_TRAIN, RUNPOD_TRAIN_GPUS, SCENES, TALKS, TRAIN_DEFAULTS, TRAIN_GPUS, Trainings } from '../service/training'
@@ -61,6 +66,7 @@ import { afterPrompt, getBalance } from '../service/comfyaccount'
 import { budgetOf, readLedger, spentToday, startSpendDesk, todayLabel } from '../service/spending'
 import { listRecipes, removeRecipe } from '../service/recipes'
 import { Batches, batchReport, batchState } from '../service/batches'
+import { makeDailies } from '../service/dailies'
 import { infoFor, priceGraph } from '../service/pricing'
 import { checkKey as checkComfyCloudKey, COMFY_CLOUD, summarise as summariseComfyCloud } from '../service/comfycloud'
 import { Usage } from '../service/usage'
@@ -143,6 +149,10 @@ const TEXT_SIZES = { normal: 1, large: 1.15, larger: 1.3 }
 let refitZoom = () => {}
 let stopWatch = null
 let installer = null
+let recInstaller = null // the Recommended LoRAs shelf (recommended.js), into this PC's ComfyUI
+let turnarounds = null // turnaround sheets (turnaround.js)
+let describer = null // Library search by what's in a file (describe.js)
+let softMouth = null // a reference video's mouths blurred (softmouth.js)
 let trainings = null
 let replace = null
 let remake = null
@@ -237,10 +247,13 @@ function makeStudio() {
   // LoRAs live on this PC's ComfyUI, also when renders go to the cloud
   if (civitai) civitai.comfy = new Comfy(s.comfyUrl)
   // nothing of IV Studio's own holds the GPU while ComfyUI renders (see Studio.makeRoom)
-  studio.beforeRender = () => voices?.release()
+  studio.beforeRender = () => (describer?.pause(), voices?.release())
   // Seedance and other partner nodes: the person's Comfy.org key, read when a render needs it (never sent to the window)
   studio.partnerKey = () => unseal(readSettings(BASE).comfyApiKey)
+  // soft mouth on video references (softmouth.js), with Shinobi's Python and the face models
+  studio.softMouth = (file) => (softMouth ? softMouth.make(file) : Promise.reject(new Error('Soft mouth isn’t ready yet.')))
   if (!installer?.running) installer = new ModelInstaller({ comfy: studio.comfy, manifest: studio.manifest, onUpdate: (u) => send('models:update', u) })
+  if (!recInstaller?.running) recInstaller = new ModelInstaller({ comfy: new Comfy(s.comfyUrl), manifest: recommendedManifest(), onUpdate: (u) => send('recommended:update', u) })
   stopWatch = studio.watch((msg) => {
     if (msg.type === 'progress' || msg.type === 'executing' || msg.type === 'execution_success' || msg.type === 'execution_error') pump()
     // a live preview step: to the window, keyed by the prompt (the shot page and the queue match it to their job)
@@ -767,8 +780,22 @@ app.whenReady().then(() => {
   handle('loras:yours', () => civitai.yours())
   handle('loras:identify', (name) => civitai.identify(name))
   handle('loras:prefs', (name, patch) => civitai.setPrefs(name, patch))
+  // the Recommended shelf: tested H3 LoRAs, pinned, downloaded by the same installer as Setup's models
+  handle('loras:recommended', async () => {
+    const names = await new Comfy(readSettings(BASE).comfyUrl).objectInfo('LoraLoaderModelOnly').then((i) => i.LoraLoaderModelOnly?.input?.required?.lora_name?.[0] || [], () => [])
+    return { list: RECOMMENDED, onDisk: recommendedOnDisk(names), state: recInstaller.status() }
+  })
+  handle('loras:recommendedDownload', (id) => recInstaller.enqueue([id]))
+  handle('loras:recommendedCancel', (id) => recInstaller.cancel(id))
+  // turnaround sheets: five views of a character from one picture
+  turnarounds = new Turnarounds({ dataDir: DATA, studio: () => studio })
+  handle('turnaround:status', () => turnarounds.status())
+  handle('turnaround:list', (characterId) => turnarounds.list(characterId))
+  handle('turnaround:make', (opts) => turnarounds.make(opts))
+  handle('turnaround:delete', (id) => turnarounds.remove(id))
   // ---------- Library: everything made in IV Studio, in one place ----------
-  handle('library:all', () => {
+  // every Library item; each video and picture carries its description (describe.js) when it has one
+  const libraryItems = () => {
     const items = studio.library().map((i) => ({ ...i, type: 'video' }))
     for (const e of edits.list()) {
       for (const x of edits.get(e.id).exports || []) if (x.file && fs.existsSync(x.file)) items.push({ key: `export:${x.file}`, type: 'video', group: 'Edit exports', label: `${e.name} · ${x.format || ''} ${x.fps || ''} fps`.trim(), at: x.at, file: { path: x.file }, set: `edit:${e.id}`, setName: e.name, variant: `${x.format || 'Export'} · ${x.fps || ''} fps`, rank: 0, editId: e.id })
@@ -779,11 +806,32 @@ app.whenReady().then(() => {
     for (const r of images.all()) (r.files || []).forEach((f, i) => fs.existsSync(f) && items.push({ key: `image:${r.id}:${i}`, type: 'image', group: 'Images', label: r.name, detail: `${r.familyLabel} · ${r.mode === 'edit' ? 'edit' : 'generate'}`, at: r.finishedAt || r.createdAt, file: { path: f }, set: `image:${r.id}`, setName: r.name, variant: `Picture ${i + 1}`, rank: i, imageId: r.id }))
     for (const l of voices.lines()) if (fs.existsSync(l.file)) items.push({ key: `line:${l.id}`, type: 'voice', group: 'Voice lines', label: l.text, detail: l.voice, duration: l.duration, at: l.createdAt, file: { path: l.file }, set: `line:${l.id}`, setName: l.text, variant: `Seed ${l.seed}`, rank: 0 })
     return items.sort((a, b) => String(b.at).localeCompare(String(a.at)))
+  }
+  handle('library:all', () => libraryItems().map((i) => (i.file?.path && describer ? { ...i, about: describer.about(i.file.path) } : i)))
+  // Library search by what's in a file: the local writer describes new videos and pictures while nothing renders
+  describer = new Describer({
+    dataDir: DATA,
+    ffmpeg: edits.ffmpeg,
+    files: () => libraryItems().filter((i) => i.file?.path && fs.existsSync(i.file.path)).map((i) => ({ path: i.file.path, type: i.type })),
+    idle: async () => {
+      if (studio.comfy.remote) return true // renders run in the cloud; this PC's GPU is free
+      const q = await studio.comfy.queue().catch(() => null)
+      return !q || (!q.queue_running?.length && !q.queue_pending?.length)
+    },
+    enabled: () => readSettings(BASE).describeLibrary !== false,
+    writer: () => localWriterModel(readSettings(BASE).ollamaModel || undefined),
+    chat: localChat,
+    onChange: (st) => send('library:describe', st)
   })
+  describer.start()
+  handle('library:describeStatus', () => describer.status())
   handle('library:toEdit', async (item, editId = null) => putOnEdit(await localCopy(item.file), item.label.slice(0, 60), editId, item.type === 'video' ? 'iv' : item.type))
   // ---------- characters: design, clips, training on Modal, pick ----------
   // ---------- Shinobi: the agent-driven editor (OpenKatana engine), and face likeness ----------
   const shinobi = new Shinobi({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpegDir: path.dirname(edits.ffmpeg), onLog: (line) => send('shinobi:log', line) })
+  softMouth = new SoftMouth({ dataDir: DATA, ffmpeg: edits.ffmpeg, shinobi: () => shinobi, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')) })
+  handle('softmouth:ready', () => softMouth.ready())
+  handle('softmouth:make', (file) => softMouth.make(file))
   const briefFile = (id) => path.join(shinobi.projectDir(id), 'iv-brief.md')
   handle('shinobi:status', () => shinobi.status())
   handle('shinobi:install', () => shinobi.install())
@@ -1011,6 +1059,8 @@ app.whenReady().then(() => {
   handle('edits:addOutput', async (item) => edits.addMedia(await localCopy(item.file), { type: 'iv', label: item.label }))
   handle('edits:export', (id) => edits.export(id, path.join(videosDir(), 'Edits'), (p) => send('edits:progress', { id, progress: p })))
   handle('edits:cancelExport', (id) => edits.cancelExport(id))
+  // the timeline for Premiere, Resolve and Final Cut: XML, FCPXML and an EDL, with the media copied beside them, zipped
+  handle('edits:interchange', (id, opts = {}) => exportInterchange(edits.get(id), path.join(videosDir(), 'Edits'), { zip: opts.zip !== false }))
   handle('edits:filmstrip', (file, duration) => edits.filmstrip(file, duration))
   handle('edits:peaks', (file) => edits.peaks(file))
   // New footage from inside an edit (extend, fill/bridge, retake): placeholders on the timeline until each lands.
@@ -2439,8 +2489,9 @@ app.whenReady().then(() => {
       }
     }
   }
+  const buildDailies = (b, jobs) => makeDailies({ batch: b, jobs, outDir: path.join(videosDir(), 'Dailies'), ffmpeg: edits.ffmpeg, font: path.join(resourcesDir(path.join(app.getAppPath(), 'resources')), 'fonts', 'BarlowCondensed-SemiBold.ttf'), localCopy: (o, dir) => studio.localCopy(o, dir), probe: (f) => edits.probe(f) })
   const reportBatch = (b, report) => {
-    const entry = { kind: 'report', title: report.title, text: report.text, picks: report.picks, batchId: b.id, at: new Date().toISOString() }
+    const entry = { kind: 'report', title: report.title, text: report.text, picks: report.picks, dailies: report.dailies || null, batchId: b.id, at: new Date().toISOString() }
     const target = chat && chat.id === b.chatId ? chat : b.chatId ? loadChat(chatsRoot, b.chatId) : null
     if (target) {
       target.entries.push(entry)
@@ -2472,7 +2523,9 @@ app.whenReady().then(() => {
           }
         }
         const report = batchReport(b, jobs)
-        batchStore.save({ ...b, status: 'reported', reportedAt: new Date().toISOString(), summary: report.text })
+        // the dailies: a reel of every take with a title card each, and notes on what to look at first (dailies.js)
+        report.dailies = await buildDailies(b, jobs).catch(() => null)
+        batchStore.save({ ...b, status: 'reported', reportedAt: new Date().toISOString(), summary: report.text, dailies: report.dailies })
         reportBatch(b, report)
       }
       if (!batchStore.running().length && awake !== null) (powerSaveBlocker.stop(awake), (awake = null))
@@ -2486,6 +2539,21 @@ app.whenReady().then(() => {
   }
   setTimeout(watchBatches, 8000)
   handle('batches:list', () => batchStore.list().slice(0, 20))
+  // the dailies again (or for a batch from before they existed): the reel and the notes, then open the folder
+  handle('batches:dailies', async (id) => {
+    const b = batchStore.get(id)
+    const jobs = {}
+    for (const j of b.jobs) jobs[j.jobId] = await jobOrNull(j.jobId)
+    const d = await buildDailies(b, jobs)
+    batchStore.save({ ...batchStore.get(id), dailies: d })
+    return d
+  })
+  handle('files:open', async (file) => {
+    if (!file || !fs.existsSync(file)) throw new Error('That file is gone.')
+    const err = await shell.openPath(file)
+    if (err) throw new Error(err)
+    return true
+  })
   // "Undo this change" on an edit the agent changed: the edit goes back as it was (an open edit reloads, and the
   // editor's own Ctrl+Z can still step back over it)
   handle('chat:undo', (undoId) => {
@@ -2563,6 +2631,8 @@ app.whenReady().then(() => {
   ranker = new Ranker({ studio: () => studio, voices: () => voices, shinobi: () => shinobi, ffmpeg: edits.ffmpeg, dataDir: DATA })
   handle('rank:job', async (id) => (await ranker.rank(id), studio.publicJob(studio.getJob(id))))
   handle('rank:learn', (id, candidate) => ranker.learn(id, candidate))
+  // a take's longest stretch without a cut, as its own file (to an edit, or to carry on from in Continue)
+  handle('rank:clean', (id, candidate, opts = {}) => cleanStretchFile({ studio, mediaTools, dir: videosDir(), jobId: id, candidate, forContinue: !!opts.forContinue }))
   reviewer = new Reviewer({ studio: () => studio, voices: () => voices, ffmpeg: edits.ffmpeg })
   handle('review:take', async (id, candidate) => (await reviewer.review(id, candidate, writerOf(readSettings(BASE))), studio.publicJob(studio.getJob(id))))
   // a staging board in motion: a grey previs clip for <Video n> (Edge or Chrome draws it, about 3 s)

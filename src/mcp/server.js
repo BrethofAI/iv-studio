@@ -14,7 +14,13 @@ import { agentGuard, chatAsk, startedJobId } from '../service/agentrun'
 import { TOUR_PAGES, TOURS, placesToShow } from '../renderer/src/tours'
 import { GUIDE_SOURCE, loadGuide } from '../service/h3guide'
 import { blocking, lintPrompt } from '../service/lint'
-import { Ranker } from '../service/ranking'
+import { cleanStretchFile, Ranker } from '../service/ranking'
+import { exportInterchange } from '../service/interchange'
+import { ModelInstaller } from '../service/models'
+import { RECOMMENDED, recommendedManifest, recommendedOnDisk } from '../service/recommended'
+import { Turnarounds } from '../service/turnaround'
+import { SoftMouth } from '../service/softmouth'
+import { makeDailies } from '../service/dailies'
 import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
 import { setOllamaSource, unloadOllama } from '../service/prompter'
@@ -237,7 +243,7 @@ const tool = (name, description, shape, fn) =>
   })
 
 const media = z
-  .array(z.object({ kind: z.enum(['picture', 'video', 'audio']), file: z.string().describe('Absolute local path (uploaded to ComfyUI) or a name already in ComfyUI input') }))
+  .array(z.object({ kind: z.enum(['picture', 'video', 'audio']), file: z.string().describe('Absolute local path (uploaded to ComfyUI) or a name already in ComfyUI input'), softMouth: z.boolean().optional().describe('A video reference in References mode: blur the mouths in it first, so the new face doesn’t mouth its words. Ignored when the shot has a spoken line. Needs the face models and Shinobi’s Python (soften_mouth checks).') }))
   .optional()
   .describe('frames mode: 1-2 pictures (first, last). reference mode: pictures, videos, audio, named <Picture 1>, <Video 1>, <Audio 1> in the prompt. continue mode: 1 video.')
 const SPEED_HELP = SPEED_IDS.map((id) => `${id}: ${SPEEDS[id].say}`).join(' ')
@@ -357,6 +363,18 @@ tool('get_batch', 'Where an overnight batch stands: each shot\'s status, and the
   const b = batches.get(batchId)
   const jobs = Object.fromEntries(b.jobs.map((j) => [j.jobId, (() => { try { return studio.getJob(j.jobId, { refresh: false }) } catch { return null } })()]))
   return { name: b.name, status: b.status, state: batchState(b, jobs), shots: b.jobs.map((j, i) => ({ shot: i + 1, label: j.label, status: jobs[j.jobId]?.status || 'gone' })), ...(b.status === 'reported' ? { report: batchReport(b, jobs) } : {}) }
+})
+tool('make_dailies', "An overnight batch's dailies: one reel of every take (the best of each shot first), each after a title card with its shot, take, seed and checks (words heard, likeness, cuts away mid-shot, first and last frames held, freezes), and notes.md saying what to look at first. Into Videos\IV Studio\Dailies. The app makes them by itself when a batch finishes; this makes them again, or for an older batch. Returns the folder, the reel and the notes.", { batchId: z.string() }, async ({ batchId }) => {
+  const b = batches.get(batchId)
+  const jobs = {}
+  for (const j of b.jobs) {
+    try {
+      jobs[j.jobId] = studio.getJob(j.jobId, { refresh: false })
+    } catch {
+      jobs[j.jobId] = null
+    }
+  }
+  return makeDailies({ batch: b, jobs, outDir: path.join(VIDEOS(), 'Dailies'), ffmpeg: edits.ffmpeg, font: path.join(resourcesDir(), 'fonts', 'BarlowCondensed-SemiBold.ttf'), localCopy: (o, dir) => studio.localCopy(o, dir), probe: (f) => edits.probe(f) })
 })
 tool('list_cast', 'Who and what a prompt can mention with @: character presets (@Tess: the picked character becomes {char}; anyone else with a face picture is attached as a reference) and places (@BusStop: attached as the place). A shot that mentions a member with a picture renders in References mode with the pictures attached, as <Subject N>.', {}, () => ({ items: studio.cast.members().map(({ handle, kind, name, picture, description, film }) => ({ mention: `@${handle}`, kind, name, hasPicture: !!picture, description, film })) }))
 tool('save_place', 'Save a place to mention as @Name in any prompt: a name, a picture (an image file path) and a short description of the room or setting.', { name: z.string(), picture: z.string().describe('An image file path'), description: z.string().default(''), id: z.string().optional().describe('To change a saved place') }, (args) => studio.cast.savePlace(args))
@@ -886,6 +904,9 @@ tool('export_edit', `Render the whole edit to one MP4 (H.264 + AAC) in Videos\\I
     .catch((err) => Object.assign(st, { state: /cancel/i.test(err.message) ? 'cancelled' : 'failed', error: err.message }))
   return st
 })
+tool('export_edit_for_editors', "Hand an edit to a real editor: writes the timeline as FCP 7 XML (Premiere Pro and DaVinci Resolve import it), FCPXML 1.10 (Resolve, Final Cut Pro) and a CMX3600 EDL of V1, with every file it uses copied into a Media folder beside them and the folder zipped to send (zip false to skip). Carries every track, clip timing and trims, pictures, clip volume, hidden, muted and locked tracks, markers, and titles (as markers, and as text in the FCPXML). Fades and title styling don't carry over. Into Videos\IV Studio\Edits, or outDir.", { editId: z.string(), outDir: z.string().optional(), zip: z.boolean().optional() }, ({ editId, outDir, zip }) =>
+  exportInterchange(edits.get(editId), outDir || path.join(VIDEOS(), 'Edits'), { zip: zip !== false })
+)
 tool('get_edit_export', 'Progress of an export started with export_edit (state running, done, failed or cancelled; file when done).', { editId: z.string() }, ({ editId }) => {
   const st = exporting.get(editId)
   if (!st) throw new Error('No export started for this edit from this MCP server. Past exports are in get_edit.')
@@ -896,6 +917,10 @@ tool('cancel_edit_export', 'Stop an export started with export_edit.', { editId:
 // ---------- character training ----------
 // ---------- Shinobi: the agent-driven editor (OpenKatana engine) ----------
 const shinobi = new Shinobi({ dataDir: DATA, resourcesDir: resourcesDir(), ffmpegDir: path.dirname(edits.ffmpeg) })
+// soft mouth (softmouth.js): a reference video's mouths blurred, for shots with no spoken line
+const softMouth = new SoftMouth({ dataDir: DATA, ffmpeg: edits.ffmpeg, shinobi: () => shinobi, resourcesDir: resourcesDir() })
+studio.softMouth = (file) => softMouth.make(file)
+tool('soften_mouth', "A copy of a video with every person's mouth and jaw blurred (InsightFace's face detector finds them each frame), so when it's a References-mode <Video N> the new face doesn't mouth the words spoken in it. Use only for shots with no spoken line. generate_previews does it by itself for media marked softMouth. Needs Shinobi's Python and the face models; without them it says what to set up.", { file: z.string() }, ({ file }) => softMouth.make(file))
 // Pictures a Shinobi tool made (preview frames, contact sheets), as small JPEGs for the agent to look at.
 async function picturesOf(result, max = 4) {
   const paths = []
@@ -1228,6 +1253,9 @@ tool('rank_takes', "Rank a finished previews job's takes: each is scored on hear
   if (!ranking) throw new Error('Only a finished previews job with its takes on this PC can be ranked.')
   return { ranking, ...(picked ? { weights: ranker.learn(jobId, picked) } : {}) }
 })
+tool('use_clean_stretch', "A take that cuts away mid-shot (rank_takes reports raw.cuts and the longest stretch without one, raw.clean): save that stretch as its own video, frame-exact. forContinue cuts it down to H3's 17n+5 frame grid, ready as the source of a Continue shot (generate_previews mode continue). Returns the file; add it to an edit with add_media. Only hard cuts are caught, not slow dissolves.", { jobId: z.string(), candidate: z.number().int().min(1).max(3), forContinue: z.boolean().optional() }, async ({ jobId, candidate, forContinue }) =>
+  cleanStretchFile({ studio, mediaTools, dir: path.join(DATA, 'clean'), jobId, candidate, forContinue: !!forContinue })
+)
 const reviewer = new Reviewer({ studio: () => studio, voices: () => voices, ffmpeg: edits.ffmpeg })
 const previs = new Previs({ resourcesDir: resourcesDir(), dataDir: DATA, browser: () => shinobi.browser(), ffmpeg: edits.ffmpeg })
 tool('make_previs', "Draw a staging board plan in motion: a grey previs clip (plain mannequins and boxes) of the camera's move and the walks, about 3 s on this PC. H3 follows a previs's arc round people, which it barely does from words. Put the clip in generate_previews' media as a video in reference mode, and put words (it names <Video 1>; renumber it if other videos come first) into the prompt. Only worth it for an arc: a push, pull, track, pan or walk did as well or better from the staging words alone in tests, and renders 1.6-3.5x faster.", { stage: stageSchema, seconds: z.number().min(1).max(15).default(5), aspect: z.enum(Object.keys(ASPECTS)).default('16:9') }, ({ stage, seconds, aspect }) => previs.make({ stage, seconds, aspect }))
@@ -1618,6 +1646,20 @@ tool('search_loras', `Search Civitai for LoRAs for one of IV Studio's model fami
 }, (a) => civitai.search(a))
 tool('get_lora', 'One Civitai LoRA in full: versions (each with its file, trigger words and preview clips), licence (commercial use, credit) and the maker’s notes.', { modelId: z.number().int() }, ({ modelId }) => civitai.model(modelId))
 tool('download_lora', 'Download a Civitai LoRA version into ComfyUI’s loras folder (Civitai/<model>/ for H3, Civitai/<family>/<model>/ for the others), checked against Civitai’s SHA-256. Needs CIVITAI_API_KEY in this server’s environment; ask the person first, and check the licence (get_lora) for commercial work. Returns the LoRA name (use it in generate_previews extraLoras for H3, make_image loras for picture families), its family and its trigger words.', { modelId: z.number().int(), versionId: z.number().int().optional() }, (a) => civitai.download(a))
+// the Recommended shelf: tested H3 LoRAs, pinned to one file and checked by SHA-256 (recommended.js)
+let recInstaller = null
+const recNames = () => new Comfy(readSettings(BASE).comfyUrl).objectInfo('LoraLoaderModelOnly').then((i) => i.LoraLoaderModelOnly?.input?.required?.lora_name?.[0] || [], () => [])
+tool('recommended_loras', "The LoRAs page's Recommended shelf: tested MiniMax H3 LoRAs with what each does, the modes it works in, how to prompt it, its trigger word, suggested strength, licence and maker's page, and whether it's already in this PC's ComfyUI (onDisk: its name for generate_previews extraLoras). Turnaround is for make_turnaround only; it breaks motion in a normal shot.", {}, async () => {
+  const onDisk = recommendedOnDisk(await recNames())
+  return { items: RECOMMENDED.map((r) => ({ ...r, onDisk: onDisk[r.id] || null, download: recInstaller?.status()?.[r.id] || null })) }
+})
+tool('download_recommended_lora', "Download one Recommended LoRA (recommended_loras id) into this PC's ComfyUI, loras/MiniMax H3/Recommended, checked against its pinned SHA-256. Ask the person first. Returns at once; call recommended_loras to follow it.", { id: z.string() }, ({ id }) => {
+  recInstaller ||= new ModelInstaller({ comfy: new Comfy(readSettings(BASE).comfyUrl), manifest: recommendedManifest() })
+  return recInstaller.enqueue([id])[id]
+})
+const turnarounds = new Turnarounds({ dataDir: DATA, studio: () => studio })
+tool('make_turnaround', "A turnaround sheet: five views of a character turning around, from their face picture (characterId) or any picture of them, with matlod's Turnaround LoRA and the H3 Contact Sheet nodes (turnaround_status says if both are here). size is per view: 512 (about a minute on a 4090), 768 or 1024. strength defaults to 1.3, which turns front, three-quarter, profile; 1 barely turns. Each sheet gets a new seed unless one is given; some seeds roll the camera sideways instead of turning, so look at the views and make another if it tilts. Waits for the render and returns the five view files and a strip.", { characterId: z.string().optional(), picture: z.string().optional(), size: z.number().int().optional(), seed: z.number().int().optional(), strength: z.number().min(0.5).max(1.6).optional() }, ({ characterId, picture, size, seed, strength }) => turnarounds.make({ characterId, picture, size, seed, strength }))
+tool('turnaround_status', 'Whether turnaround sheets can be made here: the H3 Contact Sheet nodes (install_node_packs, then restart ComfyUI) and the Turnaround LoRA (download_recommended_lora rec-turnaround). Also lists the sheets made, for a character when characterId is given.', { characterId: z.string().optional() }, async ({ characterId }) => ({ ...(await turnarounds.status()), sheets: turnarounds.list(characterId || null) }))
 tool('list_my_loras', `The LoRAs ComfyUI can load, with what IV Studio knows about each: its model family (${FAMILY_IDS.join(', ')}, or null when unknown), Civitai name, trigger words, preview, and the person’s favourite and default strength. family narrows the list; h3Only is the old switch for family h3.`, { family: z.enum([...FAMILY_IDS, 'all']).optional(), h3Only: z.boolean().optional() }, async ({ family, h3Only }) => {
   const want = family || (h3Only === false ? 'all' : 'h3')
   return { items: (await civitai.yours()).filter((x) => want === 'all' || x.family === want) }

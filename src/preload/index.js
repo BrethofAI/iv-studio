@@ -205,6 +205,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     addOutput: call('edits:addOutput'),
     export: call('edits:export'),
     cancelExport: call('edits:cancelExport'),
+    interchange: call('edits:interchange'),
     filmstrip: call('edits:filmstrip'),
     peaks: call('edits:peaks'),
     fullScreen: call('window:fullScreen'),
@@ -313,7 +314,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
   },
   clipfx: { meta: call('clipfx:meta'), status: call('clipfx:status'), run: call('clipfx:run'),
     preview: call('clipfx:preview'), live: call('clipfx:live'), runs: call('clipfx:runs'), deleteRun: call('clipfx:deleteRun'), onProgress: on('clipfx:progress') },
-  library: { all: call('library:all'), toEdit: call('library:toEdit') },
+  library: { all: call('library:all'), toEdit: call('library:toEdit'), describeStatus: call('library:describeStatus'), onDescribe: on('library:describe') },
   loras: {
     meta: call('loras:meta'),
     search: call('loras:search'),
@@ -323,8 +324,15 @@ contextBridge.exposeInMainWorld('ivstudio', {
     yours: call('loras:yours'),
     identify: call('loras:identify'),
     prefs: call('loras:prefs'),
-    onProgress: on('loras:progress')
+    onProgress: on('loras:progress'),
+    recommended: call('loras:recommended'),
+    recommendedDownload: call('loras:recommendedDownload'),
+    recommendedCancel: call('loras:recommendedCancel'),
+    onRecommended: on('recommended:update')
   },
+  softMouth: { ready: call('softmouth:ready'), make: call('softmouth:make') },
+  batches: { list: call('batches:list'), dailies: call('batches:dailies') },
+  turnaround: { status: call('turnaround:status'), list: call('turnaround:list'), make: call('turnaround:make'), delete: call('turnaround:delete') },
   refmods: { list: call('refmods:list'), ready: call('refmods:ready'), make: call('refmods:make'), onStatus: on('refmods:status') },
   characters: { list: call('characters:list'), save: call('characters:save'), catalog: call('characters:catalog'), install: call('characters:install'), loras: call('characters:loras'), onProgress: on('characters:progress') },
   projects: { list: call('projects:list'), get: call('projects:get'), rename: call('projects:rename'), delete: call('projects:delete') },
@@ -343,12 +351,12 @@ contextBridge.exposeInMainWorld('ivstudio', {
     linkRun: call('sequences:linkRun')
   },
   system: { stats: call('system:stats'), free: call('system:free') },
-  rank: { job: call('rank:job'), learn: call('rank:learn') },
+  rank: { job: call('rank:job'), learn: call('rank:learn'), clean: call('rank:clean') },
   review: { take: call('review:take') },
   previs: { make: call('previs:make') },
   cast: { list: call('cast:list'), places: call('cast:places'), savePlace: call('cast:savePlace'), deletePlace: call('cast:deletePlace') },
   render: { plan: call('render:plan'), planFinish: call('render:planFinish'), price: call('render:price'), priceFinish: call('render:priceFinish'), previews: call('render:previews'), finish: call('render:finish'), enhance: call('render:enhance') },
   jobs: { watch: call('jobs:watch'), cancel: call('jobs:cancel'), onUpdate: on('jobs:update'), onLive: on('jobs:live') },
-  files: { pick: call('files:pick'), reveal: call('files:reveal') },
+  files: { pick: call('files:pick'), reveal: call('files:reveal'), open: call('files:open') },
   links: { open: call('links:open') }
 })

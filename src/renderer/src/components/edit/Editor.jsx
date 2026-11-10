@@ -69,6 +69,8 @@ const fitFades = (c) => {
 // the timeline below, every border draggable. A full-screen workspace hides IV Studio's own sidebar.
 // An agent edits the same file through the MCP server: its changes appear here with a one-click undo.
 export default function EditEditor({ editId, notify, go, focus, setFocus, characters = [], remakeClip }) {
+  // For Premiere / Resolve (interchange.js): busy, then what was written
+  const [handing, setHanding] = useState(null)
   const [meta, setMeta] = useState(null)
   const [edit, setEdit] = useState(null)
   const chatAgent = useAgentName()
@@ -462,6 +464,22 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
     }
   }
 
+  // the timeline for Premiere, Resolve and Final Cut (interchange.js), with its media, zipped
+  async function exportForEditors() {
+    setPlaying(false)
+    clearTimeout(saveTimer.current)
+    await window.ivstudio.edits.save(edit.id, edit)
+    setHanding({ busy: true })
+    try {
+      const r = await window.ivstudio.edits.interchange(edit.id, { zip: true })
+      setHanding(r)
+      notify(`Ready for Premiere and Resolve: ${r.media.length} file${r.media.length === 1 ? '' : 's'} copied, plus a .zip to send.`, 'info')
+    } catch (err) {
+      setHanding(null)
+      notify(err.message)
+    }
+  }
+
   const addMedia = (m, { place: put = true } = {}) => {
     const e = editRef.current
     // the first file of an empty edit goes straight onto the timeline, so one click is enough to start
@@ -510,6 +528,19 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
               Exported · show in folder
             </button>
           )}
+          {handing?.folder && (
+            <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(handing.xml)}>
+              Show hand-off
+            </button>
+          )}
+          <button
+            className="btn btn-small ed-handoff"
+            disabled={!edit.clips.length || !!handing?.busy}
+            onClick={exportForEditors}
+            title="The timeline as files Premiere Pro, DaVinci Resolve and Final Cut Pro open (XML, FCPXML and an EDL), with every clip copied beside them and zipped to send. Fades and title styling stay behind."
+          >
+            {handing?.busy ? 'Packing…' : 'Premiere / Resolve'}
+          </button>
           <button className="btn btn-primary" disabled={!edit.clips.length || exp?.progress != null} onClick={exportEdit}>
             {exp?.progress != null ? `Exporting ${Math.round(exp.progress * 100)}%` : 'Export MP4'}
           </button>

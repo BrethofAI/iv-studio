@@ -664,7 +664,7 @@ function FinishDialog({ children, onClose }) {
   )
 }
 
-export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps, remote, ownCloud, editRun, openSequence, characters = [] }) {
+export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps, remote, ownCloud, editRun, openSequence, openEdit, characters = [] }) {
   const [project, setProject] = useState(null)
   // the person's own Claude Code or Codex, for "Ask" and "pick the best take" on a run (ChatPanel.jsx)
   const agent = useAgentName()
@@ -704,6 +704,27 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
       notify(err.message)
     } finally {
       setRanking((r) => ({ ...r, [run.id]: false }))
+    }
+  }
+  // a take that cuts away mid-shot (ranking.js): its longest stretch without the cut, to an edit or to carry on from
+  const [cleaning, setCleaning] = useState({})
+  async function useClean(run, candidate, forContinue) {
+    const key = `${run.id}:${candidate}`
+    setCleaning((c) => ({ ...c, [key]: true }))
+    try {
+      const part = await window.ivstudio.rank.clean(run.id, candidate, { forContinue })
+      if (forContinue) {
+        const asked = run.plan.asked || {}
+        editRun?.({ ...run, plan: { ...run.plan, request: { ...run.plan.request, mode: 'continue' }, asked: { ...asked, mode: 'continue', media: [{ kind: 'video', file: part.path }] } } }, project)
+        notify(`The part ${part.from === 0 ? 'before' : 'after'} the cut (${part.seconds} s, ${part.frames} frames) is the source. Write what happens next and hunt.`, 'info')
+      } else {
+        const e = await window.ivstudio.library.toEdit({ file: { path: part.path }, label: `${project.name} #${candidate} without the cut`, type: 'video' })
+        openEdit?.(e.id)
+      }
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setCleaning((c) => ({ ...c, [key]: false }))
     }
   }
   // Enhance (SeedVR2) on a finished video: a new job under it
@@ -952,6 +973,18 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                       <div className="take-rank" title={Object.entries(r.parts).filter(([, v]) => v != null).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(' · ')}>
                         <span className="mono small">{r.best ? '★ Best take' : `Score ${Math.round((r.score ?? 0) * 100)}`}</span>
                         {r.reasons?.length > 0 && <span className="small dim">{r.reasons.join(' · ')}</span>}
+                        {r.raw?.cuts?.length > 0 && r.raw.clean && (
+                          <span className="take-clean" title="IV Studio looks for hard cuts in a take whose prompt asks for one shot. It doesn't catch slow dissolves.">
+                            <button className="link-btn mono small" disabled={!!cleaning[`${run.id}:${o.candidate}`]} onClick={() => useClean(run, o.candidate, false)}>
+                              {cleaning[`${run.id}:${o.candidate}`] ? 'Cutting…' : `Use ${r.raw.clean.from.toFixed(1)} to ${r.raw.clean.to.toFixed(1)} s (${r.raw.clean.start === 0 ? 'before' : 'after'} the cut)`}
+                            </button>
+                            {r.raw.cleanH3 && !remote && (
+                              <button className="link-btn mono small" disabled={!!cleaning[`${run.id}:${o.candidate}`]} onClick={() => useClean(run, o.candidate, true)}>
+                                Carry on from it
+                              </button>
+                            )}
+                          </span>
+                        )}
                       </div>
                     )}
                     <video src={media(o.url)} data-take={`${run.id}:${o.candidate}`} controls loop preload="metadata" />

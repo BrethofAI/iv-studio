@@ -4,6 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import { speaks } from './softmouth.js'
 import path from 'node:path'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { Comfy } from './comfy.js'
@@ -54,7 +55,9 @@ const PREVIEW_SAVES = { 1: '42', 2: '118', 3: '128' }
 // big models never share the GPU (Z-Image or MiniMax Music next to H3 overflows a 24 GB card and 64 GB of RAM).
 // Jobs of the same family keep their models: a finish reuses its preview's cached latent.
 // Create -> Image jobs are 'picture:<family>' (see images.js), so switching image models unloads too.
-const FAMILIES = { music: 'music', sound: 'sound', still: 'image', enhance: 'seedvr2', cutout: 'sam', 'clipfx:reshoot': 'h3' }
+// A turnaround sheet (turnaround.js) loads its own H3 with the five-view LoRA patched in; kept beside a shot's H3 it
+// filled 64 GB of RAM and a 0.4 MP draft crawled for 10 minutes (2026-11-10), so it's a family of its own.
+const FAMILIES = { music: 'music', sound: 'sound', still: 'image', enhance: 'seedvr2', cutout: 'sam', 'clipfx:reshoot': 'h3', turnaround: 'turnaround' }
 // Clip effects (freefield.js) are their own families too: LTX-2.5 or Wan next to H3 would overflow the card.
 const familyOf = (kind) => FAMILIES[kind] || (/^(picture|clipfx):/.test(String(kind)) ? String(kind) : 'h3')
 // The UNETLoader each mode of the IV Studio workflow uses (Settings can swap its model).
@@ -414,9 +417,13 @@ export class Studio {
     if (unknown.length) throw new Error(unknown.map((n) => n.message).join(' '))
     const project = projectId ? this.getProject(projectId) : this.createProject(projectName || shotName(request.prompt, this.characters().find((c) => c.id === request.character)))
     const media = []
+    // soft mouth (softmouth.js): a video reference's mouths blurred, so the new face doesn't mouth its words; only
+    // when the shot has no spoken line
+    const softMouth = (m) => m.kind === 'video' && m.softMouth && !speaks(request)
+    if ((request.media || []).some(softMouth) && !this.softMouth) throw new Error('Soft mouth isn’t available here.')
     for (const m of request.media || []) {
       // H3's media loader refuses a video without sound when it's told to pair it (a previs, a silent clip)
-      const local = m.file || m.path
+      const local = softMouth(m) ? (await this.softMouth(m.file || m.path)).path : m.file || m.path
       const sound = m.kind === 'video' && m.hasAudio === undefined && local && fs.existsSync(local) ? { hasAudio: (await probe(FFPROBE, local).catch(() => null))?.hasAudio ?? true } : {}
       media.push({ ...m, ...sound, file: await this.stage(local, 'minimax_h3') })
     }
@@ -426,7 +433,7 @@ export class Studio {
     const unet = this.models[plan.request.mode]
     if (unet) plan.values[`${MODEL_NODES[plan.request.mode]}.unet_name`] = unet
     // the run keeps what was asked as written (mentions and all, media as local files), for "Edit and run again"
-    plan.asked = { prompt: asked.prompt, mode: asked.mode, media: (asked.media || []).map((m) => ({ kind: m.kind, file: m.file || m.path })), voiceLine: asked.voiceLine || null }
+    plan.asked = { prompt: asked.prompt, mode: asked.mode, media: (asked.media || []).map((m) => ({ kind: m.kind, file: m.file || m.path, ...(m.softMouth ? { softMouth: true } : {}) })), voiceLine: asked.voiceLine || null }
     const run = project.jobs.length + 1
     const name = `${slug(project.name)}_${project.id}_r${run}`
     plan.values['80'] = name

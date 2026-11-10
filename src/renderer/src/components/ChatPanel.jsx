@@ -117,6 +117,7 @@ function Entry({ e, onAnswer, onUndo, onOpenShot }) {
             ))}
           </div>
         )}
+        <Dailies entry={e} />
       </div>
     )
   // an edit the agent changed: put it back as it was
@@ -417,5 +418,45 @@ export default function ChatPanel({ status, reload, onClose, context, go, notify
         </>
       )}
     </aside>
+  )
+}
+
+// A batch's dailies (dailies.js): the reel of every take with its title card, and notes on what to look at first.
+// Reports from before dailies existed can make them here.
+function Dailies({ entry }) {
+  const [d, setD] = useState(entry.dailies || null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  const make = async () => {
+    setBusy(true)
+    setErr(null)
+    try {
+      setD(await window.ivstudio.batches.dailies(entry.batchId))
+    } catch (x) {
+      setErr(x.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const open = (f) => window.ivstudio.files.open(f).catch((x) => setErr(x.message))
+  return (
+    <div className="chat-report-dailies">
+      {d?.reel && (
+        <button className="btn btn-small btn-primary" onClick={() => open(d.reel)} title="Every take, the best of each shot first, each after a card with its seed and checks">
+          ▶ Watch the dailies
+        </button>
+      )}
+      {d?.notes && (
+        <button className="btn btn-small" onClick={() => open(d.notes)} title="What to look at first, and every take with its checks">
+          Read the notes
+        </button>
+      )}
+      {!d && entry.batchId && (
+        <button className="btn btn-small" disabled={busy} onClick={make}>
+          {busy ? 'Making the dailies…' : 'Make the dailies'}
+        </button>
+      )}
+      {err && <span className="small pink">{err}</span>}
+    </div>
   )
 }

@@ -45,7 +45,14 @@ export const CREDITS = [
       { name: 'Wan 2.1 step-distill LoRA', by: 'lightx2v', covers: ['ff_lightx2v_i2v_14b_480p_cfg_step_distill_rank64_bf16'], use: 'Fast Effects', licence: 'Apache-2.0', url: 'https://huggingface.co/Kijai/WanVideo_comfy' },
       { name: 'MiniMax H3 Turbo (ref2v, 8 steps)', by: 'lightx2v', covers: ['ff_minimax_h3_ref2v_turbo_8step_v1_0_768p_comfyui_bf16'], use: 'Reshoot in 8 steps', url: 'https://huggingface.co/lightx2v/Minimax-h3-Turbo' },
       { name: 'FILM frame interpolation', by: 'Google Research', covers: ['ff_film_net_fp16'], use: 'Smooth and slow motion', licence: 'Apache-2.0', url: 'https://github.com/google-research/frame-interpolation' },
-      { name: 'Real-ESRGAN and RIFE', use: 'Upscaling and frame interpolation for finals in the cloud and on Linux', url: 'https://github.com/xinntao/Real-ESRGAN' }
+      { name: 'Real-ESRGAN and RIFE', use: 'Upscaling and frame interpolation for finals in the cloud and on Linux', url: 'https://github.com/xinntao/Real-ESRGAN' },
+      { name: 'Turnaround LoRA (Contact-Sheet diffusion)', by: 'matlod', use: 'Characters: five views of a character from one picture', licence: 'MiniMax H3 Community License', url: 'https://huggingface.co/matlod/minimax-h3-turnaround' },
+      { name: 'Camera Motion and Spatial Physics LoRAs', by: 'Jojocodex', use: 'Recommended LoRAs: camera moves, and objects that collide and fall believably', licence: 'Apache-2.0', url: 'https://huggingface.co/Jojocodex/minimax-h3-Camera-Motion-lora' },
+      { name: 'Natural Face Speech LoRA', by: 'vpakarinen', use: 'Recommended LoRAs: natural faces and clear speech', licence: 'Apache-2.0', url: 'https://huggingface.co/vpakarinen/natural-face-speech-h3-lora' },
+      { name: 'Motion Continuity Repair LoRA', by: 'JOKER141', use: 'Recommended LoRAs: bodies that stay whole through fast action', licence: 'MiniMax H3 Community License', url: 'https://huggingface.co/JOKER141/MiniMax-H3-General-Motion-Continuity-Repair' },
+      { name: 'Head-mounted FPV LoRA', by: 'neph1', use: 'Recommended LoRAs: a first-person camera', licence: 'MiniMax H3 Community License', url: 'https://huggingface.co/neph1/minimax_h3_headmounted_fpv_cam' },
+      { name: '360° Orbit LoRA', by: 'pablodawson', use: 'Recommended LoRAs: a frozen moment with the camera going all the way round', licence: 'MiniMax H3 Community License', url: 'https://huggingface.co/pablodawson/MiniMax-H3-360-Orbit-LoRA' },
+      { name: 'Transformation LoRA', by: 'Ashmotv', use: 'Recommended LoRAs: one picture morphing into another', licence: 'MiniMax H3 Community License', url: 'https://huggingface.co/Ashmotv/transformation_lora' }
     ]
   },
   {
@@ -89,6 +96,7 @@ export const CREDITS = [
       { name: 'ComfyUI Frame Interpolation (RIFE)', by: 'Fannovel16', use: 'Frame interpolation for finals on Linux and in the cloud', url: 'https://github.com/Fannovel16/ComfyUI-Frame-Interpolation' },
       { name: 'Viggle Remake nodes and prompt guide', by: 'Viggle AI', use: 'Replace (Remake)', licence: 'Apache-2.0', url: 'https://huggingface.co/Viggle/Viggle-Remake/tree/main/comfyui/ComfyUI-Viggle-Remake' },
       { name: 'ComfyUI-LTXVideo', by: 'Lightricks', use: 'Dub, VFX and SDR to HDR', url: 'https://github.com/Lightricks/ComfyUI-LTXVideo' },
+      { name: 'ComfyUI-H3-ContactSheet', by: 'matlowai', use: 'Turnaround sheets: packs five pictures into one H3 run and decodes them', licence: 'GPL-3.0', url: 'https://github.com/matlowai/ComfyUI-H3-ContactSheet' },
       { name: 'IV Studio nodes', by: 'Infinite Variance', use: 'The latent cache, picks that survive restarts, the shot list', licence: 'MIT', url: 'https://github.com/hollisorg/iv-studio/tree/main/resources/comfy-nodes/ComfyUI-IV-Studio' }
     ]
   },
@@ -99,6 +107,7 @@ export const CREDITS = [
       { name: 'H3 prompt-writing guide', by: 'MiniMax', use: 'How the prompt writers shape H3 prompts (downloaded from MiniMax on first use)', licence: 'MiniMax H3 Community License', url: 'https://github.com/MiniMax-AI/MiniMax-H3' },
       { name: 'Directing workflow', by: 'Matthew Hollis', use: 'Staging, reviews and the writers’ direction rules' },
       { name: 'Slate', by: 'Sam Wasserman (wassermanproductions.com)', use: 'The Cinematography setups and coverage plans (bundled unchanged), and the ideas behind the prompt tools, continuity check, Lookbook and shot list', licence: 'Apache-2.0', url: 'https://wassermanproductions.com', note: 'Through Imagination Studio by keys + Wasserman. Slate’s NOTICE ships in resources/slate.' },
+      { name: 'Imagination Studio', by: 'keys and Sam Wasserman', use: 'Ideas for catching cuts in a take, checking first and last frames, the "no X" warning, export to Premiere and Resolve, the Recommended LoRAs shelf, turnaround sheets, search by what’s in a file, a soft mouth on reference videos and dailies (no code used)', licence: 'Apache-2.0', url: 'https://github.com/drowzeys/Imagination-Studio-by-keys-Wasserman' },
       { name: 'Valtz', by: 'tgo-app-dev', use: 'Ideas for the prompt checker, @ mentions, versions and Compare (no code used)', url: 'https://github.com/tgo-app-dev/valtz' }
     ]
   },
