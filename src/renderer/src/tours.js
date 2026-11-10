@@ -47,7 +47,7 @@ export const TOURS = {
       { at: '.engine-switch', title: 'The model', text: 'MiniMax H3 renders on this PC, free. Seedance 2.5 uses your Comfy.org credits: same modes and hunt, and you see the price and confirm first. Hunt in cheap 480p drafts, then finish your pick at 1080p.' },
       { at: 'step:What kind of shot', title: 'What kind of shot', text: 'Text starts from words alone. References, Frames and Continue start from your pictures or a video.' },
       { at: "step:Who's in it", title: 'Who is in it', text: 'Pick a character so they look and sound the same in every shot. LoRAs and RefMods add a look, a style or a move.' },
-      { at: '.create-step:has(.create-drop)', title: 'What it builds on', text: 'Drop pictures or a video here. Add them before writing the prompt, so the writer can see them.' },
+      { at: '.create-step:has(.create-drop)', title: 'What it builds on', text: 'Drop pictures or a video here. Add them before writing the prompt, so the writer can see them. A video in References mode can get Soft mouth, so the new face doesn’t mouth the words spoken in it.' },
       { at: 'step:What happens', title: 'What happens', text: 'Say your idea in plain words and press Write my prompt. Type @ to bring in a character or a saved place. The checker below flags problems and its Fix button mends most of them.' },
       { at: 'step:Shape and size', title: 'Shape and size', text: 'The frame shape, the length, how many previews and their quality. Draft is about twice as fast for trying ideas. With Seedance: 4 to 30 seconds, Draft 480p or 720p/1080p, and the price.' },
       { at: '.speed-row', title: 'Speed', text: 'Presets that trade picture size and steps for time and memory. Fast and Low memory suit smaller graphics cards. Changing the size, steps or takes by hand shows Custom.' },
@@ -161,7 +161,7 @@ export const TOURS = {
     steps: [
       { at: '.replace-modes', title: 'What to change', text: 'Swap people puts your character in someone’s place. Change the scene changes things, weather, light or style. Finish fixes small faces or softens the look.' },
       { at: 'step:The video', title: 'The video', text: 'Drop in the video to change. It keeps its camera, motion and sound. Click it to trim.' },
-      { at: ['step:Who goes in', 'step:What changes'], title: 'Who or what', text: 'Pick the character (or a picture) who goes in, or say in plain words what should change.' },
+      { at: ['step:Who goes in', 'step:What changes'], title: 'Who or what', text: 'Pick the character (or a picture) who goes in, or say in plain words what should change. Soft mouth keeps the new person from mouthing the source’s words.' },
       { at: 'step:The painted frames', title: 'Check the painted frames', text: 'IV Studio paints a frame per shot the way it should look. They decide how it turns out: paint one again, use your own, or leave one out.' },
       { at: 'step:Runs', title: 'Runs', text: 'Every result lands here, ready to send to Edit.' }
     ]

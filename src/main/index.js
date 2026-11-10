@@ -43,6 +43,7 @@ import { exportInterchange } from '../service/interchange'
 import { RECOMMENDED, recommendedManifest, recommendedOnDisk } from '../service/recommended'
 import { Turnarounds } from '../service/turnaround'
 import { Describer } from '../service/describe'
+import { SoftMouth } from '../service/softmouth'
 import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
 import { findFizgig, LOCAL_TRAIN, RUNPOD_TRAIN_GPUS, SCENES, TALKS, TRAIN_DEFAULTS, TRAIN_GPUS, Trainings } from '../service/training'
@@ -149,6 +150,7 @@ let installer = null
 let recInstaller = null // the Recommended LoRAs shelf (recommended.js), into this PC's ComfyUI
 let turnarounds = null // turnaround sheets (turnaround.js)
 let describer = null // Library search by what's in a file (describe.js)
+let softMouth = null // a reference video's mouths blurred (softmouth.js)
 let trainings = null
 let replace = null
 let remake = null
@@ -246,6 +248,8 @@ function makeStudio() {
   studio.beforeRender = () => (describer?.pause(), voices?.release())
   // Seedance and other partner nodes: the person's Comfy.org key, read when a render needs it (never sent to the window)
   studio.partnerKey = () => unseal(readSettings(BASE).comfyApiKey)
+  // soft mouth on video references (softmouth.js), with Shinobi's Python and the face models
+  studio.softMouth = (file) => (softMouth ? softMouth.make(file) : Promise.reject(new Error('Soft mouth isn’t ready yet.')))
   if (!installer?.running) installer = new ModelInstaller({ comfy: studio.comfy, manifest: studio.manifest, onUpdate: (u) => send('models:update', u) })
   if (!recInstaller?.running) recInstaller = new ModelInstaller({ comfy: new Comfy(s.comfyUrl), manifest: recommendedManifest(), onUpdate: (u) => send('recommended:update', u) })
   stopWatch = studio.watch((msg) => {
@@ -823,6 +827,9 @@ app.whenReady().then(() => {
   // ---------- characters: design, clips, training on Modal, pick ----------
   // ---------- Shinobi: the agent-driven editor (OpenKatana engine), and face likeness ----------
   const shinobi = new Shinobi({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpegDir: path.dirname(edits.ffmpeg), onLog: (line) => send('shinobi:log', line) })
+  softMouth = new SoftMouth({ dataDir: DATA, ffmpeg: edits.ffmpeg, shinobi: () => shinobi, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')) })
+  handle('softmouth:ready', () => softMouth.ready())
+  handle('softmouth:make', (file) => softMouth.make(file))
   const briefFile = (id) => path.join(shinobi.projectDir(id), 'iv-brief.md')
   handle('shinobi:status', () => shinobi.status())
   handle('shinobi:install', () => shinobi.install())

@@ -19,6 +19,7 @@ import { exportInterchange } from '../service/interchange'
 import { ModelInstaller } from '../service/models'
 import { RECOMMENDED, recommendedManifest, recommendedOnDisk } from '../service/recommended'
 import { Turnarounds } from '../service/turnaround'
+import { SoftMouth } from '../service/softmouth'
 import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
 import { setOllamaSource, unloadOllama } from '../service/prompter'
@@ -240,7 +241,7 @@ const tool = (name, description, shape, fn) =>
   })
 
 const media = z
-  .array(z.object({ kind: z.enum(['picture', 'video', 'audio']), file: z.string().describe('Absolute local path (uploaded to ComfyUI) or a name already in ComfyUI input') }))
+  .array(z.object({ kind: z.enum(['picture', 'video', 'audio']), file: z.string().describe('Absolute local path (uploaded to ComfyUI) or a name already in ComfyUI input'), softMouth: z.boolean().optional().describe('A video reference in References mode: blur the mouths in it first, so the new face doesn’t mouth its words. Ignored when the shot has a spoken line. Needs the face models and Shinobi’s Python (soften_mouth checks).') }))
   .optional()
   .describe('frames mode: 1-2 pictures (first, last). reference mode: pictures, videos, audio, named <Picture 1>, <Video 1>, <Audio 1> in the prompt. continue mode: 1 video.')
 const SPEED_HELP = SPEED_IDS.map((id) => `${id}: ${SPEEDS[id].say}`).join(' ')
@@ -826,6 +827,10 @@ tool('cancel_edit_export', 'Stop an export started with export_edit.', { editId:
 // ---------- character training ----------
 // ---------- Shinobi: the agent-driven editor (OpenKatana engine) ----------
 const shinobi = new Shinobi({ dataDir: DATA, resourcesDir: resourcesDir(), ffmpegDir: path.dirname(edits.ffmpeg) })
+// soft mouth (softmouth.js): a reference video's mouths blurred, for shots with no spoken line
+const softMouth = new SoftMouth({ dataDir: DATA, ffmpeg: edits.ffmpeg, shinobi: () => shinobi, resourcesDir: resourcesDir() })
+studio.softMouth = (file) => softMouth.make(file)
+tool('soften_mouth', "A copy of a video with every person's mouth and jaw blurred (InsightFace's face detector finds them each frame), so when it's a References-mode <Video N> the new face doesn't mouth the words spoken in it. Use only for shots with no spoken line. generate_previews does it by itself for media marked softMouth. Needs Shinobi's Python and the face models; without them it says what to set up.", { file: z.string() }, ({ file }) => softMouth.make(file))
 // Pictures a Shinobi tool made (preview frames, contact sheets), as small JPEGs for the agent to look at.
 async function picturesOf(result, max = 4) {
   const paths = []

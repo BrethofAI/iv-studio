@@ -14858,3 +14858,12 @@ html.rm .agent-dot.live {
   flex-wrap: wrap;
   gap: 4px;
 }
+
+/* Create: a reference video's Soft mouth switch (softmouth.js) */
+.soft-mouth {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  cursor: pointer;
+}

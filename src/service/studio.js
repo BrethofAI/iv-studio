@@ -4,6 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import { speaks } from './softmouth.js'
 import path from 'node:path'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { Comfy } from './comfy.js'
@@ -414,9 +415,13 @@ export class Studio {
     if (unknown.length) throw new Error(unknown.map((n) => n.message).join(' '))
     const project = projectId ? this.getProject(projectId) : this.createProject(projectName || shotName(request.prompt, this.characters().find((c) => c.id === request.character)))
     const media = []
+    // soft mouth (softmouth.js): a video reference's mouths blurred, so the new face doesn't mouth its words; only
+    // when the shot has no spoken line
+    const softMouth = (m) => m.kind === 'video' && m.softMouth && !speaks(request)
+    if ((request.media || []).some(softMouth) && !this.softMouth) throw new Error('Soft mouth isn’t available here.')
     for (const m of request.media || []) {
       // H3's media loader refuses a video without sound when it's told to pair it (a previs, a silent clip)
-      const local = m.file || m.path
+      const local = softMouth(m) ? (await this.softMouth(m.file || m.path)).path : m.file || m.path
       const sound = m.kind === 'video' && m.hasAudio === undefined && local && fs.existsSync(local) ? { hasAudio: (await probe(FFPROBE, local).catch(() => null))?.hasAudio ?? true } : {}
       media.push({ ...m, ...sound, file: await this.stage(local, 'minimax_h3') })
     }
@@ -426,7 +431,7 @@ export class Studio {
     const unet = this.models[plan.request.mode]
     if (unet) plan.values[`${MODEL_NODES[plan.request.mode]}.unet_name`] = unet
     // the run keeps what was asked as written (mentions and all, media as local files), for "Edit and run again"
-    plan.asked = { prompt: asked.prompt, mode: asked.mode, media: (asked.media || []).map((m) => ({ kind: m.kind, file: m.file || m.path })), voiceLine: asked.voiceLine || null }
+    plan.asked = { prompt: asked.prompt, mode: asked.mode, media: (asked.media || []).map((m) => ({ kind: m.kind, file: m.file || m.path, ...(m.softMouth ? { softMouth: true } : {}) })), voiceLine: asked.voiceLine || null }
     const run = project.jobs.length + 1
     const name = `${slug(project.name)}_${project.id}_r${run}`
     plan.values['80'] = name

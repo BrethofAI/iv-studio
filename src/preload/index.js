@@ -322,6 +322,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     recommendedCancel: call('loras:recommendedCancel'),
     onRecommended: on('recommended:update')
   },
+  softMouth: { ready: call('softmouth:ready'), make: call('softmouth:make') },
   turnaround: { status: call('turnaround:status'), list: call('turnaround:list'), make: call('turnaround:make'), delete: call('turnaround:delete') },
   refmods: { list: call('refmods:list'), ready: call('refmods:ready'), make: call('refmods:make'), onStatus: on('refmods:status') },
   characters: { list: call('characters:list'), save: call('characters:save'), catalog: call('characters:catalog'), install: call('characters:install'), loras: call('characters:loras'), onProgress: on('characters:progress') },
