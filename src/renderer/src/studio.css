@@ -8110,6 +8110,7 @@ button.nav-update:hover {
   color: var(--cream);
 }
 .switch-toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;
