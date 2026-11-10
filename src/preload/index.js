@@ -316,8 +316,13 @@ contextBridge.exposeInMainWorld('ivstudio', {
     yours: call('loras:yours'),
     identify: call('loras:identify'),
     prefs: call('loras:prefs'),
-    onProgress: on('loras:progress')
+    onProgress: on('loras:progress'),
+    recommended: call('loras:recommended'),
+    recommendedDownload: call('loras:recommendedDownload'),
+    recommendedCancel: call('loras:recommendedCancel'),
+    onRecommended: on('recommended:update')
   },
+  turnaround: { status: call('turnaround:status'), list: call('turnaround:list'), make: call('turnaround:make'), delete: call('turnaround:delete') },
   refmods: { list: call('refmods:list'), ready: call('refmods:ready'), make: call('refmods:make'), onStatus: on('refmods:status') },
   characters: { list: call('characters:list'), save: call('characters:save'), catalog: call('characters:catalog'), install: call('characters:install'), loras: call('characters:loras'), onProgress: on('characters:progress') },
   projects: { list: call('projects:list'), get: call('projects:get'), rename: call('projects:rename'), delete: call('projects:delete') },

@@ -551,6 +551,97 @@ function Yours({ items, setItems, onPick, onOpenCivitai, compact = false, notify
   )
 }
 
+// ---------- Recommended: a short shelf of tested H3 LoRAs (recommended.js), pinned and checked on download ----------
+const MODE_LABEL = { text: 'Text', frames: 'First / last frame', reference: 'References' }
+const mb = (b) => `${Math.round(b / 1e6)} MB`
+function Recommended({ notify, onUse, go }) {
+  const [data, setData] = useState(null)
+  const load = () => window.ivstudio.loras.recommended().then(setData, (err) => (notify(err.message), setData({ list: [], onDisk: {}, state: {} })))
+  useEffect(() => {
+    load()
+    return window.ivstudio.loras.onRecommended((u) => {
+      setData((d) => (d ? { ...d, state: { ...d.state, [u.id]: u } } : d))
+      if (u.status === 'done') load()
+    })
+  }, [])
+  if (!data) return <Loading label="Reading your LoRAs" />
+  return (
+    <div className="rec-shelf">
+      <p className="small dim">
+        LoRAs we’ve tried with MiniMax H3, each fixed to one tested file and checked when it downloads. They go into ComfyUI’s <span className="mono">loras\MiniMax H3\Recommended</span> folder. Each keeps its maker’s licence.
+      </p>
+      <div className="rec-grid">
+        {data.list.map((r) => {
+          const have = data.onDisk[r.id]
+          const st = data.state[r.id]
+          const busy = st && ['queued', 'downloading', 'verifying'].includes(st.status)
+          return (
+            <article key={r.id} className={`rec-card ${have ? 'have' : ''}`}>
+              <header>
+                <h3>{r.name}</h3>
+                <button className="link-btn mono small" onClick={() => window.ivstudio.links.open(r.page)} title={r.page}>
+                  by {r.author} ↗
+                </button>
+              </header>
+              <p className="small">{r.what}</p>
+              <dl className="rec-facts small">
+                <div>
+                  <dt className="dim">Works in</dt>
+                  <dd>{r.use === 'turnaround' ? 'Characters → Turnaround sheet' : r.works.map((w) => MODE_LABEL[w]).join(', ')}</dd>
+                </div>
+                <div>
+                  <dt className="dim">How</dt>
+                  <dd>{r.how}</dd>
+                </div>
+                <div>
+                  <dt className="dim">Licence</dt>
+                  <dd>{r.licence}</dd>
+                </div>
+                {r.trigger && (
+                  <div>
+                    <dt className="dim">Trigger</dt>
+                    <dd className="mono">{r.trigger}</dd>
+                  </div>
+                )}
+              </dl>
+              <footer>
+                {have ? (
+                  <>
+                    <span className="mono small cloud-ok">● On this PC</span>
+                    {r.use === 'turnaround' ? (
+                      <button className="btn btn-small" onClick={() => go?.('characters')}>
+                        Open Characters
+                      </button>
+                    ) : (
+                      <button className="btn btn-small btn-primary" onClick={() => onUse({ name: have, words: r.trigger ? [r.trigger] : [], title: r.name, strength: r.strength })}>
+                        Use in a shot
+                      </button>
+                    )}
+                  </>
+                ) : busy ? (
+                  <>
+                    <span className="mono small">{st.status === 'downloading' && st.total ? `${Math.round((100 * st.received) / st.total)}%` : st.status === 'verifying' ? 'Checking…' : 'Waiting…'}</span>
+                    <button className="link-btn small" onClick={() => window.ivstudio.loras.recommendedCancel(r.id)}>
+                      Stop
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {st?.status === 'error' && <span className="small pink">{st.error}</span>}
+                    <button className="btn btn-small" onClick={() => window.ivstudio.loras.recommendedDownload(r.id).catch((err) => notify(err.message))}>
+                      Download · {mb(r.size)}
+                    </button>
+                  </>
+                )}
+              </footer>
+            </article>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ---------- the page ----------
 export function LorasPage({ notify, go, addLoraToCreate }) {
   const [tab, setTab] = useState('discover')
@@ -593,10 +684,17 @@ export function LorasPage({ notify, go, addLoraToCreate }) {
         <button className={tab === 'yours' ? 'on' : ''} onClick={() => (setTab('yours'), reload())}>
           Yours{items ? ` · ${counts[family] || 0}` : ''}
         </button>
+        {family === 'h3' && (
+          <button className={tab === 'recommended' ? 'on' : ''} onClick={() => setTab('recommended')}>
+            Recommended
+          </button>
+        )}
       </div>
       <div className="lora-layout">
         <div>
-          {tab === 'discover' ? (
+          {tab === 'recommended' && family === 'h3' ? (
+            <Recommended notify={notify} go={go} onUse={(l) => use({ ...l, family: 'h3' })} />
+          ) : tab === 'discover' ? (
             <Discover meta={meta} family={family} onOpen={(m) => setOpen(m.id)} query={query} setQuery={setQuery} />
           ) : (
             <Yours meta={meta} family={family} items={items} setItems={setItems} notify={notify} onOpenCivitai={(id) => setOpen(id)} onPick={['ltx', 'wan'].includes(family) ? null : (x) => use({ name: x.name, words: x.prefs.triggers || x.civitai?.trainedWords || [], title: x.civitai?.name || loraTitle(x.name), family: x.family || family })} />

@@ -16,6 +16,9 @@ import { GUIDE_SOURCE, loadGuide } from '../service/h3guide'
 import { blocking, lintPrompt } from '../service/lint'
 import { cleanStretchFile, Ranker } from '../service/ranking'
 import { exportInterchange } from '../service/interchange'
+import { ModelInstaller } from '../service/models'
+import { RECOMMENDED, recommendedManifest, recommendedOnDisk } from '../service/recommended'
+import { Turnarounds } from '../service/turnaround'
 import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
 import { setOllamaSource, unloadOllama } from '../service/prompter'
@@ -1548,6 +1551,20 @@ tool('search_loras', `Search Civitai for LoRAs for one of IV Studio's model fami
 }, (a) => civitai.search(a))
 tool('get_lora', 'One Civitai LoRA in full: versions (each with its file, trigger words and preview clips), licence (commercial use, credit) and the maker’s notes.', { modelId: z.number().int() }, ({ modelId }) => civitai.model(modelId))
 tool('download_lora', 'Download a Civitai LoRA version into ComfyUI’s loras folder (Civitai/<model>/ for H3, Civitai/<family>/<model>/ for the others), checked against Civitai’s SHA-256. Needs CIVITAI_API_KEY in this server’s environment; ask the person first, and check the licence (get_lora) for commercial work. Returns the LoRA name (use it in generate_previews extraLoras for H3, make_image loras for picture families), its family and its trigger words.', { modelId: z.number().int(), versionId: z.number().int().optional() }, (a) => civitai.download(a))
+// the Recommended shelf: tested H3 LoRAs, pinned to one file and checked by SHA-256 (recommended.js)
+let recInstaller = null
+const recNames = () => new Comfy(readSettings(BASE).comfyUrl).objectInfo('LoraLoaderModelOnly').then((i) => i.LoraLoaderModelOnly?.input?.required?.lora_name?.[0] || [], () => [])
+tool('recommended_loras', "The LoRAs page's Recommended shelf: tested MiniMax H3 LoRAs with what each does, the modes it works in, how to prompt it, its trigger word, suggested strength, licence and maker's page, and whether it's already in this PC's ComfyUI (onDisk: its name for generate_previews extraLoras). Turnaround is for make_turnaround only; it breaks motion in a normal shot.", {}, async () => {
+  const onDisk = recommendedOnDisk(await recNames())
+  return { items: RECOMMENDED.map((r) => ({ ...r, onDisk: onDisk[r.id] || null, download: recInstaller?.status()?.[r.id] || null })) }
+})
+tool('download_recommended_lora', "Download one Recommended LoRA (recommended_loras id) into this PC's ComfyUI, loras/MiniMax H3/Recommended, checked against its pinned SHA-256. Ask the person first. Returns at once; call recommended_loras to follow it.", { id: z.string() }, ({ id }) => {
+  recInstaller ||= new ModelInstaller({ comfy: new Comfy(readSettings(BASE).comfyUrl), manifest: recommendedManifest() })
+  return recInstaller.enqueue([id])[id]
+})
+const turnarounds = new Turnarounds({ dataDir: DATA, studio: () => studio })
+tool('make_turnaround', "A turnaround sheet: five views of a character turning around, from their face picture (characterId) or any picture of them, with matlod's Turnaround LoRA and the H3 Contact Sheet nodes (turnaround_status says if both are here). size is per view: 512 (about a minute on a 4090), 768 or 1024. strength 1 turns furthest; 0.7 keeps the look closer. studioBackground swaps the background for a plain studio. Waits for the render and returns the five view files and a strip.", { characterId: z.string().optional(), picture: z.string().optional(), size: z.number().int().optional(), seed: z.number().int().optional(), strength: z.number().min(0.3).max(1.5).optional(), studioBackground: z.boolean().optional() }, (a) => turnarounds.make(a))
+tool('turnaround_status', 'Whether turnaround sheets can be made here: the H3 Contact Sheet nodes (install_node_packs, then restart ComfyUI) and the Turnaround LoRA (download_recommended_lora rec-turnaround). Also lists the sheets made, for a character when characterId is given.', { characterId: z.string().optional() }, async ({ characterId }) => ({ ...(await turnarounds.status()), sheets: turnarounds.list(characterId || null) }))
 tool('list_my_loras', `The LoRAs ComfyUI can load, with what IV Studio knows about each: its model family (${FAMILY_IDS.join(', ')}, or null when unknown), Civitai name, trigger words, preview, and the person’s favourite and default strength. family narrows the list; h3Only is the old switch for family h3.`, { family: z.enum([...FAMILY_IDS, 'all']).optional(), h3Only: z.boolean().optional() }, async ({ family, h3Only }) => {
   const want = family || (h3Only === false ? 'all' : 'h3')
   return { items: (await civitai.yours()).filter((x) => want === 'all' || x.family === want) }

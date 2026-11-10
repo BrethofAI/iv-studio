@@ -1416,6 +1416,19 @@
       "git": "https://github.com/Lightricks/ComfyUI-LTXVideo",
       "commit": "44c8a36b7c31ee00b4271daed11dc2a4aa481140",
       "for": "Dub and VFX"
+    },
+    {
+      "label": "H3 Contact Sheet",
+      "classes": [
+        "H3ContactSheet",
+        "H3ContactSheetDecode"
+      ],
+      "url": "https://github.com/matlowai/ComfyUI-H3-ContactSheet",
+      "dir": "ComfyUI-H3-ContactSheet",
+      "git": "https://github.com/matlowai/ComfyUI-H3-ContactSheet",
+      "commit": "3c8c8c66e69362e5abf9cf4c4e693baddab90ca3",
+      "for": "Turnaround sheets",
+      "cloud": false
     }
   ]
 }

@@ -311,10 +311,11 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const [picking, setPicking] = useState(false)
   const [yours, , reloadYours] = useYours()
   const loraInfo = (name) => yours?.find((x) => x.name === name)
-  function addLora({ name, words = [], title }) {
+  function addLora({ name, words = [], title, strength: suggested }) {
     if (form.extraLoras.some((l) => l.name === name)) return notify(`${title || loraTitle(name)} is already in the shot.`, 'info')
     const info = loraInfo(name)
-    const strength = info?.prefs?.strength ?? 1
+    // the person's own setting, else the strength a Recommended LoRA suggests, else 1
+    const strength = info?.prefs?.strength ?? suggested ?? 1
     const auto = info?.prefs?.autoTrigger !== false
     const add = auto ? words.filter((w) => w && !form.prompt.includes(w)) : []
     const prompt = add.length ? (/\[Shot 1\] /.test(form.prompt) ? form.prompt.replace('[Shot 1] ', `[Shot 1] ${add.join(', ')}. `) : `${add.join(', ')}. ${form.prompt}`) : form.prompt

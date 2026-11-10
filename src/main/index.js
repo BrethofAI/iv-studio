@@ -40,6 +40,8 @@ import { normalizeApiBase, openaiStatus, parseHeaders, setLlmSource } from '../s
 import { Studio } from '../service/studio'
 import { cleanStretchFile, Ranker } from '../service/ranking'
 import { exportInterchange } from '../service/interchange'
+import { RECOMMENDED, recommendedManifest, recommendedOnDisk } from '../service/recommended'
+import { Turnarounds } from '../service/turnaround'
 import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
 import { findFizgig, LOCAL_TRAIN, RUNPOD_TRAIN_GPUS, SCENES, TALKS, TRAIN_DEFAULTS, TRAIN_GPUS, Trainings } from '../service/training'
@@ -143,6 +145,8 @@ const TEXT_SIZES = { normal: 1, large: 1.15, larger: 1.3 }
 let refitZoom = () => {}
 let stopWatch = null
 let installer = null
+let recInstaller = null // the Recommended LoRAs shelf (recommended.js), into this PC's ComfyUI
+let turnarounds = null // turnaround sheets (turnaround.js)
 let trainings = null
 let replace = null
 let remake = null
@@ -241,6 +245,7 @@ function makeStudio() {
   // Seedance and other partner nodes: the person's Comfy.org key, read when a render needs it (never sent to the window)
   studio.partnerKey = () => unseal(readSettings(BASE).comfyApiKey)
   if (!installer?.running) installer = new ModelInstaller({ comfy: studio.comfy, manifest: studio.manifest, onUpdate: (u) => send('models:update', u) })
+  if (!recInstaller?.running) recInstaller = new ModelInstaller({ comfy: new Comfy(s.comfyUrl), manifest: recommendedManifest(), onUpdate: (u) => send('recommended:update', u) })
   stopWatch = studio.watch((msg) => {
     if (msg.type === 'progress' || msg.type === 'executing' || msg.type === 'execution_success' || msg.type === 'execution_error') pump()
     // a live preview step: to the window, keyed by the prompt (the shot page and the queue match it to their job)
@@ -767,6 +772,19 @@ app.whenReady().then(() => {
   handle('loras:yours', () => civitai.yours())
   handle('loras:identify', (name) => civitai.identify(name))
   handle('loras:prefs', (name, patch) => civitai.setPrefs(name, patch))
+  // the Recommended shelf: tested H3 LoRAs, pinned, downloaded by the same installer as Setup's models
+  handle('loras:recommended', async () => {
+    const names = await new Comfy(readSettings(BASE).comfyUrl).objectInfo('LoraLoaderModelOnly').then((i) => i.LoraLoaderModelOnly?.input?.required?.lora_name?.[0] || [], () => [])
+    return { list: RECOMMENDED, onDisk: recommendedOnDisk(names), state: recInstaller.status() }
+  })
+  handle('loras:recommendedDownload', (id) => recInstaller.enqueue([id]))
+  handle('loras:recommendedCancel', (id) => recInstaller.cancel(id))
+  // turnaround sheets: five views of a character from one picture
+  turnarounds = new Turnarounds({ dataDir: DATA, studio: () => studio })
+  handle('turnaround:status', () => turnarounds.status())
+  handle('turnaround:list', (characterId) => turnarounds.list(characterId))
+  handle('turnaround:make', (opts) => turnarounds.make(opts))
+  handle('turnaround:delete', (id) => turnarounds.remove(id))
   // ---------- Library: everything made in IV Studio, in one place ----------
   handle('library:all', () => {
     const items = studio.library().map((i) => ({ ...i, type: 'video' }))

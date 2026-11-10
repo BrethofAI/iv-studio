@@ -105,7 +105,8 @@ export const TOURS = {
     steps: [
       { at: '.shot-actions', title: 'Try again', text: 'Edit the latest run’s settings and render again into this same shot.' },
       { at: '.run-head', title: 'A run', text: 'Each run shows how it was made: mode, size, length, seed, character and render time. Older runs have their own Edit and run again.' },
-      { at: '.candidates', title: 'The takes', text: 'Watch each take. A score marks the strongest. Review names what is off and suggests one fix. Mark up to four takes, finals or enhanced copies, then Compare them.' },
+      { at: '.candidates', title: 'The takes', text: 'Watch each take. A score marks the strongest, and says when a take cuts away mid-shot or, in First / last frame mode, misses your pictures. Review suggests one fix. Mark up to four takes, then Compare them.' },
+      { at: '.take-clean', title: 'Cut around a cut', text: 'A take that cuts away can still be used: keep the part before or after the cut in an edit, or carry on from it in a Continue shot. Slow dissolves aren’t caught, only hard cuts.' },
       { at: '.take-pick', title: 'Pick one', text: 'Pick the take you like: the Finish settings open over the page. Picking also teaches the scoring your taste.' },
       { at: '.finish-panel', title: 'Finish it', text: 'Render the picked take at full size. An H3 take starts from the shot’s speed preset (1 MP plus 2x is much quicker than 2 MP). A Seedance take finishes at 1080p, or free here with SeedVR2, DLSS 5 or H3, each with a strength slider.' },
       { at: '.versions-card', title: 'Finished versions', text: 'Every final and enhanced copy as a chip, one player for the one you choose. Enhance adds a sharper copy at the strength you set; Compare plays them in sync, in a grid or a wipe, zoomed in on the same spot.' }
@@ -126,7 +127,8 @@ export const TOURS = {
       { at: '.ed-effects', title: 'Effect controls', text: 'The selected clip’s settings. With nothing selected, the edit’s own: format, frame rate and loudness.' },
       { at: '.ed-toolbar', title: 'Tools', text: 'Select (V), Razor (C), Ripple (B) and Roll (N), with snapping and zoom.' },
       { at: '.ed-tl-wrap', title: 'The timeline', text: 'Drag clips to move and trim them. Right-click a clip to Extend, Retake, Cut out or Reframe it with new footage; right-click a gap to fill it.' },
-      { at: '.ed-export', title: 'Export', text: 'Full screen gives you more room (F11, Esc to come back). Export makes the finished video.' }
+      { at: '.ed-export', title: 'Export', text: 'Full screen gives you more room (F11, Esc to come back). Export makes the finished video.' },
+      { at: '.ed-handoff', title: 'Finish in another editor', text: 'For Premiere / Resolve writes the timeline for Premiere Pro, DaVinci Resolve and Final Cut (XML, FCPXML and an EDL), copies every clip beside it and zips it to send. Tracks, trims, volume and markers come over; fades and title styling don’t.' }
     ]
   },
   workflows: {
@@ -230,7 +232,7 @@ export const TOURS = {
   characters: {
     title: 'Characters',
     steps: [
-      { at: '.cast-section:not(.train-own)', title: 'Your characters', text: 'The people H3 plays, the same in every shot. Click a card for its settings: trigger word, strength and voice.' },
+      { at: '.cast-section:not(.train-own)', title: 'Your characters', text: 'The people H3 plays, the same in every shot. Click a card for its settings: trigger word, strength and voice, and a turnaround sheet with five views of them turning around.' },
       { at: '.portrait-add', title: 'Add one', text: 'Already have a LoRA or a RefMod of someone? Add it here.' },
       { at: '.train-paths', title: 'Make your own', text: 'Train a LoRA for the best likeness: free on your own graphics card when it can (the green badge says so), or on a cloud GPU in about half an hour, with the cost shown first. Or make a RefMod from a few pictures in under a minute.' },
       { title: 'Give them a voice', text: 'Make a voice on Audio, Voices and give it to a character. Their shots then speak in it.' }
@@ -247,7 +249,7 @@ export const TOURS = {
     title: 'LoRAs',
     steps: [
       { at: '.lora-families', title: 'Pick a model', text: 'LoRAs only work with the model they were trained for. Pick one: MiniMax H3 for shots, or a picture model (Flux, Krea, Qwen, Z-Image, SDXL, Moss) for Create → Image. The number is how many you already have.' },
-      { at: '.lora-tabs', title: 'Discover or yours', text: 'Discover finds that model’s LoRAs on Civitai. Yours shows the ones already in ComfyUI; open All to tell IV Studio which model an unknown LoRA is for.' },
+      { at: '.lora-tabs', title: 'Discover, yours, recommended', text: 'Discover finds that model’s LoRAs on Civitai. Yours shows the ones already in ComfyUI; open All to tell IV Studio which model an unknown LoRA is for. For MiniMax H3, Recommended holds a few we’ve tried, with how to use each.' },
       { at: '.lora-bar', title: 'Search', text: 'Search by name and sort by downloads, rating or newest.' },
       { at: '.lora-tags', title: 'Kinds', text: 'Narrow it down to styles, concepts, camera moves and more.' },
       { at: '.lora-card', title: 'A LoRA', text: 'Hover to play its clip. Click for its details, licence and trigger words, and download it or use it in a shot or a picture. Downloads need your Civitai key in Settings.' }

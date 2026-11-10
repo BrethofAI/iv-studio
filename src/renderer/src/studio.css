@@ -14748,3 +14748,95 @@ html.rm .agent-dot.live {
   display: inline-flex;
   margin-top: 10px;
 }
+
+/* LoRAs → Recommended (recommended.js): tested H3 LoRAs, one card each */
+.rec-shelf {
+  display: grid;
+  gap: 14px;
+}
+.rec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+.rec-card {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: var(--ink-2);
+}
+.rec-card.have {
+  border-color: color-mix(in srgb, var(--green, #7fd49a) 45%, var(--line));
+}
+.rec-card header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.rec-card h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.rec-card p {
+  margin: 0;
+}
+.rec-facts {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.rec-facts div {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 8px;
+}
+.rec-facts dd {
+  margin: 0;
+}
+.rec-card footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 44px;
+}
+
+/* Characters → a character's Turnaround sheet (turnaround.js) */
+.turnaround {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.turnaround-head {
+  display: grid;
+  gap: 2px;
+}
+.turnaround-need,
+.turnaround-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.turnaround-sheet {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.turnaround-views {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+.turnaround-views img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: var(--ink-2);
+}
