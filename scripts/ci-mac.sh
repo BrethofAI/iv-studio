@@ -30,6 +30,7 @@ done
 python3 -m venv "$OUT/pyenv" && "$OUT/pyenv/bin/pip" install -q aiohttp
 run test-runpod node test/runpod.mjs "$OUT/pyenv/bin/python"
 run test-cloudprep node test/cloudprep.mjs "$OUT/pyenv/bin/python"
+run test-cloudvoice node test/cloudvoice.mjs "$OUT/pyenv/bin/python"
 
 # test media made with the bundled ffmpeg (the Mac build), then an edit export and a Shinobi render with Chrome
 # (Shinobi installs with uv, so this also checks the pinned Mac uv build)

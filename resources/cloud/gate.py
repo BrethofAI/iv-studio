@@ -15,6 +15,9 @@ by itself nor has a volume IV Studio can write to directly:
   /iv/files    lists the model files on the volume ({path: size})
   /iv/fetch    POST {"ids": [...], "hf": "<Hugging Face token or empty>"}: downloads those models (models.json
                and cloud.json ids, ivcloud.py) onto the volume in the background, each checked against its SHA-256
+
+On both platforms /iv/voice... runs IV Studio's voice engine beside ComfyUI (voicehost.py); a ComfyUI prompt
+stops it first, so a render gets the whole GPU.
   idle         with nothing to do for IV_IDLE_SECONDS the pod deletes itself, so the GPU stops billing;
                ComfyUI, the models and every render stay on the network volume
 """
@@ -37,6 +40,10 @@ try:  # beside this file on RunPod (runpod_boot.py puts it on PYTHONPATH); Modal
     import ivcloud
 except ImportError:  # pragma: no cover
     ivcloud = None
+try:  # the voice engine's host, beside this file on both platforms
+    import voicehost
+except ImportError:  # pragma: no cover - an older bundle without it
+    voicehost = None
 
 TOKEN = os.environ["IV_TOKEN"]
 UPSTREAM = os.environ.get("IV_UPSTREAM", "http://127.0.0.1:8188")  # settable for tests
@@ -173,6 +180,13 @@ async def handle(req):
     last_seen = time.time()
     if RUNPOD and req.path == "/iv/upload":
         return await upload(req)
+    if req.path.startswith("/iv/voice"):
+        if not voicehost:
+            return web.json_response({"error": "this cloud setup has no voice engine; set it up again"}, status=404)
+        return await req.app["voice"].handle(req)
+    # a render gets the whole GPU: the voice engine stops first (it starts again on the next line)
+    if req.path == "/prompt" and req.method == "POST" and req.app.get("voice"):
+        req.app["voice"].stop()
     if RUNPOD and req.path == "/iv/files":
         return web.json_response(await asyncio.to_thread(ivcloud.listing, MODELS))
     if RUNPOD and req.path == "/iv/fetch":
@@ -237,7 +251,9 @@ async def idle_watch(app):
             if time.time() - started > SETUP_LIMIT:
                 delete_self()
             continue
-        if time.time() - last_seen < IDLE or fetching.get("state") == "running":
+        voice = app.get("voice")
+        voice_busy = voice and (voice.pending or voice.setup.get("state") == "running")
+        if time.time() - last_seen < IDLE or fetching.get("state") == "running" or voice_busy:
             continue
         try:
             async with session.get(UPSTREAM + "/queue") as r:
@@ -250,13 +266,28 @@ async def idle_watch(app):
             return
 
 
+async def free_comfy(app):
+    """Before the voice engine loads: ComfyUI unloads its models, when nothing is queued there."""
+    session = app["session"]
+    async with session.get(UPSTREAM + "/queue") as r:
+        q = await r.json()
+    if not q.get("queue_running") and not q.get("queue_pending"):
+        async with session.post(UPSTREAM + "/free", json={"unload_models": True, "free_memory": True}) as r:
+            await r.read()
+
+
 async def start_session(app):
     app["session"] = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=None, sock_connect=5), auto_decompress=False)
+    if voicehost:
+        app["voice"] = voicehost.VoiceHost(free=lambda: free_comfy(app))
+        app["voice_idle"] = asyncio.create_task(app["voice"].idle_watch())
     if RUNPOD:
         app["idle"] = asyncio.create_task(idle_watch(app))
 
 
 async def close_session(app):
+    if app.get("voice"):
+        app["voice"].stop()
     await app["session"].close()
 
 

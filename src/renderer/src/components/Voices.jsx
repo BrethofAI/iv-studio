@@ -54,7 +54,7 @@ export function EngineStatus({ status, check, notify }) {
     return (
       <div className="engine-strip ready mono">
         <span className="engine-dot" />
-        Voice engine ready
+        {status.cloud ? `Voice engine ready in your ${status.cloud === 'runpod' ? 'RunPod' : 'Modal'} cloud` : 'Voice engine ready'}
         <span className="dim">{status.setup?.models.map((m) => m.name).join(' · ')}</span>
       </div>
     )
@@ -64,12 +64,14 @@ export function EngineStatus({ status, check, notify }) {
       <div>
         <p className="mono pink">Voices need a one-time setup</p>
         <p className="small dim">
-          IV Studio speaks with {status.setup?.models.map((m) => `${m.name} (${m.by}, ${m.licence})`).join(' and ')}, running on this PC. Setup downloads about {GB(status.setup?.size || 0)} into IV Studio's folder, once.
+          {status.cloud
+            ? `IV Studio speaks with ${status.setup?.models.map((m) => `${m.name} (${m.by}, ${m.licence})`).join(' and ')}, running on your ${status.cloud === 'runpod' ? 'RunPod' : 'Modal'} cloud GPU beside ComfyUI. Setup puts about ${GB(status.setup?.size || 0)} in your cloud storage, once (${status.cloud === 'runpod' ? 'on a cloud GPU, 10–20 minutes, about $0.30' : 'on a CPU, a few cents'}). Each line then runs on the cloud GPU, billed by the second.`
+            : `IV Studio speaks with ${status.setup?.models.map((m) => `${m.name} (${m.by}, ${m.licence})`).join(' and ')}, running on this PC. Setup downloads about ${GB(status.setup?.size || 0)} into IV Studio's folder, once.`}
         </p>
         {working && <p className="mono small dim voice-log">{log}</p>}
       </div>
       <button className="btn btn-primary" disabled={working} onClick={setup}>
-        {working ? 'Setting up…' : `Set up voices · ${GB(status.setup?.size || 0)}`}
+        {working ? 'Setting up…' : `Set up voices${status.cloud ? ' in the cloud' : ''} · ${GB(status.setup?.size || 0)}`}
       </button>
     </div>
   )

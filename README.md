@@ -253,8 +253,8 @@ Simple words for people new to AI video. See [what's new in 1.1](#whats-new-in-1
   with macOS 12 or newer, Apple Silicon or Intel (from 0.3.2; it renders in the cloud, see [Mac](#mac)).
 - **An NVIDIA GPU, or the cloud.** 24 GB of VRAM is what IV Studio is tested on (an RTX 4090); 16 GB works
   with smaller previews and finals. 64 GB of system RAM is recommended. Without a suitable card, nearly
-  everything can render on a cloud GPU in your own RunPod or Modal account; voices still need a local NVIDIA
-  GPU (see [Cloud](#cloud)).
+  everything can render on a cloud GPU in your own RunPod or Modal account, voices included (see
+  [Cloud](#cloud)).
 - **[ComfyUI](https://github.com/comfyanonymous/ComfyUI)**, version 0.33 or newer, running on the same PC.
   IV Studio talks to it at `http://127.0.0.1:8188` (change it in Settings → ComfyUI; `localhost:8000` for the
   ComfyUI Desktop app is fine, and Check my PC finds a ComfyUI on another usual port by itself). It can start ComfyUI for you: it
@@ -945,7 +945,8 @@ render wakes it again (about 1 to 3 minutes on Modal, 2 to 5 on RunPod). The Clo
 **What runs on RunPod and Modal:** nearly everything. Create's video shots and Sequences, pictures (every
 family, Generate and Edit) and the picture tools, Projects sketches, designing a character's stills and clips,
 Music, Sounds, Cut out, Reframe, Replace (Swap people and Change the scene, on Viggle Remake), Effects on clips
-and photos, Retake in the editor, and the SeedVR2 finish and Enhance. Finals use a 2× AI upscale (Real-ESRGAN)
+and photos, Retake in the editor, the SeedVR2 finish and Enhance, and Voices (Lines, **Speak it**, and Whisper
+reading lines back). Finals use a 2× AI upscale (Real-ESRGAN)
 and RIFE frame interpolation (48, 72 or 120 fps), or SeedVR2, in place of DLSS 5, which needs an NVIDIA card on
 Windows. The cloud runs ComfyUI v0.44.1 with an exactly pinned torch, and takes its node packs from the same
 pinned list Setup installs on a PC.
@@ -970,7 +971,13 @@ ComfyUI).
 
 **On Comfy Cloud** the check above decides it: Images and Music run there when Comfy Cloud has their models.
 
-**What still needs this PC:** Voices (and **Speak it**), live step pictures while a shot renders (they need a
+**Voices in the cloud.** IV Studio's own voice engine (VoxCPM2 and Whisper, the same as on a PC) runs beside
+ComfyUI on your cloud GPU. Press **Set up voices in the cloud** once on Audio > Voices: about 12 GB goes into your
+cloud storage (on Modal its Python is part of the cloud image and the models download on a CPU; on RunPod a GPU
+installs both onto your volume in 10 to 20 minutes, about $0.30). Each line then runs on the cloud GPU, billed by
+the second; the engine stops as soon as a render is queued, and after 10 idle minutes.
+
+**What still needs this PC:** live step pictures while a shot renders (they need a
 connection held open, which would keep the GPU billing), Replace's old engine, the H3 pass of the free
 Seedance finish, and New angle. Training a character runs on your PC, RunPod or Modal, whichever you pick.
 

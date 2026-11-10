@@ -20,6 +20,7 @@ for t in cast cutout directing editgen news tours lint productions reel screenpl
 done
 run test-runpod node test/runpod.mjs python3
 run test-cloudprep node test/cloudprep.mjs python3
+run test-cloudvoice node test/cloudvoice.mjs python3
 
 # test media made with the bundled ffmpeg (Linux build), then an edit export and a Shinobi render with Chrome
 M="$OUT/media"; mkdir -p "$M"

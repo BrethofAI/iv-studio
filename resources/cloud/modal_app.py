@@ -5,6 +5,7 @@ IV Studio deploys this for the user (they never need to read it):
   modal run modal_app.py::fetch_models               # CPU: the models setup needs, into the iv-studio-models volume
   modal run modal_app.py::fetch_models --ids a,b     # CPU: the models a render needs, the first time it needs them
   modal run modal_app.py::list_models                # CPU: what the volume holds (one JSON line)
+  modal run modal_app.py::fetch_voice                # CPU: the voice engine's models (VoxCPM2, Whisper), once
   modal volume put iv-studio-models <file> <path>    # the user's LoRAs and RefMods
 
 What runs:
@@ -14,6 +15,9 @@ What runs:
   download_models / list_files
                  CPU functions on the models volume (ivcloud.py): downloads checked against their SHA-256, and
                  the volume's file list.
+  voices         IV Studio's voice engine (voice_server.py, its own environment in the image at /opt/voice)
+                 runs in the comfy container on request, through the gate's /iv/voice routes (voicehost.py);
+                 download_voice puts its models in the volume's voice folder.
 Volumes: iv-studio-models (models, read by ComfyUI through extra_model_paths.yaml) and iv-studio-data
 (ComfyUI's input and output folders, so uploads and renders outlive a container).
 The gate's token lives in the Modal secret iv-studio-token, and the person's Hugging Face token (for gated
@@ -44,6 +48,7 @@ data_vol = modal.Volume.from_name("iv-studio-data", create_if_missing=True)
 comfy_cfg = CLOUD.get("comfyui", {"repo": "https://github.com/Comfy-Org/ComfyUI", "tag": "v0.44.1"})
 torch_cfg = CLOUD.get("torch", {"index": "https://download.pytorch.org/whl/cu128", "packages": ["torch==2.11.0", "torchvision==0.26.0", "torchaudio==2.11.0"]})
 PACKS = ivcloud.cloud_packs(MANIFEST) if ivcloud else []
+voice_cfg = CLOUD.get("voice", {"index": "https://download.pytorch.org/whl/cu128", "packages": ["torch==2.9.1", "torchaudio==2.9.1", "torchcodec==0.9.1", "voxcpm==2.0.3"]})
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -57,16 +62,24 @@ image = (
         "grep -viE '^[[:space:]]*(torch|torchvision|torchaudio)([^A-Za-z0-9_.-]|$)' /comfy/requirements.txt > /tmp/comfy-req.txt && uv pip install --system -r /tmp/comfy-req.txt",
     )
     .run_commands(*(ivcloud.pack_commands(PACKS, "/comfy/custom_nodes", "uv pip install --system") if ivcloud else ["true"]))
-    .env({"PYTHONUNBUFFERED": "1", "HF_HUB_DISABLE_TELEMETRY": "1"})
+    # the voice engine's own environment, with the same pins as on a PC (its torch is not ComfyUI's)
+    .run_commands(
+        "uv venv /opt/voice/venv --python 3.12",
+        f"uv pip install --python /opt/voice/venv --index {voice_cfg['index']} --index-strategy unsafe-best-match {' '.join(voice_cfg['packages'])}",
+    )
+    .env({"PYTHONUNBUFFERED": "1", "HF_HUB_DISABLE_TELEMETRY": "1", "IV_VOICE_PYTHON": "/opt/voice/venv/bin/python", "IV_VOICE_MODELS": "/models/voice"})
 )
 # packs that ship inside IV Studio (its own, Viggle Remake's) are copied from the deploy folder
 for _p in PACKS:
     if _p.get("bundled") and (HERE / _p["dir"]).exists():
         image = image.add_local_dir(str(HERE / _p["dir"]), f"/comfy/custom_nodes/{_p['dir']}", copy=True)
-image = image.add_local_file(str(HERE / "extra_model_paths.yaml"), "/opt/iv/extra_model_paths.yaml", copy=True).add_local_file(str(HERE / "gate.py"), "/opt/iv/gate.py", copy=True)
+for _f in ("extra_model_paths.yaml", "gate.py", "voicehost.py", "voice_server.py", "cloud.json"):
+    if (HERE / _f).exists():
+        image = image.add_local_file(str(HERE / _f), f"/opt/iv/{_f}", copy=True)
 
-# the CPU functions: Python only, with ivcloud.py
+# the CPU functions: Python only, with ivcloud.py; the voice download also needs huggingface_hub and voice_server.py
 cpu_image = modal.Image.debian_slim(python_version="3.12").add_local_python_source("ivcloud")
+voice_dl_image = modal.Image.debian_slim(python_version="3.12").pip_install("huggingface_hub==2.4.0").add_local_file(str(HERE / "voice_server.py"), "/root/voice_server.py")
 
 app = modal.App(APP_NAME)
 
@@ -135,6 +148,25 @@ def fetch_models(ids: str = ""):
     t0 = time.time()
     done = download_models.remote(models)
     print(f"models ready: {len(done)}/{len(models)} in {int(time.time() - t0)} s", flush=True)
+
+
+@app.function(image=voice_dl_image, volumes={"/models": models_vol}, timeout=3 * 3600, cpu=4)
+def download_voice():
+    """VoxCPM2 and Whisper at the revisions voice_server.py pins, into the volume's voice folder."""
+    import sys
+
+    sys.path.insert(0, "/root")
+    import voice_server
+
+    voice_server.download("/models/voice")
+    models_vol.commit()
+
+
+@app.local_entrypoint()
+def fetch_voice():
+    t0 = time.time()
+    download_voice.remote()
+    print(f"voice models ready in {int(time.time() - t0)} s", flush=True)
 
 
 @app.local_entrypoint()

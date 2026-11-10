@@ -41,21 +41,28 @@ const WAV_SECONDS = (buf) => {
 export class Voices {
   // comfy: this PC's ComfyUI. When its queue is empty, it is asked to unload its models before the voice
   // model loads; VoxCPM2 next to a full GPU loads several times slower.
-  constructor({ dataDir, resourcesDir, ffmpeg, onLog, comfy = null }) {
+  // cloud: () => the voice engine on the person's own cloud (cloudvoice.js) while IV Studio renders there, else
+  // null. It has the same calls as the engine on this PC.
+  constructor({ dataDir, resourcesDir, ffmpeg, onLog, comfy = null, cloud = null }) {
     this.dir = path.join(dataDir, 'voices')
     this.ffmpeg = ffmpeg
     this.comfy = comfy
+    this.cloud = cloud
     this.engine = new VoiceEngine({ dataDir, resourcesDir, onLog, beforeLoad: () => this.makeRoom() })
     this.idle = null
+  }
+  // the engine voices use now: the cloud's while rendering there, else this PC's
+  eng() {
+    return this.cloud?.() || this.engine
   }
 
   // ---------- the engine ----------
   // ready: set up and able to speak (the models load on the first line).
   status() {
-    const e = this.engine.status()
-    return { ...e, ready: e.installed, engines: VOICE_ENGINES.map((x) => ({ ...x, available: e.installed })), setup: VOICE_SETUP }
+    const e = this.eng().status()
+    return { ...e, ready: e.installed, engines: VOICE_ENGINES.map((x) => ({ ...x, available: e.installed })), setup: e.setup || VOICE_SETUP }
   }
-  setup = () => this.engine.install().then(() => this.status())
+  setup = () => this.eng().install().then(() => this.status())
   async makeRoom() {
     const comfy = typeof this.comfy === 'function' ? this.comfy() : this.comfy
     if (!comfy || comfy.remote) return
@@ -67,6 +74,7 @@ export class Voices {
   async release() {
     clearTimeout(this.idle)
     this.engine.release()
+    this.cloud?.()?.release()
   }
   releaseSoon() {
     clearTimeout(this.idle)
@@ -79,7 +87,7 @@ export class Voices {
     const wav = path.join(os.tmpdir(), `ivs-asr-${randomUUID().slice(0, 8)}.wav`)
     try {
       await this.ffmpegTo(file, wav, ['-ac', '1', '-ar', '16000'])
-      const out = await this.engine.call('transcribe', { file: wav })
+      const out = await this.eng().call('transcribe', { file: wav })
       this.releaseSoon()
       return String(out.text || '').trim()
     } finally {
@@ -130,7 +138,7 @@ export class Voices {
       const s = Number(seed) + i * 7
       const file = path.join(dir, `${hash(description, say, s)}.wav`)
       if (!fs.existsSync(file)) {
-        await this.engine.call('design', { text: say, description, out: file, seed: s })
+        await this.eng().call('design', { text: say, description, out: file, seed: s })
       }
       out.push({ file, seed: s, text: say, description, duration: WAV_SECONDS(fs.readFileSync(file)) })
     }
@@ -193,7 +201,7 @@ export class Voices {
     const s = seed ?? v.seed ?? 41
     if (!v.text) this.update(v.id, { text: (v.text = await this.transcribe(v.reference)) })
     const file = path.join(this.dir, 'lines', `${v.id}_${hash(say, eng, s, v.text)}.wav`)
-    if (!fs.existsSync(file)) await this.engine.call('speak', { text: say, out: file, ref_wav: v.reference, ref_text: v.text, seed: s })
+    if (!fs.existsSync(file)) await this.eng().call('speak', { text: say, out: file, ref_wav: v.reference, ref_text: v.text, seed: s })
     this.releaseSoon()
     const line = { id: randomUUID().slice(0, 8), voiceId: v.id, voice: v.name, text: say, engine: eng, seed: s, file, duration: WAV_SECONDS(fs.readFileSync(file)), createdAt: now() }
     writeJson(this.linesFile(), [line, ...this.allLines()].slice(0, 500))

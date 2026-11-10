@@ -292,7 +292,7 @@ export const TOURS = {
   voices: {
     title: 'Voices',
     steps: [
-      { at: '.engine-strip', title: 'The voice engine', text: 'Voices run on this PC. The first time, set them up once (about 12 GB).' },
+      { at: '.engine-strip', title: 'The voice engine', text: 'Voices run on this PC, or on your cloud GPU while you render in the cloud. The first time, set them up once (about 12 GB, on this PC or in your cloud storage).' },
       { at: '.voice-grid', title: 'Your voices', text: 'Play each one, rename it, and give it to a character. That character’s shots then speak in it.' },
       { at: '.audio-card', title: 'A new voice', text: 'Describe a voice that doesn’t exist yet, or save one from a recording. Never a real person’s voice without their consent.' }
     ]

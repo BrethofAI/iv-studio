@@ -11,6 +11,7 @@ import { Cloud, GPUS, MODAL_VERSION } from '../service/cloud'
 import { SetupProgress, about } from '../service/setupprogress'
 import { RunPod, GPUS as RUNPOD_GPUS, VOLUME_PER_GB_MONTH } from '../service/runpod'
 import { CloudPrep, cloudCatalog, roomOnVolume } from '../service/cloudprep'
+import { CloudVoiceEngine } from '../service/cloudvoice'
 import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
 import { isSpeed } from '../service/speed'
 import { comboOptions } from '../service/setup'
@@ -127,6 +128,7 @@ let images = null
 let civitai = null
 let runpodWake = null // starts a RunPod pod when the last one idled off (set up with the cloud handlers)
 let cloudPrepFor = null // (provider, comfy) => the CloudPrep for the person's own cloud (set up with the cloud handlers)
+let cloudVoice = null // () => the voice engine on the person's own cloud while rendering there, else null (cloud handlers)
 const pending = new Set() // job ids the window is waiting on
 let ranker = null // ranks finished previews (ranking.js), set up with the services it reads
 let reviewer = null // reviews a take against its brief (review.js)
@@ -542,7 +544,7 @@ app.whenReady().then(() => {
   // Crop and trim references before they go to H3 (Create's media editor).
   const mediaTools = new MediaTools({ dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
   // ---------- Audio: voices (IV Studio's own engine speaks: VoxCPM2 and Whisper in its data folder) ----------
-  voices = new Voices({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpeg: edits.ffmpeg, onLog: (line) => send('voices:log', line), comfy: () => (readSettings(BASE).target === 'cloud' ? null : studio.comfy) })
+  voices = new Voices({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpeg: edits.ffmpeg, onLog: (line) => send('voices:log', line), comfy: () => (readSettings(BASE).target === 'cloud' ? null : studio.comfy), cloud: () => cloudVoice?.() || null })
   handle('voices:status', () => voices.status())
   handle('voices:setup', () => voices.setup())
   handle('voices:list', async () => (await catalog?.attachVoices().catch(() => {}), voices.list()))
@@ -1382,6 +1384,57 @@ app.whenReady().then(() => {
     })
     self.comfy = comfy
     return (preps[which] = self)
+  }
+  // ---------- voices on the person's own cloud (cloudvoice.js, resources/cloud/voicehost.py) ----------
+  const VOICE_BYTES = 12e9 // the voice engine's Python (about 5 GB) and its models (6.6 GB)
+  const voiceReady = (which) => {
+    const s = readSettings(BASE)
+    // Modal's environment is part of the image: an image built before voices came in has none
+    return which === 'runpod' ? !!s.runpod?.voiceAt : !!(s.cloud?.voiceAt && s.cloud?.stamp === cloudStamp())
+  }
+  async function setUpCloudVoices(which) {
+    const log = (line) => send('voices:log', line)
+    if (which === 'modal') {
+      const c = readSettings(BASE).cloud || {}
+      if (c.stamp !== cloudStamp()) throw new Error('Your Modal cloud was set up by an older IV Studio. Press Set up again on the Cloud page (your models stay), then set up voices.')
+      log('Downloading the voice models into your Modal storage (about 6.6 GB, once, on a CPU)…')
+      await cloud.fetchVoice()
+      // a GPU container that's up doesn't see files added after it started
+      await cloudPrepFor('modal', null).provider.changed?.()
+      saveCloud({ voiceAt: new Date().toISOString() })
+      log('Voices are ready in the cloud.')
+      return
+    }
+    // RunPod: onto the network volume, by the running pod; the volume grows first only with the person's OK
+    const prep = cloudPrepFor('runpod', null)
+    const grow = await prep.provider.room(VOICE_BYTES).catch(() => null)
+    if (grow) {
+      const ok = await askWindow({ downloads: [{ id: 'voice', label: 'The voice engine (VoxCPM2, Whisper and their Python)', size: VOICE_BYTES }], bytes: VOICE_BYTES, grow, provider: 'runpod' })
+      if (!ok) throw new Error('Voices weren’t set up: your RunPod volume needs more room for them.')
+      await prep.provider.grow(grow.toGb)
+    }
+    log('Starting a cloud GPU to set up voices on your RunPod volume…')
+    const url = await freshPod()
+    const c = new Comfy(url, 'iv-studio-voices', runpodToken())
+    let st = await c.req('/iv/voice/setup', { method: 'POST', json: {}, timeout: 60000 })
+    let said = ''
+    while (!st.installed) {
+      if (st.setup?.state === 'error') throw new Error(`Setting up voices stopped: ${st.setup.error}`)
+      const line = st.setup?.detail ? `Voices: ${st.setup.detail}${st.setup.steps ? ` (${st.setup.step} of ${st.setup.steps})` : ''}…` : ''
+      if (line && line !== said) log((said = line))
+      await new Promise((r) => setTimeout(r, 5000))
+      st = await c.req('/iv/voice', { timeout: 60000 }).catch(() => st)
+    }
+    prep.record({ 'voice/engine': VOICE_BYTES })
+    saveRunpod({ voiceAt: new Date().toISOString() })
+    log('Voices are ready in the cloud.')
+  }
+  const cloudVoices = {}
+  cloudVoice = () => {
+    const s = readSettings(BASE)
+    const which = s.target === 'cloud' ? s.cloudProvider || 'modal' : null
+    if (which !== 'modal' && which !== 'runpod') return null
+    return (cloudVoices[which] ||= new CloudVoiceEngine({ provider: which, comfy: () => studio.comfy, ready: () => voiceReady(which), setUp: () => setUpCloudVoices(which) }))
   }
   // IV_STUDIO_FAKE_CLOUD_PREP (test copies only): a few seconds after the window opens, a stand-in cloud asks to
   // download Qwen Image 2.1 (growing a RunPod volume) and plays the download, so the question and the progress card

@@ -122,9 +122,11 @@ export class RunPod {
   bundle(only = null) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'iv-runpod-'))
     try {
-      for (const f of only || ['runpod_boot.py', 'gate.py', 'ivcloud.py', 'extra_model_paths.yaml', 'cloud.json']) fs.copyFileSync(path.join(this.resourcesDir, 'cloud', f), path.join(dir, f))
+      for (const f of only || ['runpod_boot.py', 'gate.py', 'ivcloud.py', 'voicehost.py', 'extra_model_paths.yaml', 'cloud.json']) fs.copyFileSync(path.join(this.resourcesDir, 'cloud', f), path.join(dir, f))
       if (!only) {
         fs.copyFileSync(path.join(this.resourcesDir, 'models.json'), path.join(dir, 'models.json'))
+        // the voice engine's worker, the same file the PC runs
+        fs.copyFileSync(path.join(this.resourcesDir, 'python', 'voice_server.py'), path.join(dir, 'voice_server.py'))
         for (const p of bundledPacks(this.resourcesDir)) fs.cpSync(path.join(this.resourcesDir, p.bundled), path.join(dir, p.dir), { recursive: true, filter: (s) => !s.includes('__pycache__') })
       }
       const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar'

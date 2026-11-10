@@ -183,8 +183,9 @@ export class Cloud {
     const d = this.deployDir
     fs.rmSync(d, { recursive: true, force: true })
     fs.mkdirSync(d, { recursive: true })
-    for (const f of ['modal_app.py', 'gate.py', 'ivcloud.py', 'extra_model_paths.yaml', 'cloud.json']) fs.copyFileSync(path.join(this.resourcesDir, 'cloud', f), path.join(d, f))
+    for (const f of ['modal_app.py', 'gate.py', 'ivcloud.py', 'voicehost.py', 'extra_model_paths.yaml', 'cloud.json']) fs.copyFileSync(path.join(this.resourcesDir, 'cloud', f), path.join(d, f))
     fs.copyFileSync(path.join(this.resourcesDir, 'models.json'), path.join(d, 'models.json'))
+    fs.copyFileSync(path.join(this.resourcesDir, 'python', 'voice_server.py'), path.join(d, 'voice_server.py'))
     for (const p of bundledPacks(this.resourcesDir)) fs.cpSync(path.join(this.resourcesDir, p.bundled), path.join(d, p.dir), { recursive: true, filter: (s) => !s.includes('__pycache__') })
   }
 
@@ -216,6 +217,14 @@ export class Cloud {
     this.stage() // the current models.json, not the copy from the last deploy
     if (!ids) this.onLog('Downloading the H3 models into your cloud storage (about 60 GB, once)…')
     return this.modal(['run', 'modal_app.py::fetch_models', ...(ids?.length ? ['--ids', ids.join(',')] : [])], { onLine })
+  }
+
+  // The voice engine's models (VoxCPM2, Whisper, about 6.6 GB) into the volume, on a CPU function, once. Its Python
+  // environment is part of the image.
+  fetchVoice() {
+    this.stage()
+    this.onLog('Downloading the voice models into your cloud storage (about 6.6 GB, once)…')
+    return this.modal(['run', 'modal_app.py::fetch_voice'])
   }
 
   // The model files in the volume ({path: bytes}), read by a CPU function (no GPU).
