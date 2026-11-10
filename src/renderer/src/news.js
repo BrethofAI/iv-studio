@@ -2,6 +2,12 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.0.9',
+    items: [
+      { text: 'Shut down GPU on Modal works again: newer Modal tools asked “Are you sure?” with nobody there to answer, and the stop failed. Guided tours show their cards on every step.' }
+    ]
+  },
+  {
     version: '1.0.8',
     items: [
       { text: 'Settings → Accessibility: bigger text, higher contrast text, reduce motion, clear focus outlines and underlined links. Secondary text is easier to read for everyone, too.' },
