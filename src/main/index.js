@@ -8,6 +8,7 @@ import { chooseTarget, copyData, discardCopy, freeBytes, listData, movableEntrie
 import { EXTRA_BIN, findHarnesses, harnessStatus } from '../service/harness'
 import { AGENT_NAMES, startAgentRun } from '../service/agentrun'
 import { AGENT_INFO, openSignIn, runInstall, signedIn } from '../service/agentinstall'
+import { applyChatEvent, listChats, loadChat, newChat, pruneChats, saveChat, startChatTurn } from '../service/agentchat'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS, MODAL_VERSION } from '../service/cloud'
 import { SetupProgress, about } from '../service/setupprogress'
@@ -2153,6 +2154,7 @@ app.whenReady().then(() => {
     const text = String(idea || '').trim().slice(0, 2000)
     if (!text) throw new Error('Type what you want to make first.')
     if (agentRun && agentRun.state().status === 'running') throw new Error(`${agentRun.state().name} is still working on the last idea. Stop it first.`)
+    if (chatTurn) throw new Error(`${chat.name} is answering in the chat. Wait for it, or stop it there.`)
     if (readSettings(BASE).target === 'cloud') throw new Error('IV Studio is set to render on the cloud. Your agent only renders on this PC (free): switch Cloud to This PC, or press Make it.')
     const { pick, exe } = agentPick()
     if (!pick) throw new Error('Neither Claude Code nor Codex is installed on this PC.')
@@ -2188,6 +2190,127 @@ app.whenReady().then(() => {
     if (agentRun && agentRun.state().status !== 'running') (agentRun = null), (agentRenders = [])
     send('agentRun:changed', agentView())
     return null
+  })
+  // The chat panel (agentchat.js): the person's own Claude Code or Codex with every IV Studio tool, asking first for
+  // anything that deletes, costs money, installs or changes Settings. One open chat; one message at a time; chats
+  // saved under the data folder's chats. A test copy can stand in an agent (IV_STUDIO_TEST_CHAT).
+  const chatsRoot = path.join(DATA, 'chats')
+  let chat = null
+  let chatTurn = null
+  let chatRenders = []
+  let chatPoll = null
+  const chatFound = () => (TEST_COPY && process.env.IV_STUDIO_TEST_CHAT ? { claude: process.env.IV_STUDIO_TEST_CHAT, codex: null } : agentsFound())
+  const chatPreferred = (found) => {
+    const s = readSettings(BASE)
+    return ['claude', 'codex'].includes(s.promptEngine) && found[s.promptEngine] ? s.promptEngine : found.claude ? 'claude' : found.codex ? 'codex' : null
+  }
+  const chatView = () => (chat ? { ...chat, busy: !!chatTurn, renders: chatRenders } : null)
+  const pushChat = () => send('chat:changed', chatView())
+  const chatJobs = () => [...new Set([...(chat?.jobs || []), ...(chatTurn?.jobs() || [])])].slice(-4)
+  const refreshChatRenders = async () => {
+    const out = []
+    for (const id of chatJobs()) {
+      try {
+        const j = await studio.refreshJob(id)
+        out.push({ id, name: j.name, kind: j.kind, status: j.status, progress: j.progress ? Math.round((100 * j.progress.value) / Math.max(1, j.progress.max)) : null, projectId: j.projectId || null })
+      } catch {
+        out.push({ id, status: 'unknown' })
+      }
+    }
+    chatRenders = out
+    pushChat()
+    if (!chatTurn && !out.some((r) => ['queued', 'running'].includes(r.status))) clearInterval(chatPoll), (chatPoll = null)
+  }
+  const watchChatRenders = () => {
+    if (!chatPoll) chatPoll = setInterval(refreshChatRenders, 3000)
+  }
+  const chatId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  const chatEngine = (engine) => {
+    const found = chatFound()
+    const e = engine || chatPreferred(found)
+    if (!e || !AGENT_NAMES[e]) throw new Error('Install Claude Code or Codex first: the chat uses your own.')
+    if (!found[e]) throw new Error(`${AGENT_NAMES[e]} isn't installed on this PC.`)
+    return e
+  }
+  handle('chat:status', () => {
+    const found = chatFound()
+    return { installed: { claude: !!found.claude, codex: !!found.codex }, preferred: chatPreferred(found), chat: chatView(), chats: listChats(chatsRoot).slice(0, 10) }
+  })
+  handle('chat:new', (engine) => {
+    if (chatTurn) throw new Error(`${chat.name} is still answering. Stop it first.`)
+    chat = newChat({ id: chatId(), engine: chatEngine(engine) })
+    chatRenders = []
+    pushChat()
+    return chatView()
+  })
+  handle('chat:open', (id) => {
+    if (chatTurn) throw new Error(`${chat.name} is still answering. Stop it first.`)
+    const c = loadChat(chatsRoot, String(id || ''))
+    if (!c) throw new Error('That chat is gone.')
+    chat = c
+    chatRenders = []
+    pushChat()
+    refreshChatRenders()
+    return chatView()
+  })
+  handle('chat:send', ({ text, context, engine } = {}) => {
+    const message = String(text || '').trim().slice(0, 8000)
+    if (!message) throw new Error('Type a message first.')
+    if (chatTurn) throw new Error(`${chat.name} is still answering. Stop it first, or wait.`)
+    if (agentRun && agentRun.state().status === 'running') throw new Error(`${agentRun.state().name} is making the Dashboard idea. Wait for it, or stop it there.`)
+    if (!chat) chat = newChat({ id: chatId(), engine: chatEngine(engine) })
+    const exe = chatFound()[chat.engine]
+    if (!exe) throw new Error(`${chat.name} isn't installed on this PC.`)
+    const current = chat
+    current.entries.push({ kind: 'you', text: message })
+    if (!current.title) current.title = message.slice(0, 80)
+    saveChat(chatsRoot, current)
+    const s = readSettings(BASE)
+    const extraEnv = {}
+    for (const k of ['IV_STUDIO_DATA', 'IV_STUDIO_USER_DATA']) if (process.env[k]) extraEnv[k] = process.env[k]
+    const turn = startChatTurn({
+      engine: current.engine,
+      exe,
+      dir: path.join(chatsRoot, current.id),
+      session: current.session,
+      message,
+      context: context && typeof context === 'object' ? context : null,
+      mcp: mcpCommand(),
+      model: current.engine === 'claude' ? s.claudeModel || '' : s.codexModel || '',
+      extraEnv,
+      onEvent: (e) => {
+        applyChatEvent(current, e)
+        if (chat === current) pushChat()
+        if (turn && turn.jobs().length) watchChatRenders()
+      }
+    })
+    chatTurn = turn
+    pushChat()
+    turn.promise.then((r) => {
+      current.jobs = [...new Set([...current.jobs, ...r.jobs])]
+      if (r.session) current.session = r.session
+      const last = current.entries[current.entries.length - 1]
+      if (!r.ok && r.error && !(last?.kind === 'problem' && last.text === r.error)) current.entries.push({ kind: 'problem', text: r.error })
+      current.updatedAt = new Date().toISOString()
+      if (chatTurn === turn) chatTurn = null
+      try {
+        saveChat(chatsRoot, current)
+        pruneChats(chatsRoot)
+      } catch {
+        /* a full drive shouldn't take the chat down */
+      }
+      if (current.jobs.length) watchChatRenders()
+      refreshChatRenders()
+    })
+    return chatView()
+  })
+  handle('chat:answer', ({ id, allow } = {}) => !!chatTurn?.answer(String(id || ''), !!allow))
+  handle('chat:stop', async () => {
+    if (!chatTurn) return chatView()
+    const jobs = chatTurn.jobs()
+    chatTurn.stop()
+    for (const id of jobs) await studio.cancelJob(id).catch(() => {})
+    return chatView()
   })
   handle('models:h3', () => studio.h3Models())
   handle('models:status', () => installer.status())

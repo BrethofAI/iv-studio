@@ -10,7 +10,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
 import { INSTRUCTIONS, readGuide } from '../service/agent'
-import { agentGuard, startedJobId } from '../service/agentrun'
+import { agentGuard, chatAsk, startedJobId } from '../service/agentrun'
 import { GUIDE_SOURCE, loadGuide } from '../service/h3guide'
 import { blocking, lintPrompt } from '../service/lint'
 import { Ranker } from '../service/ranking'
@@ -87,9 +87,44 @@ const ok = (value) => {
 const fail = (err) => ({ isError: true, content: [{ type: 'text', text: err.message }] })
 // Started from IV Studio's Dashboard ("Let Claude Code make it", agentrun.js): no deleting, installing, training,
 // Settings changes or spending, and the jobs it starts are written down so Stop can cancel them.
-const AGENT_RUN = process.env.IV_STUDIO_AGENT_RUN === '1'
+// A chat inside IV Studio (IV_STUDIO_AGENT_RUN=chat, agentchat.js) has every tool, but anything that deletes, costs
+// money, installs or changes Settings (chatAsk) waits for the person's Allow: an ask file in IV_STUDIO_AGENT_ASK, which
+// the app shows as a card, and the answer file it writes back.
+const AGENT_CHAT = process.env.IV_STUDIO_AGENT_RUN === 'chat'
+const AGENT_RUN = process.env.IV_STUDIO_AGENT_RUN === '1' || AGENT_CHAT
 const AGENT_JOBS = process.env.IV_STUDIO_AGENT_JOBS || null
+const AGENT_ASK = process.env.IV_STUDIO_AGENT_ASK || null
+const ASK_WAIT_MS = Number(process.env.IV_STUDIO_AGENT_ASK_MS) || 10 * 60 * 1000
 const agentStarted = new Set()
+const shortArgs = (args) => Object.fromEntries(Object.entries(args || {}).map(([k, v]) => [k, typeof v === 'string' && v.length > 300 ? `${v.slice(0, 300)}…` : v]))
+async function askPerson(name, args, why) {
+  if (!AGENT_ASK) throw new Error(`${why} There's no one to ask here, so it didn't run.`)
+  fs.mkdirSync(AGENT_ASK, { recursive: true })
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  const askFile = path.join(AGENT_ASK, `${id}.ask.json`)
+  const answerFile = path.join(AGENT_ASK, `${id}.answer.json`)
+  fs.writeFileSync(`${askFile}.tmp`, JSON.stringify({ id, tool: name, why, args: shortArgs(args), at: new Date().toISOString() }))
+  fs.renameSync(`${askFile}.tmp`, askFile)
+  const until = Date.now() + ASK_WAIT_MS
+  try {
+    while (Date.now() < until) {
+      let answer = null
+      try {
+        answer = JSON.parse(fs.readFileSync(answerFile, 'utf8'))
+      } catch {
+        /* not answered yet */
+      }
+      if (answer) {
+        if (answer.allow) return
+        throw new Error(`The person chose Don't allow for ${name}, so it didn't run. Don't try it again unless they ask; tell them what you'd do instead.`)
+      }
+      await new Promise((r) => setTimeout(r, 400))
+    }
+    throw new Error(`The person didn't answer the Allow card for ${name}, so it didn't run.`)
+  } finally {
+    for (const f of [askFile, answerFile]) fs.rmSync(f, { force: true })
+  }
+}
 const tool = (name, description, shape, fn) =>
   server.registerTool(name, { description, inputSchema: shape }, async (args) => {
     try {
@@ -98,7 +133,10 @@ const tool = (name, description, shape, fn) =>
       // the folders the person picked in Settings, as they are now
       studio.comfy.folders = comfyFolders(s, INCOGNITO)
       if (!!s.incognito !== INCOGNITO) throw new Error(`IV Studio switched Incognito ${INCOGNITO ? 'off' : 'on'} since this MCP server started. Restart the server (reconnect the iv-studio MCP) to work in the ${INCOGNITO ? 'normal' : 'Incognito'} data.`)
-      if (AGENT_RUN) {
+      if (AGENT_CHAT) {
+        const why = chatAsk(name, args, { settings: s })
+        if (why) await askPerson(name, args, why)
+      } else if (AGENT_RUN) {
         const refused = agentGuard(name, args, { settings: s, started: agentStarted })
         if (refused) throw new Error(refused)
       }

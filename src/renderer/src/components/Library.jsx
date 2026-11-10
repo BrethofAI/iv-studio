@@ -116,7 +116,7 @@ export default function Library({ openShot, go, notify, characters = [] }) {
   return (
     <div className="library shelf-page">
       <Stage effect="projector" art="shots" title="Shots" kicker="Infinite Variance">
-        <QuickBar search label="Search shots" placeholder="Search your shots, even the words of a prompt" value={q} onChange={setQ} goLabel="+ New shot" onGo={() => go('create')} />
+        <QuickBar search label="Search shots" placeholder="Search your shots, even the words of a prompt" value={q} onChange={setQ} results=".shelf-tools" found={shown.length} noun="shot" alt={{ label: '+ New shot', onClick: () => go('create') }} />
       </Stage>
       <p className="lede">
         Every shot you've made.

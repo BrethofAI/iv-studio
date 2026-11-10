@@ -52,17 +52,32 @@ Nothing that costs money, deletes, installs or trains is allowed in this run; th
 
 export const shellQuote = (a) => `"${String(a).replace(/"/g, '\\"')}"`
 // Ends the agent and everything it started (its MCP server, a .cmd's node): on Windows a plain kill stops only the
-// top process.
-function killTree(child) {
-  if (child.exitCode !== null || !child.pid) return
+// top process, so the whole tree goes with taskkill; on Mac and Linux the agent starts in its own process group
+// (spawnAgent), and the group goes.
+export function killTree(child) {
+  if (!child || child.exitCode !== null || !child.pid) return
   if (process.platform === 'win32') spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on('error', () => child.kill())
-  else child.kill()
+  else {
+    try {
+      process.kill(-child.pid, 'SIGTERM')
+    } catch {
+      child.kill()
+    }
+  }
+}
+
+// Start the agent's program: an npm install on Windows is a .cmd, which only runs through the shell (each argument
+// quoted, an empty --tools too); on Mac and Linux it starts in its own process group so killTree ends everything.
+export function spawnAgent(exe, args, { cwd, env, platform = process.platform } = {}) {
+  const viaShell = platform === 'win32' && /\.cmd$/i.test(exe)
+  return spawn(viaShell ? `"${exe}"` : exe, viaShell ? args.map(shellQuote) : args, { cwd, windowsHide: true, shell: viaShell, detached: platform !== 'win32', env })
 }
 const tomlString = (s) => JSON.stringify(String(s))
 const tomlTable = (o) => `{${Object.entries(o).map(([k, v]) => `${k}=${tomlString(v)}`).join(',')}}`
 
 // mcp: { command, args, env } of this install's server (env gets the agent-run flags added by the caller).
-export function claudeArgs({ mcpConfigFile, promptFile, model = '' }) {
+// persist: keep the session so a chat can --resume it (a Dashboard run keeps nothing).
+export function claudeArgs({ mcpConfigFile, promptFile, model = '', persist = false, resume = null }) {
   return [
     '-p',
     '--output-format', 'stream-json',
@@ -72,10 +87,53 @@ export function claudeArgs({ mcpConfigFile, promptFile, model = '' }) {
     '--strict-mcp-config',
     '--allowedTools', `mcp__${SERVER}`,
     '--permission-mode', 'dontAsk',
-    '--no-session-persistence',
+    ...(persist ? [] : ['--no-session-persistence']),
+    ...(resume ? ['--resume', resume] : []),
     '--append-system-prompt-file', promptFile,
     ...(model ? ['--model', model] : [])
   ]
+}
+
+// A chat with Codex: `exec` for the first message, `exec resume <thread>` after. Resume takes no --sandbox, -C or
+// --color, so the sandbox is a config value and the folder is the process's own working folder. tool_timeout_sec
+// leaves room for the person to answer an Allow card.
+export function codexChatArgs({ mcp, model = '', resume = null }) {
+  const key = `mcp_servers.${SERVER}`
+  return [
+    'exec',
+    ...(resume ? ['resume'] : []),
+    '--json',
+    '--skip-git-repo-check',
+    '--ignore-user-config',
+    ...(model ? ['-m', model] : []),
+    '-c', 'model_reasoning_effort="medium"',
+    '-c', 'approval_policy="never"',
+    '-c', 'sandbox_mode="read-only"',
+    '-c', `${key}.command=${tomlString(mcp.command)}`,
+    '-c', `${key}.args=${JSON.stringify(mcp.args)}`,
+    '-c', `${key}.env=${tomlTable(mcp.env)}`,
+    '-c', `${key}.tool_timeout_sec=900`,
+    ...(resume ? [resume] : []),
+    '-'
+  ]
+}
+
+// In a chat, the calls that wait for the person's Allow: why, in plain words, or null when it can go ahead.
+// settings: IV Studio's settings now.
+const CHAT_INSTALLS = new Set(['install_node_packs', 'update_comfy', 'undo_comfy_update', 'install_ready_character', 'download_lora', 'setup_voices', 'shinobi_setup'])
+const CHAT_SETTINGS = new Set(['set_workflow_model', 'set_lora_family'])
+const CHAT_TRAINING = new Set(['start_training', 'create_character_training', 'make_training_clips'])
+// calls that only read, price or write words: fine even while Settings renders on the cloud
+const CHAT_READS = /^(get|list|check|price|estimate|search|identify|read)_|^(scan_hardware|plan_render|comfy_balance|music_status|voice_status|sound_status|picture_tools_status|shinobi_status|shinobi_tools|effects_list|grab_frame|write_prompt|write_shots_from_story|write_sound|write_film_script|write_film_shot_prompt|free_memory|release_voice_engine)$/
+export function chatAsk(name, args = {}, { settings = {} } = {}) {
+  if (name.startsWith('delete_')) return 'This deletes something and can’t be undone.'
+  if (args.engine === 'seedance' || args.way === 'seedance') return 'Seedance renders on your Comfy.org credits: this costs money.'
+  if (Number(args.confirm_cost) > 0) return `This costs money: about ${Number(args.confirm_cost)} credits.`
+  if (CHAT_INSTALLS.has(name)) return 'This installs, downloads or updates something on your computer.'
+  if (CHAT_SETTINGS.has(name)) return 'This changes a setting.'
+  if (CHAT_TRAINING.has(name)) return 'This starts character training, which takes hours and can cost money on a cloud GPU.'
+  if (settings.target === 'cloud' && !CHAT_READS.test(name)) return 'IV Studio is set to render on the cloud, so this may cost money.'
+  return null
 }
 
 export function codexArgs({ mcp, dir, model = '' }) {
@@ -127,6 +185,8 @@ export function parseLine(engine, line) {
   }
   const out = []
   if (engine === 'claude') {
+    // the session to --resume in a chat
+    if (m.type === 'system' && m.subtype === 'init' && m.session_id) out.push({ type: 'session', id: m.session_id })
     if (m.type === 'assistant') {
       for (const c of m.message?.content || []) {
         if (c.type === 'text' && c.text?.trim()) out.push({ type: 'say', text: c.text.trim() })
@@ -139,7 +199,8 @@ export function parseLine(engine, line) {
   }
   // codex exec --json
   const it = m.item
-  if (m.type === 'item.started' && it?.type === 'mcp_tool_call') out.push({ type: 'step', tool: it.tool, label: stepLabel(it.tool), id: it.id })
+  if (m.type === 'thread.started' && m.thread_id) out.push({ type: 'session', id: m.thread_id })
+  else if (m.type === 'item.started' && it?.type === 'mcp_tool_call') out.push({ type: 'step', tool: it.tool, label: stepLabel(it.tool), id: it.id })
   else if (m.type === 'item.completed' && it?.type === 'mcp_tool_call' && (it.status === 'failed' || it.error)) out.push({ type: 'stepError', id: it.id, text: textOf(it.error?.message || it.result?.content) })
   else if (m.type === 'item.completed' && it?.type === 'agent_message' && it.text?.trim()) out.push({ type: 'say', text: it.text.trim() })
   else if (m.type === 'turn.completed') out.push({ type: 'end', ok: true, text: null })
@@ -194,9 +255,7 @@ export function startAgentRun({ engine, exe, idea, mcp, model = '', extraEnv = {
       state.jobs = [...new Set(fs.readFileSync(jobsFile, 'utf8').split('\n').map((s) => s.trim()).filter(Boolean))]
     } catch {}
   }
-  // an npm install is a .cmd, which only runs through the shell: quote each argument for it (an empty --tools too)
-  const viaShell = exe.endsWith('.cmd')
-  const child = spawn(viaShell ? `"${exe}"` : exe, viaShell ? args.map(shellQuote) : args, { cwd: dir, windowsHide: true, shell: viaShell, env: { ...process.env, NO_COLOR: '1' } })
+  const child = spawnAgent(exe, args, { cwd: dir, env: { ...process.env, NO_COLOR: '1' } })
   const input = engine === 'codex' ? `${agentPrompt()}\n\nThe person's idea: ${idea}` : `The person's idea: ${idea}`
   child.stdin.end(input)
   let buf = ''

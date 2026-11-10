@@ -962,7 +962,7 @@ input.mini {
 }
 .hero {
   position: relative;
-  width: calc(100vw - 210px);
+  width: var(--page-w, calc(100vw - 210px));
   height: 250px;
   margin: calc(-1 * var(--pad)) 0 34px calc(-1 * var(--pad));
   overflow: hidden;
@@ -11407,7 +11407,7 @@ button.set-chip:hover {
 /* ---------- Workflows tools: the animated stage, the title and the main bar centered on it ---------- */
 .stage {
   position: relative;
-  width: calc(100vw - 210px);
+  width: var(--page-w, calc(100vw - 210px));
   min-height: 430px;
   margin: calc(-1 * var(--pad)) 0 34px calc(-1 * var(--pad));
   display: grid;
@@ -11727,8 +11727,9 @@ button.set-chip:hover {
 .flow-choices {
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
 }
+/* three (or two) across while each card has room for its longest word, fewer when the page narrows (the chat open) */
 .flow-choices.flow-three {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 .flow-choice-extra {
   color: var(--pink);
@@ -11851,7 +11852,7 @@ button.set-chip:hover {
   background: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.025) 0 6px, transparent 6px 12px), #100c0e;
 }
 .flow-choices.flow-two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 .flow-page .create-steps {
   display: grid;
@@ -14177,4 +14178,351 @@ html.rm .agent-dot.live {
 }
 .whats-new-list li::marker {
   color: var(--red);
+}
+/* The chat with the person's own agent (ChatPanel.jsx): a title-bar button and a panel down the right side */
+.chat-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  min-height: 28px;
+  padding: 4px 12px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--paper);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.chat-open:hover,
+.chat-open:focus-visible,
+.chat-open.on {
+  border-color: var(--red);
+  color: var(--cream);
+}
+.chat-open svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+.chat-open-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+}
+.chat-open + .engine-badge {
+  margin-left: 10px;
+}
+/* With room (a window 1350 px and wider) the chat takes its own column and the page narrows beside it, so nothing is
+   covered; on smaller windows, where the page would get too cramped, it slides over the page instead. */
+.app.chat-on {
+  grid-template-columns: 210px minmax(0, 1fr) 380px;
+}
+.chat-panel {
+  grid-column: 3;
+  grid-row: 2;
+  min-height: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink);
+  border-left: 1px solid var(--line-strong);
+}
+@media (max-width: 1349px) {
+  .app.chat-on {
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+  .chat-panel {
+    position: fixed;
+    top: 40px;
+    right: 0;
+    bottom: 0;
+    width: min(400px, calc(100vw - 230px));
+    box-shadow: -18px 0 40px rgba(0, 0, 0, 0.45);
+  }
+}
+.chat-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 10px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.chat-head h2 {
+  margin: 0;
+  font: 700 22px / 1 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.chat-head .spacer {
+  flex: 1;
+}
+.chat-head .btn {
+  min-height: 32px;
+}
+.chat-engine button {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.chat-history {
+  margin: 10px 18px 0;
+  width: auto;
+}
+.chat-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+}
+.chat-setup {
+  gap: 4px;
+}
+.chat-empty {
+  display: grid;
+  gap: 14px;
+  margin: auto 0;
+  color: var(--paper);
+}
+.chat-ideas {
+  display: grid;
+  gap: 8px;
+}
+.chat-idea {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--ink-2);
+  color: var(--paper);
+  text-align: left;
+  cursor: pointer;
+}
+.chat-idea:hover,
+.chat-idea:focus-visible {
+  border-color: var(--red);
+  color: var(--cream);
+}
+.chat-you {
+  align-self: flex-end;
+  max-width: 88%;
+  padding: 9px 13px;
+  background: var(--ink-3);
+  border: 1px solid var(--line-strong);
+  color: var(--cream);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.chat-agent {
+  max-width: 100%;
+  color: var(--paper);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.chat-problem {
+  padding: 8px 12px;
+  border-left: 2px solid var(--red);
+  color: var(--pink);
+  overflow-wrap: anywhere;
+}
+.chat-step {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  color: var(--paper);
+  opacity: 0.75;
+  font-size: 11.5px;
+}
+.chat-step.err {
+  color: var(--pink);
+  opacity: 1;
+}
+.chat-step-why {
+  flex-basis: 100%;
+  padding-left: 16px;
+  font-family: inherit;
+  overflow-wrap: anywhere;
+}
+.chat-ask {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--red);
+  background: var(--ink-2);
+}
+.chat-ask.answered {
+  border-color: var(--line-strong);
+}
+.chat-ask-title {
+  font: 700 17px / 1.15 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.chat-ask p {
+  margin: 0;
+}
+.chat-ask-args {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+.chat-ask-args div {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.chat-ask-args dt {
+  color: var(--pink);
+}
+.chat-ask-args dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.chat-ask-btns {
+  display: flex;
+  gap: 8px;
+}
+.chat-ask-btns .btn {
+  min-height: 36px;
+}
+.chat-ask-answer {
+  margin: 0;
+  color: var(--pink);
+}
+.chat-working {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--paper);
+}
+.chat-renders {
+  display: grid;
+  gap: 6px;
+  padding: 10px 18px;
+  border-top: 1px solid var(--line);
+}
+.chat-render {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.chat-render .agent-bar {
+  flex: 1;
+}
+.chat-renders .link-btn {
+  justify-self: start;
+}
+.chat-compose {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px 18px 6px;
+  border-top: 1px solid var(--line);
+}
+.chat-compose textarea {
+  flex: 1;
+  min-height: 44px;
+  max-height: 160px;
+  resize: vertical;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.chat-send {
+  min-height: 44px;
+}
+.chat-foot {
+  margin: 0;
+  padding: 0 18px 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-open-dot {
+    animation: none;
+  }
+}
+/* The title bar on smaller windows (with the rules above): the test-copy badge drops " · separate data", "/ Studio" goes, then the
+   Chat and Incognito words (both keep their icon, and say what they are in their tooltip), and the status block on
+   the right never shrinks under the window buttons. */
+.titlebar > .test-copy {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.titlebar > .engine-badge {
+  flex-shrink: 0;
+}
+@media (max-width: 1400px) {
+  .titlebar > .brand-text.dim {
+    display: none;
+  }
+  .test-copy-more {
+    display: none;
+  }
+}
+@media (max-width: 1300px) {
+  .chat-open-label,
+  .incognito-label {
+    display: none;
+  }
+  .chat-open {
+    padding: 4px 8px;
+  }
+}
+/* the search on a banner: the magnifier inside the bar, the count of what matches under it, and the page's "+ New"
+   as its own smaller button below (QuickBar search) */
+.stage-search {
+  position: relative;
+}
+.stage-search-icon {
+  flex: none;
+  align-self: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  fill: none;
+  stroke: var(--pink);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.stage-found {
+  margin: 10px 0 0;
+  text-align: center;
+}
+.stage-found .link-btn {
+  font-size: 14px;
+}
+.stage-alt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.stage-alt .btn {
+  min-height: 36px;
+}
+/* the editor's full-screen mode keeps its whole width: the chat slides over it */
+.app.app-focus.chat-on {
+  grid-template-columns: 1fr;
+}
+.app.app-focus .chat-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(400px, 40vw);
+  box-shadow: -18px 0 40px rgba(0, 0, 0, 0.45);
 }

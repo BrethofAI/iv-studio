@@ -578,7 +578,7 @@ export function LorasPage({ notify, go, addLoraToCreate }) {
   return (
     <div className="loras">
       <Stage effect="flare" art="loras" title="LoRAs" kicker="Looks, moves and styles">
-        <QuickBar search label="Search Civitai" placeholder={`Search Civitai for ${fam?.label || 'H3'} LoRAs: cinematic, anime, painterly…`} value={query} onChange={(v) => (setQuery(v), setTab('discover'))} />
+        <QuickBar search label="Search Civitai" placeholder={`Search Civitai for ${fam?.label || 'H3'} LoRAs: cinematic, anime, painterly…`} value={query} onChange={(v) => (setQuery(v), setTab('discover'))} results=".lora-tabs" />
       </Stage>
       <p className="lede">
         Change how your models look and move.

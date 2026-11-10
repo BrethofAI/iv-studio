@@ -3,6 +3,7 @@ import { setSimpleWords } from './words'
 import { applyA11y } from './a11y'
 import { SetupPill } from './components/SetupProgress'
 import { AgentPill, useAgentRun } from './components/AgentRun'
+import ChatPanel, { ChatButton, useChat } from './components/ChatPanel'
 import { CharacterList, CharacterTrainer } from './components/Characters'
 import Create from './components/Create'
 import ivMark from './assets/iv-mark.png'
@@ -97,6 +98,34 @@ export default function App() {
   const [page, setPage] = useState(() => (savedSection() === 'audio' ? 'audio' : 'home'))
   // the Dashboard's agent run, for the title bar's pill while it works (AgentRun.jsx)
   const agentStatus = useAgentRun()
+  // The page's own width without its scrollbar (--page-w), for the tall banners that run edge to edge: 100vw can't
+  // know whether the page has a scrollbar, and was 15 px too wide when it did.
+  const pageWatch = useRef(null)
+  const watchPage = useCallback((el) => {
+    pageWatch.current?.disconnect()
+    pageWatch.current = null
+    if (!el) return
+    const set = () => document.documentElement.style.setProperty('--page-w', `${el.clientWidth}px`)
+    set()
+    pageWatch.current = new ResizeObserver(set)
+    pageWatch.current.observe(el)
+  }, [])
+  // the chat panel with the person's own agent (ChatPanel.jsx); open or closed is remembered
+  const [chatStatus, reloadChat] = useChat()
+  const [chatOpen, setChatOpen] = useState(() => {
+    try {
+      return localStorage.getItem('iv.chatOpen') === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleChat = (on) => {
+    setChatOpen(on)
+    try {
+      localStorage.setItem('iv.chatOpen', on ? '1' : '0')
+    } catch {}
+    if (on) reloadChat()
+  }
   // a spoken line or a song on its way to Create's voice line (Lines or Music > Use in a shot)
   const [lineForCreate, setLineForCreate] = useState(null)
   // a LoRA on its way to Create's LoRA tray (LoRAs > Use in a shot)
@@ -359,21 +388,26 @@ export default function App() {
   }
 
   return (
-    <div className={`app ${incognito ? 'incognito' : ''} ${focus && page === 'edit' ? 'app-focus' : ''} ${info?.platform === 'darwin' ? 'mac' : ''}`}>
+    <div className={`app ${incognito ? 'incognito' : ''} ${focus && page === 'edit' ? 'app-focus' : ''} ${info?.platform === 'darwin' ? 'mac' : ''} ${chatOpen ? 'chat-on' : ''}`}>
       <header className="titlebar">
         <img className="brand-logo" src={incognito ? ivMarkClosed : ivMark} alt="Infinite Variance" />
         <span className="mono brand-text">Infinite Variance</span>
         <span className="mono dim brand-text">/ Studio</span>
-        {info?.testCopy && <span className="mono test-copy">Test copy · separate data</span>}
+        {info?.testCopy && (
+          <span className="mono test-copy">
+            Test copy<span className="test-copy-more"> · separate data</span>
+          </span>
+        )}
         {info && (
           <button className={`incognito-switch mono ${incognito ? 'on' : ''}`} onClick={switchIncognito} title={incognito ? 'Leave Incognito (restarts IV Studio)' : 'Go Incognito: a private space (restarts IV Studio)'}>
             <span className="switch-track">
               <span className="switch-knob" />
             </span>
-            Incognito
+            <span className="incognito-label">Incognito</span>
           </button>
         )}
         <AgentPill status={agentStatus} onOpen={() => window.dispatchEvent(new CustomEvent('iv:go', { detail: { page: 'home', section: 'video' } }))} />
+        <ChatButton open={chatOpen} busy={!!chatStatus?.chat?.busy} onClick={() => toggleChat(!chatOpen)} />
         <div className={`engine-badge ${setup ? (ready ? 'ready' : 'error') : ''}`}>
           <span className="dot" />
           {setup?.remote && <span className="mono cloud-badge">Cloud</span>}
@@ -418,7 +452,7 @@ export default function App() {
         </div>
       </nav>
       {/* keyed by page: each page change remounts it, so the themed page-in animation plays (studio.css .page-anim) */}
-      <main key={page} className={`page page-anim ${page === 'edit' ? 'page-editor' : ''}`}>
+      <main key={page} ref={watchPage} className={`page page-anim ${page === 'edit' ? 'page-editor' : ''}`}>
         {page === 'home' && <Dashboard {...ctx} start={startTool} startShotWith={startShotWith} news={unseenNews(info?.version, seenNews)} dismissNews={() => markNewsSeen(info?.version)} />}
         {page === 'create' &&
           (createKind === 'image' ? (
@@ -457,6 +491,16 @@ export default function App() {
         {page === 'cloud' && <Cloud {...ctx} />}
         {page === 'settings' && <Settings {...ctx} />}
       </main>
+      {chatOpen && (
+        <ChatPanel
+          status={chatStatus}
+          reload={reloadChat}
+          onClose={() => toggleChat(false)}
+          context={{ page, section, projectId: page === 'shot' ? projectId : null, productionId: page === 'project' ? productionId : null, sequenceId: page === 'sequence' ? sequenceId : null, editId: page === 'edit' ? editId : null, sizzleId: page === 'sizzle-project' ? sizzleId : null, rebuildId: page === 'rebuild-project' ? rebuildId : null, shinobiId: page === 'shinobi-film' ? shinobiId : null, trainingId: page === 'character' ? trainingId : null }}
+          go={setPage}
+          notify={notify}
+        />
+      )}
       <ConfirmHost />
       <CloudModels />
       {cloudWiz && <CloudWizard onClose={() => (setCloudWiz(false), recheck?.(), window.dispatchEvent(new CustomEvent('iv:cloud-changed')))} notify={notify} recheck={recheck} info={info} />}

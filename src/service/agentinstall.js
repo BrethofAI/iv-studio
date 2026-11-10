@@ -33,10 +33,18 @@ export function installCommand(engine, platform = process.platform) {
 
 export const stripAnsi = (s) => String(s).replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07]*\x07/g, '')
 
+// the installer and everything it started (curl, the downloaded program): Windows by tree, Mac and Linux by the
+// process group runInstall starts it in
 function killTree(child) {
   if (!child || child.exitCode !== null) return
   if (process.platform === 'win32') spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' })
-  else child.kill('SIGTERM')
+  else {
+    try {
+      process.kill(-child.pid, 'SIGTERM')
+    } catch {
+      child.kill('SIGTERM')
+    }
+  }
 }
 
 // Run the installer. onLine gets each line it prints (colour codes removed). Resolves { ok, code, lines, error };
@@ -51,7 +59,7 @@ export function runInstall(engine, { onLine = () => {}, env = {}, platform = pro
   let timedOut = false
   const promise = new Promise((resolve) => {
     try {
-      child = spawn(command, args, { windowsHide: true, shell: /\.cmd$/i.test(command), env: { ...process.env, CODEX_NON_INTERACTIVE: '1', NO_COLOR: '1', ...env } })
+      child = spawn(command, args, { windowsHide: true, shell: /\.cmd$/i.test(command), detached: process.platform !== 'win32', env: { ...process.env, CODEX_NON_INTERACTIVE: '1', NO_COLOR: '1', ...env } })
     } catch (e) {
       resolve({ ok: false, code: null, lines, error: e.message })
       return

@@ -158,7 +158,7 @@ export function ProjectsList({ notify, openProject }) {
   return (
     <div className="projects shelf-page">
       <Stage effect="spotlight" art="projects" title="Projects" kicker="A short film, step by step">
-        <QuickBar search label="Search films" placeholder="Search your films" value={q} onChange={setQ} goLabel="+ New film" disabled={busy} onGo={create} />
+        <QuickBar search label="Search films" placeholder="Search your films" value={q} onChange={setQ} results=".shelf-tools" found={shown.length} noun="film" alt={{ label: '+ New film', onClick: create, disabled: busy }} />
       </Stage>
       <p className="lede">
         Turn an idea into a short film.

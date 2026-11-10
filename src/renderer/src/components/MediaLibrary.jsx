@@ -372,7 +372,7 @@ export default function MediaLibrary(ctx) {
   return (
     <div className="media-library">
       <Stage effect="photos" art="library" title="Library" kicker="Everything you've made">
-        <QuickBar search label="Search the Library" placeholder="Search everything: videos, pictures, songs, lines, even prompts" value={q} onChange={setQ} />
+        <QuickBar search label="Search the Library" placeholder="Search everything: videos, pictures, songs, lines, even prompts" value={q} onChange={setQ} results=".shelf-tools" found={sets.length} />
       </Stage>
       <p className="lede">
         Every video, picture, song and line you’ve made.

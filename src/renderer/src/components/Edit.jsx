@@ -26,7 +26,7 @@ export function EditList({ openEdit, notify }) {
   return (
     <div className="edits shelf-page">
       <Stage effect="snip" art="edit" title="Edit" kicker="Infinite Variance">
-        <QuickBar search label="Search edits" placeholder="Search your edits" value={q} onChange={setQ} goLabel="+ New edit" onGo={create} />
+        <QuickBar search label="Search edits" placeholder="Search your edits" value={q} onChange={setQ} results=".shelf-bar" found={shown.length} noun="edit" alt={{ label: '+ New edit', onClick: create }} />
       </Stage>
       <p className="lede">
         Cut your shots and sequences together.

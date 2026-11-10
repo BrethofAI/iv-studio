@@ -172,6 +172,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
   },
   // the Dashboard's "Let Claude Code make it" (src/service/agentrun.js)
   agentRun: { status: call('agentRun:status'), start: call('agentRun:start'), stop: call('agentRun:stop'), dismiss: call('agentRun:dismiss'), onChange: on('agentRun:changed') },
+  // the chat panel with the person's own agent (src/service/agentchat.js)
+  chat: { status: call('chat:status'), new: call('chat:new'), open: call('chat:open'), send: call('chat:send'), answer: call('chat:answer'), stop: call('chat:stop'), onChange: on('chat:changed') },
   reels: {
     make: call('reels:make')
   },
