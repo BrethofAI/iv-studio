@@ -615,6 +615,11 @@ function WriterCard({ n, settings, setSettings, notify }) {
           )}
         </SetField>
       )}
+      <SetField label="Search by what’s in a file" hint="While nothing renders, the local writer (Ollama, or your OpenAI-compatible server when it sees pictures) looks at each new video and picture in the Library and writes a sentence and a few tags, so search finds “red car” or “beach at night”. It stops when a render starts.">
+        <SetSwitch checked={settings.describeLibrary !== false} onChange={async (on) => setSettings(await window.ivstudio.settings.set({ describeLibrary: on }))}>
+          {settings.describeLibrary !== false ? 'On' : 'Off'}
+        </SetSwitch>
+      </SetField>
     </SetCard>
   )
 }

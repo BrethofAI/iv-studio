@@ -14840,3 +14840,21 @@ html.rm .agent-dot.live {
   object-fit: cover;
   background: var(--ink-2);
 }
+
+/* Library: what's in a file (describe.js) */
+.describe-status {
+  margin: -6px 0 10px;
+}
+.viewer-about {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.viewer-about p {
+  margin: 0;
+}
+.viewer-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}

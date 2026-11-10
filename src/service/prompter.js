@@ -86,7 +86,8 @@ export async function localWriterModel(model, { needsEyes = null } = {}) {
 // ([{ role, content, images?: [base64 JPEG] }]), the parsed JSON of `schema`'s shape out. Ollama unloads the model
 // afterwards and, with cpu, keeps it off the GPU while ComfyUI renders; a server manages its own models.
 // raw: return the reply text instead (writeLocal parses and retries itself).
-export async function localChat({ model, system, messages, schema, temperature = 0.5, ctx = 16384, maxTokens = 6000, cpu = false, timeoutMs = 600000, raw = false }) {
+// signal: stops the answer early (the Library's describer stops when a render starts).
+export async function localChat({ model, system, messages, schema, temperature = 0.5, ctx = 16384, maxTokens = 6000, cpu = false, timeoutMs = 600000, raw = false, signal = null }) {
   const cfg = llmConfig()
   let text
   if (cfg.provider === 'openai') text = await openaiChat({ cfg, model: cfg.model, system, messages, schema, temperature, maxTokens, timeoutMs })
@@ -96,7 +97,7 @@ export async function localChat({ model, system, messages, schema, temperature =
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ model: model || DEFAULT_LOCAL_MODEL, stream: false, format: schema, keep_alive: 0, options: { temperature, num_ctx: ctx, num_predict: maxTokens, ...cpuOptions(cpu) }, messages: [{ role: 'system', content: system }, ...messages] }),
-      signal: AbortSignal.timeout(timeoutMs)
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs)
     })
     if (!r.ok) throw new Error(`Ollama: ${(await r.text()).slice(0, 300)}`)
     text = (await r.json()).message?.content

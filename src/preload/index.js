@@ -306,7 +306,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
   },
   clipfx: { meta: call('clipfx:meta'), status: call('clipfx:status'), run: call('clipfx:run'),
     preview: call('clipfx:preview'), live: call('clipfx:live'), runs: call('clipfx:runs'), deleteRun: call('clipfx:deleteRun'), onProgress: on('clipfx:progress') },
-  library: { all: call('library:all'), toEdit: call('library:toEdit') },
+  library: { all: call('library:all'), toEdit: call('library:toEdit'), describeStatus: call('library:describeStatus'), onDescribe: on('library:describe') },
   loras: {
     meta: call('loras:meta'),
     search: call('loras:search'),

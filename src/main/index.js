@@ -35,13 +35,14 @@ import { initUpdater, updateState, MANUAL as UPDATE_MANUAL } from './updater'
 import { MediaTools } from '../service/media'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { ModelInstaller } from '../service/models'
-import { CONTEXT_IR_PRICE, normalizeOllamaUrl, ollamaStatus, pullModel, setOllamaSource, unloadOllama } from '../service/prompter'
+import { CONTEXT_IR_PRICE, localChat, localWriterModel, normalizeOllamaUrl, ollamaStatus, pullModel, setOllamaSource, unloadOllama } from '../service/prompter'
 import { normalizeApiBase, openaiStatus, parseHeaders, setLlmSource } from '../service/llm'
 import { Studio } from '../service/studio'
 import { cleanStretchFile, Ranker } from '../service/ranking'
 import { exportInterchange } from '../service/interchange'
 import { RECOMMENDED, recommendedManifest, recommendedOnDisk } from '../service/recommended'
 import { Turnarounds } from '../service/turnaround'
+import { Describer } from '../service/describe'
 import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
 import { findFizgig, LOCAL_TRAIN, RUNPOD_TRAIN_GPUS, SCENES, TALKS, TRAIN_DEFAULTS, TRAIN_GPUS, Trainings } from '../service/training'
@@ -147,6 +148,7 @@ let stopWatch = null
 let installer = null
 let recInstaller = null // the Recommended LoRAs shelf (recommended.js), into this PC's ComfyUI
 let turnarounds = null // turnaround sheets (turnaround.js)
+let describer = null // Library search by what's in a file (describe.js)
 let trainings = null
 let replace = null
 let remake = null
@@ -241,7 +243,7 @@ function makeStudio() {
   // LoRAs live on this PC's ComfyUI, also when renders go to the cloud
   if (civitai) civitai.comfy = new Comfy(s.comfyUrl)
   // nothing of IV Studio's own holds the GPU while ComfyUI renders (see Studio.makeRoom)
-  studio.beforeRender = () => voices?.release()
+  studio.beforeRender = () => (describer?.pause(), voices?.release())
   // Seedance and other partner nodes: the person's Comfy.org key, read when a render needs it (never sent to the window)
   studio.partnerKey = () => unseal(readSettings(BASE).comfyApiKey)
   if (!installer?.running) installer = new ModelInstaller({ comfy: studio.comfy, manifest: studio.manifest, onUpdate: (u) => send('models:update', u) })
@@ -786,7 +788,8 @@ app.whenReady().then(() => {
   handle('turnaround:make', (opts) => turnarounds.make(opts))
   handle('turnaround:delete', (id) => turnarounds.remove(id))
   // ---------- Library: everything made in IV Studio, in one place ----------
-  handle('library:all', () => {
+  // every Library item; each video and picture carries its description (describe.js) when it has one
+  const libraryItems = () => {
     const items = studio.library().map((i) => ({ ...i, type: 'video' }))
     for (const e of edits.list()) {
       for (const x of edits.get(e.id).exports || []) if (x.file && fs.existsSync(x.file)) items.push({ key: `export:${x.file}`, type: 'video', group: 'Edit exports', label: `${e.name} · ${x.format || ''} ${x.fps || ''} fps`.trim(), at: x.at, file: { path: x.file }, set: `edit:${e.id}`, setName: e.name, variant: `${x.format || 'Export'} · ${x.fps || ''} fps`, rank: 0, editId: e.id })
@@ -797,7 +800,25 @@ app.whenReady().then(() => {
     for (const r of images.all()) (r.files || []).forEach((f, i) => fs.existsSync(f) && items.push({ key: `image:${r.id}:${i}`, type: 'image', group: 'Images', label: r.name, detail: `${r.familyLabel} · ${r.mode === 'edit' ? 'edit' : 'generate'}`, at: r.finishedAt || r.createdAt, file: { path: f }, set: `image:${r.id}`, setName: r.name, variant: `Picture ${i + 1}`, rank: i, imageId: r.id }))
     for (const l of voices.lines()) if (fs.existsSync(l.file)) items.push({ key: `line:${l.id}`, type: 'voice', group: 'Voice lines', label: l.text, detail: l.voice, duration: l.duration, at: l.createdAt, file: { path: l.file }, set: `line:${l.id}`, setName: l.text, variant: `Seed ${l.seed}`, rank: 0 })
     return items.sort((a, b) => String(b.at).localeCompare(String(a.at)))
+  }
+  handle('library:all', () => libraryItems().map((i) => (i.file?.path && describer ? { ...i, about: describer.about(i.file.path) } : i)))
+  // Library search by what's in a file: the local writer describes new videos and pictures while nothing renders
+  describer = new Describer({
+    dataDir: DATA,
+    ffmpeg: edits.ffmpeg,
+    files: () => libraryItems().filter((i) => i.file?.path && fs.existsSync(i.file.path)).map((i) => ({ path: i.file.path, type: i.type })),
+    idle: async () => {
+      if (studio.comfy.remote) return true // renders run in the cloud; this PC's GPU is free
+      const q = await studio.comfy.queue().catch(() => null)
+      return !q || (!q.queue_running?.length && !q.queue_pending?.length)
+    },
+    enabled: () => readSettings(BASE).describeLibrary !== false,
+    writer: () => localWriterModel(readSettings(BASE).ollamaModel || undefined),
+    chat: localChat,
+    onChange: (st) => send('library:describe', st)
   })
+  describer.start()
+  handle('library:describeStatus', () => describer.status())
   handle('library:toEdit', async (item, editId = null) => putOnEdit(await localCopy(item.file), item.label.slice(0, 60), editId, item.type === 'video' ? 'iv' : item.type))
   // ---------- characters: design, clips, training on Modal, pick ----------
   // ---------- Shinobi: the agent-driven editor (OpenKatana engine), and face likeness ----------

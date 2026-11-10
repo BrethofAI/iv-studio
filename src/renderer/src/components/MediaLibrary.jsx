@@ -216,7 +216,7 @@ function Details({ item, notify }) {
   const [full, setFull] = useState(false)
   useEffect(() => setFull(false), [item.key])
   const facts = item.facts || []
-  if (!facts.length && !item.prompt) return null
+  if (!facts.length && !item.prompt && !item.about) return null
   const flip = () => {
     setOpen(!open)
     try {
@@ -231,6 +231,19 @@ function Details({ item, notify }) {
       </button>
       {open && (
         <>
+          {item.about && (
+            <div className="viewer-about">
+              <span className="mono small dim">What’s in it</span>
+              <p className="small">{item.about.sentence}</p>
+              <span className="viewer-tags">
+                {item.about.tags.map((t) => (
+                  <span key={t} className="chip small">
+                    {t}
+                  </span>
+                ))}
+              </span>
+            </div>
+          )}
           {facts.length > 0 && (
             <dl className="viewer-facts">
               {facts.map(([k, v]) => (
@@ -312,6 +325,23 @@ const SORTS = [
   ['longest', 'Longest']
 ]
 
+// How far the Library's search-by-content has got (describe.js): "142 of 300 described, more while nothing renders".
+function DescribeStatus() {
+  const [st, setSt] = useState(null)
+  useEffect(() => {
+    window.ivstudio.library.describeStatus().then(setSt, () => {})
+    return window.ivstudio.library.onDescribe(setSt)
+  }, [])
+  if (!st?.total) return null
+  if (!st.enabled) return <p className="small dim describe-status">Search by what’s in a file is off (Settings → Prompt writer).</p>
+  return (
+    <p className="small dim describe-status" title="Your prompt writer looks at each new video and picture while nothing renders, so search finds “red car” or “beach at night”. It stops as soon as a render starts.">
+      {st.described === st.total ? `Search knows what’s in all ${st.total} videos and pictures.` : `Search knows what’s in ${st.described} of ${st.total} videos and pictures${st.running ? '; looking at one now' : '; more while nothing renders'}.`}
+      {st.error && <span className="pink"> {st.error}</span>}
+    </p>
+  )
+}
+
 export default function MediaLibrary(ctx) {
   const characters = ctx.characters || []
   const [items, setItems] = useState(null)
@@ -360,8 +390,8 @@ export default function MediaLibrary(ctx) {
     who: (x) => who === 'all' || whoOf(x) === who,
     shape: (x) => shape === 'all' || x.cover.aspect === shape,
     model: (x) => model === 'all' || x.items.some((i) => i.model === model),
-    // words in a name, a detail or the prompt a render was made from
-    q: (x) => words.every((w) => `${x.name} ${x.group} ${x.items.map((i) => `${i.label} ${i.detail || ''} ${i.prompt || ''}`).join(' ')}`.toLowerCase().includes(w))
+    // words in a name, a detail, the prompt a render was made from, or what's in it (describe.js)
+    q: (x) => words.every((w) => `${x.name} ${x.group} ${x.items.map((i) => `${i.label} ${i.detail || ''} ${i.prompt || ''} ${i.about ? `${i.about.sentence} ${i.about.tags.join(' ')}` : ''}`).join(' ')}`.toLowerCase().includes(w))
   }
   const passing = (except) => allSets.filter((x) => Object.entries(tests).every(([k, t]) => k === except || t(x)))
   const count = (except, fn) => passing(except).filter(fn).length
@@ -392,6 +422,7 @@ export default function MediaLibrary(ctx) {
         Every video, picture, song and line you’ve made.
         <span className="lede-small dim">Each tile holds all its versions. Open one to watch them and see how each was made.</span>
       </p>
+      <DescribeStatus />
       <div className="shelf-tools">
         <div className="shelf-bar">
           <div className="segmented" role="tablist" aria-label="What">

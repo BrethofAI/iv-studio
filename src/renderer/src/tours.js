@@ -350,7 +350,7 @@ export const TOURS = {
   library: {
     title: 'Library',
     steps: [
-      { at: '.stage-quick', title: 'Search everything', text: 'Videos, pictures, songs and voice lines in one place. Search them all, even the words of a prompt.' },
+      { at: '.stage-quick', title: 'Search everything', text: 'Videos, pictures, songs and voice lines in one place. Search them all, even the words of a prompt, or what’s in them: while nothing renders, your prompt writer looks at each video and picture so “red car” finds one.' },
       { at: '.shelf-bar', title: 'Everything you made', text: 'Each kind with a count, and the sort order, longest first too.' },
       { at: '.shelf-filters', title: 'Narrow it down', text: 'When it was made, where it came from, and for shots their kind, who is in them, their shape and the model. Fold the panel away with Filters; it remembers.' },
       { at: '.shelf-group-head', title: 'One day at a time', text: 'Everything sits under the day it was made, older work by month. Click a day to fold it away.' },
