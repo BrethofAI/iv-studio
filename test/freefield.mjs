@@ -3,7 +3,7 @@
 // another build are swapped in.
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import { CLIP_FX, cameraOverrides, fillGraph, loadApp, sizeOf, swapModels, upstream, withFreeMemory } from '../src/service/freefield.js'
+import { CLIP_FX, cameraOverrides, fillGraph, loadApp, sizeOf, swapModels, upstream, withFreeMemory, withoutPromptWriter } from '../src/service/freefield.js'
 
 let n = 0
 const ok = (name, fn) => (fn(), n++, console.log('ok ', name))
@@ -117,6 +117,22 @@ ok('New angle starts gentle: 15° / 5°, the lens read from the clip, 0.35 MP', 
   assert.equal(sizeOf(spec, 2), 0.35, 'only its own choices')
   const { graph } = loadApp(RES, 'reshoot')
   assert.equal(graph['2'].inputs.megapixels, 0.5, 'the vendored graph is unchanged')
+})
+
+ok('the LTX apps lose their in-graph prompt rewriter and its Gemma model; the prompt goes straight in', () => {
+  for (const app of ['dub', 'vfx-clean-plate', 'vfx-day-to-night', 'vfx-water', 'morph', 'transitions']) {
+    const { app: a, graph } = loadApp(RES, app)
+    const prompt = a.inputs.find((i) => i.id === 'prompt' || i.id === 'details')
+    const filled = fillGraph(a, graph, prompt ? { [prompt.id]: 'A test prompt.' } : {})
+    const g = withoutPromptWriter(filled)
+    const kinds = Object.values(g).map((n) => n.class_type)
+    assert.ok(!kinds.includes('TextGenerateLTX2Prompt'), `${app}: no rewriter`)
+    assert.ok(!JSON.stringify(g).includes('gemma4_e2b'), `${app}: no Gemma E2B model`)
+    for (const [id, n] of Object.entries(g)) for (const v of Object.values(n.inputs || {})) if (Array.isArray(v) && v.length === 2 && typeof v[1] === 'number') assert.ok(g[String(v[0])], `${app}: ${id} points at a node still there`)
+    assert.ok(Object.values(g).some((n) => 'filename_prefix' in (n.inputs || {})), `${app}: still saves`)
+  }
+  const { graph } = loadApp(RES, 'smooth')
+  assert.equal(withoutPromptWriter(graph), graph, 'apps without a rewriter are untouched')
 })
 
 console.log(`\n${n} passed`)

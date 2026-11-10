@@ -78,6 +78,30 @@ export function sizeOf(spec, size) {
   return spec.size?.choices?.some(([v]) => v === n) ? n : spec.size?.default
 }
 
+// Freefield's LTX apps rewrite the prompt inside ComfyUI with a small Gemma model (TextGenerateLTX2Prompt), behind a
+// switch. IV Studio takes that out: whatever read the switch reads the plain prompt instead, and the rewriter and its
+// model leave the graph (ComfyUI checks every model in a graph before it starts, used or not). Prompts come from the
+// person, or IV Studio's own writer, as written.
+export function withoutPromptWriter(graph) {
+  const gens = new Set(Object.entries(graph).filter(([, n]) => n.class_type === 'TextGenerateLTX2Prompt').map(([k]) => k))
+  if (!gens.size) return graph
+  const g = JSON.parse(JSON.stringify(graph))
+  const isGen = (x) => Array.isArray(x) && gens.has(String(x[0]))
+  const plainOf = (x) => (isGen(x) ? g[String(x[0])].inputs.prompt : x)
+  const rewire = (from, to) => {
+    for (const m of Object.values(g)) for (const [k, v] of Object.entries(m.inputs || {})) if (Array.isArray(v) && String(v[0]) === from) m.inputs[k] = to
+  }
+  for (const [id, n] of Object.entries(g)) {
+    if (n.class_type !== 'ComfySwitchNode' || !(isGen(n.inputs.on_true) || isGen(n.inputs.on_false))) continue
+    rewire(id, plainOf(isGen(n.inputs.on_false) ? n.inputs.on_true : n.inputs.on_false))
+    delete g[id]
+  }
+  for (const id of gens) rewire(id, g[id].inputs.prompt)
+  // only what the outputs still need
+  const outs = Object.keys(g).filter((k) => 'filename_prefix' in (g[k].inputs || {}))
+  return upstream(g, outs)
+}
+
 export function upstream(graph, outIds) {
   const keep = new Set()
   const walk = (id) => {
@@ -252,7 +276,7 @@ export class FreefieldApps {
     const studio = this.studio()
     if (studio.comfy.remote && !studio.comfy.hosted) return { fx, ready: false, remote: true }
     const info = await studio.comfy.objectInfo()
-    const { graph } = loadApp(this.resourcesDir, spec.app)
+    const graph = withoutPromptWriter(loadApp(this.resourcesDir, spec.app).graph)
     const missingNodes = [...new Set(Object.values(graph).map((n) => n.class_type).filter((c) => !info[c]))]
     const { missing } = swapModels(graph, info, studio.manifest)
     const out = { fx, ready: !missingNodes.length && !missing.length, missingNodes, missingModels: missing }
@@ -331,7 +355,8 @@ export class FreefieldApps {
     if (!file || !fs.existsSync(file)) throw new Error(spec.media === 'image' ? 'Pick a picture.' : 'Pick a clip.')
     const studio = this.studio()
     if (studio.comfy.remote) throw new Error(`${spec.label} runs on this PC’s ComfyUI.`)
-    const { app, graph } = loadApp(this.resourcesDir, spec.app)
+    const { app, graph: raw } = loadApp(this.resourcesDir, spec.app)
+    const graph = withoutPromptWriter(raw)
     const info = await studio.comfy.objectInfo()
     const missingNodes = [...new Set(Object.values(graph).map((n) => n.class_type).filter((c) => !info[c]))]
     if (missingNodes.length) throw new Error(`${spec.label} needs ComfyUI nodes this one doesn’t have (${missingNodes.slice(0, 4).join(', ')}). Install missing node packs on Setup, then restart ComfyUI.`)
