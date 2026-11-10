@@ -137,7 +137,8 @@ export function comfyHome(file, { readLink = null, appData = process.env.APPDATA
 }
 
 // The ComfyUI Desktop app updates ComfyUI and ComfyUI-Manager itself (comfyupdate.js updates only its node packs).
-export const isDesktopLauncher = (file) => !!file && /^ComfyUI\.(exe|app)$/i.test(path.basename(file))
+// the file name, whichever OS wrote the path (a Windows path read on Linux or a Mac keeps its backslashes)
+export const isDesktopLauncher = (file) => !!file && /^ComfyUI\.(exe|app)$/i.test(String(file).split(/[\\/]/).pop())
 
 // ---------- a ComfyUI that is already starting ----------
 // ComfyUI answers only once it has loaded (often a minute or more), so "nothing answers" doesn't mean "not
