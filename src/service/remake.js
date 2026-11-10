@@ -212,6 +212,8 @@ export class Remake {
 
   // The int8 file for a kind on this ComfyUI (any folder), and what else Remake needs that it lacks.
   async check(kind = 'swap') {
+    // in the cloud, say so instead of listing this PC's Setup steps (a cloud user asked how to get H3)
+    if (this.studio.comfy.remote) return { ready: false, cloud: true, error: 'Replace isn’t available in the cloud yet: it renders on this PC’s graphics card. Shots, sequences and characters work in the cloud.', packs: [], models: [], unet: null }
     const info = await this.studio.comfy.objectInfo()
     const unets = comboOptions(info, 'UNETLoader', 'unet_name') || []
     const unet = unets.find((u) => u.replace(/\\/g, '/').split('/').pop() === MODEL[kind]) || null

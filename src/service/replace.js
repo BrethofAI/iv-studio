@@ -96,6 +96,7 @@ export class Replace {
 
   // What this ComfyUI lacks for a mode: node packs (with links) and models (with where to get them).
   async check(mode = 'person') {
+    if (this.studio.comfy.remote) return { ready: false, cloud: true, error: 'Replace isn’t available in the cloud yet: it renders on this PC’s graphics card. Shots, sequences and characters work in the cloud.', packs: [], models: [] }
     const g = this.graph(WORKFLOW[mode])
     const info = await this.studio.comfy.objectInfo()
     const classes = [...new Set(Object.values(g).map((n) => n.class_type))].map((c) => (c === 'H3SourceSlice' && !info[c] && info.MiniMaxH3ContexLoopSourceSlice ? 'MiniMaxH3ContexLoopSourceSlice' : c))
