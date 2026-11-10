@@ -62,7 +62,7 @@ ends on the given pictures (`raw.opens`, `raw.ends`). `use_clean_stretch` saves 
 it to the 17n+5 grid (`forContinue`) as a `continue` source. Don't write "no X" in a prompt: H3 shows the X;
 `check_prompt` lists such phrases (`negative-wording`) with what to say instead. For a `reference` video whose
 person speaks but the new shot doesn't, mark the media `softMouth: true` (or `soften_mouth` first) so the new
-face doesn't mouth their words.
+face doesn't mouth their words. H3 can copy the blur into the first second of a take; trim it.
 
 ## Seedance 2.5 (paid, on the person's Comfy.org credits)
 

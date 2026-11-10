@@ -149,7 +149,7 @@ own RunPod or Modal, speed presets for smaller graphics cards, and a new look th
   Settings → Prompt writer turns it off.
 - **Soft mouth.** A reference video in References mode (and Replace's Swap people) can have its mouths blurred
   first, so the new face doesn't mouth the words spoken in it. Off while the shot has a spoken line. It uses the
-  face models from Characters.
+  face models from Characters. H3 can copy the blur into a take's first second; trim it in Edit.
 - **Dailies.** When an overnight batch finishes, Videos\IV Studio\Dailies gets a reel of every take, the best
   of each shot first, each after a card with its seed and checks, and notes.md on what to look at first. The
   chat's report has **Watch the dailies** and **Read the notes**.

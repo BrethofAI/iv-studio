@@ -619,7 +619,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                         onRemove={() => set({ media: form.media.filter((_, j) => j !== i) })}
                         extra={
                           form.mode === 'reference' && m.kind === 'video' && !sd ? (
-                            <label className="soft-mouth small" title={talks ? 'This shot has a spoken line, so the mouth has to move: soft mouth is off.' : 'Blurs the mouths in this video before H3 sees it, so the new face doesn’t mouth the words spoken in it. Needs the face models (Characters).'}>
+                            <label className="soft-mouth small" title={talks ? 'This shot has a spoken line, so the mouth has to move: soft mouth is off.' : 'Blurs the mouths in this video before H3 sees it, so the new face doesn’t mouth the words spoken in it. H3 can copy the blur into the first second; trim it in Edit. Needs the face models (Characters).'}>
                               <input type="checkbox" disabled={talks} checked={!!m.softMouth && !talks} onChange={(e) => set({ media: form.media.map((x, j) => (j === i ? { ...x, softMouth: e.target.checked } : x)) })} />
                               Soft mouth{talks ? ' (off: the shot speaks)' : ''}
                             </label>
