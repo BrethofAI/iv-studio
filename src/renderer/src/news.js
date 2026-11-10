@@ -4,6 +4,11 @@ export const NEWS = [
   {
     version: '1.1.0',
     items: [
+      { text: 'Start from an example: Create now offers six ready-made shots that fill in a working prompt, and the welcome wizard’s “Make your first shot” opens the first one ready to hunt.' },
+      { text: 'A failed render now says what went wrong in plain words (out of memory, a missing model or node pack, a full drive, credits) with a button for the fix. ComfyUI’s own message is still there under Details.' },
+      { text: 'Hunt and Finish say how long they will take on your machine, worked out from your own earlier renders, and what a cloud render will cost.' },
+      { text: 'The editor can add a “Made with IV Studio” end card to an export (Edit settings → End card). It is off unless you turn it on.' },
+      { text: 'Settings → Privacy: IV Studio sends nothing about how you use it unless you turn on “Help improve IV Studio”, which counts only opens and renders, never prompts, pictures or files.' },
       { text: 'Effects on any clip in the editor (right-click → Effects…): dubbing into any language with new lip movement, clean plates, day to night, water, SDR to HDR, background removal and smooth or slow motion. Built on Freefield’s apps.' },
       { text: 'Workflows → Effects turns a photo into an effect clip, a transformation or a transition. Audio → Sounds makes sound effects, ambiences and loops with Stable Audio 3, ready for A2.' },
       { text: 'Picture tools in Create → Image: inpaint by painting over a part, relight, remove the background, upscale 2× or 4×, and depth or normal maps.' },

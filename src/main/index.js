@@ -9,14 +9,16 @@ import { EXTRA_BIN, harnessStatus } from '../service/harness'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS, MODAL_VERSION } from '../service/cloud'
 import { SetupProgress, about } from '../service/setupprogress'
-import { RunPod, GPUS as RUNPOD_GPUS } from '../service/runpod'
+import { RunPod, GPUS as RUNPOD_GPUS, VOLUME_PER_GB_MONTH } from '../service/runpod'
+import { CloudPrep, cloudCatalog, roomOnVolume } from '../service/cloudprep'
+import { CloudVoiceEngine } from '../service/cloudvoice'
 import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
 import { isSpeed } from '../service/speed'
 import { comboOptions } from '../service/setup'
 import { managerReq } from '../service/comfyupdate'
 import { comfyHome, comfyProcesses, comfyUp, findComfyElsewhere, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launcherFor, launchersIn, noteLaunch, recentLaunch, sameComfy, stopComfy, waitDown, waitUp } from '../service/comfylauncher'
 import { ComfyInstaller, checkFolder, latestAsset, pickBuild, suggestFolder } from '../service/comfyinstall'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { Edits, FORMATS, LOUDNESS } from '../service/edits'
 import { EditGen } from '../service/editgen'
 import { Productions } from '../service/productions'
@@ -53,6 +55,8 @@ import { Comfy } from '../service/comfy'
 import { afterPrompt, getBalance } from '../service/comfyaccount'
 import { infoFor, priceGraph } from '../service/pricing'
 import { checkKey as checkComfyCloudKey, COMFY_CLOUD, summarise as summariseComfyCloud } from '../service/comfycloud'
+import { Usage } from '../service/usage'
+import { estimate, estimateLine, samples, shapeOfPlan } from '../service/timing'
 
 // An app opened from Finder gets a short PATH (/usr/bin:/bin:/usr/sbin:/sbin), so the tools IV Studio runs (Claude
 // Code, Codex, Ollama, git) and what they need (node) would not be found; add the usual install folders.
@@ -125,7 +129,26 @@ let sounds = null
 let images = null
 let civitai = null
 let runpodWake = null // starts a RunPod pod when the last one idled off (set up with the cloud handlers)
+let cloudPrepFor = null // (provider, comfy) => the CloudPrep for the person's own cloud (set up with the cloud handlers)
+let cloudVoice = null // () => the voice engine on the person's own cloud while rendering there, else null (cloud handlers)
 const pending = new Set() // job ids the window is waiting on
+// Opt-in usage counting (src/service/usage.js): a render is counted when the window's watch sees it start and
+// finish. Jobs that were already over when they were first seen (an old shot opened again) are never counted.
+let usage = null
+const OVER = ['success', 'error', 'cancelled']
+const countedStarts = new Set()
+const usageKind = (kind) => (String(kind).startsWith('picture') ? 'image' : String(kind).includes('sequence') ? 'sequence' : kind)
+function noteJob(before, job) {
+  if (!usage || !job?.id || OVER.includes(before)) return
+  if (!countedStarts.has(job.id)) {
+    countedStarts.add(job.id)
+    if (Date.now() - Date.parse(job.createdAt) < 10 * 60 * 1000) usage.count('render_started', usageKind(job.kind))
+  }
+  if (job.status === 'success') {
+    usage.count('render_finished', usageKind(job.kind))
+    usage.flush()
+  }
+}
 let ranker = null // ranks finished previews (ranking.js), set up with the services it reads
 let reviewer = null // reviews a take against its brief (review.js)
 
@@ -163,6 +186,13 @@ function makeStudio() {
       : { comfyUrl: s.comfyUrl }
   studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), models: s.models, ...cloud })
   if (onRunPod) studio.comfy.waker = () => runpodWake?.()
+  // the person's own cloud: model lists without a GPU, and a render's models and LoRAs put there first (cloudprep.js)
+  if (s.target === 'cloud' && (onRunPod || ((s.cloudProvider || 'modal') === 'modal' && s.cloud?.url))) {
+    const comfy = studio.comfy
+    let prep = null
+    const get = () => (prep ||= cloudPrepFor?.(onRunPod ? 'runpod' : 'modal', comfy) || null)
+    comfy.prep = { objectInfo: (cls) => (get() ? get().objectInfo(cls) : comfy.realObjectInfo(cls)), prepare: (g) => get()?.prepare(g) }
+  }
   studio.comfy.folders = comfyFolders(s, INCOGNITO)
   if (trainings) trainings.studio = studio
   if (replace) replace.studio = studio
@@ -193,7 +223,12 @@ async function pump() {
   try {
     for (const id of [...pending]) {
       try {
+        let before = null
+        try {
+          before = studio.getJob(id).status
+        } catch {}
         const job = await studio.refreshJob(id)
+        noteJob(before, job)
         send('jobs:update', job)
         if (['success', 'error', 'cancelled'].includes(job.status)) pending.delete(id)
         // a SeedVR2 finish starts its enhance step (Studio.refreshJob): watch that too
@@ -413,10 +448,59 @@ app.whenReady().then(() => {
   handle('app:info', () => ({ version: app.getVersion(), platform: process.platform, dataDir: DATA, dataSource: LOCATION.missing ? 'default' : LOCATION.source, portable: PORTABLE, mcp: mcpCommand(), testCopy: TEST_COPY, incognito: INCOGNITO, links }))
   // The window never sees the Comfy.org or Civitai key, only whether one is saved.
   const publicSettings = (s) => {
-    const { comfyApiKey, cloudToken, civitaiKey, runpodKey, runpodToken, comfyCloudKey: _ck, ...rest } = s
-    return { ...rest, hasComfyKey: !!comfyApiKey, hasCloudToken: !!cloudToken, hasCivitaiKey: !!civitaiKey, hasRunpodKey: !!runpodKey }
+    const { comfyApiKey, cloudToken, civitaiKey, runpodKey, runpodToken, comfyCloudKey: _ck, hfToken, ...rest } = s
+    return { ...rest, hasComfyKey: !!comfyApiKey, hasCloudToken: !!cloudToken, hasCivitaiKey: !!civitaiKey, hasRunpodKey: !!runpodKey, hasHfToken: !!hfToken }
   }
   const comfyKey = () => unseal(readSettings(BASE).comfyApiKey)
+  // Anonymous usage counting and the cloud beta signup (usage.js): both off until the person says yes. A test copy
+  // only ever sends to an address given to it (IV_STUDIO_USAGE_URL, IV_STUDIO_BETA_URL), never the real one.
+  usage = new Usage({
+    dataDir: BASE,
+    version: app.getVersion(),
+    platform: process.platform,
+    settings: () => ({ ...readSettings(BASE), incognito: INCOGNITO }),
+    save: (patch) => writeSettings(patch, BASE),
+    links: TEST_COPY ? { usageUrl: process.env.IV_STUDIO_USAGE_URL, betaUrl: process.env.IV_STUDIO_BETA_URL } : links
+  })
+  handle('usage:status', () => usage.status())
+  handle('usage:set', (on) => usage.setChoice(!!on))
+  handle('usage:preview', () => usage.preview())
+  handle('usage:joinBeta', (email) => usage.joinBeta(email))
+  usage.count('app_opened')
+  setTimeout(() => usage.flush(), 20000)
+  setInterval(() => usage.flush(), 6 * 60 * 60 * 1000)
+  // How long a hunt or a finish will take here, from this machine's own finished renders (timing.js).
+  let timed = { at: 0, dir: null, history: [] }
+  handle('timing:estimate', (want) => {
+    const s = readSettings(BASE)
+    const where = s.target === 'cloud' ? 'cloud' : 'local'
+    const plan = shapeOfPlan({ ...(want || {}), where })
+    if (!plan) return null
+    const dir = path.join(DATA, 'jobs')
+    if (Date.now() - timed.at > 30000 || timed.dir !== dir) {
+      let jobs = []
+      try {
+        jobs = fs
+          .readdirSync(dir)
+          .filter((f) => f.endsWith('.json'))
+          .map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs }))
+          .sort((a, b) => b.t - a.t)
+          .slice(0, 200)
+          .map(({ f }) => {
+            try {
+              return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))
+            } catch {
+              return null
+            }
+          })
+      } catch {}
+      timed = { at: Date.now(), dir, history: samples(jobs) }
+    }
+    const provider = s.cloudProvider || 'modal'
+    const perHour = where !== 'cloud' ? null : provider === 'runpod' ? RUNPOD_GPUS.find((g) => g.id === s.runpod?.gpu)?.perHour ?? null : provider === 'modal' ? GPUS.find((g) => g.id === s.cloud?.gpu)?.perHour ?? null : null
+    const e = estimate(plan, timed.history, { perHour })
+    return e ? { ...e, where, line: estimateLine(e, { where }) } : null
+  })
   handle('settings:get', () => publicSettings(readSettings(BASE)))
   handle('settings:setComfyKey', (key) => {
     const k = String(key || '').trim()
@@ -533,7 +617,7 @@ app.whenReady().then(() => {
   // Crop and trim references before they go to H3 (Create's media editor).
   const mediaTools = new MediaTools({ dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
   // ---------- Audio: voices (IV Studio's own engine speaks: VoxCPM2 and Whisper in its data folder) ----------
-  voices = new Voices({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpeg: edits.ffmpeg, onLog: (line) => send('voices:log', line), comfy: () => (readSettings(BASE).target === 'cloud' ? null : studio.comfy) })
+  voices = new Voices({ dataDir: DATA, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')), ffmpeg: edits.ffmpeg, onLog: (line) => send('voices:log', line), comfy: () => (readSettings(BASE).target === 'cloud' ? null : studio.comfy), cloud: () => cloudVoice?.() || null })
   handle('voices:status', () => voices.status())
   handle('voices:setup', () => voices.setup())
   handle('voices:list', async () => (await catalog?.attachVoices().catch(() => {}), voices.list()))
@@ -1032,7 +1116,8 @@ app.whenReady().then(() => {
       busy: cloudBusy,
       // the last (or current) setup's progress, for a window that opens or reloads mid-setup
       setup: setupNow?.snapshot() || null,
-      hasToken: !!s.cloudToken
+      hasToken: !!s.cloudToken,
+      hasHfToken: !!s.hfToken
     }
   })
   handle('cloud:provider', (p) => {
@@ -1102,9 +1187,9 @@ app.whenReady().then(() => {
           // IV_STUDIO_FAKE_SETUP (test copies only): replays a setup's output quickly, so the progress view can be
           // checked without touching a Modal account
           if (process.env.IV_STUDIO_FAKE_SETUP) return fakeSetup(t, process.env.IV_STUDIO_FAKE_SETUP)
-          const { url, token } = await cloud.deploy({ gpu, idleSeconds })
+          const { url, token } = await cloud.deploy({ gpu, idleSeconds, hf: hfToken() })
           writeSettings({ cloudToken: seal(token) }, BASE)
-          saveCloud({ url, gpu, idleSeconds, workspace: await cloud.workspace(), deployedAt: new Date().toISOString() })
+          saveCloud({ url, gpu, idleSeconds, workspace: await cloud.workspace(), deployedAt: new Date().toISOString(), stamp: cloudStamp(), hfSaved: !!hfToken() })
           t.start('models', 'Checking which models your storage already has')
           await cloud.fetchModels()
           saveCloud({ modelsAt: new Date().toISOString() })
@@ -1152,7 +1237,7 @@ app.whenReady().then(() => {
     try {
       const res = resourcesDir(path.join(app.getAppPath(), 'resources'))
       const m = JSON.parse(fs.readFileSync(path.join(res, 'models.json'), 'utf8')).models.filter((x) => !x.optional)
-      const extra = JSON.parse(fs.readFileSync(path.join(res, 'cloud', 'cloud.json'), 'utf8')).extraModels || []
+      const extra = (JSON.parse(fs.readFileSync(path.join(res, 'cloud', 'cloud.json'), 'utf8')).extraModels || []).filter((x) => x.required)
       return [...m, ...extra].map((x) => ({ id: x.id, label: x.label, size: x.size || 0 }))
     } catch {
       return []
@@ -1210,9 +1295,9 @@ app.whenReady().then(() => {
       let url = current ? r.url : (await runpod.pods())[0]?.url
       if (!url) {
         send('cloud:log', 'Starting a cloud GPU on RunPod…')
-        const pod = await runpod.createPod({ gpu: r.gpu || RUNPOD_GPUS[0].id, volume: { id: r.volumeId, dataCenter: r.dataCenter }, token: runpodToken(), idleSeconds: r.idleSeconds || 300 })
+        const pod = await runpod.createPod({ gpu: r.gpu || RUNPOD_GPUS[0].id, volume: { id: r.volumeId, dataCenter: r.dataCenter }, token: runpodToken(), idleSeconds: r.idleSeconds || 300, hf: hfToken() })
         url = pod.url
-        saveRunpod({ url, podId: pod.id, podGpu: pod.gpu })
+        saveRunpod({ url, podId: pod.id, podGpu: pod.gpu, podStamp: cloudStamp() })
       } else saveRunpod({ url })
       await runpod.waitReady(url)
       return url
@@ -1223,6 +1308,251 @@ app.whenReady().then(() => {
     if (url && (await runpod.health(url))?.stage === 'ready') return null
     return wakeRunpod()
   }
+  // ---------- the person's own cloud: models on first use, LoRA uploads, the Hugging Face token (cloudprep.js) ----------
+  const cloudRes = resourcesDir(path.join(app.getAppPath(), 'resources'))
+  const readRes = (f) => JSON.parse(fs.readFileSync(path.join(cloudRes, f), 'utf8'))
+  const cloudCatalogList = cloudCatalog(readRes('models.json'), readRes(path.join('cloud', 'cloud.json')))
+  // what the cloud image is built from: cloud.json and the node packs (runpod_boot.py's stamp works the same way)
+  const cloudStamp = () =>
+    createHash('sha256')
+      .update(fs.readFileSync(path.join(cloudRes, 'cloud', 'cloud.json')))
+      .update(JSON.stringify(readRes('models.json').node_packs.filter((p) => !p.windowsOnly && p.cloud !== false)))
+      .digest('hex')
+      .slice(0, 16)
+  const hfToken = () => unseal(readSettings(BASE).hfToken)
+  // The window answers "download these models into your cloud storage?" (cloud:ask, then cloud:answer). No window: no.
+  const asks = new Map()
+  const askWindow = (details) =>
+    new Promise((resolve) => {
+      if (!win || win.isDestroyed()) return resolve(false)
+      const id = randomBytes(6).toString('hex')
+      asks.set(id, resolve)
+      send('cloud:ask', { id, ...details })
+    })
+  handle('cloud:answer', ({ id, ok }) => {
+    asks.get(id)?.(!!ok)
+    asks.delete(id)
+    return true
+  })
+  // This PC's LoRAs and RefMods: its ComfyUI's model folders, and the data folder's models/ (a PC without ComfyUI)
+  const localFolders = async (kind) => {
+    const own = [path.join(DATA, 'models', kind)]
+    try {
+      const list = await fetch(`${readSettings(BASE).comfyUrl}/experiment/models`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json())
+      return [...(list.find((f) => f.name === kind)?.folders || []), ...own]
+    } catch {
+      return own
+    }
+  }
+  const localFile = async (kind, name) => {
+    const rel = kind === 'refmods' ? `${name}.safetensors` : name
+    for (const d of await localFolders(kind)) {
+      const f = path.join(d, ...rel.split('/'))
+      if (fs.existsSync(f)) return f
+    }
+    return null
+  }
+  const listModels = (dir, ext = /\.(safetensors|gguf|sft|pth|pt|ckpt|bin)$/i) => {
+    const out = []
+    const walk = (d, rel) => {
+      for (const e of fs.existsSync(d) ? fs.readdirSync(d, { withFileTypes: true }) : []) {
+        if (e.isDirectory()) walk(path.join(d, e.name), rel ? `${rel}/${e.name}` : e.name)
+        else if (ext.test(e.name)) out.push(rel ? `${rel}/${e.name}` : e.name)
+      }
+    }
+    walk(dir, '')
+    return out
+  }
+  const localNames = async () => {
+    const [loraDirs, refDirs] = await Promise.all([localFolders('loras'), localFolders('refmods')])
+    return {
+      loras: [...new Set(loraDirs.flatMap((d) => listModels(d)))],
+      refmods: [...new Set(refDirs.flatMap((d) => listModels(d, /\.safetensors$/i).map((f) => f.replace(/\.safetensors$/i, ''))))]
+    }
+  }
+  // Modal: the download runs on a CPU function. A running GPU container doesn't see files added after it started,
+  // so an idle one is stopped once the volume changed (the next request starts a fresh one).
+  const modalProvider = (prep) => ({
+    name: 'modal',
+    list: () => cloud.listFiles(),
+    async download(entries, onEvent) {
+      const c = readSettings(BASE).cloud || {}
+      if (c.stamp !== cloudStamp()) throw new Error('Your Modal cloud was set up by an older IV Studio. Press Set up again on the Cloud page (your models stay), then try again.')
+      if (c.hfSavedFor !== (readSettings(BASE).hfTokenAt || null)) {
+        await cloud.saveHfToken(hfToken())
+        saveCloud({ hfSaved: !!hfToken(), hfSavedFor: readSettings(BASE).hfTokenAt || null })
+      }
+      await cloud.fetchModels(
+        entries.map((e) => e.id),
+        {
+          onLine: (line) => {
+            const m = line.match(/^progress (\S+) (\d+)% of (\d+)/)
+            if (m) onEvent({ id: m[1], label: entries.find((e) => e.id === m[1])?.label, percent: Number(m[2]), total: Number(m[3]), index: entries.findIndex((e) => e.id === m[1]) + 1, count: entries.length })
+          }
+        }
+      )
+    },
+    upload: (file, remote) => cloud.uploadModel(file, remote),
+    async changed() {
+      const running = await cloud.containers().catch(() => [])
+      if (!running.length) return
+      // a render running there finishes first; ComfyUI is asked through the gate (the container is up)
+      const comfy = prep().comfy || studio?.comfy
+      for (let i = 0; i < 180; i++) {
+        const q = await comfy?.queue().catch(() => null)
+        if (!q || (!q.queue_running?.length && !q.queue_pending?.length)) break
+        send('cloud:prep', { state: 'waiting', detail: 'Waiting for the render in the cloud to finish, so the GPU can restart with the new files' })
+        await new Promise((r) => setTimeout(r, 10000))
+      }
+      await cloud.stopGpu()
+    }
+  })
+  // RunPod: downloads and uploads go through the running pod's gate, onto the network volume, which ComfyUI sees at
+  // once. A pod from an older IV Studio is replaced first: it doesn't have the routes or the new model folders.
+  const freshPod = async () => {
+    const r = readSettings(BASE).runpod || {}
+    if (r.podStamp !== cloudStamp() && r.url) {
+      send('cloud:log', 'Restarting the cloud GPU with this version of IV Studio…')
+      await runpod.stopAll()
+      saveRunpod({ url: null, podId: null })
+    }
+    const url = await wakeRunpod()
+    if (studio?.comfy?.prep && studio.comfy.token) studio.comfy.url = url
+    return url
+  }
+  const runpodProvider = (prep) => ({
+    name: 'runpod',
+    list: async () => runpod.files(await freshPod(), runpodToken()),
+    async download(entries, onEvent) {
+      const url = await freshPod()
+      await runpod.fetchModels(url, runpodToken(), entries.map((e) => e.id), { hf: hfToken(), onProgress: (f) => f.current && onEvent(f.current) })
+    },
+    upload: async (file, remote) => runpod.uploadModel(await freshPod(), runpodToken(), file, remote),
+    async room(bytes) {
+      const r = readSettings(BASE).runpod || {}
+      const vol = r.volumeId ? await runpod.volume(r.volumeId) : null
+      if (!vol?.size) return null
+      return roomOnVolume({ sizeGb: vol.size, usedBytes: prep().usedBytes(), bytes, perGbMonth: VOLUME_PER_GB_MONTH })
+    },
+    grow: (toGb) => runpod.growVolume(readSettings(BASE).runpod.volumeId, toGb)
+  })
+  const preps = {}
+  cloudPrepFor = (which, comfy) => {
+    if (preps[which]) {
+      if (comfy) preps[which].comfy = comfy
+      return preps[which]
+    }
+    let self = null
+    self = new CloudPrep({
+      dataDir: DATA,
+      provider: which === 'runpod' ? runpodProvider(() => self) : modalProvider(() => self),
+      catalog: cloudCatalogList,
+      stamp: cloudStamp(),
+      ask: askWindow,
+      localFile,
+      localNames,
+      hfToken,
+      fetchInfo: () => (self.comfy || studio.comfy).realObjectInfo(),
+      onEvent: (e) => send('cloud:prep', e)
+    })
+    self.comfy = comfy
+    return (preps[which] = self)
+  }
+  // ---------- voices on the person's own cloud (cloudvoice.js, resources/cloud/voicehost.py) ----------
+  const VOICE_BYTES = 12e9 // the voice engine's Python (about 5 GB) and its models (6.6 GB)
+  const voiceReady = (which) => {
+    const s = readSettings(BASE)
+    // Modal's environment is part of the image: an image built before voices came in has none
+    return which === 'runpod' ? !!s.runpod?.voiceAt : !!(s.cloud?.voiceAt && s.cloud?.stamp === cloudStamp())
+  }
+  async function setUpCloudVoices(which) {
+    const log = (line) => send('voices:log', line)
+    if (which === 'modal') {
+      const c = readSettings(BASE).cloud || {}
+      if (c.stamp !== cloudStamp()) throw new Error('Your Modal cloud was set up by an older IV Studio. Press Set up again on the Cloud page (your models stay), then set up voices.')
+      log('Downloading the voice models into your Modal storage (about 6.6 GB, once, on a CPU)…')
+      await cloud.fetchVoice()
+      // a GPU container that's up doesn't see files added after it started
+      await cloudPrepFor('modal', null).provider.changed?.()
+      saveCloud({ voiceAt: new Date().toISOString() })
+      log('Voices are ready in the cloud.')
+      return
+    }
+    // RunPod: onto the network volume, by the running pod; the volume grows first only with the person's OK
+    const prep = cloudPrepFor('runpod', null)
+    const grow = await prep.provider.room(VOICE_BYTES).catch(() => null)
+    if (grow) {
+      const ok = await askWindow({ downloads: [{ id: 'voice', label: 'The voice engine (VoxCPM2, Whisper and their Python)', size: VOICE_BYTES }], bytes: VOICE_BYTES, grow, provider: 'runpod' })
+      if (!ok) throw new Error('Voices weren’t set up: your RunPod volume needs more room for them.')
+      await prep.provider.grow(grow.toGb)
+    }
+    log('Starting a cloud GPU to set up voices on your RunPod volume…')
+    const url = await freshPod()
+    const c = new Comfy(url, 'iv-studio-voices', runpodToken())
+    let st = await c.req('/iv/voice/setup', { method: 'POST', json: {}, timeout: 60000 })
+    let said = ''
+    while (!st.installed) {
+      if (st.setup?.state === 'error') throw new Error(`Setting up voices stopped: ${st.setup.error}`)
+      const line = st.setup?.detail ? `Voices: ${st.setup.detail}${st.setup.steps ? ` (${st.setup.step} of ${st.setup.steps})` : ''}…` : ''
+      if (line && line !== said) log((said = line))
+      await new Promise((r) => setTimeout(r, 5000))
+      st = await c.req('/iv/voice', { timeout: 60000 }).catch(() => st)
+    }
+    prep.record({ 'voice/engine': VOICE_BYTES })
+    saveRunpod({ voiceAt: new Date().toISOString() })
+    log('Voices are ready in the cloud.')
+  }
+  const cloudVoices = {}
+  cloudVoice = () => {
+    const s = readSettings(BASE)
+    const which = s.target === 'cloud' ? s.cloudProvider || 'modal' : null
+    if (which !== 'modal' && which !== 'runpod') return null
+    return (cloudVoices[which] ||= new CloudVoiceEngine({ provider: which, comfy: () => studio.comfy, ready: () => voiceReady(which), setUp: () => setUpCloudVoices(which) }))
+  }
+  // IV_STUDIO_FAKE_CLOUD_PREP (test copies only): a few seconds after the window opens, a stand-in cloud asks to
+  // download Qwen Image 2.1 (growing a RunPod volume) and plays the download, so the question and the progress card
+  // can be checked without a cloud account. Nothing is downloaded and no account is touched.
+  if (TEST_COPY && process.env.IV_STUDIO_FAKE_CLOUD_PREP) {
+    setTimeout(async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+      const fake = new CloudPrep({
+        dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'iv-fake-prep-')),
+        provider: {
+          name: 'runpod',
+          room: async (bytes) => roomOnVolume({ sizeGb: 100, usedBytes: 62e9, bytes, perGbMonth: VOLUME_PER_GB_MONTH }),
+          grow: async () => {},
+          async download(entries, onEvent) {
+            for (const [i, e] of entries.entries()) for (let p = 0; p <= 100; p += 10) (onEvent({ id: e.id, label: e.label, percent: p, index: i + 1, count: entries.length }), await wait(250))
+          },
+          upload: async () => wait(800)
+        },
+        catalog: cloudCatalogList,
+        stamp: 'fake',
+        ask: askWindow,
+        localFile: async () => path.join(cloudRes, 'cloud', 'cloud.json'),
+        hfToken: () => null,
+        fetchInfo: async () => ({}),
+        onEvent: (e) => send('cloud:prep', e)
+      })
+      const graph = { 1: { class_type: 'UNETLoader', inputs: { unet_name: 'Qwen/qwen_image_2.1_int8_convrot.safetensors' } }, 2: { class_type: 'CLIPLoader', inputs: { clip_name: 'qwen3vl_8b_int8_convrot.safetensors' } }, 3: { class_type: 'VAELoader', inputs: { vae_name: 'qwen_image_2.1_vae_bf16.safetensors' } }, 4: { class_type: 'LoraLoaderModelOnly', inputs: { lora_name: 'Styles/Test.safetensors' } } }
+      const r = await fake.prepare(graph).then((x) => `done: ${JSON.stringify(x)}`, (e) => `stopped: ${e.code || ''} ${e.message}`)
+      console.log(`[fake cloud prep] ${r}`)
+      send('cloud:log', `[fake cloud prep] ${r}`)
+    }, Number(process.env.IV_STUDIO_FAKE_CLOUD_PREP) || 6000)
+  }
+  // The Hugging Face token: only for gated model files (Flux.2 Klein 9B, Flux 3 Klein). Checked with Hugging Face
+  // before it's kept; on Modal it's saved in the workspace with the next download.
+  handle('cloud:hfToken', async (token) => {
+    const k = String(token || '').trim()
+    if (!k) return (writeSettings({ hfToken: null, hfTokenAt: new Date().toISOString() }, BASE), { hasToken: false })
+    if (!keysSafe()) throw new Error(KEY_STORE_MISSING)
+    const res = await fetch('https://huggingface.co/api/whoami-v2', { headers: { Authorization: `Bearer ${k}` }, signal: AbortSignal.timeout(20000) }).catch(() => null)
+    if (!res) throw new Error('Couldn’t reach Hugging Face to check the token.')
+    if (!res.ok) throw new Error('Hugging Face refused that token. Make a Read token at huggingface.co → Settings → Access Tokens.')
+    const who = await res.json().catch(() => ({}))
+    writeSettings({ hfToken: seal(k), hfTokenAt: new Date().toISOString() }, BASE)
+    return { hasToken: true, name: who?.name || null }
+  })
   // Each character's LoRA and the RefMods it uses, found through this PC's ComfyUI model folders.
   async function characterFiles() {
     const local = await fetch(`${readSettings(BASE).comfyUrl}/experiment/models`).then((r) => r.json())
@@ -1272,6 +1602,11 @@ app.whenReady().then(() => {
       }
       t.done('characters', done.length ? `${done.length} file${done.length === 1 ? '' : 's'} uploaded` : 'No character files to upload')
       saveRunpod({ charactersAt: new Date().toISOString() })
+      // the pod is up: keep its model lists, so pages can show what works without starting a GPU later
+      try {
+        const info = await new Comfy(url, 'iv-studio-setup', runpodToken()).realObjectInfo()
+        cloudPrepFor('runpod', null).remember(info)
+      } catch {}
       send('cloud:log', `Ready. ${done.length} character file${done.length === 1 ? '' : 's'} uploaded. The GPU shuts itself off after ${Math.round(idleSeconds / 60)} idle minutes.`)
       return readSettings(BASE).runpod
     }))
@@ -1337,7 +1672,7 @@ app.whenReady().then(() => {
   })
   handle('prompts:pull', (model) => pullModel(model, (ev) => send('prompts:pull', { model, ...ev })))
   handle('settings:set', (patch) => {
-    const { comfyApiKey, cloudToken, civitaiKey, cloud, target, cloudProvider, runpod, runpodKey, runpodToken, comfyCloudKey: _ck, comfycloud, ...safe } = patch || {}
+    const { comfyApiKey, cloudToken, civitaiKey, cloud, target, cloudProvider, runpod, runpodKey, runpodToken, comfyCloudKey: _ck, comfycloud, hfToken: _hf, hfTokenAt: _hfAt, ...safe } = patch || {}
     if ('ollamaUrl' in safe) {
       try {
         safe.ollamaUrl = normalizeOllamaUrl(safe.ollamaUrl)

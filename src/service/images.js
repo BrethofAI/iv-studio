@@ -322,8 +322,8 @@ export class Images {
   // What each family can do on this ComfyUI: its checkpoints, the text encoder and VAE found for it, what's
   // missing, and whether it can edit.
   async status() {
-    // a GPU of the person's own (Modal, RunPod) has no picture models; Comfy Cloud has its own, read like this PC's
-    if (this.studio.comfy.remote && !this.studio.comfy.hosted) return { remote: true, families: IMAGE_FAMILIES.map((f) => ({ ...strip(f), ready: false, models: [], missing: [] })) }
+    // the person's own cloud (Modal, RunPod) answers from its saved lists plus the models it can download (one pinned
+    // model per family, cloud.json); Comfy Cloud has its own, read like this PC's
     let info
     try {
       info = await this.studio.comfy.objectInfo()
@@ -377,7 +377,6 @@ export class Images {
     const text = String(prompt || '').trim()
     if (!text) throw new Error(mode === 'edit' ? 'Say what to change in the picture.' : 'Describe the picture first.')
     const st = await this.status()
-    if (st.remote) throw new Error('Pictures render on this PC’s ComfyUI or on Comfy Cloud. Switch on the Cloud page to make them.')
     if (st.error) throw new Error(st.error)
     const fam = st.families.find((f) => f.models.includes(model)) || st.families.find((f) => f.id === familyOfModel(String(model || ''))?.id)
     if (!fam) throw new Error(`"${model}" isn't an image model IV Studio knows. Pick one from list_image_models.`)
@@ -448,7 +447,6 @@ export class Images {
   // ---------- Tools: one-step fixes for a picture (picturetools.js) ----------
   // Which tools this ComfyUI can run, and what each still needs (manifest ids, downloaded on Setup or here).
   async toolsStatus() {
-    if (this.studio.comfy.remote && !this.studio.comfy.hosted) return { remote: true, tools: PICTURE_TOOLS.map((t) => ({ ...t, ready: false, missing: [] })) }
     let info, st
     try {
       ;[info, st] = await Promise.all([this.studio.comfy.objectInfo(), this.status()])
@@ -497,7 +495,7 @@ export class Images {
     if (!t) throw new Error(`Tool is one of ${PICTURE_TOOLS.map((x) => x.id).join(', ')}.`)
     if (!image || !fs.existsSync(image)) throw new Error('Pick the picture first.')
     const st = await this.toolsStatus()
-    if (st.remote) throw new Error('Picture tools run on this PC’s ComfyUI. Switch to "This PC" on the Cloud page.')
+    if (st.error) throw new Error(st.error)
     if (st.error) throw new Error(st.error)
     const ts = st.tools.find((x) => x.id === tool)
     if (!ts.ready) throw new Error(ts.missing?.length ? `${t.label} needs ${ts.missing.map((m) => m.label).join(', ')}. Download on Setup.` : ts.note || `${t.label} can’t run on this ComfyUI.`)

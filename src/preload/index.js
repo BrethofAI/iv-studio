@@ -16,6 +16,9 @@ const on = (channel) => (cb) => {
 
 contextBridge.exposeInMainWorld('ivstudio', {
   app: { info: call('app:info') },
+  // opt-in usage counting and the cloud beta signup (src/service/usage.js); time estimates (src/service/timing.js)
+  usage: { status: call('usage:status'), set: call('usage:set'), preview: call('usage:preview'), joinBeta: call('usage:joinBeta') },
+  timing: { estimate: call('timing:estimate') },
   data: { info: call('data:info'), size: call('data:size'), choose: call('data:choose'), move: call('data:move'), restart: call('data:restart'), removeOld: call('data:removeOld'), open: call('data:open'), onProgress: on('data:progress') },
   learn: { openGuide: call('learn:openGuide') },
   update: { state: call('update:state'), check: call('update:check'), install: call('update:install'), onChange: on('update:changed') },
@@ -218,7 +221,12 @@ contextBridge.exposeInMainWorld('ivstudio', {
     wake: call('cloud:wake'),
     stop: call('cloud:stop'),
     usage: call('cloud:usage'),
-    onLog: on('cloud:log')
+    onLog: on('cloud:log'),
+    // models a cloud render needs: the question (onAsk, then answer) and how the download goes (onPrep)
+    onAsk: on('cloud:ask'),
+    answer: call('cloud:answer'),
+    onPrep: on('cloud:prep'),
+    hfToken: call('cloud:hfToken')
   },
   prompts: { status: call('prompts:status'), write: call('prompts:write'), story: call('prompts:story'), pull: call('prompts:pull'), onPull: on('prompts:pull') },
   setup: {

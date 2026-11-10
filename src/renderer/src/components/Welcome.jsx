@@ -7,6 +7,8 @@ import { StepHead } from './CreateKit'
 import { startTour } from '../tours'
 import { setSimpleWords, simpleWords } from '../words'
 import { highContrast, setContrast } from '../a11y'
+import { UsageAsk } from './Privacy'
+import { openStarter } from './Starters'
 
 // The welcome wizard (Check my PC): opens on first launch, and again from Settings. It reads this computer
 // (hardware:scan; nothing leaves the PC), says plainly what it can do, suggests a way of working (this PC, the
@@ -66,6 +68,12 @@ export default function Welcome({ onClose, go, notify, first }) {
   const [hc, setHc] = useState(highContrast)
   const contrast = (on) => (setHc(on), setContrast(on))
   const knows = (id) => (setLevel(id), words(id === 'new'))
+  // anonymous usage counting (Privacy.jsx): off unless they say yes here; an earlier yes stays yes
+  const [count, setCount] = useState(false)
+  const countWas = useRef(null)
+  useEffect(() => {
+    window.ivstudio.usage.status().then((s) => ((countWas.current = s.choice), setCount(s.choice === 'on')), () => {})
+  }, [])
   const body = useRef(null)
   const at = STEPS.findIndex(([id]) => id === step)
   const stepRef = useRef(step)
@@ -114,6 +122,8 @@ export default function Welcome({ onClose, go, notify, first }) {
     } catch (e) {
       notify?.(e.message)
     }
+    // the answer to "Help improve IV Studio?" is saved here, once they've seen the question
+    if (countWas.current === null || (countWas.current === 'on') !== count) await window.ivstudio.usage.set(count).catch(() => {})
     window.dispatchEvent(new CustomEvent('iv:settings'))
     onClose()
     if (target === 'tour') setTimeout(() => startTour('full'), 400)
@@ -192,7 +202,7 @@ export default function Welcome({ onClose, go, notify, first }) {
             {step === 'pc' && rec && <YourPc rec={rec} scan={data.scan} />}
             {step === 'way' && rec && <Way rec={rec} way={way} setWay={setWay} prefs={prefs} setPrefs={setPrefs} writer={writer} setWriter={setWriter} installs={installs} scan={data.scan} notify={notify} />}
             {step === 'get' && rec && <Get rec={rec} way={way} pick={pick} setPick={setPick} packs={packs} setPacks={setPacks} installs={installs} scan={data.scan} started={started} download={download} startComfy={startComfy} comfyStarting={comfyStarting} rescan={scan} notify={notify} />}
-            {step === 'done' && rec && <Done rec={rec} way={way} prefs={prefs} writer={writer} started={started} onTour={() => finish('tour')} />}
+            {step === 'done' && rec && <Done rec={rec} way={way} prefs={prefs} writer={writer} started={started} onTour={() => finish('tour')} count={count} setCount={setCount} />}
           </div>
         </div>
 
@@ -224,7 +234,8 @@ export default function Welcome({ onClose, go, notify, first }) {
                     Set up the cloud{way === 'cloud' ? ' →' : ''}
                   </button>
                 )}
-                <button className={`btn ${way === 'cloud' ? '' : 'btn-primary'}`} onClick={() => finish('create')}>
+                {/* Create opens with the first starter filled in (starters.js), ready to hunt */}
+                <button className={`btn ${way === 'cloud' ? '' : 'btn-primary'}`} onClick={() => finish('create').then(() => setTimeout(() => openStarter('first'), 600))}>
                   Make your first shot{way === 'cloud' ? '' : ' →'}
                 </button>
               </>
@@ -607,7 +618,7 @@ function Get({ rec, way, pick, setPick, packs, setPacks, installs, scan, started
   )
 }
 
-function Done({ rec, way, prefs, writer, started, onTour }) {
+function Done({ rec, way, prefs, writer, started, onTour, count, setCount }) {
   const w = WAYS.find(([id]) => id === way)
   const lines = [
     ['Renders', w ? w[2] : way],
@@ -628,7 +639,7 @@ function Done({ rec, way, prefs, writer, started, onTour }) {
           </div>
         ))}
       </dl>
-      <p className="wel-lede">{way === 'local' ? 'Make your first shot: write an idea, hunt a few takes and finish the one you like.' : 'Set up the cloud first (one sign-in), then make your first shot.'}</p>
+      <p className="wel-lede">{way === 'local' ? 'Make your first shot: it opens with an example already written, so you can press Hunt, pick the take you like and finish it. Or write your own.' : 'Set up the cloud first (one sign-in), then make your first shot.'}</p>
       {/* the full tour (tours.js full): page by page, and how to get each page's own tour */}
       <div className="wel-tour">
         <span className="wel-tour-q" aria-hidden="true">?</span>
@@ -640,6 +651,7 @@ function Done({ rec, way, prefs, writer, started, onTour }) {
           Take the tour →
         </button>
       </div>
+      <UsageAsk on={count} onChange={setCount} />
     </section>
   )
 }

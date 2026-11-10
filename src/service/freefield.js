@@ -274,7 +274,6 @@ export class FreefieldApps {
   async status(fx) {
     const spec = CLIP_FX[fx]
     const studio = this.studio()
-    if (studio.comfy.remote && !studio.comfy.hosted) return { fx, ready: false, remote: true }
     const info = await studio.comfy.objectInfo()
     const graph = withoutPromptWriter(loadApp(this.resourcesDir, spec.app).graph)
     const missingNodes = [...new Set(Object.values(graph).map((n) => n.class_type).filter((c) => !info[c]))]
@@ -354,7 +353,7 @@ export class FreefieldApps {
     if (spec.off) throw new Error(spec.off)
     if (!file || !fs.existsSync(file)) throw new Error(spec.media === 'image' ? 'Pick a picture.' : 'Pick a clip.')
     const studio = this.studio()
-    if (studio.comfy.remote) throw new Error(`${spec.label} runs on this PC’s ComfyUI.`)
+    if (studio.comfy.hosted) throw new Error(`${spec.label} runs on this PC’s ComfyUI or on your own cloud (RunPod, Modal).`)
     const { app, graph: raw } = loadApp(this.resourcesDir, spec.app)
     const graph = withoutPromptWriter(raw)
     const info = await studio.comfy.objectInfo()

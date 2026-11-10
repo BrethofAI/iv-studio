@@ -212,8 +212,8 @@ export class Remake {
 
   // The int8 file for a kind on this ComfyUI (any folder), and what else Remake needs that it lacks.
   async check(kind = 'swap') {
-    // in the cloud, say so instead of listing this PC's Setup steps (a cloud user asked how to get H3)
-    if (this.studio.comfy.remote) return { ready: false, cloud: true, error: 'Replace isn’t available in the cloud yet: it renders on this PC’s graphics card. Shots, sequences and characters work in the cloud.', packs: [], models: [], unet: null }
+    // Comfy Cloud has no Viggle Remake; the person's own cloud (RunPod, Modal) downloads it the first time it's used
+    if (this.studio.comfy.hosted) return { ready: false, cloud: true, error: 'Replace doesn’t run on Comfy Cloud: it needs Viggle Remake. Use this PC, or your own cloud on RunPod or Modal.', packs: [], models: [], unet: null }
     const info = await this.studio.comfy.objectInfo()
     const unets = comboOptions(info, 'UNETLoader', 'unet_name') || []
     const unet = unets.find((u) => u.replace(/\\/g, '/').split('/').pop() === MODEL[kind]) || null
@@ -262,7 +262,7 @@ export class Remake {
   async painter() {
     if (!this.images) throw new Error('Painting needs IV Studio’s picture tools.')
     const st = await this.images.status()
-    if (st.remote) throw new Error('Remake paints its frames on this PC’s ComfyUI. Switch to "This PC" on the Cloud page.')
+    if (st.error) throw new Error(st.error)
     const fam = ['qwen21', 'flux2', 'flux3'].map((id) => st.families.find((f) => f.id === id && f.edit && f.models.length)).find(Boolean)
     if (!fam) throw new Error('Painting needs a picture editor: Qwen Image 2.1, Flux.2 Klein or Flux 3 Klein. Set one up in Settings → Setup.')
     return { family: fam.id, model: fam.models.find((m) => !/uc-/i.test(m)) || fam.models[0] }
