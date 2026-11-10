@@ -1113,7 +1113,7 @@ Seedance finish, and New angle. Training a character runs on your PC, RunPod or 
 
 ## Agents (MCP)
 
-IV Studio includes a local MCP server (stdio) with 192 tools. It uses the same projects, characters, voices
+IV Studio includes a local MCP server (stdio) with 200 tools. It uses the same projects, characters, voices
 and songs as the window, so Claude Code or any MCP client can render shots and sequences, make pictures,
 speak lines, make music, cut them together and export. **Settings → Agents** has the command for your
 install, a message to paste into any agent, and a button that adds the IV Studio skill to Claude Code.
