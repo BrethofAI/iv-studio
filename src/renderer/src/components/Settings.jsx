@@ -469,11 +469,12 @@ function WriterCard({ n, settings, setSettings, notify }) {
   const hasModel = models.some((m) => m.name === settings.ollamaModel)
   const pct = pull?.total ? Math.floor((pull.completed / pull.total) * 100) : null
   const addrChanged = addr.trim() !== (settings.ollamaUrl || '')
-  const missing = (id) => (id === 'local' ? status && !status.installed : id === 'contextir' ? !settings.hasComfyKey : status && !status.harnesses?.[id]?.installed)
+  const missing = (id) => (id === 'local' ? status && !status.installed : id === 'contextir' ? !settings.hasComfyKey : id === 'openai' ? !settings.openaiUrl || !settings.openaiModel : status && !status.harnesses?.[id]?.installed)
   const ENGINES = [
     ['local', 'Local', 'Free · your own Ollama', 'Not installed'],
     ['claude', 'Claude Code', 'Your Claude plan', 'Not installed'],
     ['codex', 'Codex', 'Your ChatGPT plan', 'Not installed'],
+    ['openai', 'OpenAI-compatible', 'Your own server or API', 'Needs setting up'],
     ['contextir', 'Context IR', 'MiniMax · paid per prompt', 'Needs a key']
   ]
   const h = HARNESS[engine]
@@ -581,6 +582,8 @@ function WriterCard({ n, settings, setSettings, notify }) {
         </>
       )}
 
+      {engine === 'openai' && <OpenAiWriter settings={settings} setSettings={setSettings} save={save} notify={notify} />}
+
       {engine === 'contextir' && (
         <SetField
           label="Comfy.org key"
@@ -613,6 +616,123 @@ function WriterCard({ n, settings, setSettings, notify }) {
         </SetField>
       )}
     </SetCard>
+  )
+}
+
+// Prompt writer → OpenAI-compatible (GitHub #15): any server that speaks the OpenAI API (llama.cpp, llama-swap,
+// vLLM, LM Studio, LiteLLM, LocalAI, OpenAI). It writes exactly as the local writer does; the address, model and
+// "sees pictures" are plain settings, the key and extra headers are stored encrypted (settings:setOpenaiSecrets).
+function OpenAiWriter({ settings, setSettings, save, notify }) {
+  const [addr, setAddr] = useState(settings.openaiUrl || '')
+  const [model, setModel] = useState(settings.openaiModel || '')
+  const [key, setKey] = useState('')
+  const [headers, setHeaders] = useState('')
+  const [check, setCheck] = useState(null) // { ok, url, models, error } | 'checking'
+  useEffect(() => setAddr(settings.openaiUrl || ''), [settings.openaiUrl])
+  useEffect(() => setModel(settings.openaiModel || ''), [settings.openaiModel])
+  const look = () => {
+    if (!settings.openaiUrl) return setCheck(null)
+    setCheck('checking')
+    window.ivstudio.prompts.openai().then(setCheck).catch((err) => setCheck({ ok: false, models: [], error: err.message }))
+  }
+  // look again whenever the address or the key changes
+  useEffect(look, [settings.openaiUrl, settings.hasOpenaiKey, settings.hasOpenaiHeaders])
+  const secrets = async (patch, done) => {
+    try {
+      setSettings(await window.ivstudio.settings.setOpenaiSecrets(patch))
+      done?.()
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  const addrChanged = addr.trim() !== (settings.openaiUrl || '')
+  const modelChanged = model.trim() !== (settings.openaiModel || '')
+  const models = check && check !== 'checking' ? check.models || [] : []
+  const listed = !models.length || models.includes(settings.openaiModel)
+  const state =
+    check === 'checking' ? (
+      <Pill>Checking…</Pill>
+    ) : check?.ok ? (
+      <Pill tone="ok">{models.length ? `Connected · ${models.length} model${models.length === 1 ? '' : 's'}` : 'Connected'}</Pill>
+    ) : check ? (
+      <Pill tone="warn">Not answering</Pill>
+    ) : null
+  return (
+    <>
+      <SetField
+        label="Address"
+        hint={check && check !== 'checking' && !check.ok ? check.error : 'The server’s OpenAI API address: llama.cpp and llama-swap localhost:8080, LM Studio localhost:1234, vLLM localhost:8000, LiteLLM localhost:4000, or https://api.openai.com/v1. IV Studio adds /v1 when there’s no path.'}
+      >
+        <div className="set-inline grow">
+          <input value={addr} placeholder="http://localhost:8080/v1" onChange={(e) => setAddr(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addrChanged && save({ openaiUrl: addr })} aria-label="OpenAI-compatible server address" />
+          <button className="btn btn-small" disabled={!addrChanged} onClick={() => save({ openaiUrl: addr })}>
+            Save
+          </button>
+          {settings.openaiUrl && !addrChanged && (
+            <button className="btn btn-small" disabled={check === 'checking'} onClick={look}>
+              Check
+            </button>
+          )}
+          {state}
+        </div>
+      </SetField>
+      <SetField
+        label="Model"
+        warn={!listed ? `The server doesn’t list ${settings.openaiModel}.` : null}
+        hint="The model name the server expects. With llama-swap, the name picks the model it loads. Your idea and pictures go to this server; nothing is unloaded by IV Studio."
+      >
+        <div className="set-inline grow">
+          <input value={model} list="iv-openai-models" placeholder={models[0] || 'qwen3-vl-8b'} onChange={(e) => setModel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && modelChanged && save({ openaiModel: model })} aria-label="Model name" />
+          <datalist id="iv-openai-models">
+            {models.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
+          <button className="btn btn-small" disabled={!modelChanged} onClick={() => save({ openaiModel: model })}>
+            Save
+          </button>
+        </div>
+      </SetField>
+      <SetField label="Pictures" hint="Turn on for a vision model (Qwen-VL, Gemma 3, GPT-4o…). It then looks at your reference pictures, and can review takes and read shots for Rebuild and Remake.">
+        <SetSwitch checked={settings.openaiVision} onChange={(on) => save({ openaiVision: on })}>
+          It can see pictures
+        </SetSwitch>
+      </SetField>
+      <SetField label="API key" tag="optional" hint="Only if the server asks for one (OpenAI, a hosted provider, a LiteLLM with keys). Sent as Authorization: Bearer. Stored encrypted on this PC. Agents using IV Studio's MCP server read it from IV_STUDIO_LLM_KEY or OPENAI_API_KEY instead.">
+        {settings.hasOpenaiKey ? (
+          <div className="set-inline">
+            <Pill tone="ok">Saved · encrypted on this PC</Pill>
+            <button className="link-btn" onClick={() => secrets({ key: '' })}>
+              Remove
+            </button>
+          </div>
+        ) : (
+          <div className="set-inline grow">
+            <input type="password" value={key} placeholder="sk-…" onChange={(e) => setKey(e.target.value)} autoComplete="off" aria-label="API key" />
+            <button className="btn btn-small" disabled={!key.trim()} onClick={() => secrets({ key }, () => setKey(''))}>
+              Save
+            </button>
+          </div>
+        )}
+      </SetField>
+      <SetField label="Extra headers" tag="optional" hint="One per line, like X-Api-Version: 2. For providers that want more than a key. Stored encrypted; agents read them from IV_STUDIO_LLM_HEADERS.">
+        {settings.hasOpenaiHeaders ? (
+          <div className="set-inline">
+            <Pill tone="ok">Saved · encrypted on this PC</Pill>
+            <button className="link-btn" onClick={() => secrets({ headers: '' })}>
+              Remove
+            </button>
+          </div>
+        ) : (
+          <div className="set-inline grow">
+            <textarea rows={2} value={headers} placeholder="X-Header-Name: value" onChange={(e) => setHeaders(e.target.value)} aria-label="Extra headers" />
+            <button className="btn btn-small" disabled={!headers.trim()} onClick={() => secrets({ headers }, () => setHeaders(''))}>
+              Save
+            </button>
+          </div>
+        )}
+      </SetField>
+    </>
   )
 }
 

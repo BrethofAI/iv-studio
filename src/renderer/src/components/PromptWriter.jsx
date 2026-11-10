@@ -69,20 +69,25 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
       ? !status.hasComfyKey && 'MiniMax Context IR needs your Comfy.org API key.'
       : harness
         ? !status.harnesses?.[engine]?.installed && `${HARNESS_NAME[engine]} isn't installed on this PC.`
+        : engine === 'openai'
+        ? (!status.openai?.url ? 'Set up the OpenAI-compatible writer in Settings → Prompt writer.' : !status.openai.model ? 'Choose a model for the OpenAI-compatible writer in Settings → Prompt writer.' : !status.openai.ok && `The OpenAI-compatible server isn't answering: ${status.openai.error}`)
         : !status.installed
         ? 'The free writer needs Ollama.'
         : status.running && !status.models.some((m) => m.name === status.model) && `The writer model ${status.model} isn't installed yet.`)
 
   // What the local writer will look at: pictures, frames from videos, or the clip a Continue shot carries on.
   const visual = (context.media || []).filter((m) => m.kind === 'picture' || m.kind === 'video')
-  const sees = status?.models?.find((m) => m.name === status.model)?.vision
+  const sees = engine === 'openai' ? status?.openai?.vision : status?.models?.find((m) => m.name === status.model)?.vision
   const seeing =
     harness && visual.length > 0
       ? `${HARNESS_NAME[engine]} looks at your ${visual.length === 1 ? (visual[0].kind === 'video' ? 'video' : 'picture') : `${visual.length} references`} and writes what it sees.`
-      : engine === 'local' && visual.length > 0 && status?.running
+      : (engine === 'local' && status?.running) || (engine === 'openai' && status?.openai?.ok) ? (visual.length > 0
       ? sees
         ? `Looks at your ${visual.length === 1 ? (visual[0].kind === 'video' ? 'video' : 'picture') : `${visual.length} references`} and writes what it sees.`
-        : `${status.model} can't see pictures; choose a model marked "sees pictures" in Settings to have it look at your references.`
+        : engine === 'openai'
+          ? `The OpenAI-compatible writer is set to not see pictures; turn on "It can see pictures" in Settings if ${status.openai.model} can.`
+          : `${status.model} can't see pictures; choose a model marked "sees pictures" in Settings to have it look at your references.`
+      : null)
       : null
 
   useEffect(() => {
@@ -109,7 +114,7 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
     <div className={`writer ${compact ? 'compact' : ''}`}>
       <div className="writer-head">
         <span className="mono label writer-label">✦ Write it for me</span>
-        <span className="mono dim small">{engine === 'contextir' ? `MiniMax Context IR · ${status?.contextIrPrice?.split(' (')[0] || 'paid'}` : harness ? `${HARNESS_NAME[engine]} · your plan` : `Local writer · free`}{context.engine === 'seedance' ? ' · Seedance guide' : ''}</span>
+        <span className="mono dim small">{engine === 'contextir' ? `MiniMax Context IR · ${status?.contextIrPrice?.split(' (')[0] || 'paid'}` : harness ? `${HARNESS_NAME[engine]} · your plan` : engine === 'openai' ? `${status?.openai?.model || 'OpenAI-compatible'} · your server` : `Local writer · free`}{context.engine === 'seedance' ? ' · Seedance guide' : ''}</span>
       </div>
       <div className="writer-row">
         <textarea rows={compact ? 2 : 2} value={idea} placeholder={context.sequence ? 'What happens in this shot, in plain words' : 'Your idea in plain words, e.g. Tess in a parked car at night admits she kept the letter'} onChange={(e) => setIdea(e.target.value)} />

@@ -49,7 +49,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     drawAngles: call('productions:drawAngles'),
     onChanged: on('productions:changed')
   },
-  settings: { get: call('settings:get'), set: call('settings:set'), setComfyKey: call('settings:setComfyKey'), setCivitaiKey: call('settings:setCivitaiKey') },
+  settings: { get: call('settings:get'), set: call('settings:set'), setComfyKey: call('settings:setComfyKey'), setCivitaiKey: call('settings:setCivitaiKey'), setOpenaiSecrets: call('settings:setOpenaiSecrets') },
   // where finished videos go: { path, custom, incognito, free }
   folders: { videos: call('folders:videos'), chooseVideos: call('folders:chooseVideos'), resetVideos: call('folders:resetVideos') },
   // The Comfy.org account: credits for paid partner nodes, the key, and what a graph would cost.
@@ -240,7 +240,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     onPrep: on('cloud:prep'),
     hfToken: call('cloud:hfToken')
   },
-  prompts: { status: call('prompts:status'), write: call('prompts:write'), story: call('prompts:story'), pull: call('prompts:pull'), onPull: on('prompts:pull') },
+  prompts: { status: call('prompts:status'), write: call('prompts:write'), story: call('prompts:story'), pull: call('prompts:pull'), openai: call('prompts:openai'), onPull: on('prompts:pull') },
   setup: {
     check: call('setup:check'),
     installNodes: call('setup:installNodes'),

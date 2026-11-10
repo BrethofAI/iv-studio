@@ -552,6 +552,14 @@ writer under **Settings → Prompt writer**:
   two frames of each reference video, your first and last frames, and the last frame of a video you're
   continuing (up to six images, labelled `<Picture 1>`, `<Video 1>` and so on), and writes what it sees.
   It tells you what it will look at, or that the model you chose can't see pictures.
+- **OpenAI-compatible:** any server that speaks the OpenAI API (`/v1/chat/completions`): llama.cpp's
+  `llama-server`, llama-swap, vLLM, LM Studio, LiteLLM, LocalAI, or OpenAI itself. Enter the address (like
+  `localhost:8080`; `/v1` is added when there's no path) and the model name, and turn on **It can see
+  pictures** for a vision model. An API key and extra headers are optional and stored encrypted. It writes
+  exactly as the local writer does, asking for structured JSON (`json_schema`, falling back to `json_object`
+  or plain text for servers without it). IV Studio doesn't load or unload its models: with llama-swap, the
+  model name picks what it loads. Agents using the MCP server pass the key as `IV_STUDIO_LLM_KEY` (or
+  `OPENAI_API_KEY`) and headers as `IV_STUDIO_LLM_HEADERS`.
 - **Claude Code or Codex:** if you have either installed and signed in, it writes with your own login,
   headless and with no tools but reading your reference pictures. It gets MiniMax's own H3 prompt guide
   (downloaded from MiniMax on first use, not shipped) and the full directing method.

@@ -6,7 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { readSettings } from './paths.js'
+import { readSettings, writerOf } from './paths.js'
 import { harnessJson } from './harness.js'
 import { ollamaJson } from './prompter.js'
 
@@ -99,8 +99,9 @@ export class Sounds {
     const s = readSettings()
     const system = `${WRITE_RULES[k.id]}\nAlso give its length in whole seconds (${SOUND_LIMITS.min} to ${SOUND_LIMITS.max}): impacts and clicks 1-3, actions 3-6, ambiences 10-30, loops one or two bars.\nAnswer as JSON: {"description": "...", "seconds": n}.`
     const user = `The sound: ${words}`
-    const engine = s.promptEngine === 'claude' || s.promptEngine === 'codex' ? s.promptEngine : 'local'
-    const out = engine === 'local' ? await ollamaJson({ system, user, schema: WRITE_SCHEMA, model: s.ollamaModel || undefined, cpu: await this.studio.gpuBusy?.().catch(() => false) }) : await harnessJson({ engine, model: engine === 'claude' ? s.claudeModel : s.codexModel, system, user, schema: WRITE_SCHEMA })
+    const w = writerOf(s)
+    const engine = w.engine === 'claude' || w.engine === 'codex' ? w.engine : 'local'
+    const out = engine === 'local' ? await ollamaJson({ system, user, schema: WRITE_SCHEMA, model: s.ollamaModel || undefined, cpu: await this.studio.gpuBusy?.().catch(() => false) }) : await harnessJson({ engine, model: w.model, system, user, schema: WRITE_SCHEMA })
     const description = String(out?.description || '').trim()
     if (!description) throw new Error('The writer gave nothing back. Try again.')
     const seconds = Math.min(SOUND_LIMITS.max, Math.max(SOUND_LIMITS.min, Math.round(Number(out.seconds) || k.seconds)))

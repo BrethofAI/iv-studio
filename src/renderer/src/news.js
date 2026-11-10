@@ -28,6 +28,8 @@ export const NEWS = [
       { text: 'Picture tools in Create → Image: inpaint by painting over a part, relight, remove the background, upscale 2× or 4×, and depth or normal maps.' },
       { text: 'LoRAs for every model, not just H3: pick MiniMax H3, LTX-2.5, Wan 2.1, Flux 3 Klein, Flux.2 Klein, Krea 2, Qwen Image 2.1, Z-Image, SDXL or Moss, find its LoRAs on Civitai and use them in that model’s tray.' },
       { text: 'Closing and reopening IV Studio while ComfyUI starts no longer starts a second ComfyUI.' },
+      { text: 'A new prompt writer: OpenAI-compatible. Point it at llama.cpp, llama-swap, vLLM, LM Studio, LiteLLM, OpenAI or any server with the OpenAI API, with an optional key and extra headers (Settings → Prompt writer).' },
+      { text: 'Fixed: a switch (like Music’s Instrumental) could scroll the whole window, pushing the title bar off screen. Sequences with a voice no longer send the prompt’s section names twice.' },
       { text: 'Seedance 2.5 in Create: a model switch beside MiniMax H3, on your Comfy.org credits. Cheap 480p drafts or 720p and 1080p takes, 4 to 30 seconds; the price shows first and you confirm before anything is charged.' },
       { text: 'Your Comfy account in Settings and the title bar, with every paid partner model priced before it runs.' },
       { text: 'Free finishes for Seedance takes on your own graphics card (SeedVR2, DLSS 5, or an H3 redraw), and a strength for each upscaler.' },

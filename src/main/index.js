@@ -36,6 +36,7 @@ import { MediaTools } from '../service/media'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { ModelInstaller } from '../service/models'
 import { CONTEXT_IR_PRICE, normalizeOllamaUrl, ollamaStatus, pullModel, setOllamaSource, unloadOllama } from '../service/prompter'
+import { normalizeApiBase, openaiStatus, parseHeaders, setLlmSource } from '../service/llm'
 import { Studio } from '../service/studio'
 import { Ranker } from '../service/ranking'
 import { Reviewer } from '../service/review'
@@ -188,6 +189,15 @@ const unseal = (enc) => {
     return null
   }
 }
+// the OpenAI-compatible prompt writer (llm.js): its address and model, with the key and headers unsealed here
+const llmOf = (s) => {
+  let headers = {}
+  try {
+    headers = parseHeaders(unseal(s.openaiHeaders) || '')
+  } catch {}
+  return { provider: s.promptEngine === 'openai' ? 'openai' : 'ollama', url: s.openaiUrl, model: s.openaiModel, vision: !!s.openaiVision, key: unseal(s.openaiKey) || '', headers }
+}
+setLlmSource(() => llmOf(readSettings(BASE)))
 
 // Comfy Cloud takes the person's Comfy API key: its own, else the Comfy.org key saved for the paid prompt writer
 // (both come from platform.comfy.org).
@@ -470,8 +480,8 @@ app.whenReady().then(() => {
   handle('app:info', () => ({ version: app.getVersion(), platform: process.platform, dataDir: DATA, dataSource: LOCATION.missing ? 'default' : LOCATION.source, portable: PORTABLE, mcp: mcpCommand(), testCopy: TEST_COPY, incognito: INCOGNITO, links }))
   // The window never sees the Comfy.org or Civitai key, only whether one is saved.
   const publicSettings = (s) => {
-    const { comfyApiKey, cloudToken, civitaiKey, runpodKey, runpodToken, comfyCloudKey: _ck, hfToken, ...rest } = s
-    return { ...rest, hasComfyKey: !!comfyApiKey, hasCloudToken: !!cloudToken, hasCivitaiKey: !!civitaiKey, hasRunpodKey: !!runpodKey, hasHfToken: !!hfToken }
+    const { comfyApiKey, cloudToken, civitaiKey, runpodKey, runpodToken, comfyCloudKey: _ck, hfToken, openaiKey, openaiHeaders, ...rest } = s
+    return { ...rest, hasComfyKey: !!comfyApiKey, hasCloudToken: !!cloudToken, hasCivitaiKey: !!civitaiKey, hasRunpodKey: !!runpodKey, hasHfToken: !!hfToken, hasOpenaiKey: !!openaiKey, hasOpenaiHeaders: !!openaiHeaders }
   }
   const comfyKey = () => unseal(readSettings(BASE).comfyApiKey)
   // Anonymous usage counting and the cloud beta signup (usage.js): both off until the person says yes. A test copy
@@ -530,6 +540,22 @@ app.whenReady().then(() => {
     const saved = publicSettings(writeSettings({ comfyApiKey: seal(k) }, BASE))
     refreshAccount()
     return saved
+  })
+  // Settings → Prompt writer → OpenAI-compatible: { key?, headers? } ('' removes one). Headers are "Name: value" lines.
+  handle('settings:setOpenaiSecrets', ({ key, headers } = {}) => {
+    const patch = {}
+    if (key !== undefined) {
+      const k = String(key || '').trim()
+      if (k && !keysSafe()) throw new Error(KEY_STORE_MISSING)
+      patch.openaiKey = seal(k)
+    }
+    if (headers !== undefined) {
+      const h = String(headers || '').trim()
+      parseHeaders(h)
+      if (h && !keysSafe()) throw new Error(KEY_STORE_MISSING)
+      patch.openaiHeaders = seal(h)
+    }
+    return publicSettings(writeSettings(patch, BASE))
   })
   handle('settings:setCivitaiKey', (key) => {
     const k = String(key || '').trim()
@@ -1688,7 +1714,15 @@ app.whenReady().then(() => {
       }
     }
   })
-  handle('prompts:status', async () => ({ ...(await ollamaStatus()), engine: readSettings(BASE).promptEngine, model: readSettings(BASE).ollamaModel, hasComfyKey: !!readSettings(BASE).comfyApiKey, contextIrPrice: CONTEXT_IR_PRICE, harnesses: agentsStatus() }))
+  // openai: the OpenAI-compatible server's answer ({ ok, url, models, error } plus the chosen model), only when it's the writer
+  handle('prompts:openai', async () => {
+    const s = readSettings(BASE)
+    return { ...(await openaiStatus({ ...llmOf(s), provider: 'openai' })), model: s.openaiModel || '', vision: !!s.openaiVision }
+  })
+  handle('prompts:status', async () => ({
+    ...(await ollamaStatus()),
+    openai: readSettings(BASE).promptEngine === 'openai' ? { ...(await openaiStatus({ ...llmOf(readSettings(BASE)), provider: 'openai' })), model: readSettings(BASE).openaiModel || '', vision: !!readSettings(BASE).openaiVision } : null,
+    engine: readSettings(BASE).promptEngine, model: readSettings(BASE).ollamaModel, hasComfyKey: !!readSettings(BASE).comfyApiKey, contextIrPrice: CONTEXT_IR_PRICE, harnesses: agentsStatus() }))
   handle('prompts:write', (request) => {
     const s = readSettings(BASE)
     const w = writerOf(request?.engine ? { ...s, promptEngine: request.engine } : s)
@@ -1700,7 +1734,17 @@ app.whenReady().then(() => {
   })
   handle('prompts:pull', (model) => pullModel(model, (ev) => send('prompts:pull', { model, ...ev })))
   handle('settings:set', (patch) => {
-    const { comfyApiKey, cloudToken, civitaiKey, cloud, target, cloudProvider, runpod, runpodKey, runpodToken, comfyCloudKey: _ck, comfycloud, hfToken: _hf, hfTokenAt: _hfAt, ...safe } = patch || {}
+    const { comfyApiKey, cloudToken, civitaiKey, cloud, target, cloudProvider, runpod, runpodKey, runpodToken, comfyCloudKey: _ck, comfycloud, hfToken: _hf, hfTokenAt: _hfAt, openaiKey: _ok, openaiHeaders: _oh, ...safe } = patch || {}
+    if ('openaiUrl' in safe) {
+      try {
+        safe.openaiUrl = normalizeApiBase(safe.openaiUrl)
+      } catch {
+        throw new Error('That isn’t an address. Use host:port or a full address, like localhost:8080 or http://192.168.1.20:8000/v1.')
+      }
+    }
+    if ('openaiModel' in safe) safe.openaiModel = String(safe.openaiModel || '').trim()
+    if ('openaiVision' in safe) safe.openaiVision = !!safe.openaiVision
+    if ('promptEngine' in safe && !['local', 'claude', 'codex', 'contextir', 'openai'].includes(safe.promptEngine)) delete safe.promptEngine
     if ('ollamaUrl' in safe) {
       try {
         safe.ollamaUrl = normalizeOllamaUrl(safe.ollamaUrl)

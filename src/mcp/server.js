@@ -18,6 +18,7 @@ import { Ranker } from '../service/ranking'
 import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
 import { setOllamaSource, unloadOllama } from '../service/prompter'
+import { parseHeaders, setLlmSource } from '../service/llm'
 import { CAMERA_MOVES, lineCheck } from '../service/staging'
 import { DIRECTING, DIRECTING_SOURCE } from '../service/directing'
 import { menuMessage, START_MENU } from '../service/startmenu'
@@ -76,6 +77,17 @@ const INCOGNITO = !!readSettings(BASE).incognito
 const DATA = contentDir(BASE)
 // the writer's Ollama: the address in Settings → Prompt writer, else OLLAMA_HOST, else this PC (prompter.js)
 setOllamaSource(() => readSettings(BASE).ollamaUrl)
+// the OpenAI-compatible writer (llm.js): address and model from Settings; its key and headers from this server's
+// environment (IV_STUDIO_LLM_KEY or OPENAI_API_KEY, IV_STUDIO_LLM_HEADERS as "Name: value" lines), since only the app
+// can unseal the ones saved in Settings. A server that needs no key works without them.
+setLlmSource(() => {
+  const s = readSettings(BASE)
+  let headers = {}
+  try {
+    headers = parseHeaders(process.env.IV_STUDIO_LLM_HEADERS || '')
+  } catch {}
+  return { provider: s.promptEngine === 'openai' ? 'openai' : 'ollama', url: s.openaiUrl, model: s.openaiModel, vision: !!s.openaiVision, key: process.env.IV_STUDIO_LLM_KEY || process.env.OPENAI_API_KEY || '', headers }
+})
 const studio = new Studio({ dataDir: DATA, resourcesDir: resourcesDir(), comfyUrl: readSettings(BASE).comfyUrl, models: readSettings(BASE).models })
 const server = new McpServer({ name: 'iv-studio', version: '0.1.0' }, { instructions: INSTRUCTIONS })
 // Where the app puts downloads and exports (Electron's videos folder; this process has no Electron app).
@@ -415,7 +427,7 @@ tool('render_out', 'Finish a version: optional colour smoothing across the joins
   scale: z.number().int().min(1).max(2).default(1),
   fps: z.number().int().default(0).describe(`Frame generation: ${FRAME_GEN_FPS.join(', ')} (0 = off)`)
 }, ({ sequenceId, ...opts }) => studio.renderOutSequence(sequenceId, opts))
-tool('write_prompt', "Write a MiniMax H3 prompt from a plain-words idea, using the same writer as the app. engine (default: the choice in Settings → Prompt writer) local = free model in Ollama; claude / codex = the Claude Code or Codex installed on this PC, on its own login; contextir = MiniMax Context IR, paid per call, needs COMFY_ORG_API_KEY in the environment of this server. local, claude and codex follow MiniMax's H3 prompt guide; Context IR is MiniMax's own rewriter.", {
+tool('write_prompt', "Write a MiniMax H3 prompt from a plain-words idea, using the same writer as the app. engine (default: the choice in Settings → Prompt writer) local = the writer model chosen in Settings: Ollama, or an OpenAI-compatible server (llama.cpp, llama-swap, vLLM, LM Studio, LiteLLM, OpenAI) when Settings picks OpenAI-compatible, with its key in IV_STUDIO_LLM_KEY or OPENAI_API_KEY; claude / codex = the Claude Code or Codex installed on this PC, on its own login; contextir = MiniMax Context IR, paid per call, needs COMFY_ORG_API_KEY in the environment of this server. local, claude and codex follow MiniMax's H3 prompt guide; Context IR is MiniMax's own rewriter.", {
   idea: z.string(),
   mode: z.enum(Object.keys(MODES)).default('text'),
   seconds: z.number().min(1).max(15).default(5),

@@ -5,7 +5,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { harnessJson } from './harness.js'
-import { DEFAULT_LOCAL_MODEL, cpuOptions, ensureOllama, jpegOf, ollamaStatus, ollamaUrl } from './prompter.js'
+import { jpegOf, localChat, localWriterModel } from './prompter.js'
 import { lintSeedance, toSeedanceTags } from './seedlint.js'
 
 export const GUIDE_FILES = ['guide.md', 'task-templates.md', 'craft.md', 'transitions.md', 'limits.md']
@@ -120,20 +120,10 @@ export async function writeSeedance({ engine = 'local', model, idea, mode = 'tex
     const images = pictures.map((p, i) => ({ ...p, name: `reference-${i + 1}.jpg` }))
     ask = (extra = '') => harnessJson({ engine, model, system, user: user + extra, schema: SCHEMA, images })
   } else {
-    await ensureOllama()
-    const name = model || DEFAULT_LOCAL_MODEL
-    const info = (await ollamaStatus()).models.find((m) => m.name === name)
-    if (!info) throw new Error(`The writer model ${name} isn't in Ollama yet. Install it in Settings → Prompt writer.`)
+    const info = await localWriterModel(model)
     ask = async (extra = '') => {
       const message = { role: 'user', content: user + extra, ...(info.vision && pictures.length ? { images: pictures.map((p) => p.data) } : {}) }
-      const r = await fetch(`${ollamaUrl()}/api/chat`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ model: name, stream: false, format: SCHEMA, keep_alive: 0, options: { temperature: 0.6, num_ctx: 12288, num_predict: 3000, ...cpuOptions(cpu) }, messages: [{ role: 'system', content: system }, message] }),
-        signal: AbortSignal.timeout(600000)
-      })
-      if (!r.ok) throw new Error(`Ollama: ${(await r.text()).slice(0, 300)}`)
-      return parse((await r.json()).message?.content)
+      return parse(await localChat({ model: info.name, system, messages: [message], schema: SCHEMA, temperature: 0.6, ctx: 12288, maxTokens: 3000, cpu, raw: true }))
     }
   }
   const clean = (p) => toSeedanceTags(String(p || '').trim()).replace(/\{char\}/g, character?.name?.split(/\s+/)[0] || 'the person')
