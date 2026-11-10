@@ -19,6 +19,7 @@ import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
 import { setOllamaSource, unloadOllama } from '../service/prompter'
 import { parseHeaders, setLlmSource } from '../service/llm'
+import { LOOK_FIELDS, PROMPT_TOOLS, loadSlate, lookbook, promptVariants, rewritePrompt, setupSnippets, withSetups } from '../service/filmcraft'
 import { CAMERA_MOVES, lineCheck } from '../service/staging'
 import { DIRECTING, DIRECTING_SOURCE } from '../service/directing'
 import { menuMessage, START_MENU } from '../service/startmenu'
@@ -669,17 +670,93 @@ tool('update_film', `Change a film's brief or assets: name, logline, aspect, tar
   props: z.array(z.object({ name: z.string(), description: z.string().optional(), pictures: z.array(z.string()).optional() })).optional()
 }, ({ filmId, ...patch }) => films.update(filmId, patch))
 tool('set_film_script', `Replace a film's script (screenplay text, see create_film). Scenes are read from it; scenes that didn't change keep their shots, changed ones are marked stale. Speakers who share a first name with a character preset join the cast, and the scene headings add locations. ${LIVE_FILM}`, { filmId: z.string(), script: z.string().min(1) }, ({ filmId, script }) => films.setScript(filmId, script))
-tool('write_film_script', `Draft a film's script with the local writer from its idea (idea, else the film's logline), its cast and its target length. It replaces the script, so ask before writing over one the person wrote. Takes a minute or two. ${LIVE_FILM}`, { filmId: z.string(), idea: z.string().optional() }, ({ filmId, idea }) => films.writeScript(filmId, { idea }))
+tool('write_film_script', `Draft a film's script with the writer chosen in Settings → Prompt writer from its idea (idea, else the film's logline), its cast and its target length. It replaces the script, so ask before writing over one the person wrote. Takes a minute or two. ${LIVE_FILM}`, { filmId: z.string(), idea: z.string().optional() }, ({ filmId, idea }) => films.writeScript(filmId, { idea }))
 tool('sketch_film_shots', "Draw a storyboard still for each shot without one (or shotIds, or every shot with redo), on this PC's picture models: about 15-30 s a shot, free. A shot's character face and its place's picture are kept when an editing model is set up. get_film shows each shot's sketch once drawn.", { filmId: z.string(), shotIds: z.array(z.string()).optional(), redo: z.boolean().default(false) }, async ({ filmId, ...opts }) => {
   if (readSettings(BASE).target !== 'cloud') await voices.release()
   return { items: await films.sketch(filmId, opts) }
 })
-tool('break_down_film', 'Break the script into shots with the local writer: each scene becomes 3-10 s shots (what we see, camera, who is on screen, at most one speaker and their exact words), then each shot gets its H3 prompt. Runs in the background (minutes); get_film shows breakdown progress. By default only scenes without shots, or stale ones; redo does every scene. sketch (on by default) then draws each new shot\'s storyboard still, as the Projects page does. Show the person the board and get their OK before rendering: renders take GPU time.', {
+tool('break_down_film', 'Break the script into shots with the writer chosen in Settings → Prompt writer (scenes with a coverage plan get exactly its shots): each scene becomes 3-10 s shots (what we see, camera, who is on screen, at most one speaker and their exact words), then each shot gets its H3 prompt. Runs in the background (minutes); get_film shows breakdown progress. By default only scenes without shots, or stale ones; redo does every scene. sketch (on by default) then draws each new shot\'s storyboard still, as the Projects page does. Show the person the board and get their OK before rendering: renders take GPU time.', {
   filmId: z.string(),
   redo: z.boolean().default(false),
   sceneIds: z.array(z.string()).optional(),
   sketch: z.boolean().default(true)
 }, ({ filmId, ...opts }) => films.breakDown(filmId, opts))
+// ---------- film craft (filmcraft.js, after Sam Wasserman's Slate) ----------
+const slate = () => loadSlate(resourcesDir())
+const writerNow = () => writerOf(readSettings(BASE))
+const busy = () => studio.gpuBusy().catch(() => false)
+tool('list_cinematography', 'The Cinematography picker\'s setups (Slate by Sam Wasserman, wassermanproductions.com): 165 ready phrases in 12 groups (photo, cinematic and commercial styles, film stocks, lenses, lighting setups, camera rigs, single-shot moves, mood, depth layers, frames within the frame, realism), and Slate\'s 12 coverage plans for a scene. Use setup ids with add_cinematography, plan ids with set_scene_coverage.', {
+  group: z.string().optional().describe('Only this group id, e.g. film-stocks, lighting-setups, camera')
+}, ({ group }) => ({
+  setups: slate().setups.filter((g) => !group || g.id === group).map((g) => ({ id: g.id, label: g.label, items: g.items.map((i) => ({ id: i.id, label: i.label, snippet: i.snippet })) })),
+  plans: group ? [] : slate().plans.map((p) => ({ id: p.id, label: p.label, description: p.description, shots: p.shots.map((x) => `${x.slot}: ${x.size}, ${x.angle}, ${x.movement}`) }))
+}))
+tool('add_cinematography', 'Add cinematography setups (ids from list_cinematography) to a prompt: each setup\'s phrase goes at the end of the description, once. Returns the new prompt.', {
+  prompt: z.string(),
+  setups: z.array(z.string()).min(1)
+}, ({ prompt, setups }) => {
+  const picked = setupSnippets(slate(), setups)
+  if (!picked.length) throw new Error('None of those setup ids exist. See list_cinematography.')
+  return { prompt: withSetups(prompt, picked), added: picked.map((x) => x.label) }
+})
+tool('rework_prompt', `Rewrite an H3 prompt with the writer chosen in Settings → Prompt writer: tool ${Object.entries(PROMPT_TOOLS).map(([k, v]) => `${k} (${v.what})`).join(', ')}, or note with a director's note in plain words. Sections, spoken lines and labels are kept; missing lists anything the rewrite dropped. For a Projects shot use rework_film_shot instead (it keeps a history).`, {
+  prompt: z.string(),
+  tool: z.enum(['note', ...Object.keys(PROMPT_TOOLS)]).default('note'),
+  note: z.string().optional(),
+  keep: z.array(z.string()).optional().describe('Words that must stay exactly as they are')
+}, async ({ prompt, tool: t, note = '', keep = [] }) => rewritePrompt(writerNow(), { prompt, tool: t, note, context: { keep }, cpu: await busy() }))
+tool('prompt_variants', 'Three versions of an H3 prompt, each weighting the shot differently (composition, light, motion or mood), with the writer chosen in Settings. Same subject, lines and continuity: good for hunting side by side.', {
+  prompt: z.string()
+}, async ({ prompt }) => ({ variants: await promptVariants(writerNow(), { prompt, cpu: await busy() }) }))
+tool('make_lookbook', `Turn a film, series, director or cinematographer (or a described look) into look language with no names in it: ${LOOK_FIELDS.map(([, l]) => l.toLowerCase()).join(', ')}, and one paragraph (words) for prompts. With filmId it becomes that film's Lookbook, used in every shot it writes.`, {
+  source: z.string(),
+  filmId: z.string().optional()
+}, async ({ source, filmId }) => {
+  const look = await lookbook(writerNow(), { source, cpu: await busy() })
+  if (filmId) films.update(filmId, { look: { ...(films.get(filmId).look || {}), lookbook: look } })
+  return look
+})
+tool('set_film_cinematography', "Set a film's cinematography: setup ids from list_cinematography, used in every shot prompt it writes (with its look notes and Lookbook). An empty list clears it.", {
+  filmId: z.string(),
+  setups: z.array(z.string())
+}, ({ filmId, setups }) => films.update(filmId, { look: { ...(films.get(filmId).look || {}), setups: setupSnippets(slate(), setups).map((x) => ({ id: x.id, label: x.label, snippet: x.snippet })) } }))
+tool('set_scene_coverage', "Cover a film's scene with one of Slate's coverage plans (plan ids from list_cinematography): the storyboard planner then makes exactly the plan's shots, in its order, each named by its slot (Master, OTS A...). plan: '' for the planner's own choice. The scene is marked to plan again (break_down_film).", {
+  filmId: z.string(),
+  sceneId: z.string(),
+  plan: z.string()
+}, ({ filmId, sceneId, plan }) => {
+  const found = plan ? slate().plans.find((p) => p.id === plan) : null
+  if (plan && !found) throw new Error(`No coverage plan "${plan}". See list_cinematography.`)
+  return films.setCoverage(filmId, sceneId, found)
+})
+tool('rework_film_shot', `A director's note (tool note) or ${Object.keys(PROMPT_TOOLS).join(', ')} on a Projects shot's prompt, with the writer chosen in Settings. The old prompt goes into the shot's history (restore_film_shot_prompt puts it back).`, {
+  filmId: z.string(),
+  sceneId: z.string(),
+  shotId: z.string(),
+  tool: z.enum(['note', ...Object.keys(PROMPT_TOOLS)]).default('note'),
+  note: z.string().optional(),
+  keep: z.array(z.string()).optional()
+}, ({ filmId, sceneId, shotId, tool: t, note = '', keep = [] }) => films.reworkShot(filmId, sceneId, shotId, { tool: t, note, keep }))
+tool('film_shot_variants', "Three variants of a Projects shot's prompt (not applied: pass one to edit_film_shot's prompt to use it; the old prompt goes into the shot's history).", {
+  filmId: z.string(),
+  sceneId: z.string(),
+  shotId: z.string()
+}, async ({ filmId, sceneId, shotId }) => ({ variants: await films.shotVariants(filmId, sceneId, shotId) }))
+tool('restore_film_shot_prompt', "Put back a prompt from a Projects shot's history (index 0 is the newest); the current one goes into the history.", {
+  filmId: z.string(),
+  sceneId: z.string(),
+  shotId: z.string(),
+  index: z.number().int().min(0).default(0)
+}, ({ filmId, sceneId, shotId, index }) => films.restoreShotPrompt(filmId, sceneId, shotId, index))
+tool('check_film_continuity', "A script supervisor's read of one scene's shot prompts, with the writer chosen in Settings: a person's look or wardrobe, props, light, time of day, weather, place, screen sides and eyelines, and where each shot ends against where the next begins. Returns issues with a concrete fix each; kept on the scene.", {
+  filmId: z.string(),
+  sceneId: z.string()
+}, async ({ filmId, sceneId }) => ({ issues: await films.checkContinuity(filmId, sceneId) }))
+tool('export_shot_list', "A film's shot list: md (Markdown, a table per scene) or csv (one row per shot, for a spreadsheet; with each prompt). Returns the text.", {
+  filmId: z.string(),
+  format: z.enum(['md', 'csv']).default('md'),
+  prompts: z.boolean().optional().describe('Include each shot prompt (csv has them unless false)')
+}, ({ filmId, format, prompts }) => ({ text: films.shotList(filmId, format, { prompts }) }))
 tool('edit_film_shot', `Change a shot (any of action, staging, camera, ends, characters, speaker, line, seconds, prompt, character, stage), add one after it (add: true, with the new shot's fields), remove it (remove: true) or move it within its scene (move: -1 or 1). stage is the staging board's plan: its exact screen-side words become staging and camera, and lineWarnings says when two people swap sides from the scene's previous staged shot. After changing what happens, write_film_shot_prompt rewrites its prompt. A change to action, staging, camera or stage marks an existing sketch sketchStale: filming starts without it until sketch_film_shots redraws it. ${LIVE_FILM}`, {
   filmId: z.string(),
   sceneId: z.string(),
@@ -695,7 +772,7 @@ tool('edit_film_shot', `Change a shot (any of action, staging, camera, ends, cha
   const before = shots.slice(0, shots.findIndex((s) => s.id === shotId)).reverse().find((s) => s.stage)
   return { ...out, lineWarnings: lineCheck(before?.stage, patch.stage) }
 })
-tool('write_film_shot_prompt', 'Write (or rewrite) one shot\'s H3 prompt from its description with the local writer.', { filmId: z.string(), sceneId: z.string(), shotId: z.string() }, async ({ filmId, sceneId, shotId }) => ({ prompt: await films.writeShotPrompt(filmId, sceneId, shotId) }))
+tool('write_film_shot_prompt', 'Write (or rewrite) one shot\'s H3 prompt from its description with the writer chosen in Settings (the old prompt goes into the shot history).', { filmId: z.string(), sceneId: z.string(), shotId: z.string() }, async ({ filmId, sceneId, shotId }) => ({ prompt: await films.writeShotPrompt(filmId, sceneId, shotId) }))
 tool('speak_film_line', 'Say a shot\'s line in its character\'s voice; the shot then lip-syncs to it when rendered, and its finish uses that sound. Each take is read back with Whisper and said again (up to 3 seeds) until every word is there; heard is what Whisper heard. again: a new take with fresh seeds, then film new takes to use it. The character needs a voice (Characters page).', { filmId: z.string(), shotId: z.string(), again: z.boolean().default(false) }, async ({ filmId, shotId, again }) => {
   if (readSettings(BASE).target !== 'cloud') await voices.release()
   await films.speak(filmId, shotId, { again })

@@ -49,6 +49,7 @@ export const TOURS = {
       { at: "step:Who's in it", title: 'Who is in it', text: 'Pick a character so they look and sound the same in every shot. LoRAs and RefMods add a look, a style or a move.' },
       { at: '.create-step:has(.create-drop)', title: 'What it builds on', text: 'Drop pictures or a video here. Add them before writing the prompt, so the writer can see them.' },
       { at: 'step:What happens', title: 'What happens', text: 'Say your idea in plain words and press Write my prompt. Type @ to bring in a character or a saved place. The checker below flags problems and its Fix button mends most of them.' },
+      { at: '.create-craft', title: 'Cinematography and prompt tools', text: '+ Cinematography adds a film stock, lens, light or camera rig. Then a director’s note, Tighten, Enrich or 3 variants reshape the prompt; earlier versions are kept.' },
       { at: 'step:Shape and size', title: 'Shape and size', text: 'The frame shape, the length, how many previews and their quality. Draft is about twice as fast for trying ideas. With Seedance: 4 to 30 seconds, Draft 480p or 720p/1080p, and the price.' },
       { at: '.speed-row', title: 'Speed', text: 'Presets that trade picture size and steps for time and memory. Fast and Low memory suit smaller graphics cards. Changing the size, steps or takes by hand shows Custom.' },
       { at: ['.shot-card', '.create-dock'], title: 'Your shot', text: 'A summary of what you set up. Hunt renders the previews; you then pick the best one and finish it at full size.' }
@@ -85,7 +86,10 @@ export const TOURS = {
     steps: [
       { at: '.wiz-steps', title: 'Six steps', text: 'Idea, Story, Cast and places, Storyboard, Film it, Watch. You can go back to any step at any time.' },
       { at: '.wiz-page', title: 'This step', text: 'Answer what this step asks. Write it for me drafts the script or the shots if you want a head start.' },
-      { at: '.wiz-panels', title: 'The storyboard', text: 'Every shot is a panel with a sketch. Click one to change what happens, the camera, the line or the length.' },
+      { at: '.wiz-craft', title: 'Cinematography and Lookbook', text: 'Choose a film stock, lenses, light and camera for the whole film, or name a film or cinematographer: the Lookbook turns it into look language with no names in it. Both go into every shot.' },
+      { at: '.wiz-scene-tools', title: 'Coverage and continuity', text: 'Cover a scene the way a director would: dialogue coverage, an entrance, parallel action and more (from Slate by Sam Wasserman). Check continuity reads every shot like a script supervisor: wardrobe, props, light and screen sides.' },
+      { at: '.wiz-panels', title: 'The storyboard', text: 'Every shot is a panel with a sketch. Click one to change what happens, the camera or the line, or to rework its prompt with a director’s note.' },
+      { at: '.wiz-shotlist', title: 'Shot list', text: 'Save the shot list as a document, or as CSV for a spreadsheet, for a crew or a schedule.' },
       { at: '.wiz-foot', title: 'Next', text: 'When this step looks right, move on. Play the animatic before filming: it costs seconds, not GPU minutes.' }
     ]
   },

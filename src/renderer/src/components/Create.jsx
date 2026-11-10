@@ -16,6 +16,8 @@ import { confirmSpend, dollars } from './ComfyAccount'
 import { SpeedRow } from './Speed'
 import { finishFor, previewFor, savedSpeed, speedOf } from '../../../service/speed'
 import Starters from './Starters'
+import { CinemaChips, CinemaPicker, PromptTools, useSlate } from './CraftKit'
+import { withSetups, withoutSetups } from '../../../service/setuptext'
 import { starterById, starterForm } from '../starters'
 
 // the preview pass's tested sampler and scheduler (plan.js DEFAULTS)
@@ -144,6 +146,10 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   // @ mentions: the cast and places a prompt can name (cast.js), and the new-place dialog with what to do after it
   const [members, setMembers] = useState([])
   const [newPlace, setNewPlace] = useState(null)
+  // the Cinematography picker (CraftKit): the setups whose phrases are in the prompt
+  const [cinema, setCinema] = useState([])
+  const [cinemaOpen, setCinemaOpen] = useState(false)
+  const slate = useSlate()
   useEffect(() => {
     window.ivstudio.cast.list().then(setMembers, () => setMembers([]))
   }, [characters])
@@ -667,7 +673,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 if (form.mode !== 'reference') set({ mode: 'reference', media: form.media.filter((m) => m.kind === 'picture') })
                 addFiles([{ kind: 'video', path: clip.file }])
               }}
-              onWritten={(prompt) => set({ prompt })}
+              onWritten={(prompt) => set({ prompt: sd ? prompt : withSetups(prompt, cinema) })}
               notify={notify}
               go={go}
             />
@@ -690,6 +696,33 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
             />
             <MentionNotes notes={plan?.notes} />
             {form.prompt.trim() && <Findings findings={findings} onFix={(prompt) => set({ prompt })} />}
+            {!sd && (
+              <div className="create-craft" data-tour="create-craft">
+                <CinemaChips
+                  value={cinema}
+                  onChange={(next) => (set({ prompt: withSetups(withoutSetups(form.prompt, cinema.filter((c) => !next.some((n) => n.id === c.id))), next) }), setCinema(next))}
+                  onOpen={() => setCinemaOpen(true)}
+                />
+                <PromptTools
+                  prompt={form.prompt}
+                  writer={slate?.writer}
+                  run={async ({ tool, note }) => {
+                    const r = await window.ivstudio.craft.rewrite({ prompt: form.prompt, tool, note, context: { spec: `${form.seconds} s, ${form.mode} mode, ${form.aspect}` } })
+                    set({ prompt: r.prompt })
+                    return r
+                  }}
+                  variants={() => window.ivstudio.craft.variants({ prompt: form.prompt, context: { spec: `${form.seconds} s, ${form.mode} mode, ${form.aspect}` } })}
+                  onUse={(prompt) => set({ prompt })}
+                />
+              </div>
+            )}
+            {cinemaOpen && (
+              <CinemaPicker
+                value={cinema}
+                onChange={(next) => (set({ prompt: withSetups(withoutSetups(form.prompt, cinema.filter((c) => !next.some((n) => n.id === c.id))), next) }), setCinema(next))}
+                onClose={() => setCinemaOpen(false)}
+              />
+            )}
             {newPlace && (
               <PlaceDialog
                 notify={notify}

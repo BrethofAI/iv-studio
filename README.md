@@ -571,18 +571,38 @@ writer under **Settings → Prompt writer**:
 **Projects** turns an idea into a finished short film, one step at a time, with a storyboard you can see.
 
 1. **Idea.** What it's about, the format (16:9, vertical or square) and the length.
-2. **Story.** **Write it for me** drafts a script from the idea, cast and length with the local writer, or
+2. **Story.** **Write it for me** drafts a script from the idea, cast and length with your prompt writer (Settings → Prompt writer:
+   the local model, Claude Code, Codex or an OpenAI-compatible server), or
    write it in plain words, or bring a `.txt` or `.fountain` screenplay.
 3. **Cast and places.** Speakers are played by your characters. Someone you made up gets a face drawn from
    their description, or from your own picture, and keeps it in every shot. Places get a description and a
    picture (drawn for you if you have none), plus **More angles** (a quarter turn, the side and a wide view,
    drawn with the QMA camera-angles LoRA for Qwen Image 2.1). Pick the film's look from six styles or your
-   own words and LoRAs.
+   own words and LoRAs, add **Cinematography** (film stocks, lenses, lighting setups, camera rigs, moods: 165
+   ready phrases), and make a **Lookbook**: name a film, director or cinematographer, or describe the look,
+   and your writer turns it into look language with no names in it. All of it goes into every shot.
 4. **Storyboard.** The writer plans each scene into 3 to 10 second shots with staging and where each one
    ends, writes each H3 prompt, and every panel gets a sketch that keeps your characters' faces and the
    room. Open a panel to change the action, camera, speaker, line or length, draw it on the staging board,
    use a recording of the line, or carry straight on from the shot before in one take. **Play the
    animatic** shows the whole film as sketches with the lines spoken.
+   - **Coverage.** Cover a scene with one of twelve coverage plans: full coverage, dialogue coverage (a
+     wide master, a matched over-the-shoulder pair, a matched close-up pair and a listening reaction),
+     motion, extreme action, an establishing sequence, surveillance, an entrance, parallel action, a dance,
+     angle coverage, an orbit or story beats. The planner then makes exactly those shots, each named by its
+     slot.
+   - **Check continuity** reads a scene's shots like a script supervisor (looks and wardrobe, props, light,
+     time of day, weather, screen sides and eyelines, and how each shot ends against the next) and gives a
+     concrete fix for each mismatch.
+   - **Prompt tools** on every shot: a director's note in plain words ("make it colder, she shouldn't
+     smile"), **Tighten**, **Enrich**, **Distill**, **Stronger shot**, **New angle** and **3 variants** to
+     compare. Spoken lines, labels and sections are kept, and every earlier prompt stays in the shot's
+     history to go back to.
+   - **Shot list**: save it as a Markdown document or as CSV for a spreadsheet.
+
+   The setups and coverage plans come from **Slate, the prompt studio for AI filmmaking, by Sam Wasserman**
+   (wassermanproductions.com, Apache-2.0), through Imagination Studio by keys + Wasserman. They ship
+   unchanged in `resources/slate/` with Slate's notice.
 5. **Film it.** Every panel is filmed from its sketch (2 or 3 takes), in References mode with the place's
    picture and the faces on screen, so the room and the people hold. Lines are spoken first in each
    character's own voice and read back with Whisper until the words match. Pick a take, and it finishes at
@@ -1078,7 +1098,7 @@ Seedance finish, and New angle. Training a character runs on your PC, RunPod or 
 
 ## Agents (MCP)
 
-IV Studio includes a local MCP server (stdio) with 184 tools. It uses the same projects, characters, voices
+IV Studio includes a local MCP server (stdio) with 195 tools. It uses the same projects, characters, voices
 and songs as the window, so Claude Code or any MCP client can render shots and sequences, make pictures,
 speak lines, make music, cut them together and export. **Settings → Agents** has the command for your
 install, a message to paste into any agent, and a button that adds the IV Studio skill to Claude Code.

@@ -25,7 +25,15 @@ contextBridge.exposeInMainWorld('ivstudio', {
   incognito: { set: call('incognito:set') },
   queue: { list: call('queue:list'), cancel: call('queue:cancel') },
   // Projects: a short film from script to rough cut (src/service/productions.js)
+  craft: { slate: call('craft:slate'), rewrite: call('craft:rewrite'), variants: call('craft:variants'), lookbook: call('craft:lookbook') },
   productions: {
+    coverage: call('productions:coverage'),
+    rework: call('productions:rework'),
+    variants: call('productions:variants'),
+    setPrompt: call('productions:setPrompt'),
+    restorePrompt: call('productions:restorePrompt'),
+    continuity: call('productions:continuity'),
+    shotList: call('productions:shotList'),
     list: call('productions:list'),
     get: call('productions:get'),
     create: call('productions:create'),

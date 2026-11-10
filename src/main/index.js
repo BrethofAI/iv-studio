@@ -37,6 +37,7 @@ import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { ModelInstaller } from '../service/models'
 import { CONTEXT_IR_PRICE, normalizeOllamaUrl, ollamaStatus, pullModel, setOllamaSource, unloadOllama } from '../service/prompter'
 import { normalizeApiBase, openaiStatus, parseHeaders, setLlmSource } from '../service/llm'
+import { loadSlate, lookbook, promptVariants, rewritePrompt, writerName } from '../service/filmcraft'
 import { Studio } from '../service/studio'
 import { Ranker } from '../service/ranking'
 import { Reviewer } from '../service/review'
@@ -1087,6 +1088,31 @@ app.whenReady().then(() => {
     return productions.drawAngles(id, locationId, opts)
   })
   // The editor's full-screen workspace: the window itself goes full screen too.
+  // Film craft (filmcraft.js, after Sam Wasserman's Slate): the cinematography setups and coverage plans, and the
+  // prompt tools, variants and lookbook with the person's own writer.
+  const slate = () => loadSlate(resourcesDir(path.join(app.getAppPath(), 'resources')))
+  const writerNow = () => writerOf(readSettings(BASE))
+  const busyGpu = () => studio.gpuBusy().catch(() => false)
+  handle('craft:slate', () => ({ setups: slate().setups, plans: slate().plans, writer: writerName(writerNow()) }))
+  handle('craft:rewrite', async ({ prompt, tool, note, context } = {}) => rewritePrompt(writerNow(), { prompt, tool, note, context, cpu: await busyGpu() }))
+  handle('craft:variants', async ({ prompt, context } = {}) => promptVariants(writerNow(), { prompt, context, cpu: await busyGpu() }))
+  handle('craft:lookbook', async (source) => lookbook(writerNow(), { source, cpu: await busyGpu() }))
+  handle('productions:coverage', (id, sceneId, planId) => productions.setCoverage(id, sceneId, planId ? slate().plans.find((p) => p.id === planId) || null : null))
+  handle('productions:rework', (id, sceneId, shotId, opts) => productions.reworkShot(id, sceneId, shotId, opts))
+  handle('productions:variants', (id, sceneId, shotId) => productions.shotVariants(id, sceneId, shotId))
+  handle('productions:setPrompt', (id, sceneId, shotId, prompt, why) => productions.setShotPrompt(id, sceneId, shotId, prompt, why))
+  handle('productions:restorePrompt', (id, sceneId, shotId, index) => productions.restoreShotPrompt(id, sceneId, shotId, index))
+  handle('productions:continuity', (id, sceneId) => productions.checkContinuity(id, sceneId))
+  // the shot list as Markdown or CSV, saved where the person picks
+  handle('productions:shotList', async (id, format = 'md') => {
+    const p = productions.get(id)
+    const ext = format === 'csv' ? 'csv' : 'md'
+    const safe = String(p.name || 'film').replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim() || 'film'
+    const r = await dialog.showSaveDialog(win, { title: 'Save the shot list', defaultPath: path.join(app.getPath('documents'), `${safe} - shot list.${ext}`), filters: [ext === 'csv' ? { name: 'CSV (spreadsheets)', extensions: ['csv'] } : { name: 'Markdown', extensions: ['md'] }] })
+    if (r.canceled || !r.filePath) return null
+    fs.writeFileSync(r.filePath, (ext === 'csv' ? '\ufeff' : '') + productions.shotList(id, format))
+    return r.filePath
+  })
   handle('window:fullScreen', (on) => {
     win.setFullScreen(!!on)
     return win.isFullScreen()

@@ -199,6 +199,27 @@ them on). The tools say "film" because `list_projects` already means shots.
 H3 follows one character LoRA per shot best: a shot's `character` is its main person; other cast on screen
 come from their face pictures (Reference mode) and are named in the prompt.
 
+## Film craft (after Sam Wasserman's Slate)
+
+Every one of these uses the writer the person chose in Settings → Prompt writer (Claude Code, Codex, the local
+model or an OpenAI-compatible server), as do `write_film_script` and `break_down_film`.
+
+- **Cinematography.** `list_cinematography` gives Slate's 165 setups in 12 groups (film stocks, lenses, lighting
+  setups, camera rigs, single-shot moves, mood, depth layers, frames within the frame, realism, photo, cinematic
+  and commercial styles) and its 12 coverage plans. `add_cinematography` puts setups' phrases into a prompt;
+  `set_film_cinematography` sets them for a whole film.
+- **Lookbook.** `make_lookbook` turns a film, director, cinematographer or described look into look language
+  with no names in it; with `filmId` it becomes that film's look. Names never go into prompts.
+- **Coverage.** `set_scene_coverage` covers a scene with a plan (`dialogue-coverage`: master, OTS A, OTS B, CU A,
+  CU B, a listening reaction). The scene is planned again by `break_down_film`; each shot is named by its slot.
+- **Prompt tools.** `rework_prompt` (any prompt) and `rework_film_shot` (a Projects shot, with history): a
+  director's `note` in plain words, or `tighten`, `enrich`, `distill`, `shot`, `angle`. `prompt_variants` and
+  `film_shot_variants` give three versions to compare. Check `missing` in the answer: anything the rewrite
+  dropped (a spoken line, `{char}`, a `<Picture N>` label). `restore_film_shot_prompt` puts an earlier one back.
+- **Continuity.** `check_film_continuity` reads one scene's shots like a script supervisor and returns issues
+  with a fix each. Show them to the person; change the shots with `edit_film_shot` or `rework_film_shot`.
+- **Shot list.** `export_shot_list` (`md` or `csv`) for a crew, a schedule or a spreadsheet.
+
 ## Sequences (one continuous video)
 
 - `save_sequence` with shots (10 or 15 s each). `method: "take"` renders every shot in one seamless

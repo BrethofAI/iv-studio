@@ -98,6 +98,7 @@ export const CREDITS = [
       { name: 'The Claire character method', by: 'u/DeliciousGorilla', use: 'Designing and training H3 characters: stills, talking clips and the dataset', url: 'https://www.reddit.com/user/DeliciousGorilla' },
       { name: 'H3 prompt-writing guide', by: 'MiniMax', use: 'How the prompt writers shape H3 prompts (downloaded from MiniMax on first use)', licence: 'MiniMax H3 Community License', url: 'https://github.com/MiniMax-AI/MiniMax-H3' },
       { name: 'Directing workflow', by: 'Matthew Hollis', use: 'Staging, reviews and the writers’ direction rules' },
+      { name: 'Slate', by: 'Sam Wasserman (wassermanproductions.com)', use: 'The Cinematography setups and coverage plans (bundled unchanged), and the ideas behind the prompt tools, continuity check, Lookbook and shot list', licence: 'Apache-2.0', url: 'https://wassermanproductions.com', note: 'Through Imagination Studio by keys + Wasserman. Slate’s NOTICE ships in resources/slate.' },
       { name: 'Valtz', by: 'tgo-app-dev', use: 'Ideas for the prompt checker, @ mentions, versions and Compare (no code used)', url: 'https://github.com/tgo-app-dev/valtz' }
     ]
   },
