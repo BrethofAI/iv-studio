@@ -28,9 +28,10 @@ pictures, songs and spoken lines, cut it all together and export. IV Studio driv
 cloud. No strong graphics card? Shots can also render on a GPU in your own [RunPod](https://www.runpod.io) or
 [Modal](https://modal.com) account, billed by the second, or on Comfy Cloud (see [Cloud](#cloud)).
 
-**IV Studio 1.1** adds Seedance 2.5 beside MiniMax H3, speed presets for smaller graphics cards, free finishes
-with their own strength, Compare for up to four versions, a Library that shows how each render was made, and
-Simple words for people new to AI video. See [what's new in 1.1](#whats-new-in-11).
+**IV Studio 1.1** brings your own Claude Code or Codex into the app as a chat that can make, edit and fix things
+for you, MiniMax H3 Image and Seedance 2.5 beside MiniMax H3, effects for any clip, nearly every feature on your
+own RunPod or Modal, speed presets for smaller graphics cards, and a new look that fits any window. See
+[what's new in 1.1](#whats-new-in-11).
 
 <p align="center">
   <img src="docs/images/create.png" alt="Create: Tess picked, Write it for me with the idea, the H3 prompt, and the pinned Your shot card with Hunt 3 previews" width="100%">
@@ -38,17 +39,49 @@ Simple words for people new to AI video. See [what's new in 1.1](#whats-new-in-1
 
 ## What's new in 1.1
 
-- **Effects on any clip.** Right-click a clip in the editor → Effects…: Dub (new words in any language, with new lip
-  movement), Clean plate, Day to night, Add water, SDR to HDR, Remove background and Smooth or slow motion. The
-  result takes the clip's place, and Undo brings it back. Built on [Freefield](https://github.com/neuregex/freefield)'s apps (MIT).
-- **Effects, Sounds and picture tools.** Workflows → Effects turns a photo into an effect clip, a transformation
-  or a transition. Audio → Sounds makes sound effects, ambiences, one-shots and loops with Stable Audio 3.
-  Create → Image → Tools inpaints (paint over a part and describe it), relights, removes backgrounds, upscales
-  and makes depth or normal maps.
-- **LoRAs for every model.** The LoRAs page and every LoRA picker cover MiniMax H3, LTX-2.5, Wan 2.1, Flux 3
-  Klein, Flux.2 Klein, Krea 2, Qwen Image 2.1, Z-Image Turbo, SDXL (with Pony and Illustrious) and Moss: find a
-  model's LoRAs on Civitai, see yours sorted by model, and send one to that model's tray. A LoRA IV Studio
-  can't place can be assigned by hand.
+### Your own Claude Code or Codex, inside IV Studio
+
+- **Chat.** The **Chat** button in the title bar opens a conversation with your own Claude Code or Codex, on
+  your own plan, with every IV Studio tool: it can look things up, write and render shots, sequence, edit, make
+  music and voices, and answer questions about your projects. It knows which page you're on and which shot,
+  film or edit is open. Anything that deletes, costs money, installs or changes a setting shows an **Allow /
+  Don't allow** card first. Conversations are kept, and you can go back to an earlier one. On a wide window the
+  chat sits beside the page; on a smaller one it slides over it. Works on Windows, Mac and Linux.
+- **Ask about this.** Buttons around the app hand the chat a question: **Ask … to fix it** on a failed render
+  (with IV Studio's own explanation), **Ask …** on any run and **Ask … to pick the best take** on the Shot page,
+  and **Ask … about this** in the Library viewer.
+- **Drop files in.** Drop pictures, videos, sound or a script onto the chat, or use its paperclip. The agent can
+  look at a picture or a moment of a video, and use the files as a first frame, a reference, a song or a script.
+- **Show me where.** Ask "where do I train a character?" and IV Studio goes to the right page and lights up the
+  right button, with the agent's words beside it.
+- **Edit by talking.** On an open edit, press **Ask …** and say "tighten the middle", "add a song under it" or
+  "put captions on". Captions are new: Whisper hears each spoken clip and the words go on as short lines at the
+  bottom, timed across the clip (silent clips are left alone). Every change the agent makes gets an **Undo
+  this change** in the chat, even when the edit isn't open, and an open edit shows the change at once.
+- **Recipes.** When something works, say "save this as a recipe". It becomes a button on the Dashboard that asks
+  the chat for the same thing again, written so it works another day.
+- **Overnight batches.** "Make 10 variations of this idea overnight, three takes each": the agent writes each
+  variation and queues them on your PC (free, up to 12). IV Studio keeps the PC from sleeping, ranks the takes
+  as they finish, and leaves a report in the chat with the best ones to open.
+- **A short film in one conversation.** **Make one with …** on Projects: the agent takes an idea through script,
+  cast, storyboard, shots and rough cut, and stops for your OK at each step. It only starts filming after you
+  approve the storyboard.
+- **A spending limit.** Settings → Agents: let the chat spend Comfy.org credits without asking, up to a daily
+  amount and an amount per step (off unless you turn it on). Each paid step shows what it spent and how much of
+  today's limit is used. Renders on your cloud GPU, training and anything without a known price always ask.
+  Seedance now works from the chat too.
+- **Let Claude Code make it.** On the Dashboard, a button beside **Make it** hands your idea to your own agent:
+  it writes the prompt and renders the previews on this PC, with its steps in a panel and a Stop button. It
+  never deletes, installs or spends.
+- **Install them from IV Studio.** Check my PC asks whether you use Claude Code or Codex, and Settings → Agents
+  can install either with its maker's own installer and open its sign-in.
+
+### Make more
+
+- **MiniMax H3 Image.** A new picture model in Create → Image: big, detailed pictures at 4, 8 or 16 MP that
+  follow long descriptions closely, with MiniMax's own prompt tips beside the box. It needs ComfyUI 0.45 or
+  newer and a 22 GB download (Settings → Setup). New pictures are clean; edits with the int8
+  download come out over-sharpened for now.
 - **Seedance 2.5 in Create.** A model switch beside MiniMax H3: the same shots on ByteDance's Seedance 2.5,
   through ComfyUI's partner nodes, on your Comfy.org credits. Cheap 480p drafts to try ideas, or 720p and
   1080p takes, 4 to 30 seconds. The price shows on the button and you confirm before anything is charged.
@@ -59,23 +92,77 @@ Simple words for people new to AI video. See [what's new in 1.1](#whats-new-in-1
   (quickest), or H3 redrawing it at full size followed by DLSS 5 or SeedVR2.
 - **Upscaler strength.** DLSS 5 has a strength and a look (Default, Natural, Cinematic), SeedVR2 an extra-detail
   slider and H3's redraw a strength, in the Finish dialog and in Enhance.
+- **Effects on any clip.** Right-click a clip in the editor → Effects…: Dub (new words in any language, with new
+  lip movement), Clean plate, Day to night, Add water, SDR to HDR, Remove background and Smooth or slow motion.
+  The result takes the clip's place, and Undo brings it back. Built on
+  [Freefield](https://github.com/neuregex/freefield)'s apps (MIT).
+- **Effects, Sounds and picture tools.** Workflows → Effects turns a photo into an effect clip, a transformation
+  or a transition. Audio → Sounds makes sound effects, ambiences, one-shots and loops with Stable Audio 3.
+  Create → Image → Tools inpaints (paint over a part and describe it), relights, removes backgrounds, upscales
+  and makes depth or normal maps.
+- **LoRAs for every model.** The LoRAs page and every LoRA picker cover MiniMax H3, LTX-2.5, Wan 2.1, Flux 3
+  Klein, Flux.2 Klein, Krea 2, Qwen Image 2.1, Z-Image Turbo, SDXL (with Pony and Illustrious) and Moss: find a
+  model's LoRAs on Civitai, see yours sorted by model, and send one to that model's tray. A LoRA IV Studio
+  can't place can be assigned by hand.
+- **Start from an example.** Create offers six ready-made shots that fill in a working prompt, and the welcome
+  wizard's **Make your first shot** opens the first one ready to hunt.
 - **Speed presets.** Quality, Balanced, Fast and Low memory trade picture size and steps for time and memory.
   Check my PC picks the one that suits your card; every preset fits a 12 GB card, the 2 MP finish too.
+- **How long, and what it costs.** Hunt and Finish say how long they'll take on your machine, worked out from
+  your own earlier renders, and what a cloud render will cost.
+- **Failed renders in plain words.** Out of memory, a missing model or node pack, a full drive, credits and more
+  are explained with a button for the fix. ComfyUI's own message is still under Details.
 - **Compare and finish.** Mark up to four takes, finals or enhanced copies and play them in sync, side by
   side, as a wipe or in a grid, zoomed in on the same spot. Picking a take opens the Finish settings over the
   page, and every finished version sits in one card.
 - **Library details.** Open any render to see how it was made: model, size, length, seed, character, LoRAs,
   how it was finished and enhanced, render time, cost and the prompt (with Copy). Tiles show size, length and
   model; search finds words in prompts.
+- **An end card, if you want one.** The editor can add a "Made with IV Studio" end card to an export (Edit
+  settings → End card), off unless you turn it on, and each export shape says where it fits.
+
+### Your own cloud does nearly everything
+
+- **Almost every feature on your RunPod or Modal.** Pictures and picture tools, storyboard sketches, character
+  design, Music, Sounds, Cut out, Reframe, Replace (with Remake), Effects, Retake in the editor, the SeedVR2
+  finish and Enhance now run on your own cloud GPU, not just shots. The models a render needs download into
+  your cloud storage the first time, after you agree to the size; your LoRAs and RefMods go up once.
+- **Voices in your cloud.** Voices, Lines, Speak it and Whisper's read-backs run on your RunPod or Modal too.
+- **Hugging Face models.** A Hugging Face token on the Cloud page (kept sealed) lets the cloud fetch gated models
+  like LTX-2.5 and Flux.2 Klein.
+- **Cloud setup you can follow.** Setting up RunPod or Modal shows each step with a timer and the time left,
+  and tells you when it's ready (1.0.6). Modal's sign-in, sign-out and new accounts work (1.0.3 to 1.0.5).
+- **The IV Studio cloud beta.** Want IV Studio to run the cloud for you? Join the waitlist on the Cloud page or
+  in Settings → Privacy. Only the email you type is sent, and only when you press Join.
+
+### Easier to use
+
+- **A new look.** Tall animated banners with a quick-start bar on every main page, and an Audio front page.
+  Nothing flashes (every banner is checked against the WCAG flash limit), animations pause when they're off
+  screen, and Reduce motion holds them still.
+- **Fits any window.** Pages, banners and the title bar adapt to smaller windows, and choice cards wrap
+  instead of being cut off.
+- **Searches that say so.** The search bars in the banners have a **Search** button that takes you to the
+  results and a count of what matches; **+ New shot**, **+ New film** and **+ New edit** are their own buttons.
+- **What's new as a pop-up.** After an update, a small **See what's new in this update** button opens this list.
 - **Simple words.** Check my PC asks how much you know about AI video. New to it? IV Studio says
   "trained look" for LoRA, "variation number" for seed, "quick sharpen" for DLSS and so on. Only the words
   change; switch it in Settings → Words.
 - **Get ComfyUI for me.** No ComfyUI yet? Setup downloads ComfyUI's official portable build for your graphics
   card into a folder you choose, checks it, unpacks it and starts it. Already have one? IV Studio keeps using it.
-- **Cloud setup you can follow.** Setting up RunPod or Modal shows each step with a timer and the time left,
-  and tells you when it's ready (1.0.6). Modal's sign-in, sign-out and new accounts work (1.0.3 to 1.0.5).
+- **A tidier Setup.** A status card first, then folding sections that open by themselves when something needs
+  you. **Restart ComfyUI** is one click (it asks first while renders run), and node packs that are installed
+  but not loaded yet say so.
+- **Less waiting on memory.** Effects free the GPU before their video model loads, and reopening IV Studio while
+  ComfyUI starts no longer starts a second one.
+- **An installer in IV Studio's colours,** with the eye down the side.
+
+### Updates, privacy and credits
+
 - **Updates on a Mac.** Mac copies now download and install new versions themselves, like Windows and Linux:
   **Restart to update**, or it installs when you quit. (IV Studio needs to be in your Applications folder.)
+- **Privacy.** Settings → Privacy: IV Studio sends nothing about how you use it unless you turn on **Help improve
+  IV Studio**, which counts only opens and renders, never prompts, pictures or files. Incognito never counts.
 - **Training on Fizgig 9.** Character training uses Fizgig 9.3.2, on this PC, Modal and RunPod. RunPod training
   pods start from Fizgig's own RunPod template, so your training time supports Fizgig too.
 - **Credits.** Settings → About → Credits lists every model, tool, node pack and library IV Studio is built on:
