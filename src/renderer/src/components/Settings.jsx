@@ -681,8 +681,70 @@ function CivitaiCard({ n, settings, setSettings, notify }) {
   )
 }
 
+// The chat's spending limit (spending.js): off by default; when on, Seedance steps priced under both amounts, and
+// covered by the Comfy.org balance, go ahead without an Allow card. 211 Comfy credits = $1.
+const BUDGET = { on: false, daily: 1000, perStep: 250 }
+const asUsd = (credits) => `$${(credits / 211).toFixed(2)}`
+function SpendingField({ settings, setSettings, notify }) {
+  const b = { ...BUDGET, ...(settings.chatBudget || {}) }
+  const [daily, setDaily] = useState(String(b.daily))
+  const [perStep, setPerStep] = useState(String(b.perStep))
+  const [today, setToday] = useState(null)
+  useEffect(() => {
+    setDaily(String(b.daily))
+    setPerStep(String(b.perStep))
+    window.ivstudio.chat.spending?.().then(setToday).catch(() => {})
+  }, [b.on, b.daily, b.perStep])
+  // the chat spending something changes today's figure
+  useEffect(() => window.ivstudio.chat.onChange(() => window.ivstudio.chat.spending?.().then(setToday).catch(() => {})), [])
+  const whole = (v, fallback) => {
+    const x = Math.round(Number(v))
+    return v !== '' && Number.isFinite(x) && x >= 0 ? x : fallback
+  }
+  async function save(patch) {
+    try {
+      setSettings(await window.ivstudio.settings.set({ chatBudget: { on: b.on, daily: b.daily, perStep: b.perStep, ...patch } }))
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  const amount = (label, value, setValue, key) => (
+    <label className="set-budget-row">
+      <span className="set-budget-label small">{label}</span>
+      <input
+        type="number"
+        min="0"
+        step="50"
+        value={value}
+        aria-label={label}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => save({ [key]: whole(value, b[key]) })}
+        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+      />
+      <span className="small dim">credits · about {asUsd(whole(value, b[key]))}</span>
+    </label>
+  )
+  return (
+    <SetField
+      label="Spending limit"
+      hint="For IV Studio’s chat. Off: every step that spends Comfy.org credits asks first. On: a Seedance step goes ahead without asking when its price (IV Studio’s own, the top of any range) fits both amounts and your balance covers it. Cloud-GPU renders, character training and anything without a known price always ask. Every paid step counts when it starts, even if the render later fails; the day starts at midnight."
+    >
+      <SetSwitch checked={b.on} onChange={(on) => save({ on })}>
+        Let the chat spend credits without asking, up to a limit
+      </SetSwitch>
+      {b.on && (
+        <div className="set-budget">
+          {amount('A day', daily, setDaily, 'daily')}
+          {amount('One step', perStep, setPerStep, 'perStep')}
+        </div>
+      )}
+      {today?.on && <p className="set-hint mono small">{today.label}</p>}
+    </SetField>
+  )
+}
+
 // Agents (MCP): a message to paste into any agent, the manual commands, and the Claude Code skill.
-function AgentCard({ n, mcp, notify }) {
+function AgentCard({ n, mcp, settings, setSettings, notify }) {
   const [agents, setAgents] = useState(null)
   const [client, setClient] = useState('claude')
   const setup = useAgentSetup()
@@ -711,6 +773,7 @@ function AgentCard({ n, mcp, notify }) {
       <SetField label="On this PC" hint="Your own Claude Code or Codex, on your own plan. Install puts it in with the maker's own installer; Sign in opens its browser login.">
         <AgentRows setup={setup} notify={notify} />
       </SetField>
+      <SpendingField settings={settings} setSettings={setSettings} notify={notify} />
       <SetField label="Easiest" hint="One message: your agent adds IV Studio, reads its guide and checks your setup.">
         <SetCode text={agents.paste} label="Copy message" tall />
       </SetField>
@@ -1014,7 +1077,7 @@ export default function Settings({ info, recheck, notify, go, setup }) {
           <WriterCard n={n('writer')} {...common} />
           <AccountCard n={n('account')} notify={notify} />
           <CivitaiCard n={n('civitai')} {...common} />
-          <AgentCard n={n('agents')} mcp={info?.mcp} notify={notify} />
+          <AgentCard n={n('agents')} mcp={info?.mcp} {...common} />
           <PrivacyCard n={n('privacy')} notify={notify} />
           <UpdateSettings n={n('updates')} notify={notify} />
           <AboutCard n={n('about')} info={info} />

@@ -8,6 +8,7 @@ import Failure from './Failure'
 import { shapeOfPlan } from '../../../service/timing'
 import { LiveFrame } from './Live'
 import { CompareViewer, PromptDiff, runChanges } from './Compare'
+import { askAgent, useAgentName } from './ChatPanel'
 import { lintPrompt } from '../../../service/lint'
 import { lintSeedance } from '../../../service/seedlint'
 
@@ -665,6 +666,8 @@ function FinishDialog({ children, onClose }) {
 
 export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps, remote, ownCloud, editRun, openSequence, characters = [] }) {
   const [project, setProject] = useState(null)
+  // the person's own Claude Code or Codex, for "Ask" and "pick the best take" on a run (ChatPanel.jsx)
+  const agent = useAgentName()
   // a sequence's shot-by-shot project: which shot each run is (sequences.runsOf), so edits go back through it
   const [seqRuns, setSeqRuns] = useState(null)
   const [linking, setLinking] = useState(null)
@@ -883,6 +886,11 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                 </button>
               )}
               {changes.length > 0 && <span className="run-changes mono small">Changed: {changes.join(' · ')}</span>}
+              {agent && (
+                <button className="btn btn-small run-ask" onClick={() => askAgent({ about: `run ${runs.length - i} of this shot (previews job ${run.id})` })} title={`Ask ${agent} about this run in the chat`}>
+                  Ask {agent}
+                </button>
+              )}
             </div>
             <Progress job={run} />
             {run.status === 'error' && <Failure job={run} notify={notify} />}
@@ -910,10 +918,29 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                 </button>
               </details>
             )}
-            {previews.length > 1 && !run.ranking && (
-              <button className="link-btn mono small rank-btn" disabled={!!ranking[run.id]} onClick={() => rank(run)}>
-                {ranking[run.id] ? 'Ranking the takes… (a minute when there are lines to hear)' : '★ Rank these takes'}
-              </button>
+            {previews.length > 1 && (!run.ranking || (agent && run.status === 'success')) && (
+              <div className="run-pick">
+                {!run.ranking && (
+                  <button className="link-btn mono small rank-btn" disabled={!!ranking[run.id]} onClick={() => rank(run)}>
+                    {ranking[run.id] ? 'Ranking the takes… (a minute when there are lines to hear)' : '★ Rank these takes'}
+                  </button>
+                )}
+                {agent && run.status === 'success' && (
+                  <button
+                    className="btn btn-small run-pick-ask"
+                    onClick={() =>
+                      askAgent({
+                        send: true,
+                        about: `run ${runs.length - i} of this shot (previews job ${run.id}, ${previews.length} takes)`,
+                        text: 'Which of these takes would you finish, and why? Use rank_takes, then review_take on the two best, and answer in a few short sentences. Don’t finish or render anything until I say so.'
+                      })
+                    }
+                    title={`${agent} ranks the takes, looks closely at the best two and says which it would finish. It doesn't finish anything until you say so.`}
+                  >
+                    Ask {agent} to pick the best take
+                  </button>
+                )}
+              </div>
             )}
             {previews.length > 0 && (
               <div className={`candidates n${previews.length}`}>

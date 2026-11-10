@@ -357,6 +357,46 @@ export const TOURS = {
   }
 }
 
+// The page each page tour lives on (as App.jsx's iv:go takes it), for "Show me where" from the chat: an agent names a
+// tour and one of its steps (show_in_app), and IV Studio goes there and lights that one part up. Pages about one item
+// (a shot, a film, an edit) need its id, so they aren't places to show.
+export const TOUR_PAGES = {
+  home: { page: 'home', section: 'video' },
+  create: { page: 'create', section: 'video', create: 'video' },
+  image: { page: 'create', section: 'video', create: 'image' },
+  projects: { page: 'projects', section: 'video' },
+  shots: { page: 'library', section: 'video' },
+  edits: { page: 'edits', section: 'video' },
+  workflows: { page: 'workflows', section: 'video' },
+  sequences: { page: 'sequences', section: 'video' },
+  replace: { page: 'replace', section: 'video' },
+  reel: { page: 'reel', section: 'video' },
+  shinobi: { page: 'shinobi', section: 'video' },
+  sizzle: { page: 'sizzle', section: 'video' },
+  rebuild: { page: 'rebuild', section: 'video' },
+  effects: { page: 'effects', section: 'video' },
+  characters: { page: 'characters', section: 'video' },
+  loras: { page: 'loras', section: 'video' },
+  cloud: { page: 'cloud', section: 'video' },
+  settings: { page: 'settings', section: 'video' },
+  setup: { page: 'setup', section: 'video' },
+  library: { page: 'media', section: 'video' },
+  audio: { page: 'audio', section: 'audio' },
+  voices: { page: 'voices', section: 'audio' },
+  lines: { page: 'lines', section: 'audio' },
+  music: { page: 'music', section: 'audio' },
+  sounds: { page: 'sounds', section: 'audio' }
+}
+// Every place an agent can show: { where (a tour), page (its title), spot (a step's title), about (its words) }.
+export const placesToShow = () =>
+  Object.keys(TOUR_PAGES).flatMap((where) => (TOURS[where]?.steps || []).filter((s) => s.at).map((s) => ({ where, page: TOURS[where].title, spot: s.title, about: s.text })))
+// The one-step tour that shows a place: go to its page, light up its part, say what to do there.
+export function spotTour({ where, spot, say }) {
+  const step = TOURS[where]?.steps.find((s) => s.title === spot && s.at)
+  if (!TOUR_PAGES[where] || !step) return null
+  return { id: `spot:${where}`, title: TOURS[where].title, steps: [{ go: TOUR_PAGES[where], at: step.at, title: step.title, text: say || step.text }] }
+}
+
 // the page each banner art belongs to, when the page doesn't name its own tour
 export const TOUR_FOR_ART = { create: 'create', shots: 'shots', projects: 'projects', edit: 'edits', characters: 'characters', audio: 'audio', voices: 'voices', lines: 'lines', music: 'music', sounds: 'sounds', effects: 'effects', workflows: 'workflows', sequences: 'sequences', shinobi: 'shinobi', replace: 'replace', sizzle: 'sizzle', rebuild: 'rebuild', loras: 'loras', library: 'library', settings: 'settings', cloud: 'cloud' }
 

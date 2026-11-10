@@ -128,6 +128,30 @@ export const IMAGE_FAMILIES = [
     note: 'The classic: thousands of fine-tunes and LoRAs on Civitai.'
   },
   {
+    // MiniMax-H3-Image, after ComfyUI's two templates (image_minimax_h3_image_t2i and _edit, 2026-11-10): one checkpoint
+    // that makes pictures and edits with up to 16 reference pictures, distilled to 6 steps with no CFG, at 4 to 16 MP
+    // (it's weak below 4). Its text encoder is H3's own Qwen3-VL 32B, unchanged, so any H3 text encoder works.
+    id: 'h3image',
+    label: 'MiniMax H3 Image',
+    unet: /minimax[_ -]?h3[_ -]?image/i,
+    te: { type: 'minimax', files: ['qwen3vl_32b_minimax_h3_int8_convrot.safetensors', 'qwen3vl_32b_minimax_h3_int4_convrot.safetensors', 'qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors', 'qwen3vl_32b_minimax_h3_bf16.safetensors'] },
+    vae: ['minimax_h3_image_vae_fp16.safetensors'],
+    steps: 6,
+    cfg: 1,
+    sampler: 'euler',
+    edit: true,
+    maxRefs: 16,
+    node: 'MiniMaxH3ImageConditioning',
+    sizes: [4, 8, 16],
+    defaultMp: 4,
+    noNegative: true,
+    loras: /minimax ?h3[ _-]?image|h3[ _-]?image/i,
+    licence: 'MiniMax-H3-Image Community License',
+    note: 'Big, detailed pictures (up to 16 MP) that follow long descriptions closely; edits with up to 16 pictures. Needs a lot of memory at 16 MP. Edits with the int8 download come out heavily over-sharpened, even in ComfyUI’s own template; new pictures are clean.',
+    // MiniMax's own prompt guide (skills/h3-image-prompt-writing), in short, for whoever writes the prompt
+    tips: 'Describe the finished picture in plain English, around one clear focus: what is in it, where things are (left/right, front/back), light, style and medium. Keep every name, count and detail asked for. Put any words that should appear in the picture in quotes, exactly as written. For an edit, call the pictures <Picture 1>, <Picture 2> in the order given, say what stays (for example "<Picture 1> is fully preserved."), then describe the finished result rather than giving an order. No negative prompt.'
+  },
+  {
     // a frame from a very short MiniMax H3 render (text mode, as a shot's first pass): pictures in the look of your H3
     // shots, with your H3 character LoRAs. Its text encoder and VAE are H3's own (Setup); the DMAD 4-step LoRA keeps
     // it at 8 steps.
@@ -168,10 +192,11 @@ const writeJson = (file, value) => {
 }
 const DONE = ['success', 'error', 'cancelled']
 
-// Width and height for an aspect at about this many megapixels, on a 32-pixel grid every family accepts.
+// Width and height for an aspect at about this many megapixels, on a 32-pixel grid every family accepts. Most
+// families stop at 4 MP; MiniMax H3 Image works best at 16 (its own table: 4096x4096, 5472x3072, 6272x2688...).
 export function imageSize(aspect, megapixels) {
   const ar = IMAGE_ASPECTS[aspect] || 1
-  const px = Math.max(0.25, Math.min(4, Number(megapixels) || 1)) * 1024 * 1024
+  const px = Math.max(0.25, Math.min(20, Number(megapixels) || 1)) * 1024 * 1024
   const w = Math.round(Math.sqrt(px * ar) / 32) * 32
   const h = Math.round(Math.sqrt(px / ar) / 32) * 32
   return { width: w, height: h }
@@ -301,6 +326,22 @@ export function imageGraph({ family, mode = 'generate', unet, te, vae, loras = [
     const enc = add('TextEncodeQwenImage21', inputs)
     const latent = mode === 'edit' ? repeat([enc, 2]) : [add('EmptyLatentImage', { width, height, batch_size: batch }), 0]
     save(ksample(cached, [enc, 0], [enc, 1], latent))
+  } else if (family === 'h3image') {
+    // ComfyUI's MiniMax-H3-Image templates: H3 Image conditioning (the prompt, the size and, for an edit, the
+    // reference pictures as <Picture 1>, <Picture 2>...) gives the conditioning and the empty latent; no CFG, so the
+    // negative is zeroed; 6 steps of euler. An edit's pictures are scaled to the size asked for (it's weak below 4 MP),
+    // on a 32-pixel grid, and the result takes the first picture's shape.
+    const inputs = { clip, vae: vaeOut, prompt, width, height }
+    if (mode === 'edit') {
+      const imgs = loadRefs().map((img) => [add('ImageScaleToTotalPixels', { image: img, upscale_method: 'area', megapixels, resolution_steps: 32 }), 0])
+      imgs.forEach((img, i) => (inputs[`images.image_${i + 1}`] = img))
+      if (!keepAspect) {
+        const size = add('GetImageSize', { image: imgs[0] })
+        ;[inputs.width, inputs.height] = [[size, 0], [size, 1]]
+      }
+    }
+    const cond = add('MiniMaxH3ImageConditioning', inputs)
+    save(ksample(model, [cond, 0], [add('ConditioningZeroOut', { conditioning: [cond, 0] }), 0], repeat([cond, 1])))
   } else if (family === 'zimage') {
     const shifted = [add('ModelSamplingAuraFlow', { model, shift: 3 }), 0]
     const pos = encode(prompt)
@@ -357,6 +398,8 @@ export class Images {
         editNote = edit ? null : !nodes ? 'Krea 2 edits need the comfyui-krea2edit nodes.' : 'Krea 2 edits need the Krea 2 Identity Edit LoRA (krea2_identity_edit) in ComfyUI’s loras folder.'
       }
       if (f.id === 'flux3' && !info.ReferenceMultiLatent) [edit, editNote] = [false, 'Flux 3 Klein edits need a newer ComfyUI.']
+      // a family built on a node newer than this ComfyUI (MiniMax H3 Image, 2026-11-10)
+      if (f.node && !info[f.node]) missing.push(`ComfyUI's ${f.label} support (update ComfyUI)`)
       // H3 stills need H3's turbo LoRA and ComfyUI's own H3 nodes
       let turbo = null
       if (f.turbo) {
@@ -386,9 +429,14 @@ export class Images {
       if (!fam.edit) throw new Error(fam.editNote || `${fam.label} can't edit pictures.`)
       if (!refs.length) throw new Error('Add the picture to edit.')
       if (fam.id === 'krea2' && refs.length > 1) throw new Error('Krea 2 edits one picture at a time.')
-      if (refs.length > (fam.id === 'qwen21' ? 3 : 6)) throw new Error(`${fam.label} takes up to ${fam.id === 'qwen21' ? 3 : 6} reference pictures.`)
+      const most = fam.maxRefs || (fam.id === 'qwen21' ? 3 : 6)
+      if (refs.length > most) throw new Error(`${fam.label} takes up to ${most} reference pictures.`)
     } else if (mode !== 'generate') throw new Error('Mode is generate or edit.')
     const spec = IMAGE_FAMILIES.find((f) => f.id === fam.id)
+    // a family that's weak below its smallest size (MiniMax H3 Image under 4 MP) gets its own default
+    if (spec.sizes && !(Number(megapixels) >= spec.sizes[0])) megapixels = spec.defaultMp || spec.sizes[0]
+    // and the others stay at the 4 MP they were built for
+    if (!spec.sizes) megapixels = Math.min(4, Number(megapixels) || 1)
     const isBase = spec.base && spec.base.match.test(model.split(/[\\/]/).pop())
     const s = seed == null || seed === '' ? Math.floor(Math.random() * 2 ** 31) : Math.floor(Number(seed))
     const usedSteps = Math.round(Number(steps) || (isBase ? spec.base.steps : spec.steps))
@@ -401,7 +449,7 @@ export class Images {
     }
     const id = randomUUID().slice(0, 8)
     const title = String(name || '').trim() || text.split(/[.,\n]/)[0].slice(0, 48)
-    const graph = imageGraph({ family: fam.id, mode, unet: model, te: fam.te, vae: fam.vae, loras: loras.filter((l) => l?.name), prompt: text, negative, width, height, count, seed: s, steps: usedSteps, cfg: usedCfg, refs: uploaded, megapixels: Number(megapixels) || 1, editLora: fam.editLora, turbo: fam.turbo || null, keepAspect: keepAspect && mode === 'edit' && ['flux2', 'flux3'].includes(fam.id), prefix: `iv_studio/images/${slug(title)}_${id}` })
+    const graph = imageGraph({ family: fam.id, mode, unet: model, te: fam.te, vae: fam.vae, loras: loras.filter((l) => l?.name), prompt: text, negative, width, height, count, seed: s, steps: usedSteps, cfg: usedCfg, refs: uploaded, megapixels: Number(megapixels) || 1, editLora: fam.editLora, turbo: fam.turbo || null, keepAspect: keepAspect && mode === 'edit' && ['flux2', 'flux3', 'h3image'].includes(fam.id), prefix: `iv_studio/images/${slug(title)}_${id}` })
     const project = this.studio.createProject(`Image · ${title}`, null, null, 'image')
     const job = await this.studio.submitGraph({ kind: `picture:${fam.id}`, graph, projectId: project.id, name: title, plan: { images: true, request: { prompt: text } } })
     const record = { id, name: title, mode, family: fam.id, familyLabel: fam.label, model, prompt: text, negative, loras: loras.filter((l) => l?.name), aspect, megapixels: Number(megapixels) || 1, width: mode === 'edit' ? null : width, height: mode === 'edit' ? null : height, count: Math.max(1, Math.min(4, Math.round(count))), seed: s, steps: usedSteps, cfg: usedCfg, refs, ...(tag ? { tag } : {}), projectId: project.id, jobId: job.id, status: job.status, files: [], createdAt: now() }
@@ -582,5 +630,5 @@ export class Images {
 
 // what the window and agents see of a family spec (no regular expressions)
 function strip(f) {
-  return { id: f.id, label: f.label, licence: f.licence, note: f.note, edit: f.edit === true, loraPattern: f.loras.source, steps: f.steps, cfg: f.cfg, maxRefs: f.id === 'krea2' ? 1 : f.id === 'qwen21' ? 3 : 6 }
+  return { id: f.id, label: f.label, licence: f.licence, note: f.note, edit: f.edit === true, loraPattern: f.loras.source, steps: f.steps, cfg: f.cfg, maxRefs: f.maxRefs || (f.id === 'krea2' ? 1 : f.id === 'qwen21' ? 3 : 6), sizes: f.sizes || null, defaultMp: f.defaultMp || null, noNegative: !!f.noNegative, tips: f.tips || null }
 }

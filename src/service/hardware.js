@@ -109,6 +109,8 @@ export const MODEL_GROUPS = [
   { id: 'core', label: 'Video shots (MiniMax H3)', ids: ['fl2va', 'ref2va', 'text_encoder', 'video_vae', 'audio_vae', 'dmad', 'upscaler'], needs: 'video' },
   { id: 'design', label: 'Designing characters (Z-Image)', ids: ['zimage', 'zimage_te', 'zimage_vae'], needs: 'pictures' },
   { id: 'sdxl', label: 'SDXL pictures', ids: ['sdxl_base'], needs: 'pictures' },
+  // MiniMax H3 Image reads text with H3's own text encoder, so it's shared with the video shots
+  { id: 'h3image', label: 'Pictures with MiniMax H3 Image (16 MP, edits with up to 16 pictures)', ids: ['h3image', 'h3image_vae', 'text_encoder'], needs: 'pictures' },
   { id: 'music', label: 'Music (MiniMax Music 3 and ACE-Step)', ids: ['music3_dit', 'music3_te', 'music3_vae', 'ace15'], needs: 'music' },
   { id: 'sounds', label: 'Sound effects (Stable Audio 3)', ids: ['sa3', 'sa3_te'], needs: 'music' },
   { id: 'pictools', label: 'Picture tools: relight, remove background, depth', ids: ['relight_unet', 'relight_te', 'relight_vae', 'relight_lightning', 'relight_lora', 'birefnet', 'moge'], needs: 'pictures' },

@@ -5,6 +5,7 @@ import QuickBar from './AudioQuick'
 import { fileUrl } from './edit/model'
 import Loading from './Loading'
 import { dayGroup, groupBy, WHEN, inWhen, Chips, Near, useMore, Groups, FilterPanel } from './ShelfKit'
+import { askAgent, useAgentName } from './ChatPanel'
 
 // Everything made in IV Studio in one place: shot, sequence and Replace renders, Edit exports, pictures
 // (Create -> Image), songs and voice lines. The takes of one shot (its previews and finals), of one sequence or of one edit are a single
@@ -64,6 +65,8 @@ export function Viewer({ sets, at, setAt, onClose, edits, notify, sendToCreate, 
   const set = sets[si]
   const item = set?.items[ii]
   const [target, setTarget] = useState('')
+  // the person's own Claude Code or Codex (ChatPanel.jsx): the chat opens with this item attached
+  const agent = useAgentName()
   // every version of every set, in order, for the arrow keys
   const flat = useMemo(() => sets.flatMap((s, a) => s.items.map((_, b) => [a, b])), [sets])
   const pos = flat.findIndex(([a, b]) => a === si && b === ii)
@@ -91,6 +94,12 @@ export function Viewer({ sets, at, setAt, onClose, edits, notify, sendToCreate, 
     } catch (err) {
       notify(err.message)
     }
+  }
+  const KIND_WORD = { video: 'video', image: 'picture', music: 'song', voice: 'voice line', sound: 'sound' }
+  const askAbout = () => {
+    const ids = [item.projectId && `shot id ${item.projectId}`, item.sequenceId && `sequence id ${item.sequenceId}`, item.jobId && `job ${item.jobId}`].filter(Boolean)
+    onClose()
+    askAgent({ about: `the ${KIND_WORD[item.type] || 'item'} “${set.name}”${item.variant ? ` (${item.variant})` : ''}: ${item.file.path}${ids.length ? `; ${ids.join(', ')}` : ''}` })
   }
   const sound = item.type !== 'video' && item.type !== 'image'
   const meta = [item.detail, secs(item.duration), new Date(item.at).toLocaleString()].filter(Boolean)
@@ -178,6 +187,11 @@ export function Viewer({ sets, at, setAt, onClose, edits, notify, sendToCreate, 
                 Add to edit
               </button>
             </div>
+            {agent && (
+              <button className="btn viewer-ask" onClick={askAbout} title={`Ask ${agent} about this in the chat`}>
+                Ask {agent} about this
+              </button>
+            )}
             <button className="link-btn mono viewer-reveal" onClick={() => window.ivstudio.files.reveal(item.file).catch((err) => notify(err.message))}>
               Show file
             </button>

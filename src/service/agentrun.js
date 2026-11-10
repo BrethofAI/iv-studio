@@ -124,11 +124,13 @@ const CHAT_INSTALLS = new Set(['install_node_packs', 'update_comfy', 'undo_comfy
 const CHAT_SETTINGS = new Set(['set_workflow_model', 'set_lora_family'])
 const CHAT_TRAINING = new Set(['start_training', 'create_character_training', 'make_training_clips'])
 // calls that only read, price or write words: fine even while Settings renders on the cloud
-const CHAT_READS = /^(get|list|check|price|estimate|search|identify|read)_|^(scan_hardware|plan_render|comfy_balance|music_status|voice_status|sound_status|picture_tools_status|shinobi_status|shinobi_tools|effects_list|grab_frame|write_prompt|write_shots_from_story|write_sound|write_film_script|write_film_shot_prompt|free_memory|release_voice_engine)$/
+const CHAT_READS = /^(get|list|check|price|estimate|search|identify|read)_|^(scan_hardware|plan_render|comfy_balance|music_status|voice_status|sound_status|picture_tools_status|shinobi_status|shinobi_tools|effects_list|grab_frame|write_prompt|write_shots_from_story|write_sound|write_film_script|write_film_shot_prompt|free_memory|release_voice_engine|show_in_app)$/
 export function chatAsk(name, args = {}, { settings = {} } = {}) {
   if (name.startsWith('delete_')) return 'This deletes something and can’t be undone.'
+  // reading, pricing and writing words never spend, even about Seedance (price_shot)
+  if (CHAT_READS.test(name)) return null
   if (args.engine === 'seedance' || args.way === 'seedance') return 'Seedance renders on your Comfy.org credits: this costs money.'
-  if (Number(args.confirm_cost) > 0) return `This costs money: about ${Number(args.confirm_cost)} credits.`
+  if (Number(args.confirm_cost) > 0) return `This costs money: about $${Number(args.confirm_cost).toFixed(2)}.`
   if (CHAT_INSTALLS.has(name)) return 'This installs, downloads or updates something on your computer.'
   if (CHAT_SETTINGS.has(name)) return 'This changes a setting.'
   if (CHAT_TRAINING.has(name)) return 'This starts character training, which takes hours and can cost money on a cloud GPU.'

@@ -77,11 +77,12 @@ export function resourcesDir(hint) {
 // comfyFolder: the person's main ComfyUI folder; comfyLauncher: the shortcut, .bat or ComfyUI.exe that starts
 // ComfyUI ('' = the best one in comfyFolder, else the best one found on this PC); comfyAutoStart:
 // start it when IV Studio opens if it isn't running (comfylauncher.js).
+// chatBudget: the chat's spending limit { on, daily, perStep } in Comfy credits (spending.js; null = off).
 // incognito: the app works in its private set of everything made (see incognitoDir); switched by a restart.
 // outputFolder / privateFolder: the folder inside ComfyUI's output where renders save, normally and in
 // Incognito ('' = straight into output). Incognito uploads go into the same folder name under input.
 export const PRIVATE_FOLDER = 'IV Private'
-const DEFAULT_SETTINGS = { comfyUrl: 'http://127.0.0.1:8188', window: null, promptEngine: 'local', ollamaUrl: '', ollamaModel: 'huihui_ai/qwen3-vl-abliterated:8b-instruct', claudeModel: '', codexModel: '', comfyApiKey: null, target: 'local', cloud: null, cloudToken: null, cloudProvider: 'modal', runpod: null, runpodKey: null, runpodToken: null, models: {}, comfyFolder: '', comfyLauncher: '', comfyAutoStart: true, civitaiKey: null, civitaiMature: false, civitaiUnblur: false, incognito: false, outputFolder: '', privateFolder: PRIVATE_FOLDER, onboarded: null, hardware: null, shotPrefs: null, speed: null, plainWords: false, highContrast: false, aiLevel: null, fizgigFolder: '', videosFolder: '', textSize: 'normal', reduceMotion: false, focusRings: false, underlineLinks: false, usage: null, betaJoined: false }
+const DEFAULT_SETTINGS = { comfyUrl: 'http://127.0.0.1:8188', window: null, promptEngine: 'local', ollamaUrl: '', ollamaModel: 'huihui_ai/qwen3-vl-abliterated:8b-instruct', claudeModel: '', codexModel: '', chatBudget: null, comfyApiKey: null, target: 'local', cloud: null, cloudToken: null, cloudProvider: 'modal', runpod: null, runpodKey: null, runpodToken: null, models: {}, comfyFolder: '', comfyLauncher: '', comfyAutoStart: true, civitaiKey: null, civitaiMature: false, civitaiUnblur: false, incognito: false, outputFolder: '', privateFolder: PRIVATE_FOLDER, onboarded: null, hardware: null, shotPrefs: null, speed: null, plainWords: false, highContrast: false, aiLevel: null, fizgigFolder: '', videosFolder: '', textSize: 'normal', reduceMotion: false, focusRings: false, underlineLinks: false, usage: null, betaJoined: false }
 
 // A folder name as ComfyUI takes it: relative to its output (or input) folder, forward slashes, nothing
 // that climbs out of it or that Windows won't allow.

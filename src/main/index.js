@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, protocol, safeStorage, screen, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, powerSaveBlocker, protocol, safeStorage, screen, shell } from 'electron'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -8,7 +8,7 @@ import { chooseTarget, copyData, discardCopy, freeBytes, listData, movableEntrie
 import { EXTRA_BIN, findHarnesses, harnessStatus } from '../service/harness'
 import { AGENT_NAMES, startAgentRun } from '../service/agentrun'
 import { AGENT_INFO, openSignIn, runInstall, signedIn } from '../service/agentinstall'
-import { applyChatEvent, listChats, loadChat, newChat, pruneChats, saveChat, startChatTurn } from '../service/agentchat'
+import { applyChatEvent, ATTACH_EXTENSIONS, attachmentOf, listChats, loadChat, MAX_ATTACH, newChat, pruneChats, saveChat, startChatTurn, undoEditChange, withAttachments } from '../service/agentchat'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS, MODAL_VERSION } from '../service/cloud'
 import { SetupProgress, about } from '../service/setupprogress'
@@ -56,6 +56,9 @@ import { RefMods } from '../service/refmods'
 import { Civitai, CIVITAI_SITES, LORA_FAMILIES, LORA_SORTS, LORA_TAGS } from '../service/civitai'
 import { Comfy } from '../service/comfy'
 import { afterPrompt, getBalance } from '../service/comfyaccount'
+import { budgetOf, readLedger, spentToday, startSpendDesk, todayLabel } from '../service/spending'
+import { listRecipes, removeRecipe } from '../service/recipes'
+import { Batches, batchReport, batchState } from '../service/batches'
 import { infoFor, priceGraph } from '../service/pricing'
 import { checkKey as checkComfyCloudKey, COMFY_CLOUD, summarise as summariseComfyCloud } from '../service/comfycloud'
 import { Usage } from '../service/usage'
@@ -965,7 +968,13 @@ app.whenReady().then(() => {
       send('edits:changed', { id, updatedAt: e.updatedAt })
     })
   })
-  fs.watch(BASE, (_, name) => name === 'settings.json' && later('settings', () => (studio.models = readSettings(BASE).models || {})))
+  fs.watch(BASE, (_, name) => {
+    if (name === 'settings.json') later('settings', () => (studio.models = readSettings(BASE).models || {}))
+    // a recipe the chat's agent saved (recipes.js): the Dashboard's buttons change at once
+    if (name === 'recipes.json') later('recipes', () => send('recipes:changed', listRecipes(BASE)))
+  })
+  handle('recipes:list', () => listRecipes(BASE))
+  handle('recipes:remove', (id) => (removeRecipe(BASE, String(id || '')), listRecipes(BASE)))
   handle('edits:delete', (id) => edits.remove(id))
   handle('edits:pickFiles', async () => {
     const r = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'], filters: [{ name: 'Media', extensions: ['mp4', 'mov', 'webm', 'mkv', 'm4v', 'wav', 'mp3', 'm4a', 'flac', 'ogg', 'png', 'jpg', 'jpeg', 'webp'] }] })
@@ -2204,7 +2213,28 @@ app.whenReady().then(() => {
     const s = readSettings(BASE)
     return ['claude', 'codex'].includes(s.promptEngine) && found[s.promptEngine] ? s.promptEngine : found.claude ? 'claude' : found.codex ? 'codex' : null
   }
-  const chatView = () => (chat ? { ...chat, busy: !!chatTurn, renders: chatRenders } : null)
+  // The spending limit (spending.js): the chat's MCP server asks this desk before a paid step, and borrows the
+  // Comfy.org key from it, with a token that only lives as long as one chat turn.
+  let spendDesk = null
+  const deskFor = () =>
+    (spendDesk ||= startSpendDesk({
+      dataDir: BASE,
+      settings: () => readSettings(BASE),
+      key: () => comfyKey() || null,
+      // a test copy can stand in a balance (IV_STUDIO_TEST_BALANCE); it has no Comfy.org key of its own
+      balance: async () => (TEST_COPY && process.env.IV_STUDIO_TEST_BALANCE ? Number(process.env.IV_STUDIO_TEST_BALANCE) : comfyKey() ? (await getBalance(comfyKey())).credits : null),
+      onSpend: (turn, entry, { spent, budget }) => {
+        const c = turn.chat
+        if (!c) return
+        c.entries.push({ kind: 'spent', credits: entry.credits, usd: entry.usd, auto: entry.auto, today: todayLabel(budget, spent) })
+        if (chat === c) pushChat()
+      }
+    }))
+  const spendToday = () => {
+    const budget = budgetOf(readSettings(BASE))
+    return { ...budget, spent: spentToday(readLedger(BASE)), label: todayLabel(budget, spentToday(readLedger(BASE))) }
+  }
+  const chatView = () => (chat ? { ...chat, busy: !!chatTurn, renders: chatRenders, spending: spendToday() } : null)
   const pushChat = () => send('chat:changed', chatView())
   const chatJobs = () => [...new Set([...(chat?.jobs || []), ...(chatTurn?.jobs() || [])])].slice(-4)
   const refreshChatRenders = async () => {
@@ -2253,32 +2283,48 @@ app.whenReady().then(() => {
     refreshChatRenders()
     return chatView()
   })
-  handle('chat:send', ({ text, context, engine } = {}) => {
-    const message = String(text || '').trim().slice(0, 8000)
+  handle('chat:send', async ({ text, context, engine, files = [] } = {}) => {
+    const attached = (Array.isArray(files) ? files : []).filter((p) => typeof p === 'string' && fs.existsSync(p)).map(attachmentOf).filter((a) => a.kind).slice(0, MAX_ATTACH)
+    const message = String(text || '').trim().slice(0, 8000) || (attached.length ? 'Here are some files.' : '')
     if (!message) throw new Error('Type a message first.')
+    // the spend desk's address, before anything else (the only wait here)
+    let deskUrl = null
+    try {
+      deskUrl = await deskFor().url
+    } catch {
+      /* no desk: paid steps still ask, with the price, as before */
+    }
     if (chatTurn) throw new Error(`${chat.name} is still answering. Stop it first, or wait.`)
     if (agentRun && agentRun.state().status === 'running') throw new Error(`${agentRun.state().name} is making the Dashboard idea. Wait for it, or stop it there.`)
     if (!chat) chat = newChat({ id: chatId(), engine: chatEngine(engine) })
     const exe = chatFound()[chat.engine]
     if (!exe) throw new Error(`${chat.name} isn't installed on this PC.`)
     const current = chat
-    current.entries.push({ kind: 'you', text: message })
+    current.entries.push({ kind: 'you', text: message, ...(attached.length ? { files: attached.map((a) => ({ name: a.name, kind: a.kind, path: a.path })) } : {}) })
     if (!current.title) current.title = message.slice(0, 80)
     saveChat(chatsRoot, current)
     const s = readSettings(BASE)
     const extraEnv = {}
     for (const k of ['IV_STUDIO_DATA', 'IV_STUDIO_USER_DATA']) if (process.env[k]) extraEnv[k] = process.env[k]
+    // this turn's own pass to the spend desk; dropped when the turn ends
+    const deskToken = deskUrl ? spendDesk.issue({ chat: current }) : null
+    if (deskToken) Object.assign(extraEnv, { IV_STUDIO_AGENT_APP: deskUrl, IV_STUDIO_AGENT_TOKEN: deskToken })
+    // an overnight batch started in this turn reports back to this chat
+    extraEnv.IV_STUDIO_CHAT_ID = current.id
+    setTimeout(watchBatches, 5000)
     const turn = startChatTurn({
       engine: current.engine,
       exe,
       dir: path.join(chatsRoot, current.id),
       session: current.session,
-      message,
+      message: withAttachments(message, attached),
       context: context && typeof context === 'object' ? context : null,
       mcp: mcpCommand(),
       model: current.engine === 'claude' ? s.claudeModel || '' : s.codexModel || '',
       extraEnv,
       onEvent: (e) => {
+        // show_in_app: the window goes there and lights it up (App.jsx)
+        if (e.type === 'show') send('chat:show', e.show)
         applyChatEvent(current, e)
         if (chat === current) pushChat()
         if (turn && turn.jobs().length) watchChatRenders()
@@ -2287,6 +2333,7 @@ app.whenReady().then(() => {
     chatTurn = turn
     pushChat()
     turn.promise.then((r) => {
+      if (deskToken) spendDesk?.revoke(deskToken)
       current.jobs = [...new Set([...current.jobs, ...r.jobs])]
       if (r.session) current.session = r.session
       const last = current.entries[current.entries.length - 1]
@@ -2303,6 +2350,83 @@ app.whenReady().then(() => {
       refreshChatRenders()
     })
     return chatView()
+  })
+  handle('chat:spending', () => spendToday())
+  // Overnight batches (batches.js): while any runs, the PC stays awake; each shot's takes are ranked as it finishes,
+  // and when all are done the report goes into the chat that started it (and a notification, if the window is away)
+  const batchStore = new Batches({ dir: path.join(DATA, 'batches') })
+  let batchTimer = null
+  let awake = null
+  let batchBusy = false
+  const jobOrNull = async (id) => {
+    try {
+      return await studio.refreshJob(id)
+    } catch {
+      try {
+        return studio.getJob(id, { refresh: false })
+      } catch {
+        return null
+      }
+    }
+  }
+  const reportBatch = (b, report) => {
+    const entry = { kind: 'report', title: report.title, text: report.text, picks: report.picks, batchId: b.id, at: new Date().toISOString() }
+    const target = chat && chat.id === b.chatId ? chat : b.chatId ? loadChat(chatsRoot, b.chatId) : null
+    if (target) {
+      target.entries.push(entry)
+      target.updatedAt = entry.at
+      saveChat(chatsRoot, target)
+      if (target === chat) pushChat()
+    }
+    if (Notification.isSupported() && !win?.isFocused()) new Notification({ title: 'Your overnight batch is done', body: report.text.slice(0, 180) }).show()
+  }
+  async function watchBatches() {
+    if (batchBusy) return
+    batchBusy = true
+    try {
+      const running = batchStore.running()
+      // the PC stays up while anything is queued (the screen may still turn off)
+      if (running.length && awake === null) awake = powerSaveBlocker.start('prevent-app-suspension')
+      if (!running.length && awake !== null) (powerSaveBlocker.stop(awake), (awake = null))
+      for (const b of running) {
+        const jobs = {}
+        for (const j of b.jobs) jobs[j.jobId] = await jobOrNull(j.jobId)
+        const st = batchState(b, jobs)
+        if (!st.done) continue
+        // rank what finished (the window's own pump may have done some already)
+        for (const j of b.jobs) {
+          const job = jobs[j.jobId]
+          if (job?.status === 'success' && !job.ranking && ranker) {
+            await ranker.rank(j.jobId).catch(() => null)
+            jobs[j.jobId] = await jobOrNull(j.jobId)
+          }
+        }
+        const report = batchReport(b, jobs)
+        batchStore.save({ ...b, status: 'reported', reportedAt: new Date().toISOString(), summary: report.text })
+        reportBatch(b, report)
+      }
+      if (!batchStore.running().length && awake !== null) (powerSaveBlocker.stop(awake), (awake = null))
+    } catch {
+      /* a bad batch file shouldn't stop the others: try again next time */
+    } finally {
+      batchBusy = false
+      clearTimeout(batchTimer)
+      batchTimer = setTimeout(watchBatches, batchStore.running().length ? 30000 : 5 * 60000)
+    }
+  }
+  setTimeout(watchBatches, 8000)
+  handle('batches:list', () => batchStore.list().slice(0, 20))
+  // "Undo this change" on an edit the agent changed: the edit goes back as it was (an open edit reloads, and the
+  // editor's own Ctrl+Z can still step back over it)
+  handle('chat:undo', (undoId) => {
+    if (!chat) throw new Error('No chat open.')
+    const entry = chat.entries.find((x) => x.kind === 'undo' && x.id === undoId)
+    if (!entry) throw new Error('No such change in this chat.')
+    const r = undoEditChange(path.join(chatsRoot, chat.id), undoId, (editId, fields) => edits.save(editId, fields))
+    entry.done = true
+    saveChat(chatsRoot, chat)
+    pushChat()
+    return r
   })
   handle('chat:answer', ({ id, allow } = {}) => !!chatTurn?.answer(String(id || ''), !!allow))
   handle('chat:stop', async () => {
@@ -2454,9 +2578,11 @@ app.whenReady().then(() => {
     const filters = {
       picture: [{ name: 'Pictures', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
       video: [{ name: 'Videos', extensions: ['mp4', 'mov', 'webm', 'mkv'] }],
-      audio: [{ name: 'Audio', extensions: ['wav', 'mp3', 'flac', 'm4a', 'ogg'] }]
+      audio: [{ name: 'Audio', extensions: ['wav', 'mp3', 'flac', 'm4a', 'ogg'] }],
+      // the chat's paperclip: anything it can pass on (agentchat.js attachmentOf)
+      chat: [{ name: 'Pictures, videos, sound and scripts', extensions: ATTACH_EXTENSIONS }]
     }[kind]
-    const r = await dialog.showOpenDialog(win, { properties: ['openFile', ...(kind === 'picture' ? ['multiSelections'] : [])], filters })
+    const r = await dialog.showOpenDialog(win, { properties: ['openFile', ...(kind === 'picture' || kind === 'chat' ? ['multiSelections'] : [])], filters })
     return r.canceled ? [] : r.filePaths
   })
   // A path on this PC opens in Explorer. An output that lives in the cloud is downloaded to

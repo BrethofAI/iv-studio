@@ -4,6 +4,7 @@ import { applyA11y } from './a11y'
 import { SetupPill } from './components/SetupProgress'
 import { AgentPill, useAgentRun } from './components/AgentRun'
 import ChatPanel, { ChatButton, useChat } from './components/ChatPanel'
+import { spotTour } from './tours'
 import { CharacterList, CharacterTrainer } from './components/Characters'
 import Create from './components/Create'
 import ivMark from './assets/iv-mark.png'
@@ -126,6 +127,21 @@ export default function App() {
     } catch {}
     if (on) reloadChat()
   }
+  // a question from a button elsewhere ("Ask Claude Code to fix it", ChatPanel askAgent): open the chat and hand it over
+  const [chatAsk, setChatAsk] = useState(null)
+  useEffect(() => {
+    const onAsk = (e) => {
+      setChatAsk({ ...e.detail, at: Date.now() })
+      toggleChat(true)
+    }
+    window.addEventListener('iv:ask', onAsk)
+    // "show me where" from the chat (show_in_app): a one-step tour that goes to the page and lights the part up
+    const offShow = window.ivstudio.chat.onShow((show) => {
+      const tour = spotTour(show || {})
+      if (tour) window.dispatchEvent(new CustomEvent('iv:tour', { detail: tour }))
+    })
+    return () => (window.removeEventListener('iv:ask', onAsk), offShow())
+  }, [])
   // a spoken line or a song on its way to Create's voice line (Lines or Music > Use in a shot)
   const [lineForCreate, setLineForCreate] = useState(null)
   // a LoRA on its way to Create's LoRA tray (LoRAs > Use in a shot)
@@ -499,6 +515,9 @@ export default function App() {
           context={{ page, section, projectId: page === 'shot' ? projectId : null, productionId: page === 'project' ? productionId : null, sequenceId: page === 'sequence' ? sequenceId : null, editId: page === 'edit' ? editId : null, sizzleId: page === 'sizzle-project' ? sizzleId : null, rebuildId: page === 'rebuild-project' ? rebuildId : null, shinobiId: page === 'shinobi-film' ? shinobiId : null, trainingId: page === 'character' ? trainingId : null }}
           go={setPage}
           notify={notify}
+          ask={chatAsk}
+          clearAsk={() => setChatAsk(null)}
+          openShot={openShot}
         />
       )}
       <ConfirmHost />

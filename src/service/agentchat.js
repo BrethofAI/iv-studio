@@ -15,11 +15,62 @@ You have IV Studio's tools (the iv-studio MCP server) and nothing else: no files
 
 Each message starts with a line in [brackets] saying what IV Studio is showing them right now (the page, and the ids of the open shot, film, sequence or edit). "This" and "it" usually mean that. Use the ids with the tools; never show raw ids to the person.
 
+When the person attaches files, the message lists their paths (and a script's or note's words). Look at a picture, or a moment of a video, with grab_frame (file, at); use the paths with the tools: a picture as a shot's first frame or an image edit's reference, a script for a film, a sound or song in a shot or edit.
+
+When the person asks where something is or how to get somewhere in IV Studio, find it with list_places and show it with show_in_app: the app goes there and lights it up, with your words beside it.
+
 Anything that deletes, costs money, installs or downloads, trains, or changes a setting shows the person an Allow card and waits. If they choose Don't allow, accept it, don't try again unless they ask, and say what you could do instead.
+
+Changing an edit by talking ("tighten the middle", "add a song", "put captions on"): get_edit first, then make the change with edit_timeline (trims, moves, ripple removes), add_media (a song made with the music tools, or a file), and caption_edit for captions. Every change you make to an edit gets an "Undo this change" button in the chat, and an open edit reloads at once, so make the change and say in a sentence what you did; don't ask first for ordinary edits.
+
+When the person asks to save something as a recipe, call save_recipe: a short name for the button and the request written out in full so it works another day on its own ("a 15 second vertical teaser from my latest finished shot, fast speed"), never ids. It becomes a button on the Dashboard.
+
+For many variations while they're away ("10 versions of this overnight, three takes each"), write each variation as its own full H3 prompt and call start_batch once. Tell them it's queued and that the report will be here in the morning; don't wait on it.
+
+A short film in one conversation: go stage by stage and stop for the person's OK after each, saying what's next. 1) create_film with the idea, then write_film_script and show the script in a few lines. 2) The cast: who plays whom (list_characters, update_film cast), faces for made-up roles. 3) break_down_film (it sketches the board) and make_animatic, and show them the board on the Projects page (show_in_app). 4) Only after an OK on the board, render_film_scene (minutes of GPU time a shot), then rank_takes and finish the best takes with their OK. 5) build_rough_cut, and offer captions or music on its edit. Keep update_film step in line with where you are, so the Projects page shows the same stage.
 
 To wait for a render, call get_job: it waits up to 25 seconds each time, so just call it again, without commentary in between. Renders take minutes; once one has started and you've checked it's running, you may tell the person it's on its way instead of waiting for all of it.
 
 Keep replies short and plain, for someone who isn't technical: a few sentences, no tables, no code unless they ask.`
+
+// Files the person drops into the chat (or picks with its paperclip): what each is, and the message with them. The
+// agent has no file tools, so it gets the paths (for IV Studio's tools, and grab_frame to look at a picture or a
+// moment of a video) and a script's or note's own text, inline.
+export const MAX_ATTACH = 10
+export const MAX_TEXT = 30000
+const ATTACH_KINDS = [
+  ['picture', /\.(png|jpe?g|webp|bmp|gif)$/i],
+  ['video', /\.(mp4|mov|webm|mkv|avi|m4v)$/i],
+  ['sound', /\.(wav|mp3|flac|m4a|ogg|aac)$/i],
+  ['text', /\.(txt|md|fountain|srt|vtt|json|csv)$/i]
+]
+export const ATTACH_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif', 'mp4', 'mov', 'webm', 'mkv', 'avi', 'm4v', 'wav', 'mp3', 'flac', 'm4a', 'ogg', 'aac', 'txt', 'md', 'fountain', 'srt', 'vtt', 'json', 'csv']
+export function attachmentOf(file) {
+  const kind = ATTACH_KINDS.find(([, re]) => re.test(file))?.[0] || null
+  return { path: file, name: path.basename(file), kind }
+}
+export function withAttachments(message, files = [], readText = (f) => fs.readFileSync(f, 'utf8')) {
+  const list = files.slice(0, MAX_ATTACH).map((f) => (typeof f === 'string' ? attachmentOf(f) : f)).filter((f) => f.kind)
+  if (!list.length) return message
+  const how = { picture: 'look at it with grab_frame (file, at 0)', video: 'see a moment with grab_frame (file, at seconds)', sound: 'use its path with the audio tools' }
+  const lines = ['The person attached:']
+  for (const f of list) {
+    if (f.kind !== 'text') {
+      lines.push(`- ${f.kind}: ${f.path} (${how[f.kind]})`)
+      continue
+    }
+    let text = ''
+    try {
+      text = readText(f.path)
+    } catch (e) {
+      lines.push(`- text file ${f.path}: couldn't be read (${e.message})`)
+      continue
+    }
+    const cut = text.length > MAX_TEXT
+    lines.push(`- text file ${f.name} (${f.path}), its words${cut ? ` (the first ${MAX_TEXT} characters)` : ''}:`, '<<<', cut ? text.slice(0, MAX_TEXT) : text, '>>>')
+  }
+  return `${lines.join('\n')}\n\n${message}`
+}
 
 // The bracketed line at the top of each message: what IV Studio is showing. ctx from the app (App.jsx).
 const PAGE_NAMES = {
@@ -74,6 +125,7 @@ export function startChatTurn({ engine, exe, dir, session = null, message, conte
   if (!AGENT_NAMES[engine]) throw new Error(`Unknown agent "${engine}".`)
   const work = path.join(dir, 'work')
   const askDir = path.join(dir, 'asks')
+  const undoDir = path.join(dir, 'undo')
   const jobsFile = path.join(dir, 'jobs.txt')
   for (const d of [work, askDir]) fs.mkdirSync(d, { recursive: true })
   for (const f of fs.readdirSync(askDir)) fs.rmSync(path.join(askDir, f), { force: true })
@@ -126,6 +178,38 @@ export function startChatTurn({ engine, exe, dir, session = null, message, conte
     } catch {
       return
     }
+    // show_in_app: a place to show the person (the app goes there and lights it up)
+    let shows = []
+    try {
+      shows = fs.readdirSync(askDir).filter((n) => n.endsWith('.show.json'))
+    } catch {}
+    for (const n of shows) {
+      try {
+        const show = JSON.parse(fs.readFileSync(path.join(askDir, n), 'utf8'))
+        fs.rmSync(path.join(askDir, n), { force: true })
+        emit({ type: 'show', show })
+      } catch {
+        /* still being written */
+      }
+    }
+    // an edit the agent changed: the edit as it was, kept in the chat's undo folder for "Undo this change"
+    let undos = []
+    try {
+      undos = fs.readdirSync(askDir).filter((n) => n.endsWith('.undo.json'))
+    } catch {}
+    for (const n of undos) {
+      try {
+        const u = JSON.parse(fs.readFileSync(path.join(askDir, n), 'utf8'))
+        if (!/^[a-z0-9-]+$/i.test(u.id || '')) throw new Error('bad id')
+        fs.mkdirSync(undoDir, { recursive: true })
+        fs.writeFileSync(path.join(undoDir, `${u.id}.json`), JSON.stringify(u))
+        fs.rmSync(path.join(askDir, n), { force: true })
+        pruneUndo(undoDir)
+        emit({ type: 'undo', undo: { id: u.id, editId: u.editId, name: u.name, tool: u.tool, label: stepLabel(u.tool) } })
+      } catch {
+        /* still being written */
+      }
+    }
     for (const n of names) {
       const id = n.slice(0, -'.ask.json'.length)
       if (seen.has(id)) continue
@@ -164,6 +248,10 @@ export function startChatTurn({ engine, exe, dir, session = null, message, conte
     if (ended) return
     ended = true
     clearInterval(poller)
+    // anything written in the turn's last moments (an undo point, a place to show)
+    try {
+      pollAsks()
+    } catch {}
     clearTimeout(timer)
     // an unanswered card is moot once the turn is over
     for (const id of seen) emit({ type: 'asked', id, allow: null, moot: true })
@@ -228,9 +316,30 @@ export function applyChatEvent(chat, e) {
   } else if (e.type === 'asked') {
     const a = chat.entries.find((x) => x.kind === 'ask' && x.id === e.id)
     if (a && !a.answer) a.answer = e.moot ? 'moot' : e.allow ? 'allow' : 'deny'
+  } else if (e.type === 'undo') {
+    chat.entries.push({ kind: 'undo', id: e.undo.id, editId: e.undo.editId, name: e.undo.name, label: e.undo.label, done: false })
   } else if (e.type === 'session') chat.session = e.id
   chat.updatedAt = new Date().toISOString()
   return chat
+}
+
+// The edit as it was before an agent's change (chat dir's undo folder): the newest KEEP_UNDO are kept.
+export const KEEP_UNDO = 30
+function pruneUndo(dir) {
+  const files = fs.readdirSync(dir).filter((n) => n.endsWith('.json')).sort()
+  for (const n of files.slice(0, Math.max(0, files.length - KEEP_UNDO))) fs.rmSync(path.join(dir, n), { force: true })
+}
+// Puts an edit back as it was before the agent's change. save(editId, fields) writes it; returns the edit's name.
+export function undoEditChange(chatDir, undoId, save) {
+  if (!/^[a-z0-9-]+$/i.test(String(undoId || ''))) throw new Error('No such change.')
+  let u
+  try {
+    u = JSON.parse(fs.readFileSync(path.join(chatDir, 'undo', `${undoId}.json`), 'utf8'))
+  } catch {
+    throw new Error('That change is too old to undo here (the chat keeps the last 30).')
+  }
+  save(u.editId, u.fields)
+  return { editId: u.editId, name: u.name }
 }
 
 // Saved chats: one folder each under root (the data folder's chats), newest first, the oldest beyond KEEP_CHATS removed.

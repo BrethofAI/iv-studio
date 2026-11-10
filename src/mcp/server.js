@@ -11,6 +11,7 @@ import path from 'node:path'
 import { z } from 'zod'
 import { INSTRUCTIONS, readGuide } from '../service/agent'
 import { agentGuard, chatAsk, startedJobId } from '../service/agentrun'
+import { TOUR_PAGES, TOURS, placesToShow } from '../renderer/src/tours'
 import { GUIDE_SOURCE, loadGuide } from '../service/h3guide'
 import { blocking, lintPrompt } from '../service/lint'
 import { Ranker } from '../service/ranking'
@@ -33,14 +34,18 @@ import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
 import { getBalance } from '../service/comfyaccount'
-import { infoFor, priceGraph } from '../service/pricing'
+import { infoFor, priceGraph, usdToCredits } from '../service/pricing'
+import { decideSpend, spendDeskClient } from '../service/spending'
+import { captionEdit, clipAudio, peakDb, QUIET_DB } from '../service/captions'
+import { listRecipes, removeRecipe, saveRecipe } from '../service/recipes'
+import { Batches, batchReport, batchState, MAX_BATCH } from '../service/batches'
 import { lintSeedance } from '../service/seedlint'
 import { comfyUp, findLaunchers, launcherFor } from '../service/comfylauncher'
 import { MODEL_GROUPS, recommend, scanHardware } from '../service/hardware'
 import { comboOptions } from '../service/setup'
 import { harnessStatus } from '../service/harness'
 import { ollamaStatus } from '../service/prompter'
-import { applyOps, clipEnd, TRACK_ID, tracksOf, videoLayers } from '../service/timeline'
+import { applyOps, clipEnd, clipLength, TRACK_ID, tracksOf, videoLayers } from '../service/timeline'
 import { TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
 import { CharacterCatalog } from '../service/characters'
@@ -125,6 +130,61 @@ async function askPerson(name, args, why) {
     for (const f of [askFile, answerFile]) fs.rmSync(f, { force: true })
   }
 }
+// In a chat: the steps with a price IV Studio knows before they run (Seedance on Comfy.org credits). The app's spend
+// desk (spending.js) says whether the person's spending limit covers it; if not, the Allow card shows the price. Either
+// way the step then runs on IV Studio's own price as its confirm_cost, with the key the app lends, and is recorded.
+const spendDesk = AGENT_CHAT ? spendDeskClient() : null
+let chatKey = null
+async function chatPrice(name, args) {
+  if (name === 'generate_previews' && args.engine === 'seedance') return studio.priceRender(args)
+  if (name === 'finish_candidate' && args.jobId) {
+    const source = studio.getJob(args.jobId)
+    if (source.plan?.engine === 'seedance' && (args.way || (source.plan.resolved.draft ? 'seedance' : 'take')) === 'seedance') return studio.priceFinish({ jobId: args.jobId, way: 'seedance' })
+  }
+  return null
+}
+async function chatPaid(name, args, settings) {
+  let price = null
+  try {
+    price = await chatPrice(name, args)
+  } catch {
+    // no price (ComfyUI down, a bad job): the card asks as before, and the tool itself reports the problem
+    const why = chatAsk(name, args, { settings })
+    if (why) await askPerson(name, args, why)
+    return { args, spend: null }
+  }
+  if (!price?.paid) return null
+  const credits = usdToCredits(price.max)
+  const step = { tool: name, credits, usd: price.max, unknown: price.unknown.length > 0 }
+  let d = null
+  if (spendDesk) d = await spendDesk.check(step).catch(() => null)
+  if (!d?.auto) await askPerson(name, args, d?.why || decideSpend({ budget: { on: false }, credits, usd: price.max }).why)
+  if (spendDesk && !process.env.COMFY_ORG_API_KEY) chatKey = await spendDesk.key().catch(() => null)
+  return { args: { ...args, confirm_cost: Math.max(Number(args.confirm_cost) || 0, price.max) }, spend: { ...step, auto: !!d?.auto } }
+}
+const EDIT_CHANGERS = new Set(['edit_timeline', 'add_media', 'set_edit_settings', 'caption_edit'])
+const EDIT_FIELDS = ['name', 'settings', 'media', 'clips', 'tracks', 'markers']
+function editSnapshot(editId) {
+  try {
+    const e = edits.get(editId)
+    return { editId, name: e.name, fields: Object.fromEntries(EDIT_FIELDS.map((k) => [k, e[k] ?? null])) }
+  } catch {
+    return null
+  }
+}
+function writeUndo(tool, before) {
+  try {
+    const after = editSnapshot(before.editId)
+    if (after && JSON.stringify(after.fields) === JSON.stringify(before.fields)) return
+    fs.mkdirSync(AGENT_ASK, { recursive: true })
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+    const file = path.join(AGENT_ASK, `${id}.undo.json`)
+    fs.writeFileSync(`${file}.tmp`, JSON.stringify({ id, tool, ...before, at: new Date().toISOString() }))
+    fs.renameSync(`${file}.tmp`, file)
+  } catch {
+    /* an undo point is a help, not a reason to fail the change */
+  }
+}
 const tool = (name, description, shape, fn) =>
   server.registerTool(name, { description, inputSchema: shape }, async (args) => {
     try {
@@ -133,14 +193,25 @@ const tool = (name, description, shape, fn) =>
       // the folders the person picked in Settings, as they are now
       studio.comfy.folders = comfyFolders(s, INCOGNITO)
       if (!!s.incognito !== INCOGNITO) throw new Error(`IV Studio switched Incognito ${INCOGNITO ? 'off' : 'on'} since this MCP server started. Restart the server (reconnect the iv-studio MCP) to work in the ${INCOGNITO ? 'normal' : 'Incognito'} data.`)
+      let spend = null
       if (AGENT_CHAT) {
-        const why = chatAsk(name, args, { settings: s })
-        if (why) await askPerson(name, args, why)
+        const paid = await chatPaid(name, args, s)
+        if (paid) ({ args, spend } = paid)
+        else {
+          const why = chatAsk(name, args, { settings: s })
+          if (why) await askPerson(name, args, why)
+        }
       } else if (AGENT_RUN) {
         const refused = agentGuard(name, args, { settings: s, started: agentStarted })
         if (refused) throw new Error(refused)
       }
+      // an edit the chat's agent changes: what it was before, so the chat can offer "Undo this change" even when
+      // the edit isn't open (an open one also puts it on the editor's own Ctrl+Z)
+      const before = AGENT_CHAT && AGENT_ASK && EDIT_CHANGERS.has(name) && args.editId ? editSnapshot(args.editId) : null
       const value = await fn(args)
+      if (before) writeUndo(name, before)
+      // a paid step counts once it has started, whatever happens to the render after
+      if (spend && spendDesk) await spendDesk.record(spend).catch(() => {})
       const started = AGENT_RUN && startedJobId(name, value)
       if (started && !agentStarted.has(started)) {
         agentStarted.add(started)
@@ -242,6 +313,38 @@ const checkRequest = (r) => {
   const ch = r.character && r.character !== 'none' ? studio.characters().find((c) => c.id === r.character) : null
   return lintPrompt(r.prompt || '', { mode: r.mode, seconds: r.seconds, media: r.media || [], character: ch ? { name: ch.name, trigger: ch.trigger } : null, voiceLine: r.voiceLine })
 }
+// Overnight batches (batches.js): many variations of one idea queued at once on this PC, ranked as they finish, with
+// a morning report in IV Studio's chat when all are done
+const batches = new Batches({ dir: path.join(DATA, 'batches') })
+const BATCH_REQUEST = z.object(request)
+tool('start_batch', `Queue a batch of shots to render on this PC (H3, free) while the person is away, like "make 10 variations of this idea, three takes each, overnight". Write each variation as its own full H3 prompt (vary what they asked to vary: the action, the light, the camera, the place). All go in one project named name; each is checked by the prompt checker first, and nothing is queued if one has an error. Returns at once. IV Studio keeps the PC awake while it runs, ranks each shot's takes as they finish, and when all are done leaves a report in this chat with the best takes; the person needs nothing more from you tonight. At most ${MAX_BATCH} shots.`, {
+  name: z.string().min(1).max(80).describe('The batch and its project, e.g. "Fox at dawn: 10 variations"'),
+  shots: z.array(z.object({ prompt: z.string().min(1), label: z.string().max(80).optional().describe('A few words on what this variation tries'), seconds: z.number().min(1).max(15).optional(), aspect: z.enum(Object.keys(ASPECTS)).optional(), character: z.string().optional() })).min(1).max(MAX_BATCH),
+  takes: z.number().int().min(1).max(3).default(3),
+  character: z.string().default('none').describe('For every shot without its own: a character preset id, or none'),
+  aspect: z.enum(Object.keys(ASPECTS)).default('16:9'),
+  seconds: z.number().min(1).max(15).default(5),
+  speed: z.enum(SPEED_IDS).optional()
+}, async ({ name, shots, takes, character, aspect, seconds, speed }) => {
+  const asks = shots.map((sh) => BATCH_REQUEST.parse({ engine: 'h3', mode: 'text', prompt: sh.prompt, character: sh.character || character, aspect: sh.aspect || aspect, seconds: sh.seconds || seconds, previews: takes, ...(speed && { speed }) }))
+  const problems = asks.map((r, i) => ({ i: i + 1, errors: blocking(checkRequest(r)) })).filter((p) => p.errors.length)
+  if (problems.length) throw new Error(`Nothing was queued. The prompt checker found: ${problems.map((p) => `shot ${p.i}: ${p.errors.map((f) => f.message).join(' | ')}`).join('; ')}`)
+  if (readSettings(BASE).target !== 'cloud') await voices.release()
+  const jobs = []
+  let projectId = null
+  for (const [i, r] of asks.entries()) {
+    const job = await studio.generatePreviews({ ...applySpeed(r, savedSpeed(readSettings(BASE))), ...(projectId ? { projectId } : { projectName: name }) })
+    projectId = projectId || job.projectId
+    jobs.push({ jobId: job.id, prompt: r.prompt, label: shots[i].label || null })
+  }
+  const b = batches.create({ name, chatId: process.env.IV_STUDIO_CHAT_ID || null, projectId, takes, jobs })
+  return { batch: b.id, project: projectId, queued: jobs.length, takes, note: 'Queued. IV Studio keeps the PC awake, ranks the takes and reports here when every shot is done.' }
+})
+tool('get_batch', 'Where an overnight batch stands: each shot\'s status, and the report once it is done.', { batchId: z.string() }, ({ batchId }) => {
+  const b = batches.get(batchId)
+  const jobs = Object.fromEntries(b.jobs.map((j) => [j.jobId, (() => { try { return studio.getJob(j.jobId, { refresh: false }) } catch { return null } })()]))
+  return { name: b.name, status: b.status, state: batchState(b, jobs), shots: b.jobs.map((j, i) => ({ shot: i + 1, label: j.label, status: jobs[j.jobId]?.status || 'gone' })), ...(b.status === 'reported' ? { report: batchReport(b, jobs) } : {}) }
+})
 tool('list_cast', 'Who and what a prompt can mention with @: character presets (@Tess: the picked character becomes {char}; anyone else with a face picture is attached as a reference) and places (@BusStop: attached as the place). A shot that mentions a member with a picture renders in References mode with the pictures attached, as <Subject N>.', {}, () => ({ items: studio.cast.members().map(({ handle, kind, name, picture, description, film }) => ({ mention: `@${handle}`, kind, name, hasPicture: !!picture, description, film })) }))
 tool('save_place', 'Save a place to mention as @Name in any prompt: a name, a picture (an image file path) and a short description of the room or setting.', { name: z.string(), picture: z.string().describe('An image file path'), description: z.string().default(''), id: z.string().optional().describe('To change a saved place') }, (args) => studio.cast.savePlace(args))
 tool('enhance_final', "Enhance a finished shot: engine seedvr2 (SeedVR2 3B restores detail and upscales to a short side of resolution, sound kept) or dlss (DLSS 5 with the finish's own noise reduction, at scale 1 or 2). A new job in the same shot; follow with get_job. On this PC's ComfyUI only. jobId is the finish job.", { jobId: z.string(), engine: z.enum(['seedvr2', 'dlss']).default('seedvr2'), resolution: z.union([z.literal(1080), z.literal(1440), z.literal(2160)]).default(1080).describe('seedvr2: the short side'), scale: z.union([z.literal(1), z.literal(2)]).default(1).describe('dlss: 1 cleans up at the same size, 2 doubles it'), strength: z.number().min(0).max(2).optional().describe("dlss: its strength (noise reduction), 0-2, default 0.8"), style: z.enum(['Default', 'Natural', 'Cinematic']).optional().describe('dlss: its look'), detail: z.number().min(0).max(1).optional().describe('seedvr2: how much it redraws (its latent noise), 0 restores faithfully (default); 0.1-0.3 smooths skin and can change faces') }, async (args) => (readSettings(BASE).target === 'cloud' || (await voices.release()), studio.enhanceFinal(args)))
@@ -471,10 +574,33 @@ tool('edit_timeline', `Change an edit's timeline with a list of operations, appl
   const { clips, media, tracks, markers, results } = applyOps(e, ops)
   return { results, edit: describe(edits.save(editId, { clips, media, tracks, markers })) }
 })
+tool('caption_edit', `Put captions on an edit: Whisper (the voice engine) hears each clip with sound on the video tracks (or tracks), and the words go on as short title lines at the bottom (style: size, position, color, box), timed across each clip. Done again, it replaces its own captions and leaves the edit's other titles alone. Needs the voice engine (voice_status); about 2-5 s a clip. ${LIVE}`, {
+  editId: z.string(),
+  tracks: z.array(trackId).optional().describe('Which tracks to hear (default every video track); add an A track for a voiceover'),
+  style: z.object({ size: z.number().min(2).max(30).optional(), position: z.enum(['top', 'center', 'bottom']).optional(), color: z.string().optional(), box: z.boolean().optional() }).optional(),
+  maxWords: z.number().int().min(2).max(14).default(7).describe('Most words on one line')
+}, async ({ editId, tracks, style, maxWords }) => {
+  if (!(await voices.status()).installed) throw new Error('Captions need the voice engine (its Whisper hears the words). Ask the person to press Set up voices on Audio > Voices, or run setup_voices with their OK.')
+  const e = edits.get(editId)
+  const hear = async (c, m) => {
+    const wav = await clipAudio(edits.ffmpeg, m.path, c.in, clipLength(c))
+    try {
+      // silence or near it: nothing to hear (Whisper would make up a word)
+      const peak = await peakDb(edits.ffmpeg, wav)
+      if (peak !== null && peak < QUIET_DB) return ''
+      return await voices.transcribe(wav)
+    } finally {
+      fs.rmSync(wav, { force: true })
+    }
+  }
+  const { clips, heard, lines } = await captionEdit(e, hear, { tracks, style, maxWords })
+  if (!lines) return { lines: 0, heard, note: heard.length ? 'Nothing was said in the clips heard.' : 'No clips with sound on those tracks.' }
+  return { lines, heard, edit: describe(edits.save(editId, { clips })) }
+})
 
-tool('grab_frame', 'A picture of one moment, to check an edit or a render by eye: either an edit at a timeline time (the top visible video clip, without titles) or any video file at a time.', {
+tool('grab_frame', 'A picture of one moment, to check an edit or a render by eye: either an edit at a timeline time (the top visible video clip, without titles), any video file at a time, or a picture file (at 0) to see it.', {
   editId: z.string().optional(),
-  file: z.string().optional().describe('Instead of editId: an absolute video path'),
+  file: z.string().optional().describe('Instead of editId: an absolute video or picture path'),
   at: z.number().min(0).describe('Seconds'),
   width: z.number().int().min(160).max(1920).default(640)
 }, async ({ editId, file, at, width }) => {
@@ -1022,8 +1148,9 @@ tool('review_take', "Review one take against its prompt, as a director would: th
 })
 process.on('exit', () => voices.release())
 studio.beforeRender = () => voices.release()
-// Seedance and other partner nodes run on the key in this server's environment (the app keeps its own sealed)
-studio.partnerKey = () => process.env.COMFY_ORG_API_KEY || null
+// Seedance and other partner nodes run on the key in this server's environment (the app keeps its own sealed); in
+// IV Studio's chat, the key the app lends for a paid step (chatPaid)
+studio.partnerKey = () => process.env.COMFY_ORG_API_KEY || chatKey || null
 tool('voice_status', `Whether IV Studio's voice engine is set up (${VOICE_ENGINES.map((e) => `${e.label}: ${e.note}`).join(' ')} Whisper large-v3 turbo, MIT, reads the words in recordings). installed false: ask the person to press Set up voices on Audio > Voices, or run setup_voices with their OK.`, {}, () => voices.status())
 tool('setup_voices', "Set up IV Studio's voice engine once: a Python environment with PyTorch and VoxCPM, plus the VoxCPM2 and Whisper models, about 12 GB of free downloads into IV Studio's data folder (roughly 5-15 minutes). Ask the person first. Returns when done.", {}, () => voices.setup())
 tool('list_voices', 'Every saved voice: id, name, kind (designed, clone, ready), engine, seed, reference recording and its words, and which characters use it.', {}, async () => {
@@ -1183,16 +1310,37 @@ tool('free_memory', "Clear the GPU and RAM now: ComfyUI unloads its models (betw
   const q = await studio.comfy.queue().catch(() => null)
   return { comfyui: 'asked to unload', voiceEngine: 'stopped', ollama, renderRunning: !!q?.queue_running?.length }
 })
-tool('list_image_models', `The image models on this PC's ComfyUI, by family: ${IMAGE_FAMILIES.map((f) => f.label).join(', ')}. Each family lists its checkpoints (pass one as make_image model), whether it is ready (and what's missing), whether it can edit, and its licence.`, {}, () => images.status())
+// "Show me where" from IV Studio's own chat: the app goes to a page and lights up one part of it, as a tour does
+// (tours.js). The server writes a show file into the chat's folder; the app's chat (agentchat.js) passes it on.
+tool('list_places', "Places in IV Studio you can show the person with show_in_app: each page's parts, as where (the page), spot (the part) and what's there. Use it to answer \"where do I...\" questions.", {}, () => ({ items: placesToShow() }))
+tool('show_in_app', "Take the person to a place in IV Studio and light it up, the way a page's tour does, with your words beside it (say: one or two short sentences on what to do there). where and spot come from list_places. Works in IV Studio's own chat.", { where: z.enum(Object.keys(TOUR_PAGES)), spot: z.string(), say: z.string().max(300).optional() }, ({ where, spot, say }) => {
+  const step = TOURS[where].steps.find((s) => s.title === spot && s.at)
+  if (!step) throw new Error(`There's no "${spot}" on ${TOURS[where].title}. Pick a spot from list_places.`)
+  if (!AGENT_CHAT || !AGENT_ASK) throw new Error("show_in_app works in IV Studio's own chat, where the app can move. Tell the person the page and what to click instead.")
+  fs.mkdirSync(AGENT_ASK, { recursive: true })
+  const file = path.join(AGENT_ASK, `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}.show.json`)
+  fs.writeFileSync(`${file}.tmp`, JSON.stringify({ where, spot, say: say || null }))
+  fs.renameSync(`${file}.tmp`, file)
+  return { shown: true, page: TOURS[where].title, spot }
+})
+// Recipes (recipes.js): one-click buttons on the Dashboard that send a saved request to IV Studio's chat
+tool('save_recipe', "Save something that worked as a recipe: a button on IV Studio's Dashboard that asks the chat for it again with one click. Only when the person asks (\"save this as a recipe\"). name: the button's few words. instruction: the request in full, as the person would type it, written so it works on its own another day: say \"my latest finished shot\" or \"the open edit\", never ids, and include the settings that made it work (length, shape, style, speed). The same name replaces an older recipe.", {
+  name: z.string().min(1).max(60),
+  instruction: z.string().min(10).max(2000),
+  note: z.string().max(200).optional().describe('One line under the button: what it makes')
+}, (args) => saveRecipe(BASE, args))
+tool('list_recipes', 'The recipes on the Dashboard: name, instruction, note.', {}, () => ({ items: listRecipes(BASE) }))
+tool('delete_recipe', 'Remove a recipe from the Dashboard. Ask the person first.', { id: z.string() }, ({ id }) => removeRecipe(BASE, id))
+tool('list_image_models', `The image models on this PC's ComfyUI, by family: ${IMAGE_FAMILIES.map((f) => f.label).join(', ')}. Each family lists its checkpoints (pass one as make_image model), whether it is ready (and what's missing), whether it can edit, its licence, its sizes (megapixels it works at) and, where the maker gives them, tips for writing its prompt: follow a family's tips when you write for it.`, {}, () => images.status())
 tool('make_image', "Make pictures on this PC (free, local). mode generate: from the prompt. mode edit: change refs (local picture paths) with the prompt as the instruction; only families with edit true can. loras: the family's LoRAs (list_loras, model-only). Returns the set at once; follow with get_image until status is success, then use its files (use one as a shot's first frame: generate_previews mode frames with a media picture).", {
   mode: z.enum(['generate', 'edit']).default('generate'),
   model: z.string().describe('A checkpoint from list_image_models'),
   prompt: z.string().describe('generate: describe the picture. edit: what to change, and what to keep.'),
   negative: z.string().optional(),
-  refs: z.array(z.string()).optional().describe('edit: absolute paths of the pictures to edit (Qwen Image 2.1: up to 3; Krea 2: 1; Flux: up to 6)'),
+  refs: z.array(z.string()).optional().describe('edit: absolute paths of the pictures to edit (Qwen Image 2.1: up to 3; Krea 2: 1; Flux: up to 6; MiniMax H3 Image: up to 16, called <Picture 1>, <Picture 2>... in the prompt)'),
   loras: z.array(z.object({ name: z.string(), strength: z.number().min(0).max(2).default(1) })).optional(),
   aspect: z.enum(Object.keys(IMAGE_ASPECTS)).default('1:1'),
-  megapixels: z.number().min(0.25).max(4).default(1),
+  megapixels: z.number().min(0.25).max(20).default(1).describe('Most families 0.25 to 4; MiniMax H3 Image 4 to 16 (best at 16, weak below 4)'),
   count: z.number().int().min(1).max(4).default(1),
   seed: z.number().int().min(0).optional(),
   steps: z.number().int().min(1).max(100).optional().describe("Leave out for the family's own setting"),

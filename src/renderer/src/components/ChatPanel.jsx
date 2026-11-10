@@ -8,6 +8,35 @@ const NAMES = { claude: 'Claude Code', codex: 'Codex' }
 const RENDER = { queued: 'waiting', running: 'rendering', success: 'done', error: 'failed', cancelled: 'cancelled', unknown: '' }
 const KIND = { previews: 'Previews', finish: 'Finish', enhance: 'Enhance' }
 const IDEAS = ['What can you do in IV Studio?', 'Make a 5 second shot of a fox crossing a frozen lake at dawn', 'Which of my shots aren’t finished yet?']
+// what to suggest on a page that's about one thing
+const PAGE_IDEAS = {
+  edit: ['Tighten the middle', 'Add a calm song under it', 'Put captions on'],
+  projects: ['Let’s make a short film together, one step at a time', 'Which of my films aren’t finished?', 'What can you do in IV Studio?'],
+  project: ['Take this film to a rough cut, one step at a time', 'Write the script for this film', 'What’s left to do on this film?'],
+  home: ['Make 10 variations of my last idea overnight, three takes each', 'What can you do in IV Studio?', 'Which of my shots aren’t finished yet?']
+}
+export const ideasFor = (page) => PAGE_IDEAS[page] || IDEAS
+
+// Anywhere in the app can hand the chat a question (App.jsx listens for iv:ask and opens the panel): about is what
+// it's about (a run, a failed render, a picture), shown above the message box and sent with the message; send: send
+// it at once (a button that says what it asks, like "Ask Claude Code to fix it"), or leave it typed for the person.
+export const askAgent = ({ text = '', about = null, send = false } = {}) => window.dispatchEvent(new CustomEvent('iv:ask', { detail: { text, about, send } }))
+
+// The agent a button can name ("Ask Claude Code ..."), or null when neither is installed (the button then doesn't
+// show). One look per window, shared by every button on the page.
+let agentLook = null
+export function useAgentName() {
+  const [name, setName] = useState(null)
+  useEffect(() => {
+    let live = true
+    if (!agentLook) agentLook = window.ivstudio.chat.status().then((s) => NAMES[s.chat?.engine || s.preferred] || null, () => null)
+    agentLook.then((n) => live && setName(n))
+    // look again after a while: one may have been installed since
+    const t = setTimeout(() => (agentLook = null), 15000)
+    return () => ((live = false), clearTimeout(t))
+  }, [])
+  return name
+}
 
 export function useChat() {
   const [status, setStatus] = useState(null)
@@ -34,10 +63,84 @@ export function ChatButton({ open, busy, onClick }) {
   )
 }
 
-function Entry({ e, onAnswer }) {
-  if (e.kind === 'you') return <div className="chat-you">{e.text}</div>
+// a dropped or picked file, by its kind (agentchat.js attachmentOf decides for the agent; this is for the chips)
+const FILE_KIND = [
+  ['picture', /\.(png|jpe?g|webp|bmp|gif)$/i, '▣'],
+  ['video', /\.(mp4|mov|webm|mkv|avi|m4v)$/i, '▶'],
+  ['sound', /\.(wav|mp3|flac|m4a|ogg|aac)$/i, '♪'],
+  ['text', /\.(txt|md|fountain|srt|vtt|json|csv)$/i, '¶']
+]
+const fileOf = (p) => {
+  const k = FILE_KIND.find(([, re]) => re.test(p))
+  return k ? { path: p, name: p.split(/[\\/]/).pop(), kind: k[0], icon: k[2] } : null
+}
+const FileChip = ({ f, onRemove }) => (
+  <span className={`chat-file ${f.kind}`} title={f.path}>
+    <span aria-hidden="true">{f.icon || FILE_KIND.find(([k]) => k === f.kind)?.[2]}</span>
+    <span className="chat-file-name">{f.name}</span>
+    {onRemove && (
+      <button className="lora-chip-x" aria-label={`Take ${f.name} off`} onClick={onRemove}>
+        ×
+      </button>
+    )}
+  </span>
+)
+
+function Entry({ e, onAnswer, onUndo, onOpenShot }) {
+  if (e.kind === 'you')
+    return (
+      <div className="chat-you">
+        {e.files?.length > 0 && (
+          <div className="chat-files">
+            {e.files.map((f) => (
+              <FileChip key={f.path} f={f} />
+            ))}
+          </div>
+        )}
+        {e.text}
+      </div>
+    )
   if (e.kind === 'agent') return <div className="chat-agent">{e.text}</div>
   if (e.kind === 'problem') return <div className="chat-problem small" role="alert">{e.text}</div>
+  // an overnight batch's morning report (batches.js): what rendered, and the best takes to open
+  if (e.kind === 'report')
+    return (
+      <div className="chat-report" role="group" aria-label={`Overnight batch ${e.title}`}>
+        <div className="chat-report-title mono small">Overnight batch · {e.title}</div>
+        <p className="small">{e.text}</p>
+        {e.picks?.length > 0 && (
+          <div className="chat-report-picks">
+            {e.picks.map((p) => (
+              <button key={`${p.jobId}-${p.candidate}`} className="btn btn-small" disabled={!p.projectId} onClick={() => onOpenShot?.(p.projectId)}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  // an edit the agent changed: put it back as it was
+  if (e.kind === 'undo')
+    return (
+      <div className="chat-undo mono small">
+        <span>Changed “{e.name}”</span>
+        {e.done ? (
+          <span className="dim">· undone</span>
+        ) : (
+          <button className="link-btn mono small" onClick={() => onUndo?.(e.id)}>
+            Undo this change
+          </button>
+        )}
+      </div>
+    )
+  // a paid step that started (spending.js): under the limit, or Allowed on its card
+  if (e.kind === 'spent')
+    return (
+      <div className="chat-spent mono small">
+        Spent {Number(e.credits).toLocaleString('en-US')} credits (${Number(e.usd).toFixed(2)}){e.auto ? ', under your limit' : ', Allowed'}
+        {e.today && <span className="dim"> · {e.today}</span>}
+      </div>
+    )
   if (e.kind === 'step')
     return (
       <div className={`chat-step mono small ${e.error ? 'err' : ''}`} title={e.error || undefined}>
@@ -80,10 +183,20 @@ function Entry({ e, onAnswer }) {
   return null
 }
 
-export default function ChatPanel({ status, reload, onClose, context, go, notify }) {
+export default function ChatPanel({ status, reload, onClose, context, go, notify, ask, clearAsk, openShot }) {
   const setup = useAgentSetup()
   const [text, setText] = useState('')
+  const [about, setAbout] = useState(null)
+  const [files, setFiles] = useState([])
+  const [dropping, setDropping] = useState(false)
   const [engine, setEngine] = useState(null)
+  // files dropped on the panel or picked with the paperclip: up to 10, of the kinds the agent can use
+  const addFiles = (paths) => {
+    const add = (paths || []).map(fileOf)
+    const skipped = add.filter((f) => !f).length
+    if (skipped) notify?.('Only pictures, videos, sound and text files (scripts, notes) can go in the chat.')
+    setFiles((now) => [...now, ...add.filter((f) => f && !now.some((x) => x.path === f.path))].slice(0, 10))
+  }
   const bodyRef = useRef(null)
   const inputRef = useRef(null)
   const chat = status?.chat
@@ -114,12 +227,28 @@ export default function ChatPanel({ status, reload, onClose, context, go, notify
     reload?.()
   }, [agentsReady])
 
-  const send = act(async (words) => {
+  const send = act(async (words, aboutNow = about) => {
     const t = (words ?? text).trim()
-    if (!t || busy) return
+    if ((!t && !files.length) || busy) return
+    const sending = files
     setText('')
-    await window.ivstudio.chat.send({ text: t, context, engine: pick })
+    setAbout(null)
+    setFiles([])
+    await window.ivstudio.chat.send({ text: aboutNow ? `About ${aboutNow}:\n${t}` : t, context, engine: pick, files: sending.map((f) => f.path) })
   })
+  // a question handed over from elsewhere in the app (askAgent): sent at once when it says so and the agent is free,
+  // otherwise left in the box with what it's about
+  useEffect(() => {
+    if (!ask || !status) return
+    clearAsk?.()
+    if (ask.send && pick && !busy && ask.text) send(ask.text, ask.about)
+    else {
+      setAbout(ask.about || null)
+      if (ask.text) setText(ask.text)
+      if (ask.send && busy) notify?.(`${NAMES[pick]} is still answering. Your question is ready in the box; send it when it's done.`)
+      inputRef.current?.focus()
+    }
+  }, [ask, !!status])
   const fresh = act(async (e) => {
     await window.ivstudio.chat.new(e || pick)
     reload?.()
@@ -129,11 +258,27 @@ export default function ChatPanel({ status, reload, onClose, context, go, notify
     reload?.()
   })
   const answer = act((id, allow) => window.ivstudio.chat.answer({ id, allow }))
+  const undo = act((id) => window.ivstudio.chat.undo(id))
   const stop = act(() => window.ivstudio.chat.stop())
   const others = (status?.chats || []).filter((c) => c.id !== chat?.id)
 
   return (
-    <aside className="chat-panel" aria-label="Chat">
+    <aside
+      className={`chat-panel ${dropping ? 'dropping' : ''}`}
+      aria-label="Chat"
+      onDragOver={(ev) => {
+        if (!pick || ![...(ev.dataTransfer?.types || [])].includes('Files')) return
+        ev.preventDefault()
+        setDropping(true)
+      }}
+      onDragLeave={(ev) => !ev.currentTarget.contains(ev.relatedTarget) && setDropping(false)}
+      onDrop={(ev) => {
+        if (!pick) return
+        ev.preventDefault()
+        setDropping(false)
+        addFiles([...(ev.dataTransfer?.files || [])].map((f) => window.ivstudio.media.pathFor(f)).filter(Boolean))
+      }}
+    >
       <header className="chat-head">
         <h2>Chat</h2>
         {ready.length > 1 && !(chat?.entries?.length) ? (
@@ -157,6 +302,11 @@ export default function ChatPanel({ status, reload, onClose, context, go, notify
           ×
         </button>
       </header>
+      {chat?.spending?.label && (
+        <div className="chat-today mono small" title="The chat's spending limit (Settings → Agents)">
+          {chat.spending.label}
+        </div>
+      )}
       {others.length > 0 && (
         <select className="chat-history small" value="" disabled={busy} onChange={(ev) => ev.target.value && openChat(ev.target.value)} aria-label="Earlier chats">
           <option value="">Earlier chats…</option>
@@ -182,7 +332,7 @@ export default function ChatPanel({ status, reload, onClose, context, go, notify
                   Ask {NAMES[pick]} about IV Studio or your projects, or tell it what to make. It can use everything IV Studio does, and it knows which page you’re on.
                 </p>
                 <div className="chat-ideas">
-                  {IDEAS.map((i) => (
+                  {ideasFor(context?.page).map((i) => (
                     <button key={i} className="chat-idea small" onClick={() => (setText(i), inputRef.current?.focus())}>
                       {i}
                     </button>
@@ -190,7 +340,7 @@ export default function ChatPanel({ status, reload, onClose, context, go, notify
                 </div>
               </div>
             ) : (
-              chat.entries.map((e, i) => <Entry key={i} e={e} onAnswer={answer} />)
+              chat.entries.map((e, i) => <Entry key={i} e={e} onAnswer={answer} onUndo={undo} onOpenShot={openShot} />)
             )}
             {busy && (
               <div className="chat-working mono small">
@@ -216,7 +366,27 @@ export default function ChatPanel({ status, reload, onClose, context, go, notify
               </button>
             </div>
           )}
+          {about && (
+            <div className="chat-about small">
+              <span className="dim">About</span> <span className="chat-about-what">{about}</span>
+              <button className="lora-chip-x" aria-label="Not about this any more" onClick={() => setAbout(null)}>
+                ×
+              </button>
+            </div>
+          )}
+          {files.length > 0 && (
+            <div className="chat-files chat-files-ready">
+              {files.map((f) => (
+                <FileChip key={f.path} f={f} onRemove={() => setFiles((now) => now.filter((x) => x.path !== f.path))} />
+              ))}
+            </div>
+          )}
           <div className="chat-compose">
+            <button className="chat-attach" disabled={busy || files.length >= 10} onClick={act(async () => addFiles(await window.ivstudio.files.pick('chat')))} title="Add pictures, videos, sound or a script (or drop them on the chat)" aria-label="Add files">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" />
+              </svg>
+            </button>
             <textarea
               ref={inputRef}
               rows={2}
@@ -236,7 +406,7 @@ export default function ChatPanel({ status, reload, onClose, context, go, notify
                 Stop
               </button>
             ) : (
-              <button className="btn btn-primary chat-send" disabled={!text.trim()} onClick={() => send()}>
+              <button className="btn btn-primary chat-send" disabled={!text.trim() && !files.length} onClick={() => send()}>
                 Send
               </button>
             )}

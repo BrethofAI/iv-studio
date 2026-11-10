@@ -184,7 +184,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
                 const off = !f.ready || (editMode && !f.edit)
                 const why = !f.models.length ? 'No checkpoints for it in ComfyUI.' : f.missing.length ? `Needs ${f.missing.join(', ')}.` : editMode && !f.edit ? f.editNote : f.note
                 return (
-                  <button key={f.id} role="radio" aria-checked={form.family === f.id} className={`family-card ${form.family === f.id ? 'on' : ''}`} disabled={off} title={why} onClick={() => set({ family: f.id, model: f.models[0], loras: [] })}>
+                  <button key={f.id} role="radio" aria-checked={form.family === f.id} className={`family-card ${form.family === f.id ? 'on' : ''}`} disabled={off} title={why} onClick={() => set({ family: f.id, model: f.models[0], loras: [], ...((f.sizes || SIZES).includes(form.megapixels) ? {} : { megapixels: f.defaultMp || (f.sizes || SIZES)[0] }) })}>
                     <span className="family-name">{f.label}</span>
                     <span className="family-tags mono">
                       {!f.ready ? 'not set up' : f.edit ? 'makes · edits' : 'makes'}
@@ -269,17 +269,25 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
           <section className="create-step">
             <StepHead n={n.prompt} title={editMode ? 'What to change' : 'What it shows'} sub={editMode ? 'Say what to change, and what to keep.' : 'Subject, place, light and style.'} />
             <textarea className="prompt image-prompt" value={form.prompt} placeholder={editMode ? 'Make it night, keep her face and pose.' : 'An old farmer kneeling in a golden field at sunset, a 3D animated film still.'} onChange={(e) => set({ prompt: e.target.value })} aria-label={editMode ? 'What to change' : 'Prompt'} />
+            {fam?.tips && (
+              <details className="image-tips small">
+                <summary className="mono">How to write for {fam.label}</summary>
+                <p className="dim">{fam.tips}</p>
+              </details>
+            )}
             <div className={`more-settings ${more ? 'open' : ''}`}>
               <button type="button" className="more-settings-toggle mono" onClick={() => setMore(!more)} aria-expanded={more}>
-                {more ? '−' : '+'} More: negative prompt, steps, CFG
+                {more ? '−' : '+'} More: {fam?.noNegative ? 'steps, CFG' : 'negative prompt, steps, CFG'}
                 <span className="dim">{[form.negative && 'negative', form.steps !== '' && `${form.steps} steps`, form.cfg !== '' && `CFG ${form.cfg}`].filter(Boolean).join(' · ')}</span>
               </button>
               {more && (
                 <div className="more-settings-body">
-                  <div className="create-field">
-                    <span className="create-label mono">Negative</span>
-                    <input value={form.negative} placeholder="What to keep out (used when CFG is above 1)" onChange={(e) => set({ negative: e.target.value })} />
-                  </div>
+                  {!fam?.noNegative && (
+                    <div className="create-field">
+                      <span className="create-label mono">Negative</span>
+                      <input value={form.negative} placeholder="What to keep out (used when CFG is above 1)" onChange={(e) => set({ negative: e.target.value })} />
+                    </div>
+                  )}
                   <div className="create-grid">
                     <div className="create-field">
                       <span className="create-label mono">Steps</span>
@@ -302,7 +310,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
               <div className="create-field">
                 <span className="create-label mono">Size</span>
                 <div className="segmented">
-                  {SIZES.map((m) => (
+                  {(fam?.sizes || SIZES).map((m) => (
                     <button key={m} className={form.megapixels === m ? 'on' : ''} onClick={() => set({ megapixels: m })}>
                       {m} MP
                     </button>

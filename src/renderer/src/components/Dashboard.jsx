@@ -8,6 +8,8 @@ import { Tile, toSets, Viewer } from './MediaLibrary'
 import Loading from './Loading'
 import { AgentPanel, useAgentRun } from './AgentRun'
 import WhatsNew, { NewsChip } from './WhatsNew'
+import { askAgent, useAgentName } from './ChatPanel'
+import { ask } from './Confirm'
 
 // The home page: start something in one click, pick up the latest renders, and the cast with their voices.
 // Each quick-start card shows its page's own banner art.
@@ -22,6 +24,44 @@ const QUICK = [
   ['character', 'New character', 'Design and train a recurring actor.', 'characters']
 ]
 const RECENT = 8
+
+// Your recipes (recipes.js): requests that worked in the chat, saved by its agent when you asked ("save this as a
+// recipe"). A click sends it to the chat again; × takes the button away.
+function Recipes({ notify }) {
+  const [list, setList] = useState([])
+  const agent = useAgentName()
+  useEffect(() => {
+    window.ivstudio.recipes.list().then(setList, () => {})
+    return window.ivstudio.recipes.onChange(setList)
+  }, [])
+  if (!list.length) return null
+  async function remove(r) {
+    if (!(await ask({ title: `Remove “${r.name}”?`, message: 'The button goes from the Dashboard. You can ask the chat to save it again.', confirm: 'Remove it' }))) return
+    try {
+      setList(await window.ivstudio.recipes.remove(r.id))
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  return (
+    <div className="dash-recipes">
+      <p className="mono small dim">Your recipes{agent ? ` · ${agent} makes them again` : ''}</p>
+      <div className="recipe-row">
+        {list.map((r) => (
+          <span key={r.id} className="recipe">
+            <button className="recipe-go" disabled={!agent} title={agent ? r.instruction : 'Install Claude Code or Codex to use recipes'} onClick={() => askAgent({ text: r.instruction, about: `the recipe “${r.name}”`, send: true })}>
+              <span className="recipe-name">{r.name}</span>
+              {r.note && <span className="small dim">{r.note}</span>}
+            </button>
+            <button className="lora-chip-x recipe-x" aria-label={`Remove the recipe ${r.name}`} onClick={() => remove(r)}>
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function Dashboard(ctx) {
   const { characters, start, startShotWith, go, notify, info, setup } = ctx
@@ -108,6 +148,7 @@ export default function Dashboard(ctx) {
             </button>
           ))}
         </div>
+        <Recipes notify={notify} />
       </section>
 
       <section className="block">

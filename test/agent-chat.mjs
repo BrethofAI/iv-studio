@@ -10,7 +10,7 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { chatAsk, claudeArgs, codexChatArgs, parseLine } from '../src/service/agentrun.js'
-import { applyChatEvent, contextLine, listChats, loadChat, newChat, pruneChats, saveChat, startChatTurn } from '../src/service/agentchat.js'
+import { applyChatEvent, attachmentOf, contextLine, listChats, loadChat, newChat, pruneChats, saveChat, startChatTurn, withAttachments } from '../src/service/agentchat.js'
 
 let failed = 0
 const check = (name, ok, extra = '') => {
@@ -22,7 +22,7 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 // what waits for the person
 check('ask: deleting', /can’t be undone/.test(chatAsk('delete_project', { projectId: 'x' }) || ''))
 check('ask: Seedance', /costs money/.test(chatAsk('generate_previews', { engine: 'seedance' }) || ''))
-check('ask: a price', /about 40 credits/.test(chatAsk('run_effect', { confirm_cost: 40 }) || ''))
+check('ask: a price', /about \$40\.00/.test(chatAsk('run_effect', { confirm_cost: 40 }) || ''))
 check('ask: installing', /installs/.test(chatAsk('install_node_packs', {}) || '') && !!chatAsk('download_lora', {}) && !!chatAsk('update_comfy', {}))
 check('ask: a setting', /setting/.test(chatAsk('set_workflow_model', {}) || ''))
 check('ask: training', /training/.test(chatAsk('start_training', {}) || ''))
@@ -55,6 +55,24 @@ check('session: Codex’s thread.started', parseLine('codex', JSON.stringify({ t
 // what IV Studio is showing
 check('context: page and ids', contextLine({ page: 'shot', section: 'video', projectId: 'abc' }) === '[IV Studio is showing a shot (visual side); shot id abc]', contextLine({ page: 'shot', section: 'video', projectId: 'abc' }))
 check('context: the editor', /the editor.*edit id e1/.test(contextLine({ page: 'edit', editId: 'e1' })))
+
+// files attached to a message
+check('attach: kinds by extension', ['a.PNG', 'b.mp4', 'c.wav', 'd.fountain', 'e.exe'].map((f) => attachmentOf(f).kind).join() === 'picture,video,sound,text,', ['a.PNG', 'b.mp4', 'c.wav', 'd.fountain', 'e.exe'].map((f) => attachmentOf(f).kind).join())
+const texts = { 'C:/x/script.txt': 'INT. KITCHEN - DAY\nMAYA pours tea.', 'C:/x/long.md': 'w'.repeat(40000) }
+const read = (f) => {
+  if (!(f in texts)) throw new Error('no such file')
+  return texts[f]
+}
+let msg = withAttachments('Make this', ['C:/x/still.png', 'C:/x/clip.mov', 'C:/x/script.txt', 'C:/x/app.exe'], read)
+check('attach: the paths, with how to look at each', /picture: C:\/x\/still\.png \(look at it with grab_frame \(file, at 0\)\)/.test(msg) && /video: C:\/x\/clip\.mov/.test(msg))
+check('attach: a script’s words go in, between markers', /text file script\.txt[\s\S]*<<<\nINT\. KITCHEN - DAY\nMAYA pours tea\.\n>>>/.test(msg))
+check('attach: what the agent can’t use is left out', !/app\.exe/.test(msg))
+check('attach: the person’s words come after', msg.endsWith('\n\nMake this'))
+msg = withAttachments('x', ['C:/x/long.md'], read)
+check('attach: long text is cut, and says so', msg.includes('(the first 30000 characters)') && msg.length < 30500)
+check('attach: an unreadable file says so', /couldn't be read \(no such file\)/.test(withAttachments('x', ['C:/x/missing.txt'], read)))
+check('attach: no usable files, no change', withAttachments('hello', ['C:/x/a.exe']) === 'hello')
+check('attach: at most 10', (withAttachments('x', Array.from({ length: 14 }, (_, i) => `C:/x/p${i}.png`)).match(/picture:/g) || []).length === 10)
 
 // turns with the stand-in agent
 const stub = path.join(here, 'fixtures', process.platform === 'win32' ? 'chat-stub.cmd' : 'chat-stub.mjs')
@@ -152,6 +170,19 @@ check('server: on the cloud, reading still goes ahead', !res.isError, res.conten
 check('server: on the cloud, a render asks first', /cloud/.test(ask.why) && out.isError)
 const { tools } = await client.listTools()
 check('server: get_job waits in a chat too', /waits up to 25 seconds/.test(tools.find((t) => t.name === 'get_job')?.description || ''))
+// Show me where: list_places, then show_in_app writes a show file the app picks up (no Allow card: it only moves the view)
+res = await call('list_places')
+const places = JSON.parse(res.content[0].text).items || []
+check('show: list_places names pages and their parts', places.length > 25 && places.every((p) => p.where && p.spot), `${places.length}`)
+check('show: every page with a tour has places', new Set(places.map((p) => p.where)).size >= 20, `${new Set(places.map((p) => p.where)).size}`)
+const place = places[0]
+out = await call('show_in_app', { where: place.where, spot: place.spot, say: 'Click here.' })
+const shows = fs.existsSync(askDir) ? fs.readdirSync(askDir).filter((n) => n.endsWith('.show.json')) : []
+const shown = shows[0] && JSON.parse(fs.readFileSync(path.join(askDir, shows[0]), 'utf8'))
+check('show: show_in_app runs without an Allow card', !out.isError && !fs.readdirSync(askDir).some((n) => n.endsWith('.ask.json')), out.content?.[0]?.text)
+check('show: it writes where, the spot and the words', shows.length === 1 && shown.where === place.where && shown.spot === place.spot && shown.say === 'Click here.', JSON.stringify(shown))
+out = await call('show_in_app', { where: place.where, spot: 'No such part' })
+check('show: a spot that isn’t on the page is refused', out.isError && /list_places/.test(out.content[0].text), out.content?.[0]?.text)
 await client.close()
 fs.rmSync(data, { recursive: true, force: true, maxRetries: 3 })
 

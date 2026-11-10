@@ -14526,3 +14526,218 @@ html.rm .agent-dot.live {
   width: min(400px, 40vw);
   box-shadow: -18px 0 40px rgba(0, 0, 0, 0.45);
 }
+/* batch 1: the chat's "About ..." line over the message box, and the Ask buttons it comes from (ChatPanel askAgent) */
+.chat-about {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 18px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-left: 2px solid var(--red);
+  background: var(--ink-2);
+  min-width: 0;
+}
+.chat-about-what {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cream);
+}
+.run-ask {
+  margin-left: auto;
+}
+.run-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 8px 0 4px;
+}
+.run-pick .rank-btn {
+  margin: 0;
+}
+.viewer-ask {
+  width: 100%;
+}
+/* batch 2: files in the chat (ChatPanel): the paperclip, the chips before sending and on a sent message, the drop glow */
+.chat-attach {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--paper);
+  cursor: pointer;
+}
+.chat-attach:hover:not(:disabled),
+.chat-attach:focus-visible {
+  border-color: var(--red);
+  color: var(--cream);
+}
+.chat-attach:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.chat-attach svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.chat-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.chat-files-ready {
+  margin: 0 18px;
+  padding-top: 10px;
+}
+.chat-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 3px 4px 3px 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--ink-2);
+  font-size: 12px;
+  color: var(--paper);
+}
+.chat-you .chat-file {
+  padding-right: 8px;
+}
+.chat-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+.chat-panel.dropping {
+  outline: 2px dashed var(--pink);
+  outline-offset: -8px;
+}
+/* the chat's spending limit (spending.js): today's figure under the chat header, a line for each paid step, and the
+   two amounts in Settings → Agents */
+.chat-today {
+  margin: 8px 18px 0;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  color: var(--paper);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+.chat-spent {
+  color: var(--pink);
+  font-size: 11.5px;
+  padding: 2px 0;
+}
+.set-budget {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+.set-budget-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.set-budget-label {
+  min-width: 70px;
+}
+.set-budget-row input {
+  width: 110px;
+}
+
+/* batch 3 in the chat: "Undo this change" under an edit the agent changed, an overnight batch's morning report, and
+   the Dashboard's recipes */
+.chat-undo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  color: var(--paper);
+  opacity: 0.85;
+  font-size: 11.5px;
+}
+.chat-report {
+  border: 1px solid var(--pink);
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+.chat-report-title {
+  color: var(--pink);
+  letter-spacing: 0.08em;
+}
+.chat-report p {
+  margin: 0;
+}
+.chat-report-picks {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.chat-report-picks .btn {
+  text-align: left;
+  white-space: normal;
+}
+.dash-recipes {
+  margin-top: 18px;
+  display: grid;
+  gap: 8px;
+}
+.recipe-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.recipe {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--line-strong);
+  max-width: 100%;
+}
+.recipe-go {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  padding: 10px 12px;
+  min-height: 44px;
+  background: none;
+  border: 0;
+  color: var(--paper);
+  cursor: pointer;
+  max-width: 340px;
+}
+.recipe-go:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.04);
+}
+.recipe-go:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.recipe-name {
+  font-weight: 600;
+}
+.recipe-x {
+  align-self: center;
+  margin-right: 6px;
+}
+.proj-ask {
+  display: inline-flex;
+  margin-top: 10px;
+}

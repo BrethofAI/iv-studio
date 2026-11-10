@@ -10,6 +10,7 @@ import QuickBar from './AudioQuick'
 import Loading from './Loading'
 import { dayGroup, groupBy, WHEN, inWhen, Chips, useMore, Groups, FilterPanel } from './ShelfKit'
 import { LoraPicker } from './Loras'
+import { askAgent, useAgentName } from './ChatPanel'
 
 // Projects: a short film made step by step (src/service/productions.js). The list of films, and one film as a
 // six-step wizard: Idea, Story, Cast and places, Storyboard, Film it, Watch. The storyboard is the heart of it:
@@ -112,6 +113,7 @@ export function ProjectsList({ notify, openProject }) {
   const [items, setItems] = useState(null)
   const [busy, setBusy] = useState(false)
   const [q, setQ] = useState('')
+  const agent = useAgentName()
   const [stage, setStage] = useState('all')
   const [period, setPeriod] = useState('any')
   const [shape, setShape] = useState('all')
@@ -163,6 +165,11 @@ export function ProjectsList({ notify, openProject }) {
       <p className="lede">
         Turn an idea into a short film.
         <span className="lede-small dim">Say what it's about, get a script, cast your characters, see it as a storyboard, then film it shot by shot and watch it come together.</span>
+        {agent && (
+          <button className="btn btn-small proj-ask" onClick={() => askAgent({ text: 'Let’s make a short film together, one step at a time. It’s about ' })} title={`${agent} walks it through script, cast, storyboard, shots and rough cut, and stops for your OK at each step`}>
+            Make one with {agent}
+          </button>
+        )}
       </p>
       <div className="shelf-tools">
         <div className="shelf-bar">

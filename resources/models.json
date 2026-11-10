@@ -159,6 +159,38 @@
       "optionalFor": "designing characters"
     },
     {
+      "id": "h3image",
+      "label": "MiniMax H3 Image (int8)",
+      "loader": "UNETLoader.unet_name",
+      "match": "minimax_h3_image_pruned_int8_convrot.safetensors",
+      "alt": [
+        "minimax_h3_image_pruned_w4a8.safetensors",
+        "minimax_h3_image_pruned_bf16.safetensors"
+      ],
+      "folder": "diffusion_models",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/diffusion_models/minimax_h3_image_pruned_int8_convrot.safetensors",
+      "size": 20979314802,
+      "needed_for": [
+        "pictures"
+      ],
+      "optional": true,
+      "optionalFor": "MiniMax H3 Image pictures"
+    },
+    {
+      "id": "h3image_vae",
+      "label": "MiniMax H3 Image VAE",
+      "loader": "VAELoader.vae_name",
+      "match": "minimax_h3_image_vae_fp16.safetensors",
+      "folder": "vae",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/vae/minimax_h3_image_vae_fp16.safetensors",
+      "size": 1168505312,
+      "needed_for": [
+        "pictures"
+      ],
+      "optional": true,
+      "optionalFor": "MiniMax H3 Image pictures"
+    },
+    {
       "id": "qma",
       "label": "QMA camera angles LoRA (Qwen Image 2.1, Apache-2.0)",
       "loader": "LoraLoaderModelOnly.lora_name",

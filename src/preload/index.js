@@ -173,7 +173,9 @@ contextBridge.exposeInMainWorld('ivstudio', {
   // the Dashboard's "Let Claude Code make it" (src/service/agentrun.js)
   agentRun: { status: call('agentRun:status'), start: call('agentRun:start'), stop: call('agentRun:stop'), dismiss: call('agentRun:dismiss'), onChange: on('agentRun:changed') },
   // the chat panel with the person's own agent (src/service/agentchat.js)
-  chat: { status: call('chat:status'), new: call('chat:new'), open: call('chat:open'), send: call('chat:send'), answer: call('chat:answer'), stop: call('chat:stop'), onChange: on('chat:changed') },
+  chat: { status: call('chat:status'), new: call('chat:new'), open: call('chat:open'), send: call('chat:send'), answer: call('chat:answer'), stop: call('chat:stop'), spending: call('chat:spending'), undo: call('chat:undo'), onChange: on('chat:changed'), onShow: on('chat:show') },
+  // recipes: the chat's saved requests, as Dashboard buttons (src/service/recipes.js)
+  recipes: { list: call('recipes:list'), remove: call('recipes:remove'), onChange: on('recipes:changed') },
   reels: {
     make: call('reels:make')
   },

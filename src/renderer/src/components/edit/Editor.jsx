@@ -8,6 +8,7 @@ import { ContextMenu, GenDialog, PickDialog } from './Generate'
 import { ClipFxDialog } from './ClipFx'
 import { ask } from '../Confirm'
 import Help from '../Help'
+import { askAgent, useAgentName } from '../ChatPanel'
 import { FRAME, clipEnd, clipFor, clipLength, describeChange, editLength, editPoints, insert, newId, nextTrackId, overwrite, remove, split, timecode, titleClip, tracksOf, videoLayers } from './model'
 
 // Panel sizes, remembered between sessions: bin and effect-controls widths, the source monitor's share
@@ -70,6 +71,7 @@ const fitFades = (c) => {
 export default function EditEditor({ editId, notify, go, focus, setFocus, characters = [], remakeClip }) {
   const [meta, setMeta] = useState(null)
   const [edit, setEdit] = useState(null)
+  const chatAgent = useAgentName()
   const [gens, setGens] = useState([]) // new footage on its way (src/service/editgen.js)
   const [menu, setMenu] = useState(null) // { x, y, items }
   const [fxFor, setFxFor] = useState(null) // the clip the Effects dialog is open for
@@ -485,6 +487,11 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
           <span className="ed-help">
             <Help page="editor" compact />
           </span>
+          {chatAgent && (
+            <button className="btn btn-small ed-ask" onClick={() => (focus && toggleFocus(false), askAgent({ about: `the edit “${edit.name}” (edit ${edit.id})` }))} title={`Tell ${chatAgent} what to change: “tighten the middle”, “add a song”, “put captions on”. Each change can be undone.`}>
+              Ask {chatAgent}
+            </button>
+          )}
           <button className="btn btn-small" onClick={() => toggleFocus()} title={focus ? 'Back to IV Studio (Esc)' : 'Full-screen workspace (F11)'}>
             {focus ? 'Exit full screen' : '⤢ Full screen'}
           </button>
