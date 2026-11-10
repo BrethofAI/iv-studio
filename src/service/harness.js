@@ -49,7 +49,8 @@ export function findHarnesses(env = process.env, home = os.homedir(), platform =
   const roaming = env.APPDATA || path.join(home, 'AppData', 'Roaming')
   return {
     claude: firstExisting([path.join(home, '.local', 'bin', 'claude.exe'), path.join(roaming, 'npm', 'claude.cmd')]),
-    codex: newestCodex(local) || firstExisting([path.join(roaming, 'npm', 'codex.cmd')])
+    // the Codex app's copy, then OpenAI's command-line installer (install.ps1), then npm
+    codex: newestCodex(local) || firstExisting([path.join(local, 'Programs', 'OpenAI', 'Codex', 'bin', 'codex.exe'), path.join(roaming, 'npm', 'codex.cmd')])
   }
 }
 
@@ -84,11 +85,11 @@ export function codexModels(env = process.env, home = os.homedir()) {
 }
 
 // What Settings shows: which harnesses are installed, and their models.
-export function harnessStatus() {
-  const found = findHarnesses()
+export function harnessStatus(env = process.env, home = os.homedir()) {
+  const found = findHarnesses(env, home)
   return {
     claude: { installed: !!found.claude, models: CLAUDE_MODELS },
-    codex: { installed: !!found.codex, models: codexModels() }
+    codex: { installed: !!found.codex, models: codexModels(env, home) }
   }
 }
 

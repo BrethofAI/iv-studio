@@ -162,7 +162,13 @@ contextBridge.exposeInMainWorld('ivstudio', {
   media: { probe: call('media:probe'), prepare: call('media:prepare'), pathFor: (file) => webUtils.getPathForFile(file) },
   agents: {
     info: call('agents:info'),
-    installSkill: call('agents:installSkill')
+    installSkill: call('agents:installSkill'),
+    // installing Claude Code or Codex and signing in (src/service/agentinstall.js)
+    setup: call('agents:setup'),
+    install: call('agents:install'),
+    stopInstall: call('agents:stopInstall'),
+    signIn: call('agents:signIn'),
+    onSetup: on('agents:setupChanged')
   },
   // the Dashboard's "Let Claude Code make it" (src/service/agentrun.js)
   agentRun: { status: call('agentRun:status'), start: call('agentRun:start'), stop: call('agentRun:stop'), dismiss: call('agentRun:dismiss'), onChange: on('agentRun:changed') },

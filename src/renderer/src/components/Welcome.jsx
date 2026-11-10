@@ -9,6 +9,7 @@ import { setSimpleWords, simpleWords } from '../words'
 import { highContrast, setContrast } from '../a11y'
 import { UsageAsk } from './Privacy'
 import { openStarter } from './Starters'
+import { AgentRows, useAgentSetup } from './AgentSetup'
 
 // The welcome wizard (Check my PC): opens on first launch, and again from Settings. It reads this computer
 // (hardware:scan; nothing leaves the PC), says plainly what it can do, suggests a way of working (this PC, the
@@ -113,7 +114,10 @@ export default function Welcome({ onClose, go, notify, first }) {
   }, [])
 
   const rec = data?.rec
-  const installs = data?.scan?.installs || {}
+  // Claude Code and Codex: what the scan found, plus anything installed from the "Do you use..." card since
+  const agents = useAgentSetup()
+  const scanInstalls = data?.scan?.installs || {}
+  const installs = { ...scanInstalls, claude: scanInstalls.claude || !!agents?.claude?.installed, codex: scanInstalls.codex || !!agents?.codex?.installed }
   const scanned = data && shown >= rows.length
 
   async function finish(target, cloudWizard = false) {
@@ -200,7 +204,7 @@ export default function Welcome({ onClose, go, notify, first }) {
             {step === 'hello' && <Hello level={level} knows={knows} simple={simple} words={words} hc={hc} contrast={contrast} />}
             {step === 'scan' && <Scan rows={rows} shown={shown} error={error} retry={scan} />}
             {step === 'pc' && rec && <YourPc rec={rec} scan={data.scan} />}
-            {step === 'way' && rec && <Way rec={rec} way={way} setWay={setWay} prefs={prefs} setPrefs={setPrefs} writer={writer} setWriter={setWriter} installs={installs} scan={data.scan} notify={notify} />}
+            {step === 'way' && rec && <Way rec={rec} way={way} setWay={setWay} prefs={prefs} setPrefs={setPrefs} writer={writer} setWriter={setWriter} installs={installs} agents={agents} scan={data.scan} notify={notify} />}
             {step === 'get' && rec && <Get rec={rec} way={way} pick={pick} setPick={setPick} packs={packs} setPacks={setPacks} installs={installs} scan={data.scan} started={started} download={download} startComfy={startComfy} comfyStarting={comfyStarting} rescan={scan} notify={notify} />}
             {step === 'done' && rec && <Done rec={rec} way={way} prefs={prefs} writer={writer} started={started} onTour={() => finish('tour')} count={count} setCount={setCount} />}
           </div>
@@ -428,7 +432,7 @@ function prefsForSpeed(id) {
   return { speed: id, previewMp: p.megapixels, quality: p.steps === 4 ? 'draft' : 'standard', finalMp: finishFor(id).megapixels }
 }
 
-function Way({ rec, way, setWay, prefs, setPrefs, writer, setWriter, installs, scan, notify }) {
+function Way({ rec, way, setWay, prefs, setPrefs, writer, setWriter, installs, agents, scan, notify }) {
   const set = (p) => setPrefs((x) => ({ ...x, ...p }))
   const [videos, setVideos] = useState(null)
   useEffect(() => {
@@ -457,6 +461,11 @@ function Way({ rec, way, setWay, prefs, setPrefs, writer, setWriter, installs, s
             </button>
           ))}
         </div>
+      </section>
+      <section className="block create-step wel-agents">
+        <StepHead title="Do you use Claude Code or Codex?" sub="If you have either, IV Studio can use it on your own plan to write your prompts and to make a whole idea for you from the Dashboard." />
+        <AgentRows setup={agents} notify={notify} />
+        <p className="dim small wel-agents-skip">Don’t use either? That’s fine: skip this. The Local writer works without them, and you can add them any time in Settings → Agents.</p>
       </section>
       <section className="block create-step">
         <StepHead title="Defaults for your shots" sub="Set to suit this PC. Every shot can still change them." />

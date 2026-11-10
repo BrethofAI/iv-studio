@@ -7,6 +7,7 @@ import { comfyFolders, dataLocation, incognitoDir, readSettings, resourcesDir, v
 import { chooseTarget, copyData, discardCopy, freeBytes, listData, movableEntries, oldCopy, removeOldCopy, verifyCopy, writePointer } from '../service/datafolder'
 import { EXTRA_BIN, findHarnesses, harnessStatus } from '../service/harness'
 import { AGENT_NAMES, startAgentRun } from '../service/agentrun'
+import { AGENT_INFO, openSignIn, runInstall, signedIn } from '../service/agentinstall'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS, MODAL_VERSION } from '../service/cloud'
 import { SetupProgress, about } from '../service/setupprogress'
@@ -102,6 +103,22 @@ function serveFile(req) {
 const BG = '#100c0e'
 // A copy started with its own user data (testing beside the installed app) says so everywhere.
 const TEST_COPY = !!process.env.IV_STUDIO_USER_DATA
+// Where Claude Code and Codex are looked for, and where Install puts them: this account's home, or in a test copy a
+// throwaway one (IV_STUDIO_TEST_HOME). extra is what the installer and the agents get to point them there.
+function agentHome() {
+  const home = TEST_COPY && process.env.IV_STUDIO_TEST_HOME
+  if (!home) return { home: os.homedir(), env: process.env, extra: {} }
+  const extra = { USERPROFILE: home, HOME: home, LOCALAPPDATA: path.join(home, 'AppData', 'Local'), APPDATA: path.join(home, 'AppData', 'Roaming'), CODEX_HOME: path.join(home, '.codex'), CLAUDE_CONFIG_DIR: path.join(home, '.claude') }
+  return { home, env: { ...process.env, ...extra, PATH: '' }, extra }
+}
+const agentsFound = () => {
+  const { env, home } = agentHome()
+  return findHarnesses(env, home)
+}
+const agentsStatus = () => {
+  const { env, home } = agentHome()
+  return harnessStatus(env, home)
+}
 // Settings and keys live in BASE. Everything made lives in DATA: BASE itself, or BASE\incognito while
 // Incognito is on (see incognitoDir). The switch takes a restart, so one run never mixes the two.
 // A moved data folder that isn't there (its drive unplugged) is asked about first thing (below); until then
@@ -1661,7 +1678,7 @@ app.whenReady().then(() => {
       }
     }
   })
-  handle('prompts:status', async () => ({ ...(await ollamaStatus()), engine: readSettings(BASE).promptEngine, model: readSettings(BASE).ollamaModel, hasComfyKey: !!readSettings(BASE).comfyApiKey, contextIrPrice: CONTEXT_IR_PRICE, harnesses: harnessStatus() }))
+  handle('prompts:status', async () => ({ ...(await ollamaStatus()), engine: readSettings(BASE).promptEngine, model: readSettings(BASE).ollamaModel, hasComfyKey: !!readSettings(BASE).comfyApiKey, contextIrPrice: CONTEXT_IR_PRICE, harnesses: agentsStatus() }))
   handle('prompts:write', (request) => {
     const s = readSettings(BASE)
     const w = writerOf(request?.engine ? { ...s, promptEngine: request.engine } : s)
@@ -1724,7 +1741,7 @@ app.whenReady().then(() => {
     // IV Studio would start keeps its ComfyUI in (a shortcut's target, the Desktop app's install folder)
     const home = (f) => comfyHome(f, { readLink: (p) => shell.readShortcutLink(p) })
     const comfyFolder = modelsFolder || s.comfyFolder || home(launcherFor(s)) || launchers.map((l) => home(l.path)).find(Boolean) || ''
-    const harness = harnessStatus()
+    const harness = agentsStatus()
     const ids = new Set(MODEL_GROUPS.flatMap((g) => g.ids))
     const installs = {
       comfyRunning: !!running,
@@ -2045,6 +2062,58 @@ app.whenReady().then(() => {
     fs.writeFileSync(skillFile, skillText())
     return skillFile
   })
+  // Installing Claude Code or Codex for the person (agentinstall.js): the maker's own installer, one at a time, its
+  // lines shown as it goes (agents:setupChanged); then a window to sign in. A test copy can stand in an installer
+  // (IV_STUDIO_TEST_INSTALL, a .cmd taking the agent's name) and keeps "signed in" as a marker in its test home.
+  let agentInstall = null // { engine, status: 'running' | 'done' | 'failed', lines, error, run }
+  const installView = () => (agentInstall ? { engine: agentInstall.engine, status: agentInstall.status, lines: agentInstall.lines.slice(-6), error: agentInstall.error } : null)
+  const testHome = () => TEST_COPY && !!process.env.IV_STUDIO_TEST_HOME
+  const testSigned = (engine) => path.join(agentHome().home, `.iv-test-signed-in-${engine}`)
+  const isSignedIn = (engine, exe) => (testHome() ? Promise.resolve(!!exe && fs.existsSync(testSigned(engine))) : signedIn(engine, exe, { env: agentHome().extra }))
+  const agentSetup = async () => {
+    const found = agentsFound()
+    const one = async (engine) => ({ ...AGENT_INFO[engine], installed: !!found[engine], signedIn: found[engine] ? await isSignedIn(engine, found[engine]) : false })
+    const [claude, codex] = await Promise.all([one('claude'), one('codex')])
+    return { platform: process.platform, claude, codex, install: installView() }
+  }
+  const pushSetup = () => agentSetup().then((s) => send('agents:setupChanged', s), () => {})
+  handle('agents:setup', () => agentSetup())
+  handle('agents:install', (engine) => {
+    if (!AGENT_INFO[engine]) throw new Error('IV Studio can install Claude Code or Codex.')
+    if (agentInstall?.status === 'running') throw new Error(`${AGENT_INFO[agentInstall.engine].name} is still installing.`)
+    const stand = TEST_COPY && process.env.IV_STUDIO_TEST_INSTALL
+    const state = { engine, status: 'running', lines: [], error: null, run: null }
+    agentInstall = state
+    state.run = runInstall(engine, {
+      env: agentHome().extra,
+      override: stand ? { command: stand, args: [engine] } : null,
+      onLine: (line) => {
+        state.lines.push(line)
+        if (state.lines.length > 50) state.lines.shift()
+        if (agentInstall === state) send('agents:setupChanged', { install: installView() })
+      }
+    })
+    pushSetup()
+    state.run.promise.then((r) => {
+      const there = !!agentsFound()[engine]
+      state.status = r.ok && there ? 'done' : 'failed'
+      state.error = r.ok && !there ? `The installer finished, but IV Studio can't find ${AGENT_INFO[engine].name} yet. Restart IV Studio, or install it from ${AGENT_INFO[engine].site}` : r.error
+      if (agentInstall === state) pushSetup()
+    })
+    return true
+  })
+  handle('agents:stopInstall', () => {
+    if (agentInstall?.status === 'running') agentInstall.run.stop()
+    return true
+  })
+  handle('agents:signIn', (engine) => {
+    if (!AGENT_INFO[engine]) throw new Error('IV Studio can sign in to Claude Code or Codex.')
+    const exe = agentsFound()[engine]
+    if (!exe) throw new Error(`${AGENT_INFO[engine].name} isn't installed yet.`)
+    if (testHome()) fs.writeFileSync(testSigned(engine), 'test')
+    else openSignIn(engine, exe, { env: agentHome().extra })
+    return true
+  })
   // The Dashboard's "Let Claude Code make it": the person's own agent makes their idea inside IV Studio (agentrun.js).
   // The writer chosen in Settings when it's Claude Code or Codex, else whichever is installed, Claude Code first. A test
   // copy can stand in a recorded agent (IV_STUDIO_TEST_AGENT, a .cmd or program printing an agent's stream).
@@ -2052,7 +2121,7 @@ app.whenReady().then(() => {
   let agentRenders = []
   let agentPoll = null
   const agentPick = () => {
-    const found = TEST_COPY && process.env.IV_STUDIO_TEST_AGENT ? { claude: process.env.IV_STUDIO_TEST_AGENT, codex: null } : findHarnesses()
+    const found = TEST_COPY && process.env.IV_STUDIO_TEST_AGENT ? { claude: process.env.IV_STUDIO_TEST_AGENT, codex: null } : agentsFound()
     const s = readSettings(BASE)
     const pick = ['claude', 'codex'].includes(s.promptEngine) && found[s.promptEngine] ? s.promptEngine : found.claude ? 'claude' : found.codex ? 'codex' : null
     return { pick, exe: pick ? found[pick] : null, installed: { claude: !!found.claude, codex: !!found.codex } }

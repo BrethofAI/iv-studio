@@ -7,6 +7,7 @@ import { sendIdea } from './PromptWriter'
 import { Tile, toSets, Viewer } from './MediaLibrary'
 import Loading from './Loading'
 import { AgentPanel, useAgentRun } from './AgentRun'
+import WhatsNew, { NewsChip } from './WhatsNew'
 
 // The home page: start something in one click, pick up the latest renders, and the cast with their voices.
 // Each quick-start card shows its page's own banner art.
@@ -32,6 +33,7 @@ export default function Dashboard(ctx) {
   const [voices, setVoices] = useState([])
   const [ready, setReady] = useState([])
   const [open, setOpen] = useState(null)
+  const [newsOpen, setNewsOpen] = useState(false)
   // the person's own Claude Code or Codex can make the idea here instead (AgentRun.jsx)
   const agent = useAgentRun()
   const agentBusy = agent?.run?.status === 'running'
@@ -80,24 +82,10 @@ export default function Dashboard(ctx) {
         />
       </Stage>
       <AgentPanel run={agent?.run} go={go} onStop={() => window.ivstudio.agentRun.stop().catch((err) => notify(err.message))} onDismiss={() => window.ivstudio.agentRun.dismiss().catch(() => {})} />
-      {/* once after an update: what this version brought (news.js); all of it stays on Settings → Updates */}
-      {ctx.news && (
-        <section className="news-strip" aria-label="What's new">
-          <div className="news-strip-head">
-            <span className="mono small pink">New in {ctx.news.version}</span>
-            <button className="lora-chip-x" aria-label="Dismiss" onClick={ctx.dismissNews}>
-              ×
-            </button>
-          </div>
-          <ul>
-            {ctx.news.items.map((n) => (
-              <li key={n.text} className="small">
-                {n.text}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {/* once after an update: a small button that opens what this version brought (news.js, WhatsNew.jsx); all of
+          it stays on Settings → Updates */}
+      <NewsChip news={ctx.news} onOpen={() => setNewsOpen(true)} onDismiss={ctx.dismissNews} />
+      {newsOpen && ctx.news && <WhatsNew news={ctx.news} go={go} onClose={() => (setNewsOpen(false), ctx.dismissNews())} />}
       {macLocal && (
         <p className="notice">
           On a Mac, shots render in the cloud: MiniMax H3 needs an NVIDIA graphics card. Set up your own RunPod or Modal account, or Comfy Cloud, and IV Studio sends the work there.{' '}

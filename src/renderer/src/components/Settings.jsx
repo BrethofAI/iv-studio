@@ -12,6 +12,7 @@ import Credits from './Credits'
 import { SpeedCards } from './Speed'
 import { savedSpeed } from '../../../service/speed'
 import { PrivacyCard } from './Privacy'
+import { AgentRows, useAgentSetup } from './AgentSetup'
 
 const WRITER_MODEL = 'huihui_ai/qwen3-vl-abliterated:8b-instruct'
 const GB = (b) => `${(b / 1e9).toFixed(1)} GB`
@@ -427,6 +428,12 @@ function WriterCard({ n, settings, setSettings, notify }) {
     return window.ivstudio.prompts.onPull((ev) => setPull(ev))
   }, [])
   useEffect(() => setAddr(settings.ollamaUrl || ''), [settings.ollamaUrl])
+  // Claude Code or Codex installed from here: look again, so its models show
+  const agents = useAgentSetup()
+  const agentsFound = `${!!agents?.claude?.installed}${!!agents?.codex?.installed}`
+  useEffect(() => {
+    if (agents) refresh()
+  }, [agentsFound])
 
   const save = async (patch) => {
     try {
@@ -500,14 +507,9 @@ function WriterCard({ n, settings, setSettings, notify }) {
         ))}
       </div>
 
-      {h && harness && !harness.installed && (
+      {h && harness && (!harness.installed || (agents?.[engine] && agents[engine].signedIn !== true)) && (
         <SetField label={h.name}>
-          <p className="small pink set-plain">
-            {h.name} isn't installed on this PC.{' '}
-            <button className="link-btn" onClick={() => open(h.get)}>
-              Get {h.name}
-            </button>
-          </p>
+          <AgentRows setup={agents} notify={notify} only={engine} />
         </SetField>
       )}
       {h && harness?.installed && (
@@ -683,6 +685,7 @@ function CivitaiCard({ n, settings, setSettings, notify }) {
 function AgentCard({ n, mcp, notify }) {
   const [agents, setAgents] = useState(null)
   const [client, setClient] = useState('claude')
+  const setup = useAgentSetup()
   const refresh = () => window.ivstudio.agents.info().then(setAgents)
   useEffect(() => {
     refresh()
@@ -705,6 +708,9 @@ function AgentCard({ n, mcp, notify }) {
   const skill = !agents.skillInstalled ? null : agents.skillCurrent ? 'ok' : 'warn'
   return (
     <SetCard id="agents" n={n} title="Agents" sub="Claude Code, Codex and other agents can render, sequence and edit in IV Studio, with the same projects and results you see here." aside={<Pill>MCP</Pill>}>
+      <SetField label="On this PC" hint="Your own Claude Code or Codex, on your own plan. Install puts it in with the maker's own installer; Sign in opens its browser login.">
+        <AgentRows setup={setup} notify={notify} />
+      </SetField>
       <SetField label="Easiest" hint="One message: your agent adds IV Studio, reads its guide and checks your setup.">
         <SetCode text={agents.paste} label="Copy message" tall />
       </SetField>

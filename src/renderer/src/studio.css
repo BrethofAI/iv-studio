@@ -14060,3 +14060,121 @@ html.rm .agent-dot.live {
   text-transform: uppercase;
   cursor: pointer;
 }
+
+/* Claude Code and Codex on this PC (AgentSetup.jsx): one row each, found or not, Install and Sign in */
+.agent-setup {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.agent-setup-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.02);
+}
+.agent-setup-row.ready {
+  border-color: var(--line);
+}
+.agent-setup-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-width: 0;
+}
+.agent-setup-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  color: var(--cream);
+}
+.agent-setup-tick {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--pink);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.agent-setup-act .btn {
+  min-height: 36px;
+  white-space: nowrap;
+}
+.agent-setup-line {
+  grid-column: 1 / -1;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.wel-agents-skip {
+  margin: 12px 0 0;
+}
+/* What's new after an update (WhatsNew.jsx): a small button on the Dashboard that opens a pop-up */
+.news-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 26px;
+}
+.news-chip-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  min-width: 0;
+  padding: 8px 16px;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--red);
+  background: var(--ink-2);
+  color: var(--paper);
+  cursor: pointer;
+  text-align: left;
+}
+.news-chip-open:hover,
+.news-chip-open:focus-visible {
+  border-color: var(--red);
+  color: var(--cream);
+}
+.news-chip-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+}
+.news-chip-text {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.news-chip-arrow {
+  color: var(--pink);
+}
+.modal.whats-new {
+  width: min(680px, 100%);
+}
+.whats-new-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 2px 6px 2px 20px;
+  max-height: min(58vh, 520px);
+  overflow: auto;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--paper);
+}
+.whats-new-list li::marker {
+  color: var(--red);
+}
