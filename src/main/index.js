@@ -53,6 +53,7 @@ import { CharacterCatalog } from '../service/characters'
 import { Replace, RESOLUTIONS, MAX_CHARACTERS, DEFAULT_TONE, OPENJUTSU } from '../service/replace'
 import { CREDIT as REMAKE_CREDIT, Remake } from '../service/remake'
 import { lintPrompt } from '../service/lint'
+import { ABUSE_EMAIL, acceptance, H3_LICENSE_URL, H3_RULES, H3_TERMS_DECLINED, H3_TERMS_NEEDED, H3_TERMS_VERSION, REPORT_URL, setH3Gate, termsAccepted } from '../service/terms'
 import { Reader } from '../service/reader'
 import { Rebuilds } from '../service/rebuild'
 import { Voices } from '../service/voices'
@@ -2747,6 +2748,57 @@ app.whenReady().then(() => {
   })
   handle('links:open', (url) => {
     if (/^https:\/\//.test(url)) shell.openExternal(url)
+    return true
+  })
+
+  // ---------- terms for MiniMax H3 (terms.js, TERMS.md) ----------
+  // The first H3 render or training asks the window (terms:ask) and waits; the person reads the rules and accepts or
+  // declines (terms:answer). One question at a time: renders that arrive meanwhile wait for the same answer.
+  let termsAsk = null // { promise, resolve }
+  const termsState = () => {
+    const s = readSettings(BASE)
+    return { accepted: termsAccepted(s), at: s.h3Terms?.at || null, version: H3_TERMS_VERSION, rules: H3_RULES, abuseEmail: ABUSE_EMAIL, asking: termsAsk?.what || null }
+  }
+  const settleTerms = (ok) => {
+    if (ok) {
+      writeSettings({ h3Terms: acceptance() }, BASE)
+      send('terms:changed', termsState())
+    }
+    termsAsk?.resolve(!!ok)
+    termsAsk = null
+    return termsState()
+  }
+  setH3Gate(async (what) => {
+    if (termsAccepted(readSettings(BASE))) return
+    if (!win || win.isDestroyed()) throw new Error(H3_TERMS_NEEDED)
+    if (!termsAsk) {
+      let resolve
+      const promise = new Promise((r) => (resolve = r))
+      termsAsk = { promise, resolve, what }
+      send('terms:ask', { what })
+    }
+    if (!(await termsAsk.promise)) throw new Error(H3_TERMS_DECLINED)
+  })
+  handle('terms:state', () => termsState())
+  // terms:accept from Settings or Check my PC; terms:answer from the notice a render opened
+  handle('terms:accept', () => settleTerms(true))
+  handle('terms:answer', (ok) => settleTerms(ok))
+  handle('terms:report', () => {
+    shell.openExternal(REPORT_URL)
+    return ABUSE_EMAIL
+  })
+  // MiniMax's licence as shipped with IV Studio (resources/licenses); online if the file can't be opened
+  handle('terms:openLicense', async () => {
+    // copied to the data folder first, like the guide (an AppImage's resources live in a temporary mount)
+    const src = path.join(resourcesDir(path.join(app.getAppPath(), 'resources')), 'licenses', 'MiniMax-H3-LICENSE.txt')
+    const dest = path.join(BASE, 'licenses', 'MiniMax-H3-LICENSE.txt')
+    let err = 'missing'
+    try {
+      fs.mkdirSync(path.dirname(dest), { recursive: true })
+      fs.copyFileSync(src, dest)
+      err = await shell.openPath(dest)
+    } catch {}
+    if (err) shell.openExternal(H3_LICENSE_URL)
     return true
   })
 

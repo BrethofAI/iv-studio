@@ -14,6 +14,7 @@ import { Cloud } from './cloud.js'
 import { probe } from './media.js'
 import { comboOptions } from './setup.js'
 import { readSettings } from './paths.js'
+import { checkH3Terms } from './terms.js'
 import { GPUS as RENDER_GPUS, RunPod } from './runpod.js'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -683,6 +684,8 @@ export class Trainings {
   async startTraining(id, { gpu, epochs, options, more } = {}) {
     if (this.runs.size || this.localRunning()) throw new Error('A character is already training. One at a time.')
     const t = this.get(id)
+    // training makes an H3 LoRA: the H3 terms first (terms.js)
+    await checkH3Terms(null, 'training')
     const where = trainOptions(more ? t.train?.options : options).where
     if (more && t.train?.where && t.train.where !== where) throw new Error('Train more runs where the run was trained.')
     if (where === 'modal' && !(await this.cloud.workspace())) throw new Error('Sign in to Modal on the Cloud page first (steps 1 and 2).')

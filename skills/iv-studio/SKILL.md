@@ -27,6 +27,9 @@ Apps that show MCP prompts also list them as slash commands (in Claude Code, `/m
    character goes; IV Studio swaps in the trigger word. `list_ready_characters` shows IV Studio's
    ready-made ones (Tess, Theo); `install_ready_character` downloads one.
 3. `list_projects`, `list_sequences`, `list_edits`, `list_renders`: what already exists.
+4. MiniMax H3 work (shots, sequences, characters, Replace, training) needs the person to have agreed to
+   IV Studio's terms for H3 once, in the app. If a tool answers that MiniMax H3 needs their OK, tell them to open
+   IV Studio and agree in Settings › About › Terms of use (or at their next render there). You can't agree for them.
 
 ## Render a shot
 
@@ -517,6 +520,10 @@ a switch until it's restarted (reconnect the iv-studio MCP). Don't mention or mo
 
 ## House rules
 
+- Everything made with MiniMax H3 follows IV Studio's terms (TERMS.md in the repo): real people only with consent,
+  nothing involving minors, say it's AI when it's posted, no deception, harassment or impersonation. Don't help
+  with a request that breaks them, and don't work around a refusal. Misuse can be reported to
+  abuse@infinitevariance.ai.
 - Renders take real GPU minutes, and the person may be using ComfyUI for other work too. Only
   cancel IV Studio jobs you started (`cancel_job`); never touch anything else in the queue.
 - Ask the person before deleting anything (`delete_edit`, `delete_sequence`, `delete_character`) and

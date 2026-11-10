@@ -10,6 +10,7 @@ import { highContrast, setContrast } from '../a11y'
 import { UsageAsk } from './Privacy'
 import { openStarter } from './Starters'
 import { AgentRows, useAgentSetup } from './AgentSetup'
+import { openH3Terms, useH3Terms } from './H3Terms'
 
 // The welcome wizard (Check my PC): opens on first launch, and again from Settings. It reads this computer
 // (hardware:scan; nothing leaves the PC), says plainly what it can do, suggests a way of working (this PC, the
@@ -660,8 +661,33 @@ function Done({ rec, way, prefs, writer, started, onTour, count, setCount }) {
           Take the tour →
         </button>
       </div>
+      <WelcomeTerms />
       <UsageAsk on={count} onChange={setCount} />
     </section>
+  )
+}
+
+// MiniMax H3's terms (terms.js): read and agreed here, or at the first H3 render
+function WelcomeTerms() {
+  const terms = useH3Terms()
+  if (!terms) return null
+  return (
+    <div className="wel-tour wel-terms">
+      <span className="wel-tour-q" aria-hidden="true">
+        {terms.accepted ? '✓' : '§'}
+      </span>
+      <div>
+        <strong>The rules for MiniMax H3</strong>
+        <p className="small dim">
+          {terms.accepted
+            ? 'You’ve agreed to IV Studio’s terms for H3. They’re in Settings › About whenever you want them.'
+            : 'Shots are made with MiniMax H3. Before the first one, read its rules (real people only with consent, nothing involving minors, say it’s AI when you post it) and agree once.'}
+        </p>
+      </div>
+      <button className="btn" onClick={() => openH3Terms({ accepted: terms.accepted })}>
+        {terms.accepted ? 'Read them' : 'Read and agree →'}
+      </button>
+    </div>
   )
 }
 

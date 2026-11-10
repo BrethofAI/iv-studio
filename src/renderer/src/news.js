@@ -4,6 +4,7 @@ export const NEWS = [
   {
     version: '1.1.0',
     items: [
+      { text: 'The rules for MiniMax H3: before your first H3 render, IV Studio shows them in plain words and asks you to agree to its terms once. Read them again, or report misuse, in Settings › About.' },
       { text: 'Chat with your own Claude Code or Codex: the Chat button in the title bar. It can use everything IV Studio does and knows which page you’re on. Before anything that deletes, costs money, installs or changes a setting, it asks you first.' },
       { text: 'Ask it from anywhere: Ask … to fix it on a failed render, to pick the best take on a shot, or about a picture in the Library. Drop pictures, videos, sound or a script into the chat.' },
       { text: 'Show me where: ask where something is, and IV Studio goes there and lights it up.' },

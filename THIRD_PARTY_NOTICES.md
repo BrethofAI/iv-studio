@@ -24,6 +24,15 @@ package `ffmpeg-ffprobe-static` 6.1.2-rc.1. Source: https://github.com/FFmpeg/FF
 and https://github.com/BtbN/FFmpeg-Builds (build scripts). IV Studio runs it as a separate program,
 the same way you would from a command line.
 
+## MiniMax H3
+
+MiniMax H3 is licensed under the MiniMax H3 Community License Agreement, Copyright © 2026 MiniMax. All Rights Reserved.
+
+IV Studio is Powered by MiniMax H3. It doesn't include H3's weights (see Not bundled), but it ships a copy of MiniMax's
+licence (`resources/licenses/MiniMax-H3-LICENSE.txt`, from Hugging Face `MiniMaxAI/MiniMax-H3` revision `42ed227`) and
+its notice (`MiniMax-H3-NOTICE.txt`). Everyone who uses H3 through IV Studio agrees to [TERMS.md](TERMS.md), which
+carries the licence's use restrictions and Acceptable Use Policy.
+
 ## Artwork
 
 `src/renderer/src/assets/eye.webp` is Infinite Variance's own artwork (the "What If?" eye from infinitevariance.ai). It is © Infinite Variance and is **not** covered by the MIT licence; don't reuse it outside IV Studio without permission.

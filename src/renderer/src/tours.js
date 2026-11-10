@@ -283,6 +283,8 @@ export const TOURS = {
       { at: '#set-writer', title: 'Prompt writer', text: 'Who writes your prompts: a free local model in Ollama, your own Claude Code or Codex, any OpenAI-compatible server (llama.cpp, vLLM, LM Studio, OpenAI…), or MiniMax’s paid rewriter.' },
       { at: '#set-account', title: 'Comfy account', text: 'Your Comfy.org key and credits, for ComfyUI’s paid partner models such as Seedance, Kling and Veo. The balance also shows in the title bar, and IV Studio shows the price and asks before anything paid runs.' },
       { at: '#set-agents', title: 'Agents', text: 'Connect Claude Code, Codex or any MCP agent, so it can make shots and edits in IV Studio with you.' },
+      { at: '.about-terms', title: 'Terms of use', text: 'IV Studio is Powered by MiniMax H3. Read the rules for H3 here and agree once, before your first H3 render. They apply to everything you make with it.' },
+      { at: '.about-report', title: 'Report misuse', text: 'Seen something made with IV Studio that breaks the rules, or uses someone without consent? Report misuse emails us, and every report is acted on.' },
       { at: '.about-credits', title: 'Credits', text: 'Everything IV Studio is built on: the models, tools, node packs and libraries, who made each and its licence.' }
     ]
   },

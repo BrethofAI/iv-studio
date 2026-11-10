@@ -11,6 +11,7 @@ import ivMark from './assets/iv-mark.png'
 import ivMarkClosed from './assets/iv-mark-closed.png'
 import { ConfirmHost, ask } from './components/Confirm'
 import CloudModels from './components/CloudModels'
+import { H3TermsHost } from './components/H3Terms'
 import Library from './components/Library'
 import Cloud, { CloudMeter } from './components/Cloud'
 import StartComfy from './components/StartComfy'
@@ -522,6 +523,7 @@ export default function App() {
       )}
       <ConfirmHost />
       <CloudModels />
+      <H3TermsHost />
       {cloudWiz && <CloudWizard onClose={() => (setCloudWiz(false), recheck?.(), window.dispatchEvent(new CustomEvent('iv:cloud-changed')))} notify={notify} recheck={recheck} info={info} />}
       <TourHost />
       {welcome && <Welcome first={welcome === 'first'} onClose={() => (setWelcome(null), recheck?.())} go={setPage} notify={notify} />}

@@ -38,6 +38,7 @@ import { Reframes } from '../service/reframe'
 import { MediaTools } from '../service/media'
 import { applyFinishSpeed, applySpeed, savedSpeed, SPEED_IDS, SPEEDS } from '../service/speed'
 import { comfyFolders, contentDir, dataLocation, readSettings, resourcesDir, videosFolderOf, writerOf, writeSettings } from '../service/paths'
+import { H3_TERMS_NEEDED, setH3Gate, termsAccepted } from '../service/terms'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
@@ -80,6 +81,10 @@ if (LOCATION.missing) {
   process.exit(1)
 }
 const BASE = LOCATION.dir
+// MiniMax H3 only after the person has accepted its terms in the app (terms.js). An agent can't accept for them.
+setH3Gate(async () => {
+  if (!termsAccepted(readSettings(BASE))) throw new Error(H3_TERMS_NEEDED)
+})
 const INCOGNITO = !!readSettings(BASE).incognito
 const DATA = contentDir(BASE)
 // the writer's Ollama: the address in Settings → Prompt writer, else OLLAMA_HOST, else this PC (prompter.js)

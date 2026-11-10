@@ -15132,3 +15132,55 @@ html.rm .agent-dot.live {
   max-height: calc(100vh - 44px);
   overflow-y: auto;
 }
+
+/* ---------- MiniMax H3 terms (H3Terms.jsx): asked once before the first H3 render, above every other layer ---------- */
+.modal-backdrop.h3-terms-backdrop {
+  z-index: 120;
+}
+.modal.confirm.h3-terms {
+  width: min(620px, 100%);
+}
+.h3-terms-rules {
+  display: grid;
+  gap: 5px;
+  /* the rules scroll inside the dialog, so Agree is always on screen, down to the smallest window */
+  max-height: max(140px, calc(100vh - 470px));
+  overflow: auto;
+  font-size: 14px;
+  margin: 2px 0 0;
+  padding: 12px 14px 12px 34px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  line-height: 1.45;
+}
+.h3-terms-rules li::marker {
+  color: var(--pink);
+  font-family: var(--mono);
+}
+.h3-terms-credit {
+  margin: 0;
+  line-height: 1.5;
+}
+.h3-terms-credit strong {
+  color: var(--cream);
+}
+.h3-terms-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.h3-terms-agree {
+  padding: 10px 12px;
+  border: 1px solid rgba(244, 72, 89, 0.45);
+  color: var(--paper);
+}
+.h3-terms-done {
+  margin: 0;
+  color: #6ee7a8;
+}
+.about-terms-line {
+  margin: 0;
+}
+.wel-terms .wel-tour-q {
+  font-size: 18px;
+}

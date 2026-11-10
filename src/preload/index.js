@@ -358,5 +358,6 @@ contextBridge.exposeInMainWorld('ivstudio', {
   render: { plan: call('render:plan'), planFinish: call('render:planFinish'), price: call('render:price'), priceFinish: call('render:priceFinish'), previews: call('render:previews'), finish: call('render:finish'), enhance: call('render:enhance') },
   jobs: { watch: call('jobs:watch'), cancel: call('jobs:cancel'), onUpdate: on('jobs:update'), onLive: on('jobs:live') },
   files: { pick: call('files:pick'), reveal: call('files:reveal'), open: call('files:open') },
-  links: { open: call('links:open') }
+  links: { open: call('links:open') },
+  terms: { state: call('terms:state'), accept: call('terms:accept'), answer: call('terms:answer'), report: call('terms:report'), openLicense: call('terms:openLicense'), onAsk: on('terms:ask'), onChanged: on('terms:changed') }
 })

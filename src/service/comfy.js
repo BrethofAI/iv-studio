@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { cleanFolder, outputsUnder } from './paths.js'
 import { checkSpend, infoFor, priceGraph } from './pricing.js'
+import { checkH3Terms } from './terms.js'
 
 export class Comfy {
   // token: a cloud ComfyUI sits behind IV Studio's gate (resources/cloud/gate.py), which wants it as a
@@ -117,9 +118,12 @@ export class Comfy {
   realObjectInfo = (cls) => this.req(cls ? `/object_info/${encodeURIComponent(cls)}` : '/object_info', { timeout: this.remote && !this.hosted ? 600000 : 60000 })
 
   // front: put it ahead of waiting renders (used for quick jobs such as writing a prompt).
+  // A graph that runs MiniMax H3 waits for the person's OK to its terms first (terms.js).
   // spend: the person's OK for paid partner nodes ({ approvedUsd, unknownOk }, see pricing.js checkSpend). A graph
   // that can spend Comfy.org credits (a key attached, or Comfy Cloud) is priced first and refused without it.
   async submit(prompt, extra = {}, { front = false, spend = null } = {}) {
+    // MiniMax H3 only after the person has accepted its terms (terms.js)
+    await checkH3Terms(prompt)
     outputsUnder(prompt, this.folders.output)
     renameFiles(prompt, await this.filesFor())
     // the person's own cloud: its models downloaded and this PC's LoRAs uploaded first (asks before downloading)

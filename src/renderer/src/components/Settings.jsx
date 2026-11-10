@@ -9,6 +9,8 @@ import { SetCard, SetField, SetSwitch, Pill, SetPath, SetCode } from './Settings
 import { startTour } from '../tours'
 import { AccountCard } from './ComfyAccount'
 import Credits from './Credits'
+import { openH3Terms, reportMisuse, useH3Terms } from './H3Terms'
+import { SAFEGUARDS_URL } from '../../../service/terms'
 import { SpeedCards } from './Speed'
 import { savedSpeed } from '../../../service/speed'
 import { PrivacyCard } from './Privacy'
@@ -940,8 +942,10 @@ function AgentCard({ n, mcp, settings, setSettings, notify }) {
 
 function AboutCard({ n, info }) {
   const [credits, setCredits] = useState(false)
+  const terms = useH3Terms()
+  const agreed = terms?.at ? new Date(terms.at).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : null
   return (
-    <SetCard id="about" n={n} title="About">
+    <SetCard id="about" n={n} title="About" aside={terms && (terms.accepted ? <Pill tone="ok">Terms agreed</Pill> : <Pill tone="warn">Terms to agree</Pill>)}>
       <SetField label="IV Studio">
         <div className="set-inline">
           <span className="set-big mono">v{info?.version}</span>
@@ -953,6 +957,31 @@ function AboutCard({ n, info }) {
           </button>
           <button className="link-btn mono small" onClick={() => window.ivstudio.learn.openGuide().catch(() => {})}>
             The guide (PDF) ↗
+          </button>
+        </div>
+      </SetField>
+      <SetField
+        label="Terms of use"
+        hint="IV Studio is Powered by MiniMax H3. Using H3 means agreeing to IV Studio’s terms, which carry MiniMax’s use restrictions: real people only with consent, nothing involving minors, say it’s AI when you post it, and more. You’re asked once, before your first H3 render."
+      >
+        <div className="set-inline about-terms">
+          {terms?.accepted ? <span className="small">Agreed on {agreed}</span> : <span className="small pink">Not agreed yet</span>}
+          <button className={`btn btn-small ${terms && !terms.accepted ? 'btn-primary' : ''}`} onClick={() => openH3Terms({ accepted: !!terms?.accepted })}>
+            {terms && !terms.accepted ? 'Read and agree' : 'Read the terms'}
+          </button>
+          <button className="link-btn mono small" onClick={() => window.ivstudio.terms.openLicense().catch(() => {})}>
+            MiniMax’s licence ↗
+          </button>
+        </div>
+      </SetField>
+      <SetField label="Report misuse" hint="Seen something made with IV Studio that breaks the terms, or that uses you or someone else without consent? Email us. Every report is read and acted on.">
+        <div className="set-inline about-report">
+          <button className="btn btn-small" onClick={reportMisuse}>
+            Report misuse
+          </button>
+          <span className="mono small">{terms?.abuseEmail || 'abuse@infinitevariance.ai'}</span>
+          <button className="link-btn mono small" onClick={() => open(SAFEGUARDS_URL)}>
+            How we keep it safe ↗
           </button>
         </div>
       </SetField>

@@ -33,6 +33,10 @@ for you, MiniMax H3 Image and Seedance 2.5 beside MiniMax H3, effects for any cl
 own RunPod or Modal, speed presets for smaller graphics cards, and a new look that fits any window. See
 [what's new in 1.1](#whats-new-in-11).
 
+IV Studio is **Powered by MiniMax H3**. Using H3 through it means agreeing to the
+[IV Studio terms of use](TERMS.md), which carry MiniMax's use restrictions: IV Studio asks once, before your first
+H3 render. To report misuse, email [abuse@infinitevariance.ai](mailto:abuse@infinitevariance.ai).
+
 <p align="center">
   <img src="docs/images/create.png" alt="Create: Tess picked, Write it for me with the idea, the H3 prompt, and the pinned Your shot card with Hunt 3 previews" width="100%">
 </p>
@@ -202,6 +206,10 @@ These ideas come from keys and Sam Wasserman's Imagination Studio (Apache-2.0); 
   pods start from Fizgig's own RunPod template, so your training time supports Fizgig too.
 - **Credits.** Settings → About → Credits lists every model, tool, node pack and library IV Studio is built on:
   who made it, what it does here and its licence.
+- **Terms for MiniMax H3.** Before your first H3 render or training, IV Studio shows the rules for H3 in plain words
+  and asks you to agree to its [terms of use](TERMS.md) once (they carry MiniMax's licence restrictions and Acceptable
+  Use Policy). Read them again, or report misuse, in **Settings → About**. If you're updating from 1.0, you'll be asked
+  at your next H3 render.
 
 ## What's new in 1.0
 
@@ -402,6 +410,7 @@ These ideas come from keys and Sam Wasserman's Imagination Studio (Apache-2.0); 
 3. Open IV Studio. On first launch **Check my PC** reads your graphics card, memory and drives (nothing
    leaves your PC), says what it can do, and sets previews, finals, the prompt writer and the downloads to
    suit; it ends by offering a two-minute tour of the app. IV Studio starts ComfyUI for you when it can.
+   Before your first MiniMax H3 render it asks you to read and agree to the [terms of use](TERMS.md) once.
 4. **Settings → Setup** checks ComfyUI, your GPU, the node packs and every
    model, installs missing node packs into ComfyUI with one click (restart ComfyUI afterwards), and
    downloads missing models straight into ComfyUI's models folder (each checked against the SHA-256 its
@@ -1206,6 +1215,13 @@ The MCP server always renders on the local ComfyUI.
 
 ## Use it well
 
+- **Terms.** Using MiniMax H3 through IV Studio means agreeing to the [IV Studio terms of use](TERMS.md): real people
+  only with their consent, nothing involving minors, say it's AI when you post it, and the rest of MiniMax's use
+  restrictions. How IV Studio guards against misuse, and what it doesn't do yet, is in
+  [docs/SAFEGUARDS.md](docs/SAFEGUARDS.md).
+- **Report misuse.** Seen something made with IV Studio that breaks the terms, or uses you or someone else without
+  consent? Email [abuse@infinitevariance.ai](mailto:abuse@infinitevariance.ai) (or **Settings → About → Report
+  misuse**). Every report is read and acted on.
 - **Model licences.** IV Studio doesn't bundle any model weights; each one downloads from its own host under
   its own licence, linked from Setup. Read them before commercial work. In particular:
   - **MiniMax H3** is under the MiniMax H3 Community Licence, which covers use worldwide *except* the EU,
@@ -1246,6 +1262,8 @@ Tests are in `test/`:
 - `media-prepare.mjs`, `models-download.mjs`, `prompt-writer.mjs`: media trims, checked downloads and the
   local prompt writer.
 - `tours.mjs`: every How it works tour exists, reads well, and points only at parts the window still has.
+- `terms.mjs`: which graphs count as MiniMax H3, the terms gate before H3 renders and training, and that
+  [TERMS.md](TERMS.md) carries MiniMax's use restrictions.
 - `hardware.mjs`, `training-recipe.mjs`, `training-runpod.mjs`, `sampler-choice.mjs`, `refmods.mjs`,
   `news.mjs`: Check my PC's advice, the training recipe and its spending cap, RunPod training against a mock,
   the sampler choice, RefMod characters and What's new.
@@ -1255,6 +1273,11 @@ Tests are in `test/`:
 IV Studio is MIT-licensed (see [LICENSE](LICENSE)); the Infinite Variance eye artwork is Infinite Variance's
 own and isn't covered by the MIT licence. Third-party notices are in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The bundled FFmpeg build is GPL.
+
+IV Studio is Powered by MiniMax H3. MiniMax H3 is licensed under the MiniMax H3 Community License Agreement,
+Copyright © 2026 MiniMax. All Rights Reserved. A copy of that licence ships in
+[resources/licenses/MiniMax-H3-LICENSE.txt](resources/licenses/MiniMax-H3-LICENSE.txt), and using H3 through
+IV Studio is subject to the [terms of use](TERMS.md).
 
 Screenshots show Tess Marlow and Theo Lindqvist, invented IV Studio characters, and other shots, pictures and
 songs made with IV Studio. The LoRA previews in the LoRAs screenshots are by their makers on Civitai.
