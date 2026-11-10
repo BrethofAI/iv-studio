@@ -69,6 +69,8 @@ const fitFades = (c) => {
 // the timeline below, every border draggable. A full-screen workspace hides IV Studio's own sidebar.
 // An agent edits the same file through the MCP server: its changes appear here with a one-click undo.
 export default function EditEditor({ editId, notify, go, focus, setFocus, characters = [], remakeClip }) {
+  // For Premiere / Resolve (interchange.js): busy, then what was written
+  const [handing, setHanding] = useState(null)
   const [meta, setMeta] = useState(null)
   const [edit, setEdit] = useState(null)
   const chatAgent = useAgentName()
@@ -463,7 +465,6 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
   }
 
   // the timeline for Premiere, Resolve and Final Cut (interchange.js), with its media, zipped
-  const [handing, setHanding] = useState(null)
   async function exportForEditors() {
     setPlaying(false)
     clearTimeout(saveTimer.current)
@@ -529,7 +530,7 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
           )}
           {handing?.folder && (
             <button className="link-btn mono" onClick={() => window.ivstudio.files.reveal(handing.xml)}>
-              Handed off · show folder
+              Show hand-off
             </button>
           )}
           <button
@@ -538,7 +539,7 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
             onClick={exportForEditors}
             title="The timeline as files Premiere Pro, DaVinci Resolve and Final Cut Pro open (XML, FCPXML and an EDL), with every clip copied beside them and zipped to send. Fades and title styling stay behind."
           >
-            {handing?.busy ? 'Packing…' : 'For Premiere / Resolve'}
+            {handing?.busy ? 'Packing…' : 'Premiere / Resolve'}
           </button>
           <button className="btn btn-primary" disabled={!edit.clips.length || exp?.progress != null} onClick={exportEdit}>
             {exp?.progress != null ? `Exporting ${Math.round(exp.progress * 100)}%` : 'Export MP4'}

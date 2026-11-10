@@ -132,7 +132,7 @@ own RunPod or Modal, speed presets for smaller graphics cards, and a new look th
 - **"No …" wording.** H3 has no negative prompt, so "No photographs appear anywhere" can hang photographs on the
   wall. The checker lists every "no / without / never / not …" phrase with what to write instead. IV Studio's own
   tested lines ("No one speaks.", "There is no writing anywhere in the picture.") stay.
-- **For Premiere / Resolve.** In the editor, the timeline goes out as FCP 7 XML (Premiere Pro and DaVinci
+- **Premiere / Resolve.** The editor's **Premiere / Resolve** button: the timeline goes out as FCP 7 XML (Premiere Pro and DaVinci
   Resolve), FCPXML 1.10 (Resolve, Final Cut Pro) and a CMX3600 EDL of V1, with every clip copied into a Media
   folder beside them and the folder zipped to send. Tracks, trims, pictures, volume, hidden, muted and locked
   tracks and markers come over; titles come over as markers (and as text in the FCPXML). Fades and title

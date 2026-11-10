@@ -21,11 +21,14 @@ export const DEFAULT_WEIGHTS = { words: 4, likeness: 2, cuts: 2, frames: 1.5, mo
 // A flash or a burst (bright, fast effects) changes several frames in a row; a cut changes one, so the next biggest
 // change nearby must be well below it (isolate).
 export const CUT = { min: 6, ratio: 5, floor: 1.2, edge: 3, gap: 6, isolate: 2.5 }
-export function findCuts(scores, fps = 24) {
+// mafd: scdet's raw difference from the frame before. A one-frame flicker jumps away and straight back, so the frame
+// after it differs as much again; a cut stays on its new picture, so the frame after it barely differs.
+export function findCuts(scores, fps = 24, mafd = null) {
   const out = []
   for (let i = CUT.edge; i < scores.length - CUT.edge; i++) {
     const s = scores[i]
     if (!(s >= CUT.min)) continue
+    if (mafd && mafd[i + 1] != null && mafd[i] && mafd[i + 1] >= 0.5 * mafd[i]) continue
     const near = [...scores.slice(Math.max(0, i - 6), i), ...scores.slice(i + 1, i + 7)].filter((x) => x != null).sort((a, b) => a - b)
     const median = near.length ? near[Math.floor(near.length / 2)] : 0
     if (s < CUT.ratio * Math.max(median, CUT.floor)) continue
@@ -187,16 +190,17 @@ export class Ranker {
 
   // scdet's score for every frame (0 for the first), the frame rate and the frame count.
   async sceneScores(file) {
-    const log = await this.run(['-hide_banner', '-v', 'info', '-i', file, '-vf', 'scale=256:-2,scdet=threshold=100,metadata=print:key=lavfi.scd.score', '-an', '-f', 'null', '-'])
+    const log = await this.run(['-hide_banner', '-v', 'info', '-i', file, '-vf', 'scale=256:-2,scdet=threshold=100,metadata=print', '-an', '-f', 'null', '-'])
     const fps = Number(/, ([\d.]+) fps/.exec(log)?.[1]) || 24
     const scores = [...log.matchAll(/lavfi\.scd\.score=([\d.]+)/g)].map((m) => Number(m[1]))
-    return { scores, fps, frames: scores.length }
+    const mafd = [...log.matchAll(/lavfi\.scd\.mafd=([\d.]+)/g)].map((m) => Number(m[1]))
+    return { scores, mafd: mafd.length === scores.length ? mafd : null, fps, frames: scores.length }
   }
   // Hard cuts in a take, and its longest stretch without one.
   async cuts(file) {
-    const { scores, fps, frames } = await this.sceneScores(file)
+    const { scores, mafd, fps, frames } = await this.sceneScores(file)
     if (!frames) return null
-    const cuts = findCuts(scores, fps)
+    const cuts = findCuts(scores, fps, mafd)
     const clean = cleanStretch(cuts, frames, fps)
     return { cuts, clean, fps, frames, h3: cuts.length ? h3Stretch(clean, fps) : null }
   }

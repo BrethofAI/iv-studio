@@ -14876,3 +14876,16 @@ html.rm .agent-dot.live {
   align-items: center;
   margin-top: 6px;
 }
+/* trigger words are typed exactly, so they keep their case */
+.rec-facts dd.mono {
+  text-transform: none;
+  letter-spacing: 0;
+}
+/* a character's settings with a turnaround sheet in them: the settings side scrolls when the window is short */
+.modal.cast-modal {
+  max-height: calc(100vh - 40px);
+}
+.modal.cast-modal .cast-modal-body {
+  max-height: calc(100vh - 44px);
+  overflow-y: auto;
+}

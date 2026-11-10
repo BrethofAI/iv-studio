@@ -41,7 +41,7 @@ export const NEWS = [
       { text: 'Character training moves to Fizgig 9; RunPod training starts from Fizgig’s own template. Settings → About → Credits lists everything IV Studio is built on.' },
       { text: 'Takes that cut away: when a one-shot take cuts to a close-up nobody asked for, the take card says when, it scores lower, and you can keep the part before or after the cut. In First / last frame mode, each take says whether it really opens and ends on your pictures.' },
       { text: 'The prompt checker warns about “no …” wording: H3 has no negative prompt, so “no photographs” can put photographs on the wall. It suggests what to write instead.' },
-      { text: 'For Premiere / Resolve in the editor: the timeline as files Premiere Pro, DaVinci Resolve and Final Cut open, with every clip copied beside them and zipped to send.' },
+      { text: 'Premiere / Resolve in the editor: the timeline as files Premiere Pro, DaVinci Resolve and Final Cut open, with every clip copied beside them and zipped to send.' },
       { text: 'LoRAs → Recommended: a shelf of H3 LoRAs we’ve tried (camera moves, natural speech, motion repair, physics, first-person, 360° orbit, transformations), each with how to use it.' },
       { text: 'Turnaround sheets on Characters: five views of a character turning around, from their face picture.' },
       { text: 'Search the Library by what’s in a file: while nothing renders, your prompt writer looks at each video and picture, so “red car” finds one (Settings → Prompt writer turns it off).' },

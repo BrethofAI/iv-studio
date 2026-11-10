@@ -716,7 +716,7 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
       if (forContinue) {
         const asked = run.plan.asked || {}
         editRun?.({ ...run, plan: { ...run.plan, request: { ...run.plan.request, mode: 'continue' }, asked: { ...asked, mode: 'continue', media: [{ kind: 'video', file: part.path }] } } }, project)
-        notify(`The part before the cut (${part.seconds} s, ${part.frames} frames) is the source. Write what happens next and hunt.`, 'info')
+        notify(`The part ${part.from === 0 ? 'before' : 'after'} the cut (${part.seconds} s, ${part.frames} frames) is the source. Write what happens next and hunt.`, 'info')
       } else {
         const e = await window.ivstudio.library.toEdit({ file: { path: part.path }, label: `${project.name} #${candidate} without the cut`, type: 'video' })
         openEdit?.(e.id)

@@ -61,6 +61,16 @@ await ok('cuts: one frame unlike the one before, standing alone', () => {
   const flash = calm.slice()
   ;[110, 111, 112, 115, 116].forEach((i, k) => (flash[i] = [5.5, 10.4, 5.5, 6.3, 9.4][k]))
   assert.deepEqual(findCuts(flash), [], 'a burst of bright frames is not a cut')
+  // a one-frame flicker: scdet scores the jump, not the jump back; the raw differences show both
+  const flick = calm.slice()
+  flick[53] = 8.4
+  const mafd = calm.map((x) => x + 0.5)
+  mafd[53] = 9
+  mafd[54] = 8.8
+  assert.deepEqual(findCuts(flick, 24, mafd), [], 'a flicker that jumps straight back is not a cut')
+  const stays = mafd.slice()
+  stays[54] = 0.9
+  assert.equal(findCuts(flick, 24, stays).length, 1, 'a change that stays is')
   const edge = calm.slice()
   edge[1] = 30
   assert.deepEqual(findCuts(edge), [], 'the first frames are skipped')

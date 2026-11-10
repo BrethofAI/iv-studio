@@ -128,7 +128,7 @@ export const TOURS = {
       { at: '.ed-toolbar', title: 'Tools', text: 'Select (V), Razor (C), Ripple (B) and Roll (N), with snapping and zoom.' },
       { at: '.ed-tl-wrap', title: 'The timeline', text: 'Drag clips to move and trim them. Right-click a clip to Extend, Retake, Cut out or Reframe it with new footage; right-click a gap to fill it.' },
       { at: '.ed-export', title: 'Export', text: 'Full screen gives you more room (F11, Esc to come back). Export makes the finished video.' },
-      { at: '.ed-handoff', title: 'Finish in another editor', text: 'For Premiere / Resolve writes the timeline for Premiere Pro, DaVinci Resolve and Final Cut (XML, FCPXML and an EDL), copies every clip beside it and zips it to send. Tracks, trims, volume and markers come over; fades and title styling don’t.' }
+      { at: '.ed-handoff', title: 'Finish in another editor', text: 'Premiere / Resolve writes the timeline for Premiere Pro, DaVinci Resolve and Final Cut (XML, FCPXML and an EDL), copies every clip beside it and zips it to send. Tracks, trims, volume and markers come over; fades and title styling don’t.' }
     ]
   },
   workflows: {
