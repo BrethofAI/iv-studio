@@ -5,7 +5,8 @@ import path from 'node:path'
 import { Readable } from 'node:stream'
 import { comfyFolders, dataLocation, incognitoDir, readSettings, resourcesDir, videosFolderOf, writerOf, writeSettings } from '../service/paths'
 import { chooseTarget, copyData, discardCopy, freeBytes, listData, movableEntries, oldCopy, removeOldCopy, verifyCopy, writePointer } from '../service/datafolder'
-import { EXTRA_BIN, harnessStatus } from '../service/harness'
+import { EXTRA_BIN, findHarnesses, harnessStatus } from '../service/harness'
+import { AGENT_NAMES, startAgentRun } from '../service/agentrun'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS, MODAL_VERSION } from '../service/cloud'
 import { SetupProgress, about } from '../service/setupprogress'
@@ -2043,6 +2044,81 @@ app.whenReady().then(() => {
     fs.mkdirSync(path.dirname(skillFile), { recursive: true })
     fs.writeFileSync(skillFile, skillText())
     return skillFile
+  })
+  // The Dashboard's "Let Claude Code make it": the person's own agent makes their idea inside IV Studio (agentrun.js).
+  // The writer chosen in Settings when it's Claude Code or Codex, else whichever is installed, Claude Code first. A test
+  // copy can stand in a recorded agent (IV_STUDIO_TEST_AGENT, a .cmd or program printing an agent's stream).
+  let agentRun = null
+  let agentRenders = []
+  let agentPoll = null
+  const agentPick = () => {
+    const found = TEST_COPY && process.env.IV_STUDIO_TEST_AGENT ? { claude: process.env.IV_STUDIO_TEST_AGENT, codex: null } : findHarnesses()
+    const s = readSettings(BASE)
+    const pick = ['claude', 'codex'].includes(s.promptEngine) && found[s.promptEngine] ? s.promptEngine : found.claude ? 'claude' : found.codex ? 'codex' : null
+    return { pick, exe: pick ? found[pick] : null, installed: { claude: !!found.claude, codex: !!found.codex } }
+  }
+  const agentView = () => (agentRun ? { ...agentRun.state(), renders: agentRenders } : null)
+  const agentStatus = () => {
+    const { pick, installed } = agentPick()
+    return { pick, name: pick ? AGENT_NAMES[pick] : null, installed, cloud: readSettings(BASE).target === 'cloud', run: agentView() }
+  }
+  // the takes the run started, as the panel shows them: name, status and progress
+  const refreshAgentRenders = async () => {
+    if (!agentRun) return
+    const out = []
+    for (const id of agentRun.jobs()) {
+      try {
+        const j = await studio.refreshJob(id)
+        out.push({ id, name: j.name, kind: j.kind, status: j.status, progress: j.progress ? Math.round((100 * j.progress.value) / Math.max(1, j.progress.max)) : null, projectId: j.projectId || null })
+      } catch {
+        out.push({ id, status: 'unknown' })
+      }
+    }
+    agentRenders = out
+    send('agentRun:changed', agentView())
+    const running = agentRun.state().status === 'running' || out.some((r) => ['queued', 'running'].includes(r.status))
+    if (!running) clearInterval(agentPoll), (agentPoll = null)
+  }
+  handle('agentRun:status', agentStatus)
+  handle('agentRun:start', (idea) => {
+    const text = String(idea || '').trim().slice(0, 2000)
+    if (!text) throw new Error('Type what you want to make first.')
+    if (agentRun && agentRun.state().status === 'running') throw new Error(`${agentRun.state().name} is still working on the last idea. Stop it first.`)
+    if (readSettings(BASE).target === 'cloud') throw new Error('IV Studio is set to render on the cloud. Your agent only renders on this PC (free): switch Cloud to This PC, or press Make it.')
+    const { pick, exe } = agentPick()
+    if (!pick) throw new Error('Neither Claude Code nor Codex is installed on this PC.')
+    const mcp = mcpCommand()
+    const extraEnv = {}
+    for (const k of ['IV_STUDIO_DATA', 'IV_STUDIO_USER_DATA']) if (process.env[k]) extraEnv[k] = process.env[k]
+    agentRenders = []
+    const s = readSettings(BASE)
+    agentRun = startAgentRun({
+      engine: pick,
+      exe,
+      idea: text,
+      mcp,
+      model: pick === 'claude' ? s.claudeModel || '' : s.codexModel || '',
+      extraEnv,
+      onChange: (state) => {
+        send('agentRun:changed', { ...state, renders: agentRenders })
+        if (state.jobs.length && !agentPoll) agentPoll = setInterval(refreshAgentRenders, 3000)
+        if (state.endedAt) refreshAgentRenders()
+      }
+    })
+    return agentView()
+  })
+  handle('agentRun:stop', async () => {
+    if (!agentRun) return null
+    agentRun.stop()
+    for (const id of agentRun.jobs()) await studio.cancelJob(id).catch(() => {})
+    await refreshAgentRenders()
+    return agentView()
+  })
+  // close the panel of a finished run
+  handle('agentRun:dismiss', () => {
+    if (agentRun && agentRun.state().status !== 'running') (agentRun = null), (agentRenders = [])
+    send('agentRun:changed', agentView())
+    return null
   })
   handle('models:h3', () => studio.h3Models())
   handle('models:status', () => installer.status())

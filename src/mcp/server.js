@@ -10,6 +10,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
 import { INSTRUCTIONS, readGuide } from '../service/agent'
+import { agentGuard, startedJobId } from '../service/agentrun'
 import { GUIDE_SOURCE, loadGuide } from '../service/h3guide'
 import { blocking, lintPrompt } from '../service/lint'
 import { Ranker } from '../service/ranking'
@@ -84,6 +85,11 @@ const ok = (value) => {
   return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }], structuredContent: structured }
 }
 const fail = (err) => ({ isError: true, content: [{ type: 'text', text: err.message }] })
+// Started from IV Studio's Dashboard ("Let Claude Code make it", agentrun.js): no deleting, installing, training,
+// Settings changes or spending, and the jobs it starts are written down so Stop can cancel them.
+const AGENT_RUN = process.env.IV_STUDIO_AGENT_RUN === '1'
+const AGENT_JOBS = process.env.IV_STUDIO_AGENT_JOBS || null
+const agentStarted = new Set()
 const tool = (name, description, shape, fn) =>
   server.registerTool(name, { description, inputSchema: shape }, async (args) => {
     try {
@@ -92,7 +98,17 @@ const tool = (name, description, shape, fn) =>
       // the folders the person picked in Settings, as they are now
       studio.comfy.folders = comfyFolders(s, INCOGNITO)
       if (!!s.incognito !== INCOGNITO) throw new Error(`IV Studio switched Incognito ${INCOGNITO ? 'off' : 'on'} since this MCP server started. Restart the server (reconnect the iv-studio MCP) to work in the ${INCOGNITO ? 'normal' : 'Incognito'} data.`)
-      return ok(await fn(args))
+      if (AGENT_RUN) {
+        const refused = agentGuard(name, args, { settings: s, started: agentStarted })
+        if (refused) throw new Error(refused)
+      }
+      const value = await fn(args)
+      const started = AGENT_RUN && startedJobId(name, value)
+      if (started && !agentStarted.has(started)) {
+        agentStarted.add(started)
+        if (AGENT_JOBS) fs.appendFileSync(AGENT_JOBS, `${started}\n`)
+      }
+      return ok(value)
     } catch (err) {
       return fail(err)
     }
@@ -286,7 +302,17 @@ tool('write_shots_from_story', 'Split a short story into sequence shots and writ
   const w = writerOf(readSettings(BASE))
   return studio.writeStory(args, w.engine === 'claude' || w.engine === 'codex' ? w : { model: readSettings(BASE).ollamaModel }).then((shots) => ({ shots }))
 })
-tool('get_job', 'Status, progress and outputs of a job.', { jobId: z.string() }, ({ jobId }) => studio.refreshJob(jobId))
+// In an agent run from the Dashboard the agent has no way to wait, so get_job waits for it: up to 25 s while the job
+// is still queued or running (a call every few seconds would spend the person's plan for nothing).
+tool('get_job', AGENT_RUN ? 'Status, progress and outputs of a job. While it is still queued or running this waits up to 25 seconds for it to finish before answering, so just call it again until it is done.' : 'Status, progress and outputs of a job.', { jobId: z.string() }, async ({ jobId }) => {
+  let job = await studio.refreshJob(jobId)
+  const until = Date.now() + (AGENT_RUN ? 25000 : 0)
+  while (['queued', 'running'].includes(job.status) && Date.now() < until) {
+    await new Promise((r) => setTimeout(r, 3000))
+    job = await studio.refreshJob(jobId)
+  }
+  return job
+})
 tool('cancel_job', 'Cancel an IV Studio job (removes it from the queue or interrupts it if running); never touches other work.', { jobId: z.string() }, ({ jobId }) => studio.cancelJob(jobId))
 tool('get_outputs', 'Playable outputs (paths and URLs) with the settings that made them, for a job or a whole project.', { jobId: z.string().optional(), projectId: z.string().optional() }, async ({ jobId, projectId }) => {
   if (jobId) {

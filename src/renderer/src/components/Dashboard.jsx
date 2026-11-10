@@ -6,6 +6,7 @@ import QuickBar from './AudioQuick'
 import { sendIdea } from './PromptWriter'
 import { Tile, toSets, Viewer } from './MediaLibrary'
 import Loading from './Loading'
+import { AgentPanel, useAgentRun } from './AgentRun'
 
 // The home page: start something in one click, pick up the latest renders, and the cast with their voices.
 // Each quick-start card shows its page's own banner art.
@@ -31,6 +32,17 @@ export default function Dashboard(ctx) {
   const [voices, setVoices] = useState([])
   const [ready, setReady] = useState([])
   const [open, setOpen] = useState(null)
+  // the person's own Claude Code or Codex can make the idea here instead (AgentRun.jsx)
+  const agent = useAgentRun()
+  const agentBusy = agent?.run?.status === 'running'
+  const letAgent = async () => {
+    try {
+      await window.ivstudio.agentRun.start(idea)
+      setIdea('')
+    } catch (err) {
+      notify(err.message)
+    }
+  }
   useEffect(() => {
     window.ivstudio.library.all().then(setItems, (err) => (notify(err.message), setItems([])))
     window.ivstudio.edits.list().then(setEdits, () => {})
@@ -53,8 +65,21 @@ export default function Dashboard(ctx) {
           goLabel="Make it"
           disabled={!idea.trim()}
           onGo={() => (start('shot'), sendIdea(idea, true), setIdea(''))}
+          after={
+            agent?.pick && (
+              <button
+                className="btn agent-go"
+                disabled={!idea.trim() || agentBusy || agent.cloud}
+                title={agent.cloud ? `${agent.name} only renders on this PC: switch Cloud to This PC to use it` : agentBusy ? `${agent.name} is still working on the last idea` : `${agent.name} writes the prompt and renders the previews here, on this PC`}
+                onClick={letAgent}
+              >
+                Let {agent.name} make it
+              </button>
+            )
+          }
         />
       </Stage>
+      <AgentPanel run={agent?.run} go={go} onStop={() => window.ivstudio.agentRun.stop().catch((err) => notify(err.message))} onDismiss={() => window.ivstudio.agentRun.dismiss().catch(() => {})} />
       {/* once after an update: what this version brought (news.js); all of it stays on Settings → Updates */}
       {ctx.news && (
         <section className="news-strip" aria-label="What's new">

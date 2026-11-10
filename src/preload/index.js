@@ -164,6 +164,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
     info: call('agents:info'),
     installSkill: call('agents:installSkill')
   },
+  // the Dashboard's "Let Claude Code make it" (src/service/agentrun.js)
+  agentRun: { status: call('agentRun:status'), start: call('agentRun:start'), stop: call('agentRun:stop'), dismiss: call('agentRun:dismiss'), onChange: on('agentRun:changed') },
   reels: {
     make: call('reels:make')
   },

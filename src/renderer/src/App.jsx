@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { setSimpleWords } from './words'
 import { applyA11y } from './a11y'
 import { SetupPill } from './components/SetupProgress'
+import { AgentPill, useAgentRun } from './components/AgentRun'
 import { CharacterList, CharacterTrainer } from './components/Characters'
 import Create from './components/Create'
 import ivMark from './assets/iv-mark.png'
@@ -94,6 +95,8 @@ export default function App() {
     } catch {}
   }
   const [page, setPage] = useState(() => (savedSection() === 'audio' ? 'audio' : 'home'))
+  // the Dashboard's agent run, for the title bar's pill while it works (AgentRun.jsx)
+  const agentStatus = useAgentRun()
   // a spoken line or a song on its way to Create's voice line (Lines or Music > Use in a shot)
   const [lineForCreate, setLineForCreate] = useState(null)
   // a LoRA on its way to Create's LoRA tray (LoRAs > Use in a shot)
@@ -370,6 +373,7 @@ export default function App() {
             Incognito
           </button>
         )}
+        <AgentPill status={agentStatus} onOpen={() => window.dispatchEvent(new CustomEvent('iv:go', { detail: { page: 'home', section: 'video' } }))} />
         <div className={`engine-badge ${setup ? (ready ? 'ready' : 'error') : ''}`}>
           <span className="dot" />
           {setup?.remote && <span className="mono cloud-badge">Cloud</span>}

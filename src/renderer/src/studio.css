@@ -13929,3 +13929,134 @@ button.set-chip:hover {
 .app.incognito .stage-art-eye .stage-art {
   background-image: url('./assets/eye-closed.webp') !important;
 }
+
+/* ---------- the person's own agent making a Dashboard idea (AgentRun.jsx, agentrun.js) ---------- */
+.stage-quick .agent-go {
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--cream);
+}
+.stage-quick .agent-go:not(:disabled):hover {
+  border-color: var(--red);
+}
+.agent-panel {
+  margin: 0 0 28px;
+  padding: 16px 20px;
+  border: 1px solid var(--line-strong);
+  border-left: 2px solid var(--red);
+  background: var(--ink-2);
+}
+.agent-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.agent-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.agent-idea {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-head .btn {
+  min-height: 36px;
+}
+/* a slow, small breathe (never a flash): 3 s, half to full opacity, still under Reduce motion */
+.agent-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--paper-dim);
+}
+.agent-dot.live {
+  background: var(--red);
+  animation: agent-breathe 3s ease-in-out infinite;
+}
+@keyframes agent-breathe {
+  50% {
+    opacity: 0.5;
+  }
+}
+html.rm .agent-dot.live {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-dot.live {
+    animation: none;
+  }
+}
+.agent-steps {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+.agent-steps li {
+  color: var(--paper-dim);
+}
+.agent-steps .agent-step-now {
+  color: var(--cream);
+}
+.agent-steps .agent-step-error {
+  color: var(--cream);
+  flex-basis: 100%;
+}
+.agent-steps .agent-step-error .mono {
+  color: var(--red);
+}
+.agent-renders {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.agent-renders li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.agent-bar {
+  flex: 0 1 200px;
+  height: 4px;
+  background: var(--line);
+}
+.agent-bar span {
+  display: block;
+  height: 100%;
+  background: var(--red);
+}
+.agent-say {
+  margin: 12px 0 0;
+  max-width: 70ch;
+  white-space: pre-wrap;
+}
+.agent-panel > .btn {
+  margin-top: 12px;
+}
+.agent-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--cream);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
