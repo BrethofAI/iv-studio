@@ -605,6 +605,12 @@ input.mini {
 .rank-btn {
   margin: 6px 0;
 }
+/* a take that cuts away: use the stretch without the cut (ranking.js) */
+.take-clean {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
 .enhance-row {
   display: flex;
   align-items: center;

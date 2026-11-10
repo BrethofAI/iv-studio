@@ -14,7 +14,8 @@ import { agentGuard, chatAsk, startedJobId } from '../service/agentrun'
 import { TOUR_PAGES, TOURS, placesToShow } from '../renderer/src/tours'
 import { GUIDE_SOURCE, loadGuide } from '../service/h3guide'
 import { blocking, lintPrompt } from '../service/lint'
-import { Ranker } from '../service/ranking'
+import { cleanStretchFile, Ranker } from '../service/ranking'
+import { exportInterchange } from '../service/interchange'
 import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
 import { setOllamaSource, unloadOllama } from '../service/prompter'
@@ -809,6 +810,9 @@ tool('export_edit', `Render the whole edit to one MP4 (H.264 + AAC) in Videos\\I
     .catch((err) => Object.assign(st, { state: /cancel/i.test(err.message) ? 'cancelled' : 'failed', error: err.message }))
   return st
 })
+tool('export_edit_for_editors', "Hand an edit to a real editor: writes the timeline as FCP 7 XML (Premiere Pro and DaVinci Resolve import it), FCPXML 1.10 (Resolve, Final Cut Pro) and a CMX3600 EDL of V1, with every file it uses copied into a Media folder beside them and the folder zipped to send (zip false to skip). Carries every track, clip timing and trims, pictures, clip volume, hidden, muted and locked tracks, markers, and titles (as markers, and as text in the FCPXML). Fades and title styling don't carry over. Into Videos\IV Studio\Edits, or outDir.", { editId: z.string(), outDir: z.string().optional(), zip: z.boolean().optional() }, ({ editId, outDir, zip }) =>
+  exportInterchange(edits.get(editId), outDir || path.join(VIDEOS(), 'Edits'), { zip: zip !== false })
+)
 tool('get_edit_export', 'Progress of an export started with export_edit (state running, done, failed or cancelled; file when done).', { editId: z.string() }, ({ editId }) => {
   const st = exporting.get(editId)
   if (!st) throw new Error('No export started for this edit from this MCP server. Past exports are in get_edit.')
@@ -1151,6 +1155,9 @@ tool('rank_takes', "Rank a finished previews job's takes: each is scored on hear
   if (!ranking) throw new Error('Only a finished previews job with its takes on this PC can be ranked.')
   return { ranking, ...(picked ? { weights: ranker.learn(jobId, picked) } : {}) }
 })
+tool('use_clean_stretch', "A take that cuts away mid-shot (rank_takes reports raw.cuts and the longest stretch without one, raw.clean): save that stretch as its own video, frame-exact. forContinue cuts it down to H3's 17n+5 frame grid, ready as the source of a Continue shot (generate_previews mode continue). Returns the file; add it to an edit with add_media. Only hard cuts are caught, not slow dissolves.", { jobId: z.string(), candidate: z.number().int().min(1).max(3), forContinue: z.boolean().optional() }, async ({ jobId, candidate, forContinue }) =>
+  cleanStretchFile({ studio, mediaTools, dir: path.join(DATA, 'clean'), jobId, candidate, forContinue: !!forContinue })
+)
 const reviewer = new Reviewer({ studio: () => studio, voices: () => voices, ffmpeg: edits.ffmpeg })
 const previs = new Previs({ resourcesDir: resourcesDir(), dataDir: DATA, browser: () => shinobi.browser(), ffmpeg: edits.ffmpeg })
 tool('make_previs', "Draw a staging board plan in motion: a grey previs clip (plain mannequins and boxes) of the camera's move and the walks, about 3 s on this PC. H3 follows a previs's arc round people, which it barely does from words. Put the clip in generate_previews' media as a video in reference mode, and put words (it names <Video 1>; renumber it if other videos come first) into the prompt. Only worth it for an arc: a push, pull, track, pan or walk did as well or better from the staging words alone in tests, and renders 1.6-3.5x faster.", { stage: stageSchema, seconds: z.number().min(1).max(15).default(5), aspect: z.enum(Object.keys(ASPECTS)).default('16:9') }, ({ stage, seconds, aspect }) => previs.make({ stage, seconds, aspect }))

@@ -38,7 +38,8 @@ import { ModelInstaller } from '../service/models'
 import { CONTEXT_IR_PRICE, normalizeOllamaUrl, ollamaStatus, pullModel, setOllamaSource, unloadOllama } from '../service/prompter'
 import { normalizeApiBase, openaiStatus, parseHeaders, setLlmSource } from '../service/llm'
 import { Studio } from '../service/studio'
-import { Ranker } from '../service/ranking'
+import { cleanStretchFile, Ranker } from '../service/ranking'
+import { exportInterchange } from '../service/interchange'
 import { Reviewer } from '../service/review'
 import { Previs } from '../service/previs'
 import { findFizgig, LOCAL_TRAIN, RUNPOD_TRAIN_GPUS, SCENES, TALKS, TRAIN_DEFAULTS, TRAIN_GPUS, Trainings } from '../service/training'
@@ -1010,6 +1011,8 @@ app.whenReady().then(() => {
   handle('edits:addOutput', async (item) => edits.addMedia(await localCopy(item.file), { type: 'iv', label: item.label }))
   handle('edits:export', (id) => edits.export(id, path.join(videosDir(), 'Edits'), (p) => send('edits:progress', { id, progress: p })))
   handle('edits:cancelExport', (id) => edits.cancelExport(id))
+  // the timeline for Premiere, Resolve and Final Cut: XML, FCPXML and an EDL, with the media copied beside them, zipped
+  handle('edits:interchange', (id, opts = {}) => exportInterchange(edits.get(id), path.join(videosDir(), 'Edits'), { zip: opts.zip !== false }))
   handle('edits:filmstrip', (file, duration) => edits.filmstrip(file, duration))
   handle('edits:peaks', (file) => edits.peaks(file))
   // New footage from inside an edit (extend, fill/bridge, retake): placeholders on the timeline until each lands.
@@ -2537,6 +2540,8 @@ app.whenReady().then(() => {
   ranker = new Ranker({ studio: () => studio, voices: () => voices, shinobi: () => shinobi, ffmpeg: edits.ffmpeg, dataDir: DATA })
   handle('rank:job', async (id) => (await ranker.rank(id), studio.publicJob(studio.getJob(id))))
   handle('rank:learn', (id, candidate) => ranker.learn(id, candidate))
+  // a take's longest stretch without a cut, as its own file (to an edit, or to carry on from in Continue)
+  handle('rank:clean', (id, candidate, opts = {}) => cleanStretchFile({ studio, mediaTools, dir: videosDir(), jobId: id, candidate, forContinue: !!opts.forContinue }))
   reviewer = new Reviewer({ studio: () => studio, voices: () => voices, ffmpeg: edits.ffmpeg })
   handle('review:take', async (id, candidate) => (await reviewer.review(id, candidate, writerOf(readSettings(BASE))), studio.publicJob(studio.getJob(id))))
   // a staging board in motion: a grey previs clip for <Video n> (Edge or Chrome draws it, about 3 s)

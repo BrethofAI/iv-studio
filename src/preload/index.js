@@ -197,6 +197,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     addOutput: call('edits:addOutput'),
     export: call('edits:export'),
     cancelExport: call('edits:cancelExport'),
+    interchange: call('edits:interchange'),
     filmstrip: call('edits:filmstrip'),
     peaks: call('edits:peaks'),
     fullScreen: call('window:fullScreen'),
@@ -335,7 +336,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     linkRun: call('sequences:linkRun')
   },
   system: { stats: call('system:stats'), free: call('system:free') },
-  rank: { job: call('rank:job'), learn: call('rank:learn') },
+  rank: { job: call('rank:job'), learn: call('rank:learn'), clean: call('rank:clean') },
   review: { take: call('review:take') },
   previs: { make: call('previs:make') },
   cast: { list: call('cast:list'), places: call('cast:places'), savePlace: call('cast:savePlace'), deletePlace: call('cast:deletePlace') },
