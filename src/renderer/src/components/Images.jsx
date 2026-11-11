@@ -5,6 +5,7 @@ import { fileUrl } from './edit/model'
 import { ask } from './Confirm'
 import { AspectTiles, DropIcon, ImageModeIcon, StepHead } from './CreateKit'
 import PictureTools from './PictureTools'
+import HfLogin from './HfLogin'
 
 const I = () => window.ivstudio.images
 const MODES = [
@@ -31,6 +32,88 @@ const sizeOf = (aspect, mp) => {
   return [Math.round(Math.sqrt(px * ar) / 32) * 32, Math.round(Math.sqrt(px / ar) / 32) * 32]
 }
 
+const GB = (b) => `${(b / 1024 ** 3).toFixed(1)} GB`
+const ACTIVE = ['queued', 'downloading', 'verifying']
+
+// A model family that isn't set up yet (GitHub #22): what it is, the files it needs and which are already here, one
+// button that downloads the rest into ComfyUI (the same downloader as Settings → Setup), a Hugging Face login when one
+// is gated, and anything else it needs (a newer ComfyUI, a turbo LoRA).
+function FamilySetup({ f, remote, notify, go, onReady }) {
+  const [dl, setDl] = useState({})
+  useEffect(() => {
+    window.ivstudio.models.status().then(setDl, () => {})
+    return window.ivstudio.models.onUpdate((u) => {
+      setDl((all) => ({ ...all, [u.id]: u }))
+      if (u.status === 'done') onReady()
+      if (u.status === 'error') notify(u.error || 'The download stopped.')
+    })
+  }, [])
+  const files = f.setup || []
+  const want = files.filter((x) => !x.present)
+  const going = want.filter((x) => ACTIVE.includes(dl[x.id]?.status))
+  const todo = want.filter((x) => !ACTIVE.includes(dl[x.id]?.status))
+  const bytes = todo.reduce((n, x) => n + x.size, 0)
+  const gated = want.filter((x) => x.gated)
+  const pages = [...new Map(gated.map((x) => [x.gated, { url: x.gated, label: x.label.replace(/ \(.*\)$/, '') }])).values()]
+  const other = f.missing.filter((m) => !/^text encoder|^VAE /.test(m))
+  const pct = (x) => {
+    const st = dl[x.id]
+    return st?.total ? Math.floor((st.received / st.total) * 100) : null
+  }
+  const busyFile = (x) => ACTIVE.includes(dl[x.id]?.status)
+  return (
+    <div className="family-setup">
+      <div className="family-setup-head">
+        <h3>{f.label} isn’t set up yet</h3>
+        <p className="small dim">
+          {f.note} <span className="mono">Licence: {f.licence}</span>
+        </p>
+      </div>
+      {files.length > 0 ? (
+        <ul className="family-setup-files">
+          {files.map((x) => (
+            <li key={x.id} className={x.present ? 'ok' : ''}>
+              <span className="check-icon" aria-hidden="true">
+                {x.present ? '●' : busyFile(x) ? '◌' : '○'}
+              </span>
+              <span className="family-setup-name">{x.label}</span>
+              <span className="mono dim small">{x.present ? 'Here' : busyFile(x) ? (pct(x) == null ? 'Waiting…' : `${pct(x)}%`) : x.size ? GB(x.size) : ''}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="small dim">IV Studio has no download for this one. Put its model files in ComfyUI’s models folders, then check again.</p>
+      )}
+      {other.length > 0 && <p className="small pink">Also needs {other.join(', ')}.</p>}
+      {remote ? (
+        <p className="small dim">In the cloud, IV Studio downloads a model into your cloud storage the first time you use it.</p>
+      ) : (
+        <>
+          {gated.length > 0 && <HfLogin notify={notify} pages={pages} />}
+          <div className="family-setup-actions">
+            {todo.length > 0 && (
+              <button className="btn btn-primary" onClick={() => window.ivstudio.models.download(todo.map((x) => x.id)).catch((err) => notify(err.message))}>
+                Download {todo.length === want.length ? (todo.length === 1 ? 'it' : `all ${todo.length}`) : `the other ${todo.length}`} · {GB(bytes)}
+              </button>
+            )}
+            {going.length > 0 && (
+              <span className="mono small dim">
+                Downloading {going.length} file{going.length === 1 ? '' : 's'}. You can keep working.
+              </span>
+            )}
+            <button className="btn" onClick={onReady}>
+              Check again
+            </button>
+            <button className="link-btn mono small" onClick={() => go?.('setup')}>
+              Settings → Setup
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // Create -> Image: Generate and Edit with the person's own image models, their LoRAs, and a gallery.
 export default function Images({ kindSwitch, notify, go, pictureToShot, incomingLora = null, clearIncomingLora = () => {}, incomingPicture = null, clearIncomingPicture = () => {} }) {
   const [status, setStatus] = useState(null)
@@ -41,6 +124,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
   const [viewing, setViewing] = useState(null) // { set, i }
   const [toFix, setToFix] = useState(null) // a picture handed to Tools from the viewer
   const [more, setMore] = useState(false)
+  const [setupFam, setSetupFam] = useState(null) // a family that isn't set up, opened to see what it needs
   const [yours, , reloadYours] = useYours()
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
   // an iv:go with a mode (App.jsx) can open Image on Generate or Edit
@@ -50,8 +134,9 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
     return () => window.removeEventListener('iv:learn', go)
   }, [])
 
+  const loadStatus = () => I().status().then(setStatus, (err) => setStatus({ error: err.message, families: [] }))
   useEffect(() => {
-    I().status().then(setStatus, (err) => setStatus({ error: err.message, families: [] }))
+    loadStatus()
     I().list().then(setSets, () => {})
   }, [])
   useEffect(() => {
@@ -189,19 +274,27 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
             <StepHead n={n.model} title="The model" sub={editMode ? 'Only models that can edit are on.' : 'Your image models in ComfyUI. Each has its own look.'} />
             <div className="family-cards" role="radiogroup" aria-label="Model family">
               {families.map((f) => {
-                const off = !f.ready || (editMode && !f.edit)
-                const why = !f.models.length ? 'No checkpoints for it in ComfyUI.' : f.missing.length ? `Needs ${f.missing.join(', ')}.` : editMode && !f.edit ? f.editNote : f.note
+                // a family that isn't set up stays clickable and opens what it needs; edit mode still rules out the ones
+                // that can't edit
+                const off = editMode && (f.ready ? !f.edit : !f.canEdit)
+                const why = !f.ready ? 'Not set up yet: click to see what it needs.' : editMode && !f.edit ? f.editNote : f.note
+                const pickIt = () => {
+                  if (!f.ready) return setSetupFam(setupFam === f.id ? null : f.id)
+                  setSetupFam(null)
+                  set({ family: f.id, model: f.models[0], loras: [], ...((f.sizes || SIZES).includes(form.megapixels) ? {} : { megapixels: f.defaultMp || (f.sizes || SIZES)[0] }) })
+                }
                 return (
-                  <button key={f.id} role="radio" aria-checked={form.family === f.id} className={`family-card ${form.family === f.id ? 'on' : ''}`} disabled={off} title={why} onClick={() => set({ family: f.id, model: f.models[0], loras: [], ...((f.sizes || SIZES).includes(form.megapixels) ? {} : { megapixels: f.defaultMp || (f.sizes || SIZES)[0] }) })}>
+                  <button key={f.id} role="radio" aria-checked={form.family === f.id && f.ready} aria-expanded={!f.ready ? setupFam === f.id : undefined} className={`family-card ${form.family === f.id && f.ready ? 'on' : ''} ${!f.ready ? 'unset' : ''} ${setupFam === f.id ? 'open' : ''}`} disabled={off} title={why} onClick={pickIt}>
                     <span className="family-name">{f.label}</span>
                     <span className="family-tags mono">
-                      {!f.ready ? 'not set up' : f.edit ? 'makes · edits' : 'makes'}
+                      {!f.ready ? 'not set up ▸' : f.edit ? 'makes · edits' : 'makes'}
                     </span>
                   </button>
                 )
               })}
               {!status && <span className="dim small">Checking your image models…</span>}
             </div>
+            {setupFam && families.some((f) => f.id === setupFam && !f.ready) && <FamilySetup key={setupFam} f={families.find((f) => f.id === setupFam)} remote={status?.remote} notify={notify} go={go} onReady={loadStatus} />}
             {fam && (
               <>
                 <div className="create-field">

@@ -15696,3 +15696,139 @@ html.chat-window body {
   color: var(--agent-color);
   cursor: pointer;
 }
+
+/* ---- 1.2: Setup's optional tools say what they do (GitHub #21), and Create → Image sets a model up (#22) ---- */
+.setup-toolbar {
+  position: sticky;
+  /* the page scrolls with var(--pad) of top padding; stick at its very top edge, not under the padding */
+  top: calc(-1 * var(--pad, 52px));
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  margin: 0 -14px;
+  background: rgba(18, 13, 15, 0.94);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--line);
+}
+.setup-toolbar .setup-view {
+  justify-self: auto;
+}
+.setup-toolbar-label {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.setup-toolbar-hint {
+  flex: 1 1 220px;
+}
+.setup-area-what {
+  margin: 6px 0 0;
+  max-width: 78ch;
+  color: var(--paper);
+  line-height: 1.5;
+}
+.setup-area-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.setup-area .setup-rows {
+  margin-top: 6px;
+}
+.hf-login {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px dashed var(--line-strong);
+}
+.hf-login-text {
+  line-height: 1.5;
+}
+.hf-login-pages {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-left: 8px;
+}
+.hf-login-ok {
+  margin: 0;
+}
+.hf-login .ok-dot {
+  color: var(--green, #5fd38d);
+}
+.hf-login .key-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.hf-login .key-form input {
+  flex: 1 1 220px;
+  max-width: 360px;
+}
+.family-card.unset {
+  opacity: 0.6;
+  border-style: dashed;
+}
+.family-card.unset:hover:not(:disabled),
+.family-card.unset.open {
+  opacity: 1;
+}
+.family-card.unset.open {
+  border-color: var(--line-strong);
+  border-style: solid;
+  background: rgba(255, 255, 255, 0.03);
+}
+.family-setup {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--red);
+  background: rgba(255, 255, 255, 0.02);
+}
+.family-setup-head h3 {
+  margin: 0 0 4px;
+  font: 700 20px/1.1 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+}
+.family-setup-head p {
+  margin: 0;
+}
+.family-setup-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.family-setup-files li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.family-setup-files li .check-icon {
+  color: var(--paper-dim);
+}
+.family-setup-files li.ok .check-icon {
+  color: var(--green, #5fd38d);
+}
+.family-setup-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.family-setup-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}

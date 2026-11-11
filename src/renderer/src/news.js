@@ -11,6 +11,8 @@ export const NEWS = [
       { text: 'Activity: a tab in the chat that lists everything agents did in IV Studio (the chat, Dashboard ideas, and Claude Desktop, Codex or any agent using IV Studio from outside), with links to what they made and Undo for changes to an edit.' },
       { text: 'The chat knows more about what you’re looking at: the version you picked on a shot, the clip and playhead in the editor, the item open in the Library, how Create is set up, what’s rendering, and the last render that failed.' },
       { text: 'See how full the agent’s working memory is, and this chat’s usage, in the chat’s header. You’ll see a note when it summarizes earlier messages to make room.' },
+      { text: 'Create → Image: a model that isn’t set up opens what it needs, with one button that downloads it. Flux.2 Klein, Flux 3 Klein, Krea 2, Moss and Qwen Image 2.1 can now be downloaded from IV Studio.' },
+      { text: 'Setup: each optional tool says what it does and where to find it, and lists its files. The Needs you / Everything bar stays at the top as you scroll. A Hugging Face login for gated models (Flux, the LTX effects) can be saved right there, for this PC and the cloud.' },
       { text: 'Fixed: Z-Image Turbo installed from Setup now works in Create → Image and Projects (they were looking for a different text encoder file).' }
     ]
   },

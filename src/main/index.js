@@ -35,7 +35,7 @@ import { SCENE_KINDS, SIZZLE_FORMATS, Sizzles } from '../service/sizzle'
 import { initUpdater, updateState, MANUAL as UPDATE_MANUAL } from './updater'
 import { MediaTools } from '../service/media'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
-import { ModelInstaller } from '../service/models'
+import { ModelInstaller, hfLoginFrom, setSavedHfToken } from '../service/models'
 import { CONTEXT_IR_PRICE, localChat, localWriterModel, normalizeOllamaUrl, ollamaStatus, pullModel, setOllamaSource, unloadOllama } from '../service/prompter'
 import { normalizeApiBase, openaiStatus, parseHeaders, setLlmSource } from '../service/llm'
 import { loadSlate, lookbook, promptVariants, rewritePrompt, writerName } from '../service/filmcraft'
@@ -1745,13 +1745,14 @@ app.whenReady().then(() => {
   // before it's kept; on Modal it's saved in the workspace with the next download.
   handle('cloud:hfToken', async (token) => {
     const k = String(token || '').trim()
-    if (!k) return (writeSettings({ hfToken: null, hfTokenAt: new Date().toISOString() }, BASE), { hasToken: false })
+    if (!k) return (writeSettings({ hfToken: null, hfTokenAt: new Date().toISOString() }, BASE), setSavedHfToken(null), { hasToken: false })
     if (!keysSafe()) throw new Error(KEY_STORE_MISSING)
     const res = await fetch('https://huggingface.co/api/whoami-v2', { headers: { Authorization: `Bearer ${k}` }, signal: AbortSignal.timeout(20000) }).catch(() => null)
     if (!res) throw new Error('Couldn’t reach Hugging Face to check the token.')
     if (!res.ok) throw new Error('Hugging Face refused that token. Make a Read token at huggingface.co → Settings → Access Tokens.')
     const who = await res.json().catch(() => ({}))
     writeSettings({ hfToken: seal(k), hfTokenAt: new Date().toISOString() }, BASE)
+    setSavedHfToken(k)
     return { hasToken: true, name: who?.name || null }
   })
   // Each character's LoRA and the RefMods it uses, found through this PC's ComfyUI model folders.
@@ -2765,6 +2766,12 @@ app.whenReady().then(() => {
   handle('models:status', () => installer.status())
   handle('models:download', (ids) => installer.enqueue(ids))
   handle('models:cancel', (id) => installer.cancel(id))
+  // a Hugging Face login for gated models on this PC (Flux.2 Klein, Flux 3 Klein, the LTX effects): IV Studio's saved
+  // token (the same one the cloud uses), else HF_TOKEN, else hf auth login's
+  try {
+    setSavedHfToken(unseal(readSettings(BASE).hfToken))
+  } catch {}
+  handle('models:hfLogin', () => ({ from: hfLoginFrom() }))
   handle('characters:list', async () => (await catalog?.attachVoices().catch(() => {}), studio.characters()))
   // Ready-made characters: bundled picture, LoRA downloaded on request (resources/characters/catalog.json).
   catalog = new CharacterCatalog({ studio, voices, resourcesDir: resourcesDir(path.join(app.getAppPath(), 'resources')) })

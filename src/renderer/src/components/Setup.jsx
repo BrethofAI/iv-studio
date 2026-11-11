@@ -5,6 +5,7 @@ import StartComfy, { RestartComfy } from './StartComfy'
 import GetComfy from './GetComfy'
 import ComfyUpdates from './ComfyUpdates'
 import { Pill } from './SettingsKit'
+import HfLogin from './HfLogin'
 
 // Settings → Setup: what IV Studio needs on this PC, laid out so the answer comes first. A status card says
 // whether shots can render and holds the one or two actions that fix it (and Restart ComfyUI). Below, five
@@ -16,19 +17,21 @@ const GB = (b) => `${(b / 1024 ** 3).toFixed(1)} GB`
 const ACTIVE = ['queued', 'downloading', 'verifying']
 const VIEW_KEY = 'iv.setupView'
 
-// Optional models, by the part of IV Studio that uses them (models.json optionalFor)
+// Optional models, by the part of IV Studio that uses them (models.json optionalFor), each with what it does and
+// where to find it (GitHub #21: a title alone wasn't enough to decide). First match wins, so the order matters.
 const AREAS = [
-  ['New angle', /reshoot|new angle|depth maps/i],
-  ['Dub and video effects', /dub|clean plate|day to night|water|sdr/i],
-  ['Photo effects', /^effects$|transformation|transition/i],
-  ['Slow motion', /smooth|slow/i],
-  ['Pictures', /relight|remove background|sdxl|depth|picture/i],
-  ['Music and sounds', /music|sound/i],
-  ['Replace', /replace/i],
-  ['Characters and places', /character|angles of a place|projects/i],
-  ['Live preview', /live step/i]
+  ['Live preview', /live step/i, 'The Live preview switch above the queue', 'Step-by-step pictures of a shot while it renders (a tiny H3 decoder, 0.1 GB).'],
+  ['Picture tools', /relight|remove background|depth maps/i, 'Create → Image → Tools', 'Relight a picture (Qwen Image Edit with a relight LoRA), remove the background of a picture or a video clip (BiRefNet; also in the editor), and depth and normal maps (MoGe).'],
+  ['Replace', /^replace/i, 'Workflows → Replace', 'Swap a person in a video for one of your characters, or change the whole scene in words, keeping the motion and sound (Viggle Remake on MiniMax H3, SAM 3.1 masks, a Qwen3-VL describer).'],
+  ['Picture models', /create → image|pictures/i, 'Create → Image', 'Extra models for making pictures, each with its own look. Flux.2 Klein, Flux 3 Klein, Krea 2, Qwen Image 2.1 and MiniMax H3 Image can also edit a picture you give them. Z-Image Turbo also draws the design stills for training a character. Get only the ones you want: each card in Create → Image says what it needs.'],
+  ['Video effects', /dub|clean plate|day to night|water|sdr/i, 'Edit → right-click a clip → Effects…', 'Dub a line into another language with lip sync, Clean plate (remove people), Day to night, Add water and SDR to HDR, on LTX-2.5. Works best with 64 GB of RAM.'],
+  ['Photo effects and transitions', /^effects$|transformation|transition/i, 'Workflows → Effects', 'One-click effects that animate a photo (Wan 2.1 480p with a LoRA per effect), plus Transformations and Transitions between two pictures (these also use the LTX-2.5 files from Video effects).'],
+  ['Slow motion', /smooth|slow/i, 'Edit → right-click a clip → Effects…', 'Smooth a choppy clip or slow it down by drawing the frames in between (FILM frame interpolation). Small and fast.'],
+  ['Music and sounds', /music|sound/i, 'Audio → Music and Audio → Sounds', 'Songs with vocals or instrumentals (MiniMax Music 3, ACE-Step 1.5) and sound effects from a description (Stable Audio 3).'],
+  ['Places in Projects', /character|angles of a place|projects/i, 'Projects → Cast and places → More angles', 'Draws a place from new camera angles so shots in one room match (a camera-angle LoRA for Qwen Image 2.1, which comes from Picture models).']
 ]
 const areaOf = (i) => AREAS.find(([, re]) => re.test(i.for || ''))?.[0] || 'Other tools'
+const areaInfo = (name) => AREAS.find(([n]) => n === name) || [name, null, null, null]
 
 function ModelAction({ item, dl }) {
   if (item.status === 'ok') return item.size ? <span className="mono dim small">{GB(item.size)}</span> : <span />
@@ -184,6 +187,7 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
   const [dl, setDl] = useState({})
   const [view, setViewState] = useState(() => localStorage.getItem(VIEW_KEY) || 'attention')
   const [toggled, setToggled] = useState({})
+  const [openAreas, setOpenAreas] = useState({}) // optional tool groups showing their files
   const items = setup?.items || []
   const setView = (v) => (setViewState(v), localStorage.setItem(VIEW_KEY, v))
 
@@ -238,7 +242,10 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
       if (!m.has(a)) m.set(a, [])
       m.get(a).push(i)
     }
-    return [...m.entries()].sort((a, b) => AREAS.findIndex(([n]) => n === a[0]) - AREAS.findIndex(([n]) => n === b[0]))
+    // shown in this order (AREAS is in match order); anything unknown last
+    const ORDER = ['Picture models', 'Picture tools', 'Video effects', 'Photo effects and transitions', 'Slow motion', 'Music and sounds', 'Replace', 'Places in Projects', 'Live preview']
+    const rank = (n) => (ORDER.includes(n) ? ORDER.indexOf(n) : ORDER.length)
+    return [...m.entries()].sort((a, b) => rank(a[0]) - rank(b[0]))
   }, [optional])
 
   const rows = (list) => (
@@ -298,13 +305,18 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
         </p>
       ))}
 
-      <div className="setup-view segmented" role="tablist" aria-label="Show">
-        <button className={view === 'attention' ? 'on' : ''} onClick={() => setView('attention')}>
-          Needs you · {attention}
-        </button>
-        <button className={view === 'all' ? 'on' : ''} onClick={() => setView('all')}>
-          Everything · {items.length}
-        </button>
+      {/* what the cards below list: one bar above them that stays in view while scrolling (GitHub #21) */}
+      <div className="setup-toolbar">
+        <span className="mono small dim setup-toolbar-label">Show</span>
+        <div className="setup-view segmented" role="tablist" aria-label="Show">
+          <button role="tab" aria-selected={view === 'attention'} className={view === 'attention' ? 'on' : ''} onClick={() => setView('attention')}>
+            Needs you · {attention}
+          </button>
+          <button role="tab" aria-selected={view === 'all'} className={view === 'all' ? 'on' : ''} onClick={() => setView('all')}>
+            Everything · {items.length}
+          </button>
+        </div>
+        <span className="dim small setup-toolbar-hint">{view === 'attention' ? 'Only what needs fixing. Optional tools always show, each with what it does.' : 'Every check, model and node pack, set up or not.'}</span>
       </div>
 
       {sections.map((x, k) => {
@@ -335,10 +347,16 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
                 {shown.length ? rows(shown) : <p className="dim small">Every node pack is installed.</p>}
               </>
             )}
+            {x.id === 'extras' && !remote && optional.some((i) => i.gated && i.status !== 'ok') && (
+              <HfLogin notify={notify} pages={[...new Map(optional.filter((i) => i.gated && i.status !== 'ok').map((i) => [i.gated, { url: i.gated, label: i.name.replace(/ \(.*\)$/, '') }])).values()]} />
+            )}
             {x.id === 'extras' &&
               groups.map(([area, list]) => {
                 const want = list.filter((i) => i.status !== 'ok' && !ACTIVE.includes(dl[i.model]?.status))
                 const bytes = want.reduce((n, i) => n + (i.size || 0), 0)
+                const total = list.reduce((n, i) => n + (i.size || 0), 0)
+                const [, , where, what] = areaInfo(area)
+                const showFiles = openAreas[area] ?? view === 'all'
                 return (
                   <div key={area} className="setup-area">
                     <div className="setup-area-head">
@@ -352,7 +370,14 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
                         </button>
                       )}
                     </div>
-                    {view === 'all' && rows(list)}
+                    {what && <p className="small setup-area-what">{what}</p>}
+                    <div className="setup-area-meta">
+                      {where && <span className="mono small dim">Where: {where}</span>}
+                      <button className="link-btn mono small" aria-expanded={showFiles} onClick={() => setOpenAreas((o) => ({ ...o, [area]: !showFiles }))}>
+                        {showFiles ? 'Hide the files ▾' : `What’s in it · ${list.length} file${list.length === 1 ? '' : 's'}${total ? `, ${GB(total)}` : ''} ▸`}
+                      </button>
+                    </div>
+                    {showFiles && rows(list)}
                   </div>
                 )
               })}

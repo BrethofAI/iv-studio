@@ -23,7 +23,21 @@ export async function modelTarget(comfy, model) {
 // The person's own Hugging Face login, for gated models (LTX-2.5 and its LoRAs need their licence accepted on
 // Hugging Face, then a logged-in download): HF_TOKEN, else the token `hf auth login` saved (HF_HOME, else
 // ~/.cache/huggingface). Sent only to huggingface.co; never logged or kept by IV Studio.
+// The token saved in IV Studio (Settings → Setup, or the Cloud page) comes first; the window sets it at start and
+// whenever it changes.
+let savedToken = null
+export const setSavedHfToken = (t) => (savedToken = t || null)
+export function hfLoginFrom(env = process.env, home = os.homedir()) {
+  if (savedToken) return 'iv'
+  if (env.HF_TOKEN || env.HUGGING_FACE_HUB_TOKEN) return 'env'
+  try {
+    return fs.readFileSync(path.join(env.HF_HOME || path.join(home, '.cache', 'huggingface'), 'token'), 'utf8').trim() ? 'hf' : null
+  } catch {
+    return null
+  }
+}
 export function hfToken(env = process.env, home = os.homedir()) {
+  if (savedToken) return savedToken
   const t = env.HF_TOKEN || env.HUGGING_FACE_HUB_TOKEN
   if (t) return t.trim()
   const file = path.join(env.HF_HOME || path.join(home, '.cache', 'huggingface'), 'token')
@@ -34,7 +48,7 @@ export function hfToken(env = process.env, home = os.homedir()) {
   }
 }
 export const authFor = (url, token = hfToken()) => (token && /^https:\/\/huggingface\.co\//.test(url) ? { Authorization: `Bearer ${token}` } : {})
-const GATED = (url) => `This model is gated: open ${url.replace(/\/resolve\/.*/, '')} while logged in to Hugging Face, accept its licence, then log in on this PC (run hf auth login, or set HF_TOKEN) and try again.`
+const GATED = (url) => `This model is gated: open ${url.replace(/\/resolve\/.*/, '')} while logged in to Hugging Face, accept its licence, then add a Read token in Settings → Setup → Optional tools (or run hf auth login) and try again.`
 
 // Size and SHA-256 as Hugging Face publishes them, without downloading.
 export async function upstreamInfo(url) {

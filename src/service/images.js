@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { comboOptions } from './setup.js'
+import { comboOptions, modelOptions, resolveModel } from './setup.js'
 import ffmpegStatic from 'ffmpeg-ffprobe-static'
 import { probe } from './media.js'
 import { DEPTH_OUTPUTS, PICTURE_TOOLS, RELIGHT, depthGraph, inpaintGraph, relightGraph, relightText, removeBgGraph, upscaleGraph } from './picturetools.js'
@@ -408,9 +408,17 @@ export class Images {
         if (!turbo) missing.push('the DMAD 4-step turbo LoRA (Settings → Setup)')
         if (!info.MiniMaxH3ImageToVideo || !info.LTXVSeparateAVLatent) missing.push('ComfyUI’s MiniMax H3 nodes (update ComfyUI)')
       }
-      return { ...strip(f), models, te, vae, editLora, turbo, ready: models.length > 0 && !missing.length, missing, edit: edit && models.length > 0 && !missing.length, editNote }
+      return { ...strip(f), models, te, vae, editLora, turbo, ready: models.length > 0 && !missing.length, missing, edit: edit && models.length > 0 && !missing.length, canEdit: f.edit !== false, editNote }
     })
-    return { families, aspects: Object.keys(IMAGE_ASPECTS), defaults: IMAGE_DEFAULTS }
+    // what each family downloads from Settings → Setup (models.json pictureFamilies), and which of those files this
+    // ComfyUI already has, so a family that isn't set up can say what it needs and get it in one click (GitHub #22)
+    const manifest = this.studio.manifest?.models || []
+    for (const f of families) {
+      f.setup = manifest
+        .filter((m) => m.pictureFamilies?.includes(f.id))
+        .map((m) => ({ id: m.id, label: m.label, size: m.size || 0, present: !!resolveModel(m, modelOptions(info, m) || [])?.file, gated: m.gated || null }))
+    }
+    return { families, aspects: Object.keys(IMAGE_ASPECTS), defaults: IMAGE_DEFAULTS, remote: !!this.studio.comfy?.remote }
   }
 
   // Queues a set of pictures. request: { mode: generate|edit, model (a checkpoint), prompt, negative, loras

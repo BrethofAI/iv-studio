@@ -699,6 +699,13 @@ the image models you have in ComfyUI:
 | SDXL (and any SDXL fine-tune: Juggernaut, RealVis, Pony, Illustrious…) | ✓ | ✗ | CreativeML Open RAIL++-M (base); fine-tunes have their own |
 | MiniMax H3 (a still) | ✓ with your H3 character LoRAs | ✗ | MiniMax H3 Community License |
 
+**Getting a model (1.2).** A family you don't have yet says *not set up*. Click it to see the files it needs,
+which of them you already have, and one button that downloads the rest into ComfyUI (pinned versions, each
+checked against its published SHA-256). The same files are under Settings → Setup → Optional tools → Picture
+models. Your own builds and fine-tunes count: a Moss or Krea 2 fine-tune in its own folder makes that family
+ready. Flux.2 Klein 9B and Flux 3 Klein are gated: accept their licence on Hugging Face, then save a Read token
+in that panel or on Setup (or log in with `hf auth login`).
+
 SDXL checkpoints go in ComfyUI's `models/checkpoints`; Setup offers SDXL base 1.0 as an optional download. An
 H3 still is one frame from the middle of a very short H3 render (8 steps with the turbo LoRA), so it has the
 look of your shots and can star your trained characters; it uses the H3 models you already have.
@@ -1151,7 +1158,7 @@ GB a month). Modal's storage is free up to 1 TiB.
 **Gated models.** Flux.2 Klein 9B, Flux 3 Klein and the LTX effects (Dub, Clean plate, Day to night, Add
 water, SDR to HDR, Transformations and Transitions) are behind a licence on Hugging Face. To use them in the
 cloud, accept each licence on its Hugging Face page, then paste a Read token on the Cloud page (stored
-encrypted; used only for those downloads into your own storage).
+encrypted; used only for those downloads). The same token serves downloads on your PC (Settings → Setup).
 
 **Your LoRAs and RefMods.** A cloud render that uses a LoRA or RefMod from this PC uploads it first, once,
 checked by SHA-256 (from your local ComfyUI's folders, or IV Studio's own `models` folder on a PC without

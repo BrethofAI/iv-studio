@@ -39,6 +39,10 @@ export function resolveModel(m, opts, chosen = {}) {
   if (exact) return { file: exact, how: 'exact' }
   const version = (m.accept || []).map((a) => new RegExp(a, 'i')).reduce((hit, re) => hit || opts.find((o) => re.test(base(o))), null)
   if (version) return { file: version, how: 'version' }
+  // acceptPath: patterns on the whole name, folder included (a picture model's fine-tunes in its own folder, as
+  // Create → Image reads the family)
+  const inFolder = (m.acceptPath || []).map((a) => new RegExp(a, 'i')).reduce((hit, re) => hit || opts.find((o) => re.test(o)), null)
+  if (inFolder) return { file: inFolder, how: 'version' }
   const pick = (PICKS[m.id] || []).map((k) => chosen[k]).find((f) => f && opts.includes(f))
   return pick ? { file: pick, how: 'picked' } : null
 }
@@ -137,7 +141,7 @@ export async function checkSetup({ comfy, template, manifest, characters, chosen
     const r = resolveModel(m, opts, chosen)
     const found = r?.file
     const detail = !r ? `Not found (${m.match})` : r.how === 'version' ? `${found} · another version of ${m.match}, used in its place` : r.how === 'picked' ? `${found} · your pick in Settings → Models` : found
-    items.push({ id: `model:${m.id}`, label: m.optional ? `${m.label} · for ${m.optionalFor || 'optional tools'}` : m.label, status: found ? 'ok' : m.optional ? 'warn' : 'missing', detail, fix: found ? undefined : `Download into models/${m.folder}`, kind: 'model', model: m.id, size: m.size, optional: !!m.optional, name: m.label, for: m.optional ? m.optionalFor || 'Optional tools' : undefined, page: m.url.match(/^https:\/\/huggingface\.co\/[^/]+\/[^/]+/)?.[0] })
+    items.push({ id: `model:${m.id}`, label: m.optional ? `${m.label} · for ${m.optionalFor || 'optional tools'}` : m.label, status: found ? 'ok' : m.optional ? 'warn' : 'missing', detail, fix: found ? undefined : `Download into models/${m.folder}`, kind: 'model', model: m.id, size: m.size, optional: !!m.optional, name: m.label, for: m.optional ? m.optionalFor || 'Optional tools' : undefined, page: m.url.match(/^https:\/\/huggingface\.co\/[^/]+\/[^/]+/)?.[0], gated: m.gated || undefined })
   }
 
   const loras = comboOptions(info, 'LoraLoaderModelOnly', 'lora_name') || []
