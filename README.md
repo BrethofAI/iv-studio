@@ -477,6 +477,9 @@ downloads it in the background. Click **↻ Update to …** at the bottom of the
 update** in Settings → Updates) to install it and reopen; otherwise it installs the next time you quit.
 It waits while an edit is exporting or models are downloading. Coming from 0.2.0 or older, install 0.2.1
 by hand once.
+The portable Windows copy updates itself the same way from 1.1.2 on: it downloads the new portable zip into
+its data folder, checks it, and swaps the program files in place, keeping the data folder. A portable copy on
+1.1.1 or older needs the 1.1.2 zip unzipped over it once.
 
 <p align="center">
   <img src="docs/images/setup.png" alt="Settings → Setup" width="100%">

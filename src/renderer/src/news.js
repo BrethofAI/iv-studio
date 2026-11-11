@@ -2,6 +2,13 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.2',
+    items: [
+      { text: 'The portable Windows copy now updates itself like the installed one: a new version downloads in the background and Update to … restarts into it, keeping your data folder. (From 1.1.1 or older, unzip 1.1.2 over the folder once.)' },
+      { text: 'Fixed: an update download could stop just short of the end and never finish.' }
+    ]
+  },
+  {
     version: '1.1.1',
     items: [
       { text: 'Continue from this: every finished version can start a new Continue shot that carries it on, with the same character, LoRAs and shape.' },

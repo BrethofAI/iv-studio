@@ -8,6 +8,9 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import http from 'node:http'
+import https from 'node:https'
+import { pipeline } from 'node:stream/promises'
 import yaml from 'js-yaml'
 
 export const RELEASES = 'https://github.com/hollisorg/iv-studio/releases'
@@ -88,12 +91,56 @@ export async function checkFile(file, want) {
 }
 
 // Download url to file with progress (0-100). Resumes nothing: a failed download starts again next time.
-export async function download(url, file, { onProgress = () => {}, fetchImpl = fetch, signal } = {}) {
+// Through Node's own http/https, not fetch: undici (fetch) asserts when a server closes the connection while the
+// body is paused for the disk ("assert(!this.paused)"), and in the app that left the download hanging just short
+// of the end. GitHub's redirects to its file host are followed; a connection that goes quiet for a minute fails.
+// fetchImpl is still taken for an injected stand-in (a test's fetch-like function), which is used as before.
+export async function download(url, file, { onProgress = () => {}, fetchImpl = null, signal, quietMs = 60_000 } = {}) {
   fs.mkdirSync(path.dirname(file), { recursive: true })
+  const part = `${file}.part`
+  if (fetchImpl) return downloadWith(fetchImpl, url, file, part, { onProgress, signal })
+  const res = await get(url, { signal, quietMs })
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    res.resume()
+    throw new Error(`The download failed (${res.statusCode}).`)
+  }
+  const total = Number(res.headers['content-length']) || 0
+  let got = 0
+  let last = -1
+  res.on('data', (chunk) => {
+    got += chunk.length
+    const pct = total ? Math.floor((got / total) * 100) : 0
+    if (pct !== last) onProgress(pct, got, total)
+    last = pct
+  })
+  await pipeline(res, fs.createWriteStream(part))
+  if (total && got !== total) throw new Error(`The download stopped at ${got} of ${total} bytes.`)
+  fs.renameSync(part, file)
+  return file
+}
+
+// One GET, following up to 5 redirects; the response stream, or an error. quietMs: no bytes for that long fails it.
+function get(url, { signal, quietMs, hops = 0 }) {
+  return new Promise((resolve, reject) => {
+    const lib = url.startsWith('https:') ? https : http
+    const req = lib.get(url, { signal, headers: { 'user-agent': 'IV-Studio-updater' } }, (res) => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+        res.resume()
+        if (hops >= 5) return reject(new Error('The download redirected too many times.'))
+        return resolve(get(new URL(res.headers.location, url).toString(), { signal, quietMs, hops: hops + 1 }))
+      }
+      res.setTimeout(quietMs, () => res.destroy(new Error('The download stopped sending data.')))
+      resolve(res)
+    })
+    req.setTimeout(quietMs, () => req.destroy(new Error('The download didn’t start.')))
+    req.on('error', reject)
+  })
+}
+
+async function downloadWith(fetchImpl, url, file, part, { onProgress, signal }) {
   const res = await fetchImpl(url, { redirect: 'follow', signal })
   if (!res.ok || !res.body) throw new Error(`The download failed (${res.status}).`)
   const total = Number(res.headers.get('content-length')) || 0
-  const part = `${file}.part`
   const out = fs.createWriteStream(part)
   let got = 0
   let last = -1
