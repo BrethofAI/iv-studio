@@ -15297,6 +15297,36 @@ html.rm .agent-dot.live {
 .chat-head {
   gap: 8px;
   padding: 10px 10px 10px 18px;
+  min-width: 0;
+}
+.chat-panel {
+  container: chat / inline-size;
+}
+.chat-head .chat-tabs {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+@container chat (max-width: 460px) {
+  .chat-head {
+    gap: 4px;
+    padding-left: 14px;
+  }
+  .chat-tabs button {
+    padding: 0 9px;
+  }
+}
+@container chat (max-width: 359px) {
+  .chat-head h2 {
+    display: none;
+  }
+}
+@container chat (max-width: 340px) {
+  .chat-tabs button {
+    padding: 0 7px;
+  }
+  .chat-head .chat-icon {
+    width: 30px;
+  }
 }
 .chat-tabs {
   display: inline-flex;
