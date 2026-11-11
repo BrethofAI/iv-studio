@@ -2,6 +2,15 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.7',
+    items: [
+      { text: 'A simpler welcome: it starts by asking how much you know about AI video. New to it? Everyday words, fewer choices, and IV Studio picks the settings for you. Then name yourself, your helper and your colour, and it checks your PC.' },
+      { text: 'The Cinematography menu shows a picture for every setup: the same scene with each film stock, lens, light, camera move and mood, so you can see the difference before you pick. It opens from a new Cinematography button.' },
+      { text: 'Hermes can write your prompts: pick it in Settings → Prompt writer, beside Claude Code and Codex.' },
+      { text: 'Start from an example and Stage it on a board open as pop-ups on Create.' }
+    ]
+  },
+  {
     version: '1.1.6',
     items: [
       { text: 'Fixed: Write it for me said Unknown writer "h3" when H3 was the shot’s model (for example after Use in a shot). It uses the writer from Settings again.' },
