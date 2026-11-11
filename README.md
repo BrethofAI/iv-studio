@@ -42,7 +42,7 @@ IV Studio is **Powered by MiniMax H3**. Using H3 through it means agreeing to th
 H3 render. To report misuse, email [abuse@infinitevariance.ai](mailto:abuse@infinitevariance.ai).
 
 <p align="center">
-  <img src="docs/images/create.png" alt="Create: Tess picked, Write it for me with the idea, the H3 prompt, and the pinned Your shot card with Hunt 3 previews" width="100%">
+  <img src="docs/images/create.png" alt="Create: Tess's rainy bus-stop shot with its H3 prompt, the checker's note, the prompt tools and the pinned Your shot card" width="100%">
 </p>
 
 ## What's new in 1.1
@@ -101,6 +101,10 @@ H3 render. To report misuse, email [abuse@infinitevariance.ai](mailto:abuse@infi
 - **Install them from IV Studio.** Check my PC asks whether you use Claude Code or Codex, and Settings → Agents
   can install either with its maker's own installer and open its sign-in.
 
+<p align="center">
+  <img src="docs/images/chat.png" alt="The chat beside the Dashboard: Claude Code answering which shots aren't finished yet, film by film, after looking them up with IV Studio's tools" width="100%">
+</p>
+
 ### Make more
 
 - **MiniMax H3 Image.** A new picture model in Create → Image: big, detailed pictures at 4, 8 or 16 MP that
@@ -145,6 +149,25 @@ H3 render. To report misuse, email [abuse@infinitevariance.ai](mailto:abuse@infi
   model; search finds words in prompts.
 - **An end card, if you want one.** The editor can add a "Made with IV Studio" end card to an export (Edit
   settings → End card), off unless you turn it on, and each export shape says where it fits.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/seedance.png" alt="Create with Seedance 2.5 picked: the four kinds of shot, Tess as a face picture, and Hunt 2 takes priced at about $1.48"></td>
+    <td width="50%"><img src="docs/images/effects.png" alt="Effects on a clip in the editor: Dub, Clean plate, Day to night, Add water, SDR to HDR, Remove background and Smooth or slow motion"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Seedance 2.5 beside MiniMax H3, priced before you hunt</sub></td>
+    <td align="center"><sub>Right-click a clip for Effects</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/compare.png" alt="Compare in Grid: three takes and the finished version of The apple, paused on the same frame"></td>
+    <td width="50%"><img src="docs/images/library-details.png" alt="The Library viewer: a take of Tess at the bus stop, with what's in it, model, size, length, character, seed, steps, render time, cost and the prompt"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Compare up to four versions in sync</sub></td>
+    <td align="center"><sub>Every render says how it was made</sub></td>
+  </tr>
+</table>
 
 ### Catch problems sooner, finish anywhere
 
@@ -309,7 +332,7 @@ These ideas come from keys and Sam Wasserman's Imagination Studio (Apache-2.0); 
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/dashboard.png" alt="Dashboard: what's new in 1.0, quick-start cards and recent renders"></td>
+    <td width="50%"><img src="docs/images/dashboard.png" alt="Dashboard: the What if? banner with Make it and Let Claude Code make it, quick-start cards and recent renders"></td>
     <td width="50%"><img src="docs/images/tour.png" alt="How it works: the Create tour lighting up What happens, with its card and Next"></td>
   </tr>
   <tr>
@@ -318,26 +341,26 @@ These ideas come from keys and Sam Wasserman's Imagination Studio (Apache-2.0); 
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/welcome.png" alt="Check my PC: this PC can do everything, with the graphics card, memory, processor, free space and prompt writer rated"></td>
-    <td width="50%"><img src="docs/images/hunt.png" alt="A Dry Seat shot: two preview takes of Tess at a rainy bus stop, ready to pick, and the final below"></td>
+    <td width="50%"><img src="docs/images/hunt.png" alt="The apple: three preview takes of the farmer and his dog, each scored, with Review, Mark and Pick, and a review of take 1 below"></td>
   </tr>
   <tr>
     <td align="center"><sub>Check my PC sets IV Studio up for your computer</sub></td>
-    <td align="center"><sub>Hunt a few takes, pick one, finish it at full size</sub></td>
+    <td align="center"><sub>Hunt a few takes, review them, pick one and finish it</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/shots.png" alt="Shots: filters for status, when, kind, who and shape, and The Seed's shots under their day"></td>
-    <td width="50%"><img src="docs/images/projects.png" alt="Projects: seven short films as cards, filtered by where each one is"></td>
+    <td width="50%"><img src="docs/images/shots.png" alt="Shots: finished References shots under their day, with filters for status, when, kind, who and shape"></td>
+    <td width="50%"><img src="docs/images/projects.png" alt="Projects: short films under their day, filtered by where each one is"></td>
   </tr>
   <tr>
     <td align="center"><sub>Every shot, a day at a time, with filters</sub></td>
     <td align="center"><sub>A short film, step by step</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/image.png" alt="Create in Image mode: Generate or Edit, and eight image model families"></td>
-    <td width="50%"><img src="docs/images/staging-board.png" alt="The staging board on Create: Tess and a second person on a top-down floor, a wide lens and an arcing camera, and the staging words it writes"></td>
+    <td width="50%"><img src="docs/images/image.png" alt="Create in Image mode: Generate, Edit or Tools, and nine image model families"></td>
+    <td width="50%"><img src="docs/images/staging-board.png" alt="The staging board on Create: two people on a top-down floor, a wide lens and an arc left, and the staging words it writes"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Pictures too: generate or edit on eight model families</sub></td>
+    <td align="center"><sub>Pictures too: generate, edit or fix on nine model families</sub></td>
     <td align="center"><sub>Stage the shot on a board; it becomes exact directions or a previs clip</sub></td>
   </tr>
   <tr>
@@ -349,11 +372,11 @@ These ideas come from keys and Sam Wasserman's Imagination Studio (Apache-2.0); 
     <td align="center"><sub>Train free on your PC, or rent a cloud GPU</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/loras.png" alt="LoRAs: a Civitai search for painting styles, shown as tall picture cards under the page's own banner"></td>
-    <td width="50%"><img src="docs/images/lora-details.png" alt="A LoRA's pop-up: its example clips, maker, trigger words, licence, file and tags"></td>
+    <td width="50%"><img src="docs/images/loras.png" alt="LoRAs: a model bar for every family, and a Civitai search for paint styles shown as tall picture cards"></td>
+    <td width="50%"><img src="docs/images/lora-details.png" alt="A LoRA's pop-up: Rough Sketch Nature's example clips, maker, trigger words, licence, file and tags"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Find H3 LoRAs on Civitai</sub></td>
+    <td align="center"><sub>LoRAs for every model, found on Civitai</sub></td>
     <td align="center"><sub>Every LoRA's examples, trigger words and licence</sub></td>
   </tr>
   <tr>
@@ -365,7 +388,7 @@ These ideas come from keys and Sam Wasserman's Imagination Studio (Apache-2.0); 
     <td align="center"><sub>Songs and scores, made on your PC</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/edit.png" alt="Edit: project bin, source and program monitors, effect controls, and a timeline with filmstrips and titles"></td>
+    <td width="50%"><img src="docs/images/edit.png" alt="Edit: project bin, source and program monitors, effect controls with loudness and end card, and a timeline with filmstrips and a title"></td>
     <td width="50%"><img src="docs/images/library.png" alt="Library: everything you made with filters for when, where from, kind, who and shape"></td>
   </tr>
   <tr>
@@ -373,27 +396,27 @@ These ideas come from keys and Sam Wasserman's Imagination Studio (Apache-2.0); 
     <td align="center"><sub>Everything you've made, in one place</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/workflows.png" alt="Workflows: Sequences, Sizzle, Reel, Shinobi and Replace as cards with their own art"></td>
+    <td width="50%"><img src="docs/images/workflows.png" alt="Workflows: Sequences, Sizzle, Effects, Reel, Shinobi, Replace and Rebuild as cards with their own art"></td>
     <td width="50%"><img src="docs/images/sizzle.png" alt="Sizzle: a wall of flames behind the web address bar, centered on its stage"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Five tools for after a render</sub></td>
+    <td align="center"><sub>Seven tools for after a render</sub></td>
     <td align="center"><sub>Sizzle: a website, made into a promo film</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/reel.png" alt="Reel: beat bars and a drop bar for pictures and a song, then numbered steps and the Your reel card"></td>
-    <td width="50%"><img src="docs/images/cloud.png" alt="Cloud: render on this PC or the cloud, RunPod, Modal or Comfy Cloud, and the RunPod account step"></td>
+    <td width="50%"><img src="docs/images/cloud.png" alt="Cloud: render on this PC or the cloud, RunPod, Modal or Comfy Cloud, a guided setup, the RunPod account and the GPU choice"></td>
   </tr>
   <tr>
     <td align="center"><sub>Reel: pictures and a song, cut to the beat</sub></td>
     <td align="center"><sub>No big GPU? Render on your own cloud account</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/settings.png" alt="Settings: a section index and cards for the prompt writer, Civitai and agents"></td>
-    <td width="50%"><img src="docs/images/setup.png" alt="Settings → Setup: ComfyUI and the GPU ready, and every model checked"></td>
+    <td width="50%"><img src="docs/images/settings.png" alt="Settings: a section index, and Your PC with the four speed presets"></td>
+    <td width="50%"><img src="docs/images/setup.png" alt="Settings → Setup: a ready status card with Restart ComfyUI, and folding sections for models, node packs and optional tools"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Settings, one card per topic</sub></td>
+    <td align="center"><sub>Settings, one card per topic, with speed presets</sub></td>
     <td align="center"><sub>Setup checks and downloads what ComfyUI needs</sub></td>
   </tr>
 </table>
@@ -503,7 +526,7 @@ its data folder, checks it, and swaps the program files in place, keeping the da
 1.1.1 or older needs the 1.1.2 zip unzipped over it once.
 
 <p align="center">
-  <img src="docs/images/setup.png" alt="Settings → Setup" width="100%">
+  <img src="docs/images/setup.png" alt="Settings → Setup: a ready status card with Restart ComfyUI, and folding sections for models, node packs and optional tools" width="100%">
 </p>
 
 ## Dashboard
@@ -928,10 +951,15 @@ the folders above, and LoRAs trained in Incognito land in ComfyUI's LoRAs folder
 
 ## Workflows
 
-Five tools for what comes after a render. Each opens on its own animated stage with its main bar centered (a
-wall of fire for Sizzle, a beat for Reel, running film for Sequences, blade cuts for Shinobi, a scanning swap
-for Replace), then works in numbered steps; the stages pause when they're off screen and stay still if your
-system asks for reduced motion. Sequences is described [above](#sequences).
+Seven tools for what comes after a render: Sequences, Sizzle, Effects, Reel, Shinobi, Replace and Rebuild. Each
+opens on its own animated stage with its main bar centered (a wall of fire for Sizzle, a beat for Reel, running
+film for Sequences, blade cuts for Shinobi, a scanning swap for Replace), then works in numbered steps; the
+stages pause when they're off screen and stay still if your system asks for reduced motion. Sequences is
+described [above](#sequences), and Effects in [what's new in 1.1](#whats-new-in-11).
+
+**Rebuild** takes a video you made apart and remakes it: IV Studio reads it shot by shot, your agent (Claude Code
+or Codex) plans how each shot is remade, you approve the plan and the frames, H3 renders the new shots on this PC,
+and a first cut lands in Edit beside the original.
 
 ### Sizzle
 
