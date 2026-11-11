@@ -2,6 +2,12 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.6',
+    items: [
+      { text: 'Fixed: on a narrow window the chat’s close button was cut off at the edge, and the live preview sat over the chat’s message box. The chat’s header now fits, and the live preview keeps to the left of the chat.' }
+    ]
+  },
+  {
     version: '1.1.5',
     items: [
       { text: 'Fixed on Windows: when IV Studio had to start Ollama itself, a terminal window opened every time Ollama loaded a model (with Library search on, after each new render). IV Studio now starts Ollama through its own tray app, or hidden.' }
