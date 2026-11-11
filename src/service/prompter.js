@@ -356,7 +356,8 @@ function ollamaExe() {
 // PowerShell with a hidden console that its runners share. Mac and Linux start `ollama serve` in the background.
 export function ollamaStartCommand(exe, platform = process.platform, exists = fs.existsSync) {
   if (platform !== 'win32') return { command: exe, args: ['serve'] }
-  const tray = path.join(path.dirname(exe), 'ollama app.exe')
+  // Windows paths by Windows rules, so this answers the same on any machine (and in Linux and Mac CI)
+  const tray = path.win32.join(path.win32.dirname(exe), 'ollama app.exe')
   if (exists(tray)) return { command: tray, args: [] }
   const q = (s) => `'${String(s).replace(/'/g, "''")}'`
   return { command: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', `Start-Process -FilePath ${q(exe)} -ArgumentList 'serve' -WindowStyle Hidden`] }
