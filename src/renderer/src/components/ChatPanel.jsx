@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AgentRows, useAgentSetup } from './AgentSetup'
 import ActivityLog from './ActivityLog'
 import { selectionFor } from '../selection'
+import { chatLines } from '../chatText'
 
 const fileUrl = (p) => `ivfile://local/?p=${encodeURIComponent(p)}`
 const tokens = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n || 0))
@@ -92,6 +93,39 @@ const FileChip = ({ f, onRemove }) => (
   </span>
 )
 
+// the agent's markdown shown as formatting (chatText.js), built from React elements, never HTML
+const Parts = ({ parts }) =>
+  parts.map((p, i) => (p.b ? <strong key={i}>{p.t}</strong> : p.i ? <em key={i}>{p.t}</em> : p.code ? <code key={i} className="ct-code">{p.t}</code> : <span key={i}>{p.t}</span>))
+
+function ChatText({ text }) {
+  return (
+    <div className="chat-text md">
+      {chatLines(text).map((l, i) =>
+        l.kind === 'rule' ? (
+          <hr key={i} className="ct-rule" />
+        ) : l.kind === 'head' ? (
+          <div key={i} className="ct-head">
+            <Parts parts={l.parts} />
+          </div>
+        ) : l.kind === 'bullet' ? (
+          <div key={i} className="ct-bullet" style={l.indent ? { marginLeft: Math.min(l.indent, 8) * 6 } : undefined}>
+            <span className="ct-mark">{l.mark}</span>
+            <span>
+              <Parts parts={l.parts} />
+            </span>
+          </div>
+        ) : l.parts.length ? (
+          <div key={i}>
+            <Parts parts={l.parts} />
+          </div>
+        ) : (
+          <div key={i} className="ct-gap" />
+        )
+      )}
+    </div>
+  )
+}
+
 function Entry({ e, onAnswer, onUndo, onOpenShot, agentName, first }) {
   if (e.kind === 'you')
     return (
@@ -114,7 +148,7 @@ function Entry({ e, onAnswer, onUndo, onOpenShot, agentName, first }) {
       <div className={`chat-row agent ${first ? 'first' : ''}`}>
         <div className="chat-bubble agent">
           {first && <span className="chat-name mono">{agentName}</span>}
-          <span className="chat-text">{e.text}</span>
+          <ChatText text={e.text} />
           {e.at && <span className="chat-time mono">{timeOf(e.at)}</span>}
         </div>
       </div>

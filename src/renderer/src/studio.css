@@ -15392,6 +15392,43 @@ html.rm .agent-dot.live {
 .chat-text {
   white-space: pre-wrap;
 }
+/* the agent's markdown as formatting (ChatText, chatText.js) */
+.chat-text.md {
+  display: block;
+}
+.chat-text.md strong {
+  font-weight: 700;
+  color: var(--cream, var(--paper));
+}
+.chat-text.md .ct-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.88em;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(241, 237, 229, 0.08);
+}
+.chat-text.md .ct-head {
+  margin-top: 6px;
+  font-weight: 700;
+  color: var(--cream, var(--paper));
+}
+.chat-text.md .ct-bullet {
+  display: flex;
+  gap: 8px;
+}
+.chat-text.md .ct-mark {
+  flex: none;
+  min-width: 10px;
+  color: var(--agent-color);
+}
+.chat-text.md .ct-gap {
+  height: 0.7em;
+}
+.chat-text.md .ct-rule {
+  border: 0;
+  border-top: 1px solid rgba(241, 237, 229, 0.16);
+  margin: 8px 0;
+}
 .chat-name {
   display: block;
   margin-bottom: 2px;
