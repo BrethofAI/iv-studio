@@ -2,6 +2,12 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.5',
+    items: [
+      { text: 'Fixed on Windows: when IV Studio had to start Ollama itself, a terminal window opened every time Ollama loaded a model (with Library search on, after each new render). IV Studio now starts Ollama through its own tray app, or hidden.' }
+    ]
+  },
+  {
     version: '1.1.4',
     items: [
       { text: 'Hermes in the chat: pick Hermes beside Claude Code and Codex, and your own Hermes Agent works in IV Studio with every IV Studio tool, on the model you chose in Hermes. Anything Hermes would run outside IV Studio is declined.' },
