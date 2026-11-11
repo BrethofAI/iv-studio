@@ -1,3 +1,4 @@
+import { isHarness } from '../service/harness.js'
 // IV Studio MCP server (stdio). Same service, data folder and job records as the studio window, so an agent
 // and a person see the same projects and results. Run with the app's own binary:
 //   ELECTRON_RUN_AS_NODE=1 "IV Studio.exe" <resources>/app.asar/out/main/mcp.js
@@ -486,7 +487,7 @@ tool('write_prompt', "Write a MiniMax H3 prompt from a plain-words idea, using t
   media,
   sequence: z.boolean().default(false).describe('Write it as one shot of a continuous sequence (join rules)'),
   previous: z.string().optional().describe('sequence: the prompt of the previous shot'),
-  engine: z.enum(['local', 'claude', 'codex', 'contextir']).optional().describe('Defaults to the choice in Settings → Prompt writer'),
+  engine: z.enum(['local', 'claude', 'codex', 'hermes', 'contextir']).optional().describe('Defaults to the choice in Settings → Prompt writer'),
   target: z.enum(['h3', 'seedance']).default('h3').describe('seedance: a Seedance 2.5 prompt from IV Studio\'s Seedance guide, with references named @image1, @video1, @audio1 (a character\'s face comes after your pictures)'),
   voiceLine: z.string().optional().describe('seedance: a voice recording that goes along as @audio')
 }, ({ engine, target, ...request }) => {
@@ -503,7 +504,7 @@ tool('write_shots_from_story', 'Split a short story into sequence shots and writ
   character: z.string().default('tess')
 }, (args) => {
   const w = writerOf(readSettings(BASE))
-  return studio.writeStory(args, w.engine === 'claude' || w.engine === 'codex' ? w : { model: readSettings(BASE).ollamaModel }).then((shots) => ({ shots }))
+  return studio.writeStory(args, isHarness(w.engine) ? w : { model: readSettings(BASE).ollamaModel }).then((shots) => ({ shots }))
 })
 // In an agent run from the Dashboard the agent has no way to wait, so get_job waits for it: up to 25 s while the job
 // is still queued or running (a call every few seconds would spend the person's plan for nothing).

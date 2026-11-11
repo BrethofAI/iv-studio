@@ -1,9 +1,10 @@
+import { isHarness } from '../service/harness.js'
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, powerSaveBlocker, protocol, safeStorage, screen, shell } from 'electron'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { Readable } from 'node:stream'
-import { comfyFolders, dataLocation, incognitoDir, readSettings, resourcesDir, videosFolderOf, writerFor, writerOf, writeSettings } from '../service/paths'
+import { comfyFolders, dataLocation, incognitoDir, readSettings, resourcesDir, videosFolderOf, PROMPT_WRITERS, writerFor, writerOf, writeSettings } from '../service/paths'
 import { chooseTarget, copyData, discardCopy, freeBytes, listData, movableEntries, oldCopy, removeOldCopy, verifyCopy, writePointer } from '../service/datafolder'
 import { codexWindow, EXTRA_BIN, findHarnesses, harnessStatus } from '../service/harness'
 import { AGENT_NAMES, startAgentRun } from '../service/agentrun'
@@ -1879,7 +1880,7 @@ app.whenReady().then(() => {
   })
   handle('prompts:story', (request) => {
     const w = writerOf(readSettings(BASE))
-    return studio.writeStory(request, w.engine === 'claude' || w.engine === 'codex' ? w : { model: readSettings(BASE).ollamaModel })
+    return studio.writeStory(request, isHarness(w.engine) ? w : { model: readSettings(BASE).ollamaModel })
   })
   handle('prompts:pull', (model) => pullModel(model, (ev) => send('prompts:pull', { model, ...ev })))
   handle('settings:set', (patch) => {
@@ -1893,7 +1894,7 @@ app.whenReady().then(() => {
     }
     if ('openaiModel' in safe) safe.openaiModel = String(safe.openaiModel || '').trim()
     if ('openaiVision' in safe) safe.openaiVision = !!safe.openaiVision
-    if ('promptEngine' in safe && !['local', 'claude', 'codex', 'contextir', 'openai'].includes(safe.promptEngine)) delete safe.promptEngine
+    if ('promptEngine' in safe && !PROMPT_WRITERS.includes(safe.promptEngine)) delete safe.promptEngine
     if ('ollamaUrl' in safe) {
       try {
         safe.ollamaUrl = normalizeOllamaUrl(safe.ollamaUrl)
@@ -1990,7 +1991,7 @@ app.whenReady().then(() => {
     // the speed preset (speed.js) the wizard picked; Settings → Your PC can change it afterwards
     if (shotPrefs?.speed && isSpeed(shotPrefs.speed)) patch.speed = shotPrefs.speed
     if (hardware) patch.hardware = hardware
-    if (promptEngine && ['local', 'claude', 'codex'].includes(promptEngine)) patch.promptEngine = promptEngine
+    if (promptEngine && ['local', 'claude', 'codex', 'hermes'].includes(promptEngine)) patch.promptEngine = promptEngine
     return publicSettings(writeSettings(patch, BASE))
   })
   handle('setup:installNodes', () => studio.installNodePacks({ folder: readSettings(BASE).comfyFolder || null, onProgress: (u) => send('setup:nodes', u) }))

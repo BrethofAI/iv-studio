@@ -69,7 +69,7 @@ export function resourcesDir(hint) {
 // comfyApiKey and civitaiKey are stored encrypted by the app (Electron safeStorage); they're never sent to the window.
 // civitaiMature: mature LoRAs from civitai.red on the LoRAs page, off unless the person turns it on.
 // civitaiUnblur: with civitaiMature on, mature previews show without the blur (a second, separate opt-in).
-// promptEngine: 'local' (ollamaModel), 'claude' (claudeModel) or 'codex' (codexModel) writes prompts, or 'contextir',
+// promptEngine: 'local' (ollamaModel), 'claude' (claudeModel), 'codex' (codexModel) or 'hermes' (hermesModel) writes prompts, or 'contextir',
 // or 'openai': an OpenAI-compatible server (llm.js) at openaiUrl with openaiModel; openaiVision: it sees pictures;
 // openaiKey and openaiHeaders ("Name: value" lines) are stored encrypted.
 // '' as a Claude Code or Codex model means the person's own default there.
@@ -220,12 +220,12 @@ export function writeSettings(patch, dir = dataDir()) {
 
 // The prompt writer chosen in Settings, as { engine, model }.
 // the prompt writers a person can pick in Settings → Prompt writer
-export const PROMPT_WRITERS = ['local', 'openai', 'claude', 'codex', 'contextir']
+export const PROMPT_WRITERS = ['local', 'openai', 'claude', 'codex', 'hermes', 'contextir']
 export function writerOf(settings) {
   const engine = settings.promptEngine || 'local'
   // the OpenAI-compatible server writes exactly as the local writer does; only the transport differs (llm.js)
   if (engine === 'openai') return { engine: 'local', provider: 'openai', model: settings.openaiModel || '' }
-  return { engine, model: engine === 'claude' ? settings.claudeModel || '' : engine === 'codex' ? settings.codexModel || '' : settings.ollamaModel }
+  return { engine, model: engine === 'claude' ? settings.claudeModel || '' : engine === 'codex' ? settings.codexModel || '' : engine === 'hermes' ? settings.hermesModel || '' : settings.ollamaModel }
 }
 // The writer for one "Write it for me": Settings' choice, unless the request names a writer. request.engine is the
 // shot's video model (h3 or seedance) since 1.1, so it picks a writer only when it is one (GitHub #23,

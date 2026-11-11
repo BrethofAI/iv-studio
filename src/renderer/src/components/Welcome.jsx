@@ -29,7 +29,7 @@ const STEPS = [
 const ART = { hello: '', you: '', pc: 'pc-card', way: 'pc-path', get: 'pc-path', done: '' }
 const GB = 1024 ** 3
 const gbs = (b) => (b / GB >= 1000 ? `${(b / GB / 1024).toFixed(1)} TB` : `${b / GB >= 100 ? Math.round(b / GB) : (b / GB).toFixed(b / GB < 10 ? 1 : 0)} GB`)
-const WRITERS = { claude: 'Claude Code', codex: 'Codex', local: 'Local (Ollama)' }
+const WRITERS = { claude: 'Claude Code', codex: 'Codex', hermes: 'Hermes', local: 'Local (Ollama)' }
 
 // small line icons, in the app's style
 const Icon = ({ name }) => {
@@ -611,6 +611,7 @@ function Way({ rec, way, setWay, prefs, setPrefs, writer, setWriter, installs, a
             options={[
               ['claude', 'Claude Code', !installs.claude && 'Claude Code isn’t on this PC'],
               ['codex', 'Codex', !installs.codex && 'Codex isn’t on this PC'],
+              ['hermes', 'Hermes', !installs.hermes && 'Hermes isn’t on this PC'],
               ['local', 'Local (Ollama)']
             ]}
           />

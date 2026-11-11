@@ -475,7 +475,9 @@ function ModelCard({ n, settings, setSettings, notify }) {
 // The person's own Claude Code or Codex as the writer: whether it's on this PC, and which of its models writes.
 const HARNESS = {
   claude: { name: 'Claude Code', maker: 'Anthropic', login: 'Claude', get: 'https://claude.com/claude-code', key: 'claudeModel' },
-  codex: { name: 'Codex', maker: 'OpenAI', login: 'ChatGPT', get: 'https://openai.com/codex', key: 'codexModel' }
+  codex: { name: 'Codex', maker: 'OpenAI', login: 'ChatGPT', get: 'https://openai.com/codex', key: 'codexModel' },
+  // Hermes writes on the model set in Hermes itself; it has no model list here
+  hermes: { name: 'Hermes', maker: 'the provider of the model you picked in Hermes', login: 'Hermes', get: 'https://github.com/NousResearch/hermes-agent', key: 'hermesModel' }
 }
 
 function WriterCard({ n, settings, setSettings, notify }) {
@@ -535,6 +537,7 @@ function WriterCard({ n, settings, setSettings, notify }) {
     ['local', 'Local', 'Free · your own Ollama', 'Not installed'],
     ['claude', 'Claude Code', 'Your Claude plan', 'Not installed'],
     ['codex', 'Codex', 'Your ChatGPT plan', 'Not installed'],
+    ['hermes', 'Hermes', 'Your own Hermes and its model', 'Not installed'],
     ['openai', 'OpenAI-compatible', 'Your own server or API', 'Needs setting up'],
     ['contextir', 'Context IR', 'MiniMax · paid per prompt', 'Needs a key']
   ]
@@ -569,12 +572,27 @@ function WriterCard({ n, settings, setSettings, notify }) {
         ))}
       </div>
 
-      {h && harness && (!harness.installed || (agents?.[engine] && agents[engine].signedIn !== true)) && (
+      {engine === 'hermes' && harness && !harness.installed && (
+        <SetField label="Hermes">
+          <p className="small pink set-plain">
+            Hermes isn't installed on this PC.{' '}
+            <button className="link-btn" onClick={() => open(h.get)}>
+              Get Hermes
+            </button>
+          </p>
+        </SetField>
+      )}
+      {engine === 'hermes' && harness?.installed && (
+        <SetField label="Model" hint="Your own Hermes writes on the model you picked in Hermes (hermes model), with no tools; your idea, and your reference pictures if that model takes pictures, go to that model's provider. It doesn't use this PC's GPU.">
+          <p className="small set-plain">The model set in Hermes.</p>
+        </SetField>
+      )}
+      {h && engine !== 'hermes' && harness && (!harness.installed || (agents?.[engine] && agents[engine].signedIn !== true)) && (
         <SetField label={h.name}>
           <AgentRows setup={agents} notify={notify} only={engine} />
         </SetField>
       )}
-      {h && harness?.installed && (
+      {h && engine !== 'hermes' && harness?.installed && (
         <SetField label="Model" hint={`Your own ${h.name} writes on your ${h.login} login and plan, with no tools except reading your reference pictures; your idea and pictures go to ${h.maker}. It doesn't use this PC's GPU, so it's as quick while ComfyUI renders.`}>
           <select value={settings[h.key] || ''} onChange={(e) => save({ [h.key]: e.target.value })}>
             {harness.models.map((m) => (

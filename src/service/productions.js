@@ -1,3 +1,4 @@
+import { isHarness } from './harness.js'
 // Projects: a short film from script to rough cut. (Called "productions" in the code: a "project" already means
 // one shot's renders, see Studio.createProject.) A production holds:
 //   brief    name, logline, aspect, target length, look (style LoRAs, notes)
@@ -651,7 +652,7 @@ export class Productions {
     const ch = this.character(sh.character)
     const w = this.writer()
     const written =
-      w.engine === 'claude' || w.engine === 'codex'
+      isHarness(w.engine)
         ? await writeHarness({ engine: w.engine, model: w.model, idea, mode: 'text', seconds: sh.seconds, character: ch })
         : await writeLocal({ idea, mode: 'text', seconds: sh.seconds, character: ch, model: this.model(), cpu: cpu ?? (await this.studio().gpuBusy().catch(() => false)) })
     const prompt = oneTake(withLine(written, ch && first(ch.name) === first(sh.speaker) ? '{char}' : sh.speaker, sh.line))

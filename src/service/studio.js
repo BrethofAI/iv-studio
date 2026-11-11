@@ -1,3 +1,4 @@
+import { isHarness } from './harness.js'
 // IV Studio service: the one place both the studio window and the MCP server go through.
 // Projects, jobs and characters live as JSON in the data folder, so either process can pick up the
 // other's work. ComfyUI does the rendering; this records what was asked, what ran and what came out.
@@ -924,7 +925,7 @@ export class Studio {
     const character = charId === 'none' ? null : this.characters().find((c) => c.id === charId) || null
     const files = media.map((m) => ({ kind: m.kind, file: m.file || m.path }))
     if (engine === 'local') return writeLocal({ idea, mode, seconds, character, sequence, previous, media: files, model, cpu: await this.gpuBusy() })
-    if (engine === 'claude' || engine === 'codex') return writeHarness({ engine, model, idea, mode, seconds, character, sequence, previous, media: files })
+    if (isHarness(engine)) return writeHarness({ engine, model, idea, mode, seconds, character, sequence, previous, media: files })
     if (engine !== 'contextir') throw new Error(`Unknown writer "${engine}".`)
     if (!apiKey) throw new Error('MiniMax Context IR needs a Comfy.org API key. Add it in Settings → Prompt writer.')
     const staged = []
@@ -949,7 +950,7 @@ export class Studio {
   async writeStory({ story, shots = 3, seconds = 10, character: charId = 'none' }, { engine = 'local', model } = {}) {
     if (!story?.trim()) throw new Error('Write the story first.')
     const character = charId === 'none' ? null : this.characters().find((c) => c.id === charId) || null
-    const harness = engine === 'claude' || engine === 'codex'
+    const harness = isHarness(engine)
     return writeStoryLocal({ story, shots: Math.min(8, Math.max(1, shots)), seconds, character, engine: harness ? engine : 'local', model, cpu: harness ? false : await this.gpuBusy() })
   }
 

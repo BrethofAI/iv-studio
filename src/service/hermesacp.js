@@ -59,7 +59,9 @@ const startExe = (exe, args, opts) => {
   return spawn(viaShell ? `"${exe}"` : exe, args, { ...opts, shell: viaShell })
 }
 
-export function hermesTurn({ exe, cwd, server, session = null, text, model = '', emit = () => {}, env = process.env, spawnFn = startExe }) {
+// server: IV Studio's MCP server for the chat, or null for a plain answer (the prompt writer). images: [{ data, mimeType }]
+// sent with the text when Hermes says its model takes pictures (promptCapabilities.image); otherwise left out.
+export function hermesTurn({ exe, cwd, server, session = null, text, images = [], model = '', emit = () => {}, env = process.env, spawnFn = startExe }) {
   const child = spawnFn(exe, [], { cwd, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
   let buf = ''
   let id = 0
@@ -163,10 +165,12 @@ export function hermesTurn({ exe, cwd, server, session = null, text, model = '',
   child.on('error', (e) => finish({ ok: false, error: `Hermes couldn't start: ${e.message}` }))
   child.on('close', (code) => finish({ ok: false, error: err.trim().split('\n').filter(Boolean).pop() || `Hermes stopped (code ${code}).` }))
 
-  const mcpServers = [{ name: 'iv-studio', command: server.command, args: server.args, env: Object.entries(server.env || {}).map(([name, value]) => ({ name, value: String(value) })) }]
+  const mcpServers = server ? [{ name: 'iv-studio', command: server.command, args: server.args, env: Object.entries(server.env || {}).map(([name, value]) => ({ name, value: String(value) })) }] : []
+  let seesPictures = false
   ;(async () => {
     try {
-      await request('initialize', { protocolVersion: ACP_PROTOCOL, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'iv-studio', version: '1' } })
+      const init = await request('initialize', { protocolVersion: ACP_PROTOCOL, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'iv-studio', version: '1' } })
+      seesPictures = !!init?.agentCapabilities?.promptCapabilities?.image
       let opened = null
       if (sessionId) {
         replaying = true
@@ -186,7 +190,9 @@ export function hermesTurn({ exe, cwd, server, session = null, text, model = '',
       if (model && option && option.currentValue !== model && option.options.some((o) => o.value === model)) {
         await request('session/set_config_option', { sessionId, configId: option.id, value: model }).catch(() => null)
       }
-      const r = await request('session/prompt', { sessionId, prompt: [{ type: 'text', text }] })
+      const pictures = seesPictures ? images.map((im) => ({ type: 'image', mimeType: im.mimeType || 'image/jpeg', data: im.data })) : []
+      emit({ type: 'pictures', sent: pictures.length })
+      const r = await request('session/prompt', { sessionId, prompt: [{ type: 'text', text }, ...pictures] })
       flushWords()
       const u = r?.usage
       if (u) emit({ type: 'usage', turn: { input: u.inputTokens || 0, cached: u.cachedReadTokens || 0, output: u.outputTokens || 0 } })

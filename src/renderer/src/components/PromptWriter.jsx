@@ -4,7 +4,7 @@ import { ask } from './Confirm'
 import StageBoard from './StageBoard'
 import { cameraWords, defaultStage, previsWords, stagingWords } from '../../../service/staging'
 
-const HARNESS_NAME = { claude: 'Claude Code', codex: 'Codex' }
+const HARNESS_NAME = { claude: 'Claude Code', codex: 'Codex', hermes: 'Hermes' }
 
 // An idea from somewhere else (Create's banner bar, the Dashboard's "What do you want to make?") for Create's own
 // writer: it fills in the idea and, with write, writes the prompt straight away. Kept until a listening writer takes
@@ -66,7 +66,7 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
 
   // Context IR is MiniMax's H3 rewriter: a Seedance shot is written by the local writer instead
   const engine = context.engine === 'seedance' && status?.engine === 'contextir' ? 'local' : status?.engine || 'local'
-  const harness = engine === 'claude' || engine === 'codex'
+  const harness = engine === 'claude' || engine === 'codex' || engine === 'hermes'
   const blocker =
     status &&
     (engine === 'contextir'
@@ -84,7 +84,7 @@ export default function PromptWriter({ context, current, onWritten, notify, go, 
   const sees = engine === 'openai' ? status?.openai?.vision : status?.models?.find((m) => m.name === status.model)?.vision
   const seeing =
     harness && visual.length > 0
-      ? `${HARNESS_NAME[engine]} looks at your ${visual.length === 1 ? (visual[0].kind === 'video' ? 'video' : 'picture') : `${visual.length} references`} and writes what it sees.`
+      ? `${HARNESS_NAME[engine]} looks at your ${visual.length === 1 ? (visual[0].kind === 'video' ? 'video' : 'picture') : `${visual.length} references`} and writes what it sees${engine === 'hermes' ? ', if its model takes pictures' : ''}.`
       : (engine === 'local' && status?.running) || (engine === 'openai' && status?.openai?.ok) ? (visual.length > 0
       ? sees
         ? `Looks at your ${visual.length === 1 ? (visual[0].kind === 'video' ? 'video' : 'picture') : `${visual.length} references`} and writes what it sees.`

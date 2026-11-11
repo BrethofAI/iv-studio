@@ -1,3 +1,4 @@
+import { isHarness } from './harness.js'
 // Film craft for prompts and Projects, after Slate, the prompt studio for AI filmmaking, by Sam Wasserman
 // (wassermanproductions.com, Apache-2.0), as built into Imagination Studio:
 //   - the writer the person chose in Settings (askWriter) for every job below, and for Projects' script and plans;
@@ -22,10 +23,10 @@ import { ollamaJson } from './prompter.js'
 // the local writer. Returns the parsed JSON object of `schema`'s shape.
 export async function askWriter(writer, { system, user, schema, cpu = false, temperature = 0.5, ctx = 16384, timeoutMs = 600000 }) {
   const w = writer || { engine: 'local' }
-  if (w.engine === 'claude' || w.engine === 'codex') return harnessJson({ engine: w.engine, model: w.model, system, user: `${user}\n\nAnswer with the JSON object only.`, schema, timeoutMs })
+  if (isHarness(w.engine)) return harnessJson({ engine: w.engine, model: w.model, system, user: `${user}\n\nAnswer with the JSON object only.`, schema, timeoutMs })
   return ollamaJson({ system, user, schema, model: w.engine === 'local' ? w.model || undefined : undefined, cpu, temperature, ctx })
 }
-export const writerName = (w) => ({ claude: 'Claude Code', codex: 'Codex' })[w?.engine] || (w?.provider === 'openai' ? 'the OpenAI-compatible writer' : 'the local writer')
+export const writerName = (w) => ({ claude: 'Claude Code', codex: 'Codex', hermes: 'Hermes' })[w?.engine] || (w?.provider === 'openai' ? 'the OpenAI-compatible writer' : 'the local writer')
 
 // ---------- Slate's data ----------
 const cache = new Map()

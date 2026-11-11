@@ -191,7 +191,7 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
             <span className="small dim">each takes a few minutes</span>
           </div>
           <details className="replace-settings">
-            <summary className="mono label">The prompt {session.prompt ? `(by ${session.writer === 'local' ? 'the local writer' : session.writer === 'claude' ? 'Claude Code' : session.writer === 'codex' ? 'Codex' : session.writer})` : '(written when you start)'}</summary>
+            <summary className="mono label">The prompt {session.prompt ? `(by ${session.writer === 'local' ? 'the local writer' : session.writer === 'claude' ? 'Claude Code' : session.writer === 'codex' ? 'Codex' : session.writer === 'hermes' ? 'Hermes' : session.writer})` : '(written when you start)'}</summary>
             {session.prompt ? (
               <>
                 <textarea className="remake-prompt mono small" rows={14} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
