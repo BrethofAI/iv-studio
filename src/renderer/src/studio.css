@@ -16410,3 +16410,71 @@ html.chat-window body {
     font-size: 15px;
   }
 }
+
+/* ---------- Create: "Start from an example" as one button and a pop-up (Starters.jsx) ---------- */
+.starters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 0 0 18px;
+}
+.starter-menu {
+  width: min(980px, 100%);
+}
+.starter-menu .starters-row {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.starter-menu .starter {
+  min-height: 150px;
+  padding: 16px 18px;
+  animation: starter-in 0.3s calc(var(--i, 0) * 40ms) both;
+}
+.starter-menu .starter-name {
+  font-size: 21px;
+}
+.starter-menu .starter-about {
+  -webkit-line-clamp: 4;
+}
+@keyframes starter-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+:root.rm .starter-menu .starter {
+  animation: none;
+}
+
+/* ---------- the staging board in its own pop-up (PromptWriter.jsx StagePop) ---------- */
+.stage-pop {
+  width: min(1180px, 100%);
+}
+.stage-pop .stage-board {
+  grid-template-columns: minmax(320px, 520px) minmax(0, 1fr);
+  padding: 16px;
+}
+@media (max-width: 900px) {
+  .stage-pop .stage-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .stage-pop .stage-floor {
+    max-width: 420px;
+    justify-self: center;
+  }
+}
+.stage-pop-previs {
+  margin: 0;
+}
+.writer-staged {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 6px;
+}
+.writer-staged > .small {
+  flex: 1 1 320px;
+  min-width: 0;
+}
