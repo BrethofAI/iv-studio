@@ -9700,7 +9700,7 @@ button.nav-update:hover {
   from { opacity: 0; transform: translateX(-14px) }
 }
 .welcome-steps {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--steps, 6), minmax(0, 1fr));
   margin: 18px 0 22px;
 }
 .welcome-steps button:disabled {
@@ -16296,4 +16296,117 @@ html.chat-window body {
 .wel-names-row label {
   display: grid;
   gap: 6px;
+}
+
+/* ---------- the welcome wizard's first page and its simpler path for someone new (Welcome.jsx) ---------- */
+.wel-first {
+  padding-top: 8px;
+}
+.wel-first-q {
+  margin: 4px 0 8px;
+  font: 800 clamp(30px, 3.4vw, 46px) / 1.02 var(--display);
+  text-transform: uppercase;
+  color: var(--cream);
+  max-width: 22ch;
+}
+.wel-first-sub {
+  margin: 0 0 22px;
+  font-size: 16px;
+}
+.wel-levels-big {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.wel-levels-big .wel-way {
+  min-height: 170px;
+  padding: 22px;
+  text-align: left;
+  animation: wel-rise 0.4s calc(var(--i, 0) * 70ms) both;
+}
+.wel-levels-big .wel-way h3 {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+.wel-levels-big .wel-way p {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+@keyframes wel-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+:root.rm .wel-levels-big .wel-way {
+  animation: none;
+}
+.wel-fold > summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  list-style: none;
+  cursor: pointer;
+}
+.wel-fold > summary::-webkit-details-marker {
+  display: none;
+}
+.wel-fold-more {
+  flex: none;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  color: var(--paper-dim);
+}
+.wel-fold[open] .wel-fold-more {
+  color: var(--paper);
+  border-color: var(--red);
+}
+.wel-plain {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+.wel-plain li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 16px;
+  line-height: 1.45;
+}
+.wel-plain .wel-icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
+}
+.wel-cards.wel-cards-folded {
+  display: none;
+}
+.wel-pc-more {
+  margin: 0 0 14px;
+}
+.wel-dl-fold > summary {
+  cursor: pointer;
+  margin: 8px 0 10px;
+  color: var(--paper-dim);
+}
+.wel-dl-fold:not([open]) > summary {
+  margin-bottom: 0;
+}
+.wel-while {
+  margin: 22px 0 10px;
+  color: var(--paper-dim);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* the welcome wizard's step bar stays one even row: on a narrow window the small line under each name goes first */
+@media (max-width: 1180px) {
+  .welcome-steps .wizard-sub {
+    display: none;
+  }
+  .welcome-steps .wizard-label {
+    font-size: 15px;
+  }
 }
