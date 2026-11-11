@@ -679,7 +679,7 @@ function Cast({ v, act, characters, notify, go, setStep }) {
       <div className="wiz-craft" data-tour="film-cinema">
         <h3 className="wiz-q-small">Cinematography</h3>
         <p className="small dim">Film stock, lenses, light and camera for the whole film. Each goes into every shot's prompt.</p>
-        <CinemaChips value={v.look?.setups || []} onChange={(setups) => saveLook({ setups })} onOpen={() => setCinema(true)} label={v.look?.setups?.length ? '+ More' : '+ Choose the cinematography'} />
+        <CinemaChips value={v.look?.setups || []} onChange={(setups) => saveLook({ setups })} onOpen={() => setCinema(true)} label={v.look?.setups?.length ? 'Add more' : 'Choose the cinematography'} />
       </div>
       {cinema && <CinemaPicker value={v.look?.setups || []} onChange={(setups) => saveLook({ setups })} onClose={() => setCinema(false)} />}
       <div className="wiz-craft" data-tour="film-lookbook">

@@ -124,8 +124,26 @@ export function CinemaPicker({ value = [], onChange, onClose }) {
   )
 }
 
-// The chosen setups as small chips, with × to take one away and + to open the picker.
-export function CinemaChips({ value = [], onChange, onOpen, label = '+ Cinematography' }) {
+// A cinema camera, the Cinematography button's mark: its two reels turn while the button is hovered.
+const CinemaIcon = () => (
+  <svg className="craft-open-icon" viewBox="0 0 24 24" aria-hidden="true">
+    <g className="reel">
+      <circle cx="7" cy="6.5" r="3.4" />
+      <circle cx="7" cy="6.5" r="0.9" />
+      <path d="M7 3.1v1.6M7 8.3v1.6M3.6 6.5h1.6M8.8 6.5h1.6" />
+    </g>
+    <g className="reel">
+      <circle cx="14.5" cy="6.5" r="3.4" />
+      <circle cx="14.5" cy="6.5" r="0.9" />
+      <path d="M14.5 3.1v1.6M14.5 8.3v1.6M11.1 6.5h1.6M16.3 6.5h1.6" />
+    </g>
+    <rect x="2.5" y="11" width="14" height="9" rx="1.2" className="body" />
+    <path d="M16.5 13.6 21.5 11v9l-5-2.6z" className="lens" />
+  </svg>
+)
+
+// The chosen setups as small chips, with × to take one away, and the Cinematography button that opens the picker.
+export function CinemaChips({ value = [], onChange, onOpen, label = 'Cinematography' }) {
   return (
     <div className="craft-chosen">
       {value.map((s) => (
@@ -136,8 +154,10 @@ export function CinemaChips({ value = [], onChange, onOpen, label = '+ Cinematog
           </button>
         </span>
       ))}
-      <button className="link-btn mono small craft-open" onClick={onOpen}>
-        {label}
+      <button className="btn craft-open" onClick={onOpen} title="Film stocks, lenses, light, camera moves and moods, each with a picture">
+        <CinemaIcon />
+        <span>{label}</span>
+        {value.length > 0 && <span className="craft-open-n mono">{value.length}</span>}
       </button>
     </div>
   )

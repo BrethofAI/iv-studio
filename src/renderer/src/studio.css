@@ -16607,3 +16607,59 @@ html.chat-window body {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* the Cinematography button (CraftKit.jsx CinemaChips): a cinema camera in the accent colour, its reels turning on hover */
+.btn.craft-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  padding: 7px 14px 7px 11px;
+  border: 1px solid rgba(var(--accent-rgb), 0.55);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+.btn.craft-open:hover,
+.btn.craft-open:focus-visible {
+  border-color: var(--red);
+  background: rgba(var(--accent-rgb), 0.16);
+}
+.craft-open-icon {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  fill: none;
+  stroke: var(--red);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.craft-open-icon .body,
+.craft-open-icon .lens {
+  fill: rgba(var(--accent-rgb), 0.22);
+}
+.craft-open-icon .reel {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.btn.craft-open:hover .craft-open-icon .reel {
+  animation: craft-reel 1.4s linear infinite;
+}
+@keyframes craft-reel {
+  to {
+    transform: rotate(360deg);
+  }
+}
+:root.rm .btn.craft-open:hover .craft-open-icon .reel {
+  animation: none;
+}
+.craft-open-n {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--red);
+  color: #fff;
+  font-size: 11px;
+}
