@@ -28,6 +28,10 @@ pictures, songs and spoken lines, cut it all together and export. IV Studio driv
 cloud. No strong graphics card? Shots can also render on a GPU in your own [RunPod](https://www.runpod.io) or
 [Modal](https://modal.com) account, billed by the second, or on Comfy Cloud (see [Cloud](#cloud)).
 
+**IV Studio 1.1.4** adds **Hermes** to the chat beside Claude Code and Codex, and a **History** tab for earlier
+conversations. The [IV Studio plugin for Hermes](https://github.com/hollisorg/hermes-iv-studio) works the other way
+round: Hermes's own `video_generate` and `image_generate` render in IV Studio, on your GPU, for free.
+
 **IV Studio 1.1.3** lets you talk to the chat (it hears you with IV Studio's own speech recognition, on your PC) and
 read its replies aloud, shows every agent's work in an **Activity** log with Undo, gives the chat a cleaner look and
 its own window, and tells it more about what you're looking at.
@@ -47,14 +51,20 @@ H3 render. To report misuse, email [abuse@infinitevariance.ai](mailto:abuse@infi
 
 ## What's new in 1.1
 
-### Your own Claude Code or Codex, inside IV Studio
+### Your own Claude Code, Codex or Hermes, inside IV Studio
 
-- **Chat.** The **Chat** button in the title bar opens a conversation with your own Claude Code or Codex, on
+- **Chat.** The **Chat** button in the title bar opens a conversation with your own Claude Code, Codex or Hermes, on
   your own plan, with every IV Studio tool: it can look things up, write and render shots, sequence, edit, make
   music and voices, and answer questions about your projects. It knows which page you're on and which shot,
   film or edit is open. Anything that deletes, costs money, installs or changes a setting shows an **Allow /
-  Don't allow** card first. Conversations are kept, and you can go back to an earlier one. On a wide window the
+  Don't allow** card first. Conversations are kept: the **History** tab (1.1.4) lists them, newest first, with which
+  agent and when, and opening one carries on where you left off. On a wide window the
   chat sits beside the page; on a smaller one it slides over it. Works on Windows, Mac and Linux.
+- **Hermes (1.1.4).** Pick Hermes beside Claude Code and Codex and your own
+  [Hermes Agent](https://hermes-agent.nousresearch.com) works in the chat, on the model you chose in Hermes. IV Studio
+  talks to it through Hermes's Agent Client Protocol server (`hermes-acp`, found where Hermes's installer puts it),
+  gives the session IV Studio's tools, and resumes the same Hermes session for each message. Anything Hermes asks
+  approval to run outside IV Studio (a shell command, a file edit) is declined and shown as a declined step.
 - **Talk to it (1.1.3).** Press the mic in the chat, say what you want and press send. IV Studio's own Whisper writes
   it down on your PC (Audio → Voices → Set up voices once). Talking while the agent works stops its answer and
   sends your new words; renders it already started keep going. The speaker button reads each reply aloud in one of

@@ -2,6 +2,14 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.4',
+    items: [
+      { text: 'Hermes in the chat: pick Hermes beside Claude Code and Codex, and your own Hermes Agent works in IV Studio with every IV Studio tool, on the model you chose in Hermes. Anything Hermes would run outside IV Studio is declined.' },
+      { text: 'History: a tab in the chat lists your earlier conversations, newest first, with which agent and when. Open one to carry on where you left off.' },
+      { text: 'And the other way round: the IV Studio plugin for Hermes (github.com/hollisorg/hermes-iv-studio) makes Hermes’s own video and picture tools render here, on your GPU, for free.' }
+    ]
+  },
+  {
     version: '1.1.3',
     items: [
       { text: 'Talk to the chat: press the mic, say what you want, and press send. IV Studio’s own speech recognition writes it down on your PC. Talking while the agent works stops its answer and sends your new words.' },

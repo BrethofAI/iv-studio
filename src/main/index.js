@@ -9,6 +9,7 @@ import { codexWindow, EXTRA_BIN, findHarnesses, harnessStatus } from '../service
 import { AGENT_NAMES, startAgentRun } from '../service/agentrun'
 import { ACTIVITY_FOLDER, markUndone, pruneActivity, readActivity } from '../service/activity'
 import { AGENT_INFO, openSignIn, runInstall, signedIn } from '../service/agentinstall'
+import { findHermes } from '../service/hermesacp'
 import { applyChatEvent, applyUsage, spokenText as spoken, ATTACH_EXTENSIONS, attachmentOf, listChats, loadChat, MAX_ATTACH, newChat, pruneChats, saveChat, startChatTurn, undoEditChange, withAttachments } from '../service/agentchat'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS, MODAL_VERSION } from '../service/cloud'
@@ -2400,10 +2401,17 @@ app.whenReady().then(() => {
   let chatTurn = null
   let chatRenders = []
   let chatPoll = null
-  const chatFound = () => (TEST_COPY && process.env.IV_STUDIO_TEST_CHAT ? { claude: process.env.IV_STUDIO_TEST_CHAT, codex: null } : agentsFound())
+  // Hermes (hermesacp.js) joins the chat only: the prompt writer and Dashboard ideas stay with Claude Code and Codex.
+  // A test copy can stand in a Hermes ACP server too (IV_STUDIO_TEST_HERMES: a command line).
+  const chatFound = () => {
+    if (TEST_COPY && process.env.IV_STUDIO_TEST_CHAT) return { claude: process.env.IV_STUDIO_TEST_CHAT, codex: null, hermes: process.env.IV_STUDIO_TEST_HERMES || null }
+    const { env, home } = agentHome()
+    return { ...agentsFound(), hermes: (TEST_COPY && process.env.IV_STUDIO_TEST_HERMES) || findHermes(env, home) }
+  }
   const chatPreferred = (found) => {
     const s = readSettings(BASE)
-    return ['claude', 'codex'].includes(s.promptEngine) && found[s.promptEngine] ? s.promptEngine : found.claude ? 'claude' : found.codex ? 'codex' : null
+    if (['claude', 'codex', 'hermes'].includes(s.chatEngine) && found[s.chatEngine]) return s.chatEngine
+    return ['claude', 'codex'].includes(s.promptEngine) && found[s.promptEngine] ? s.promptEngine : found.claude ? 'claude' : found.codex ? 'codex' : found.hermes ? 'hermes' : null
   }
   // The spending limit (spending.js): the chat's MCP server asks this desk before a paid step, and borrows the
   // Comfy.org key from it, with a token that only lives as long as one chat turn.
@@ -2450,13 +2458,13 @@ app.whenReady().then(() => {
   const chatEngine = (engine) => {
     const found = chatFound()
     const e = engine || chatPreferred(found)
-    if (!e || !AGENT_NAMES[e]) throw new Error('Install Claude Code or Codex first: the chat uses your own.')
+    if (!e || !AGENT_NAMES[e]) throw new Error('Install Claude Code, Codex or Hermes first: the chat uses your own.')
     if (!found[e]) throw new Error(`${AGENT_NAMES[e]} isn't installed on this PC.`)
     return e
   }
   handle('chat:status', () => {
     const found = chatFound()
-    return { installed: { claude: !!found.claude, codex: !!found.codex }, preferred: chatPreferred(found), chat: chatView(), chats: listChats(chatsRoot).slice(0, 10) }
+    return { installed: { claude: !!found.claude, codex: !!found.codex, hermes: !!found.hermes }, preferred: chatPreferred(found), chat: chatView(), chats: listChats(chatsRoot).slice(0, 20) }
   })
   handle('chat:new', (engine) => {
     if (chatTurn) throw new Error(`${chat.name} is still answering. Stop it first.`)
@@ -2532,7 +2540,7 @@ app.whenReady().then(() => {
       message: withAttachments(message, attached),
       context: fullContext,
       mcp: mcpCommand(),
-      model: current.engine === 'claude' ? s.claudeModel || '' : s.codexModel || '',
+      model: current.engine === 'claude' ? s.claudeModel || '' : current.engine === 'codex' ? s.codexModel || '' : s.hermesModel || '',
       extraEnv,
       onEvent: (e) => {
         // show_in_app: the window goes there and lights it up (App.jsx)

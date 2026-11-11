@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-export const AGENT_NAMES = { claude: 'Claude Code', codex: 'Codex' }
+export const AGENT_NAMES = { claude: 'Claude Code', codex: 'Codex', hermes: 'Hermes' }
 export const RUN_LIMIT_MS = 45 * 60 * 1000
 export const SERVER = 'iv-studio'
 

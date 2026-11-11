@@ -1,10 +1,11 @@
-// A chat with the person's own Claude Code or Codex inside IV Studio (docs/superpowers/specs/2026-11-10-agent-chat-design.md):
+// A chat with the person's own Claude Code, Codex or Hermes inside IV Studio (docs/superpowers/specs/2026-11-10-agent-chat-design.md):
 // like adding IV Studio to Claude Desktop or Codex as an MCP server, but in the app. Every IV Studio tool, nothing
 // else; anything that deletes, costs money, installs or changes Settings waits for the person's Allow (server.js
 // askPerson, chatAsk). One headless turn per message, continuing the agent's own session.
 import fs from 'node:fs'
 import path from 'node:path'
 import { AGENT_NAMES, SERVER, claudeArgs, codexChatArgs, killTree, parseLine, spawnAgent, stepLabel } from './agentrun.js'
+import { HERMES_NOTE, hermesTurn } from './hermesacp.js'
 
 export const TURN_LIMIT_MS = 45 * 60 * 1000
 export const KEEP_CHATS = 20
@@ -159,10 +160,14 @@ export function startChatTurn({ engine, exe, dir, session = null, message, conte
     fs.writeFileSync(promptFile, chatPrompt())
     args = claudeArgs({ mcpConfigFile, promptFile, model, persist: true, resume: session })
     input = text
-  } else {
+  } else if (engine === 'codex') {
     args = codexChatArgs({ mcp: server, model, resume: session })
     // Codex has no system prompt of its own here: the first message carries it, and the session keeps it
     input = session ? text : `${chatPrompt()}\n\n---\n\n${text}`
+  } else {
+    // Hermes (hermesacp.js): its ACP server takes IV Studio's MCP server for the session; the first message carries
+    // the chat's instructions, as with Codex
+    input = session ? text : `${chatPrompt()}${HERMES_NOTE}\n\n---\n\n${text}`
   }
 
   const jobs = () => {
@@ -241,12 +246,39 @@ export function startChatTurn({ engine, exe, dir, session = null, message, conte
   }
   const poller = setInterval(pollAsks, pollMs)
 
-  const child = spawnAgent(exe, args, { cwd: work, env: { ...process.env, NO_COLOR: '1', MCP_TOOL_TIMEOUT: String(15 * 60 * 1000) } })
-  child.stdin.on('error', () => {})
-  child.stdin.end(input)
+  const childEnv = { ...process.env, NO_COLOR: '1', MCP_TOOL_TIMEOUT: String(15 * 60 * 1000) }
+  let hermes = null
+  let child
+  if (engine === 'hermes') {
+    hermes = hermesTurn({
+      exe,
+      cwd: work,
+      server,
+      session,
+      text: input,
+      model,
+      env: childEnv,
+      emit: (e) => {
+        if (e.type === 'session') newSession = e.id
+        if (e.type === 'step') e = { ...e, label: stepLabel(e.tool) }
+        emit(e)
+      }
+    })
+    child = hermes.child
+    hermes.done.then((r) => {
+      if (r.session) newSession = r.session
+      if (stopped) return finish(false, 'Stopped.')
+      finish(r.ok, r.ok ? null : r.error)
+      killTree(child)
+    })
+  } else {
+    child = spawnAgent(exe, args, { cwd: work, env: childEnv })
+    child.stdin.on('error', () => {})
+    child.stdin.end(input)
+  }
   let buf = ''
   let err = ''
-  child.stdout.on('data', (d) => {
+  if (!hermes) child.stdout.on('data', (d) => {
     buf += d
     let i
     while ((i = buf.indexOf('\n')) >= 0) {
@@ -260,7 +292,7 @@ export function startChatTurn({ engine, exe, dir, session = null, message, conte
       }
     }
   })
-  child.stderr.on('data', (d) => (err = (err + d).slice(-2000)))
+  if (!hermes) child.stderr.on('data', (d) => (err = (err + d).slice(-2000)))
   const finish = (ok, error) => {
     if (ended) return
     ended = true
@@ -278,8 +310,8 @@ export function startChatTurn({ engine, exe, dir, session = null, message, conte
     killTree(child)
     finish(false, `${AGENT_NAMES[engine]} worked for ${Math.round(limitMs / 60000)} minutes, the limit for one message, and was stopped.`)
   }, limitMs)
-  child.on('error', (e) => finish(false, `${AGENT_NAMES[engine]} couldn't start: ${e.message}`))
-  child.on('close', (code) => {
+  if (!hermes) child.on('error', (e) => finish(false, `${AGENT_NAMES[engine]} couldn't start: ${e.message}`))
+  if (!hermes) child.on('close', (code) => {
     if (stopped) return finish(false, 'Stopped.')
     if (endEvent) return finish(endEvent.ok, endEvent.ok ? null : endEvent.text || `${AGENT_NAMES[engine]} stopped with a problem.`)
     finish(code === 0, code === 0 ? null : err.trim().split('\n').filter(Boolean).pop() || `${AGENT_NAMES[engine]} stopped (code ${code}).`)
@@ -300,6 +332,7 @@ export function startChatTurn({ engine, exe, dir, session = null, message, conte
     stop() {
       if (ended) return
       stopped = true
+      if (hermes) hermes.cancel()
       killTree(child)
     }
   }
