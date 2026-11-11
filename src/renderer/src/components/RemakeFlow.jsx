@@ -17,11 +17,9 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
   const [takes, setTakes] = useState(1)
   const [useLora, setUseLora] = useState(false)
   const [prompt, setPrompt] = useState('')
-  const [credit, setCredit] = useState('')
 
   useEffect(() => {
     X.faces().then(setFaces)
-    X.meta().then((m) => setCredit(m.credit))
     return X.onProgress((u) => setProgress((p) => ({ ...p, [u.frame]: u.step })))
   }, [])
   useEffect(() => {
@@ -212,7 +210,6 @@ export default function RemakeFlow({ kind, video, notify, onStarted }) {
         </Step>
       )}
       {busy && busy !== 'Painting the frames' && busy !== 'Starting' && <p className="small dim">{busy}…</p>}
-      {credit && <p className="small dim">{credit}.</p>}
     </>
   )
 }

@@ -934,7 +934,7 @@ function SceneTools({ v, sc, k, act, planning }) {
   return (
     <>
       <div className="wiz-scene-tools">
-        <label className="small dim" title={plan ? plan.description : 'How the scene is covered: the planner\'s own choice, or one of Slate\'s coverage plans. Changing it plans the scene again.'}>
+        <label className="small dim" title={plan ? plan.description : 'How the scene is covered: the planner\'s own choice, or one of the coverage plans. Changing it plans the scene again.'}>
           Coverage{' '}
           <select value={sc.coverage?.id || ''} disabled={planning || !slate} aria-label={`Coverage for scene ${k + 1}`} onChange={(e) => act(() => P().coverage(v.id, sc.id, e.target.value || null), e.target.value ? 'Coverage set. Plan the changed scene to get its shots.' : 'Coverage set back to the planner\'s choice.')}>
             <option value="">The planner's choice</option>

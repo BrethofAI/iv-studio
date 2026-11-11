@@ -38,7 +38,7 @@ export function useAgentName() {
   const [name, setName] = useState(null)
   useEffect(() => {
     let live = true
-    if (!agentLook) agentLook = window.ivstudio.chat.status().then((s) => NAMES[s.chat?.engine || s.preferred] || null, () => null)
+    if (!agentLook) agentLook = window.ivstudio.chat.status().then((s) => (NAMES[s.chat?.engine || s.preferred] ? s.agentName || NAMES[s.chat?.engine || s.preferred] : null), () => null)
     agentLook.then((n) => live && setName(n))
     // look again after a while: one may have been installed since
     const t = setTimeout(() => (agentLook = null), 15000)
@@ -128,10 +128,11 @@ function ChatText({ text }) {
   )
 }
 
-function Entry({ e, onAnswer, onUndo, onOpenShot, agentName, first }) {
+function Entry({ e, onAnswer, onUndo, onOpenShot, agentName, userName, first }) {
   if (e.kind === 'you')
     return (
       <div className="chat-row you">
+        {first && userName && <span className="chat-name chat-name-you mono">{userName}</span>}
         <div className="chat-bubble you">
           {e.files?.length > 0 && (
             <div className="chat-files">
@@ -443,6 +444,8 @@ export default function ChatPanel({ status, reload, onClose, context, go, notify
   const installed = status?.installed || {}
   const ready = ['claude', 'codex', 'hermes'].filter((e) => installed[e])
   const pick = chat?.engine || (engine && installed[engine] ? engine : status?.preferred)
+  // what the agent is called: the name the person gave it (Settings → Your agent), else its app's name
+  const call = (e) => status?.agentName || NAMES[e]
   const busy = !!chat?.busy
   const act = (fn) => async (...a) => {
     try {
@@ -564,7 +567,7 @@ export default function ChatPanel({ status, reload, onClose, context, go, notify
     else {
       setAbout(ask.about || null)
       if (ask.text) setText(ask.text)
-      if (ask.send && busy) notify?.(`${NAMES[pick]} is still answering. Your question is ready in the box; send it when it's done.`)
+      if (ask.send && busy) notify?.(`${call(pick)} is still answering. Your question is ready in the box; send it when it's done.`)
       inputRef.current?.focus()
     }
   }, [ask, !!status])
@@ -706,7 +709,8 @@ export default function ChatPanel({ status, reload, onClose, context, go, notify
             ) : (
               pick && (
                 <span className="chat-who mono small">
-                  <span className="chat-who-dot" aria-hidden="true" /> {NAMES[pick]}
+                  <span className="chat-who-dot" aria-hidden="true" /> {call(pick)}
+                  {status?.agentName && <span className="dim"> · {NAMES[pick]}</span>}
                 </span>
               )
             )}
@@ -748,7 +752,7 @@ export default function ChatPanel({ status, reload, onClose, context, go, notify
               <div className="chat-body" ref={bodyRef} aria-live="polite">
                 {!chat?.entries?.length ? (
                   <div className="chat-empty">
-                    <p className="small">Ask {NAMES[pick]} about IV Studio or your projects, or tell it what to make. Type, or press the mic and talk. It can use everything IV Studio does, and it knows what you’re looking at.</p>
+                    <p className="small">Ask {call(pick)} about IV Studio or your projects, or tell it what to make. Type, or press the mic and talk. It can use everything IV Studio does, and it knows what you’re looking at.</p>
                     <div className="chat-ideas">
                       {ideasFor(context?.page).map((i) => (
                         <button key={i} className="chat-idea small" onClick={() => (setText(i), inputRef.current?.focus())}>
@@ -758,7 +762,7 @@ export default function ChatPanel({ status, reload, onClose, context, go, notify
                     </div>
                   </div>
                 ) : (
-                  chat.entries.map((e, i) => <Entry key={i} e={e} onAnswer={answer} onUndo={undo} onOpenShot={openShot} agentName={NAMES[chat.engine] || 'Agent'} first={e.kind === 'agent' && chat.entries[i - 1]?.kind !== 'agent'} />)
+                  chat.entries.map((e, i) => <Entry key={i} e={e} onAnswer={answer} onUndo={undo} onOpenShot={openShot} agentName={call(chat.engine) || 'Agent'} userName={status?.userName} first={e.kind !== chat.entries[i - 1]?.kind} />)
                 )}
                 {busy && (
                   <div className="chat-row agent">
@@ -832,8 +836,8 @@ export default function ChatPanel({ status, reload, onClose, context, go, notify
                         ref={inputRef}
                         rows={1}
                         value={text}
-                        placeholder={`Message ${NAMES[pick]}…`}
-                        aria-label={`Message ${NAMES[pick]}`}
+                        placeholder={`Message ${call(pick)}…`}
+                        aria-label={`Message ${call(pick)}`}
                         onChange={(ev) => setText(ev.target.value)}
                         onKeyDown={(ev) => {
                           if (ev.key === 'Enter' && !ev.shiftKey && !ev.nativeEvent.isComposing) {

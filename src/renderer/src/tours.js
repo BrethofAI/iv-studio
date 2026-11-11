@@ -19,7 +19,7 @@ export const TOURS = {
       { go: { page: 'library', section: 'video' }, at: '.shelf-grid', title: 'Shots', text: 'Every shot you have made, with its takes and finals.' },
       { go: { page: 'projects', section: 'video' }, at: '.shelf-bar', title: 'Projects', text: 'A short film from an idea, step by step: story, cast, storyboard, filming and the cut.' },
       { go: { page: 'edits', section: 'video' }, at: '.shelf-bar', title: 'Edit', text: 'A timeline editor for your shots, songs and titles, that can also make new footage right inside the edit.' },
-      { go: { page: 'workflows', section: 'video' }, at: '.workflow-cards', title: 'Workflows', text: 'Tools for after a render: one-take sequences, swapping people, reels cut to a song, and agent-made edits.' },
+      { go: { page: 'workflows', section: 'video' }, at: '.workflow-cards', title: 'Workflows', text: 'Tools for after a render: swapping people, one-take sequences, reels cut to a song, and agent-made edits.' },
       { go: { page: 'characters', section: 'video' }, at: ['.cast-section', '.train-paths'], title: 'Characters', text: 'Your recurring actors, the same in every shot. Add one you have, or train your own.' },
       { go: { page: 'audio', section: 'audio' }, at: '.section-switch', title: 'The sound side', text: 'Visual and Audio switch the sidebar. Audio has Voices, Lines, Music and Sounds.' },
       { go: { page: 'media', section: 'video' }, at: '.nav-library', title: 'Library', text: 'Everything you made, in one place: videos, pictures, songs and voice lines.' },
@@ -89,7 +89,7 @@ export const TOURS = {
       { at: '.wiz-steps', title: 'Six steps', text: 'Idea, Story, Cast and places, Storyboard, Film it, Watch. You can go back to any step at any time.' },
       { at: '.wiz-page', title: 'This step', text: 'Answer what this step asks. Write it for me drafts the script or the shots if you want a head start.' },
       { at: '.wiz-craft', title: 'Cinematography and Lookbook', text: 'Choose a film stock, lenses, light and camera for the whole film, or name a film or cinematographer: the Lookbook turns it into look language with no names in it. Both go into every shot.' },
-      { at: '.wiz-scene-tools', title: 'Coverage and continuity', text: 'Cover a scene the way a director would: dialogue coverage, an entrance, parallel action and more (from Slate by Sam Wasserman). Check continuity reads every shot like a script supervisor: wardrobe, props, light and screen sides.' },
+      { at: '.wiz-scene-tools', title: 'Coverage and continuity', text: 'Cover a scene the way a director would: dialogue coverage, an entrance, parallel action and more. Check continuity reads every shot like a script supervisor: wardrobe, props, light and screen sides.' },
       { at: '.wiz-panels', title: 'The storyboard', text: 'Every shot is a panel with a sketch. Click one to change what happens, the camera or the line, or to rework its prompt with a director’s note.' },
       { at: '.wiz-shotlist', title: 'Shot list', text: 'Save the shot list as a document, or as CSV for a spreadsheet, for a crew or a schedule.' },
       { at: '.wiz-foot', title: 'Next', text: 'When this step looks right, move on. Play the animatic before filming: it costs seconds, not GPU minutes.' }
@@ -133,7 +133,7 @@ export const TOURS = {
       { at: '.ed-bin', title: 'Your media', text: 'Everything in this edit, plus the whole Library. Add files or a title here.' },
       { at: '.ed-monitor', title: 'Source', text: 'Click something in the bin to see it here. Mark I and O, then press comma to insert or full stop to overwrite at the playhead.' },
       { at: '.ed-effects', title: 'Effect controls', text: 'The selected clip’s settings. With nothing selected, the edit’s own: format, frame rate and loudness.' },
-      { at: '.ed-toolbar', title: 'Tools', text: 'Select (V), Razor (C), Ripple (B) and Roll (N), with snapping and zoom.' },
+      { at: '.ed-toolbar', title: 'Tools', text: 'Select (V), Razor (C), Ripple (B) and Roll (N), with snapping and zoom. The razor turns your pointer into a red katana: a dashed line shows where it will cut, and a click slices the clip in two.' },
       { at: '.ed-tl-wrap', title: 'The timeline', text: 'Drag clips to move and trim them. Right-click a clip to Extend, Retake, Cut out or Reframe it with new footage; right-click a gap to fill it.' },
       { at: '.ed-export', title: 'Export', text: 'Full screen gives you more room (F11, Esc to come back). Export makes the finished video.' },
       { at: '.ed-handoff', title: 'Finish in another editor', text: 'Premiere / Resolve writes the timeline for Premiere Pro, DaVinci Resolve and Final Cut (XML, FCPXML and an EDL), copies every clip beside it and zips it to send. Tracks, trims, volume and markers come over; fades and title styling don’t.' }
@@ -143,7 +143,7 @@ export const TOURS = {
     title: 'Workflows',
     steps: [
       { title: 'Take a video further', text: 'Tools for what comes after a render. Each one works with your IV Studio renders and files.' },
-      { at: '.workflow-cards', title: 'The tools', text: 'Sequences for several shots in one take, Replace to swap who is in a shot, Reel to cut pictures to a song, Shinobi and Sizzle for edits an agent helps make.' }
+      { at: '.workflow-cards', title: 'The tools', text: 'Replace swaps who is in a shot or changes the scene. Sequences, Sizzle, Effects, Reel, Shinobi and Rebuild follow: one-take scenes, films from websites, photo effects, reels and agent edits.' }
     ]
   },
   sequences: {
@@ -280,7 +280,8 @@ export const TOURS = {
       { at: '.set-nav', title: 'Jump around', text: 'Every topic in one list. Click one to jump to it.' },
       { at: '#set-pc', title: 'Your PC', text: 'What your computer can do. Check again re-runs the scan and its recommended defaults.' },
       { at: '.speed-cards', title: 'Speed', text: 'How each new shot starts: Quality, Balanced, Fast or Low memory. The one that suits this PC is marked. Times are from an RTX 4090; smaller cards take longer.' },
-      { at: '#set-access', title: 'Accessibility', text: 'Bigger text, higher contrast, less motion, clear focus outlines and underlined links. Each applies at once.' },
+      { at: '#set-you', title: 'You and your agent', text: 'Your name, your agent’s name, and whether it runs on Claude Code, Codex or Hermes. The chat and the Dashboard use the names.' },
+      { at: '#set-access', title: 'Colour and accessibility', text: 'Pick the app’s colour (red, blue, purple, orange, or Dark for greys only), then bigger text, higher contrast, less motion, clear focus outlines and underlined links. Each applies at once.' },
       { at: '#set-words', title: 'Words', text: 'Simple words: the app talks in everyday words instead of AI terms, for people new to this. Only the words change.' },
       { at: '#set-comfy', title: 'ComfyUI', text: 'Where ComfyUI is (typing localhost:8000 is fine), and whether IV Studio starts it for you when it opens.' },
       { at: '#set-folders', title: 'Folders', text: 'Where finished videos go, on any drive, and where renders save inside ComfyUI.' },

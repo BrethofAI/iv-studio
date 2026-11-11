@@ -7,6 +7,8 @@ import { StepHead } from './CreateKit'
 import { startTour } from '../tours'
 import { setSimpleWords, simpleWords } from '../words'
 import { highContrast, setContrast } from '../a11y'
+import { applyAccent } from '../accent'
+import AccentPicker from './AccentPicker'
 import { UsageAsk } from './Privacy'
 import { openStarter } from './Starters'
 import { AgentRows, useAgentSetup } from './AgentSetup'
@@ -69,6 +71,15 @@ export default function Welcome({ onClose, go, notify, first }) {
   const words = (on) => (setSimple(on), setSimpleWords(on))
   const [hc, setHc] = useState(highContrast)
   const contrast = (on) => (setHc(on), setContrast(on))
+  // the accent colour (accent.js): shown at once, saved with the rest at the end
+  const [accent, setAccent] = useState(() => document.documentElement.dataset.accent || 'red')
+  const tint = (id) => (setAccent(id), applyAccent(id))
+  // you and your agent: names, and the app it runs on; saved with the rest at the end (Settings → You and your agent)
+  const [names, setNames] = useState({ userName: '', agentName: '', chatEngine: '' })
+  useEffect(() => {
+    window.ivstudio.settings.get().then((s) => setNames({ userName: s.userName || '', agentName: s.agentName || '', chatEngine: s.chatEngine || '' }), () => {})
+  }, [])
+  const named = { userName: names.userName.trim(), agentName: names.agentName.trim(), ...(names.chatEngine ? { chatEngine: names.chatEngine } : {}) }
   const knows = (id) => (setLevel(id), words(id === 'new'))
   // anonymous usage counting (Privacy.jsx): off unless they say yes here; an earlier yes stays yes
   const [count, setCount] = useState(false)
@@ -123,7 +134,7 @@ export default function Welcome({ onClose, go, notify, first }) {
 
   async function finish(target, cloudWizard = false) {
     try {
-      await window.ivstudio.hardware.apply({ shotPrefs: prefs, promptEngine: writer !== data?.promptEngine ? writer : undefined, hardware: summaryOf(data), plainWords: simple, highContrast: hc, ...(level ? { aiLevel: level } : {}) })
+      await window.ivstudio.hardware.apply({ shotPrefs: prefs, promptEngine: writer !== data?.promptEngine ? writer : undefined, hardware: summaryOf(data), plainWords: simple, highContrast: hc, accent, ...named, ...(level ? { aiLevel: level } : {}) })
     } catch (e) {
       notify?.(e.message)
     }
@@ -138,7 +149,7 @@ export default function Welcome({ onClose, go, notify, first }) {
   async function skip() {
     if (stepRef.current === 'done') return finish()
     try {
-      await window.ivstudio.hardware.apply({ plainWords: simple, highContrast: hc, ...(level ? { aiLevel: level } : {}) })
+      await window.ivstudio.hardware.apply({ plainWords: simple, highContrast: hc, accent, ...named, ...(level ? { aiLevel: level } : {}) })
     } catch {}
     window.dispatchEvent(new CustomEvent('iv:settings'))
     onClose()
@@ -202,10 +213,10 @@ export default function Welcome({ onClose, go, notify, first }) {
           </ol>
 
           <div className="welcome-body" key={`b-${step}`}>
-            {step === 'hello' && <Hello level={level} knows={knows} simple={simple} words={words} hc={hc} contrast={contrast} />}
+            {step === 'hello' && <Hello level={level} knows={knows} simple={simple} words={words} hc={hc} contrast={contrast} accent={accent} tint={tint} />}
             {step === 'scan' && <Scan rows={rows} shown={shown} error={error} retry={scan} />}
             {step === 'pc' && rec && <YourPc rec={rec} scan={data.scan} />}
-            {step === 'way' && rec && <Way rec={rec} way={way} setWay={setWay} prefs={prefs} setPrefs={setPrefs} writer={writer} setWriter={setWriter} installs={installs} agents={agents} scan={data.scan} notify={notify} />}
+            {step === 'way' && rec && <Way rec={rec} way={way} setWay={setWay} prefs={prefs} setPrefs={setPrefs} writer={writer} setWriter={setWriter} installs={installs} agents={agents} scan={data.scan} notify={notify} names={names} setNames={setNames} />}
             {step === 'get' && rec && <Get rec={rec} way={way} pick={pick} setPick={setPick} packs={packs} setPacks={setPacks} installs={installs} scan={data.scan} started={started} download={download} startComfy={startComfy} comfyStarting={comfyStarting} rescan={scan} notify={notify} />}
             {step === 'done' && rec && <Done rec={rec} way={way} prefs={prefs} writer={writer} started={started} onTour={() => finish('tour')} count={count} setCount={setCount} />}
           </div>
@@ -259,7 +270,7 @@ const LEVELS = [
   ['lots', 'Know it well', 'LoRAs, seeds and samplers are old friends.']
 ]
 
-function Hello({ level, knows, simple, words, hc, contrast }) {
+function Hello({ level, knows, simple, words, hc, contrast, accent, tint }) {
   const what = [
     ['Shots', 'Write an idea, hunt a few takes, pick one and finish it at full size.'],
     ['Characters and voices', 'Your own cast, with faces, voices and trained looks.'],
@@ -310,6 +321,10 @@ function Hello({ level, knows, simple, words, hc, contrast }) {
             <span className="dim small">Grey text turns close to white, so it’s easier to read. Settings → Accessibility also has bigger text, less motion and clearer focus outlines.</span>
           </span>
         </label>
+        <div className="wel-accent">
+          <h3>Pick a colour</h3>
+          <AccentPicker value={accent} onPick={tint} />
+        </div>
       </div>
     </section>
   )
@@ -433,7 +448,7 @@ function prefsForSpeed(id) {
   return { speed: id, previewMp: p.megapixels, quality: p.steps === 4 ? 'draft' : 'standard', finalMp: finishFor(id).megapixels }
 }
 
-function Way({ rec, way, setWay, prefs, setPrefs, writer, setWriter, installs, agents, scan, notify }) {
+function Way({ rec, way, setWay, prefs, setPrefs, writer, setWriter, installs, agents, scan, notify, names, setNames }) {
   const set = (p) => setPrefs((x) => ({ ...x, ...p }))
   const [videos, setVideos] = useState(null)
   useEffect(() => {
@@ -467,6 +482,29 @@ function Way({ rec, way, setWay, prefs, setPrefs, writer, setWriter, installs, a
         <StepHead title="Do you use Claude Code or Codex?" sub="If you have either, IV Studio can use it on your own plan to write your prompts and to make a whole idea for you from the Dashboard." />
         <AgentRows setup={agents} notify={notify} />
         <p className="dim small wel-agents-skip">Don’t use either? That’s fine: skip this. The Local writer works without them, and you can add them any time in Settings → Agents.</p>
+      </section>
+      <section className="block create-step wel-names">
+        <StepHead title="You and your agent" sub="Name your agent and tell it yours. It answers to its name in the chat, on the Dashboard and in the activity log. Change either any time in Settings → You and your agent." />
+        <div className="wel-names-row">
+          <label>
+            <span className="mono small dim">Your name</span>
+            <input value={names.userName} maxLength={40} placeholder="Your name" onChange={(e) => setNames({ ...names, userName: e.target.value })} />
+          </label>
+          <label>
+            <span className="mono small dim">Your agent’s name</span>
+            <input value={names.agentName} maxLength={40} placeholder="Name your agent" onChange={(e) => setNames({ ...names, agentName: e.target.value })} />
+          </label>
+        </div>
+        <Seg
+          label="It runs on"
+          value={names.chatEngine || (installs.claude ? 'claude' : installs.codex ? 'codex' : installs.hermes ? 'hermes' : '')}
+          onChange={(v) => setNames({ ...names, chatEngine: v })}
+          options={[
+            ['claude', 'Claude Code', !installs.claude && 'Claude Code isn’t on this PC'],
+            ['codex', 'Codex', !installs.codex && 'Codex isn’t on this PC'],
+            ['hermes', 'Hermes', !installs.hermes && 'Hermes isn’t on this PC']
+          ]}
+        />
       </section>
       <section className="block create-step">
         <StepHead title="Defaults for your shots" sub="Set to suit this PC. Every shot can still change them." />

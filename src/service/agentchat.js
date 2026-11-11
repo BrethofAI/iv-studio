@@ -10,6 +10,15 @@ import { HERMES_NOTE, hermesTurn } from './hermesacp.js'
 export const TURN_LIMIT_MS = 45 * 60 * 1000
 export const KEEP_CHATS = 20
 
+// The names the person gave in the welcome wizard or Settings → Your agent: the agent's own, and theirs. Said once at
+// the start of a chat, so the agent answers to its name and knows who it's talking with.
+export function namesNote({ agentName = '', userName = '', engine = '' } = {}) {
+  const a = String(agentName || '').trim().slice(0, 40)
+  const u = String(userName || '').trim().slice(0, 40)
+  if (!a && !u) return ''
+  return `\n\n${a ? `In IV Studio the person calls you ${a}: that's your name here (you run on ${AGENT_NAMES[engine] || 'their agent app'}). Answer to it and use it when you mention yourself.` : ''}${a && u ? ' ' : ''}${u ? `The person's name is ${u}; use it naturally now and then, not in every message.` : ''}`
+}
+
 export const chatPrompt = () => `You are the assistant inside IV Studio, the person's video app, talking with them in a chat panel at the side of the app.
 
 You have IV Studio's tools (the iv-studio MCP server) and nothing else: no files, no shell. Use them the way you would if the person had added IV Studio to their own agent app: look things up, write H3 prompts, render on this PC, sequence shots, edit, make music and voices, and answer questions about their projects and about IV Studio. Call get_guide before the first thing you make in a chat, and check_setup when something might be missing.
@@ -139,7 +148,7 @@ export function contextLine(ctx = {}) {
 // One message's turn. dir: the chat's own folder (kept, so the agent's session can resume from the same place).
 // session: the agent's session to continue, or null for the first message. onEvent(e) gets parseLine's events plus
 // { type: 'ask', ask } and { type: 'asked', id, allow }. Resolves { ok, error, session, jobs } when the turn ends.
-export function startChatTurn({ engine, exe, dir, session = null, message, context = null, mcp, model = '', extraEnv = {}, onEvent = () => {}, limitMs = TURN_LIMIT_MS, pollMs = 400 }) {
+export function startChatTurn({ engine, exe, dir, session = null, message, context = null, mcp, model = '', names = {}, extraEnv = {}, onEvent = () => {}, limitMs = TURN_LIMIT_MS, pollMs = 400 }) {
   if (!AGENT_NAMES[engine]) throw new Error(`Unknown agent "${engine}".`)
   const work = path.join(dir, 'work')
   const askDir = path.join(dir, 'asks')
@@ -157,17 +166,17 @@ export function startChatTurn({ engine, exe, dir, session = null, message, conte
     const mcpConfigFile = path.join(dir, 'mcp.json')
     const promptFile = path.join(dir, 'prompt.txt')
     fs.writeFileSync(mcpConfigFile, JSON.stringify({ mcpServers: { [SERVER]: { type: 'stdio', ...server } } }))
-    fs.writeFileSync(promptFile, chatPrompt())
+    fs.writeFileSync(promptFile, chatPrompt() + namesNote({ ...names, engine }))
     args = claudeArgs({ mcpConfigFile, promptFile, model, persist: true, resume: session })
     input = text
   } else if (engine === 'codex') {
     args = codexChatArgs({ mcp: server, model, resume: session })
     // Codex has no system prompt of its own here: the first message carries it, and the session keeps it
-    input = session ? text : `${chatPrompt()}\n\n---\n\n${text}`
+    input = session ? text : `${chatPrompt()}${namesNote({ ...names, engine })}\n\n---\n\n${text}`
   } else {
     // Hermes (hermesacp.js): its ACP server takes IV Studio's MCP server for the session; the first message carries
     // the chat's instructions, as with Codex
-    input = session ? text : `${chatPrompt()}${HERMES_NOTE}\n\n---\n\n${text}`
+    input = session ? text : `${chatPrompt()}${namesNote({ ...names, engine })}${HERMES_NOTE}\n\n---\n\n${text}`
   }
 
   const jobs = () => {

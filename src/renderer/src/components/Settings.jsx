@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import StartComfy, { RestartComfy } from './StartComfy'
 import { UpdateSettings } from './Update'
 import { ART } from './Hero'
+import { applyAccent } from '../accent'
+import AccentPicker from './AccentPicker'
 import Stage from './Stage'
 import { ask } from './Confirm'
 import { setUnblurred } from './Loras'
@@ -23,6 +25,7 @@ const open = (url) => window.ivstudio.links.open(url)
 // The page's topics, in order: the index on the left and each card's number come from here.
 const SECTIONS = [
   ['pc', 'Your PC'],
+  ['you', 'You and your agent'],
   ['words', 'Words'],
   ['access', 'Accessibility'],
   ['comfy', 'ComfyUI'],
@@ -134,6 +137,59 @@ function WordsCard({ n, settings, setSettings }) {
   )
 }
 
+// You and your agent: the person's name and the name they gave their agent (both shown in the chat and told to the
+// agent: agentchat.js namesNote), and which app the agent runs on (chatEngine: Claude Code, Codex or Hermes).
+const AGENT_APPS = [
+  ['claude', 'Claude Code'],
+  ['codex', 'Codex'],
+  ['hermes', 'Hermes']
+]
+function NameField({ label, hint, value, placeholder, onSave }) {
+  const [v, setV] = useState(value || '')
+  useEffect(() => setV(value || ''), [value])
+  const changed = v.trim() !== (value || '')
+  return (
+    <SetField label={label} hint={hint}>
+      <div className="set-inline grow">
+        <input value={v} maxLength={40} placeholder={placeholder} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && changed && onSave(v.trim())} />
+        <button className="btn btn-small" disabled={!changed} onClick={() => onSave(v.trim())}>
+          Save
+        </button>
+      </div>
+    </SetField>
+  )
+}
+function YouCard({ n, settings, setSettings, notify }) {
+  const [installed, setInstalled] = useState({})
+  useEffect(() => {
+    window.ivstudio.chat.status().then((s) => setInstalled(s.installed || {}), () => {})
+  }, [])
+  const set = async (patch) => {
+    try {
+      setSettings(await window.ivstudio.settings.set(patch))
+      window.dispatchEvent(new CustomEvent('iv:settings'))
+    } catch (err) {
+      notify(err.message)
+    }
+  }
+  const app = settings.chatEngine || AGENT_APPS.find(([id]) => installed[id])?.[0] || ''
+  return (
+    <SetCard id="you" n={n} title="You and your agent" sub="Give your agent a name, and tell it yours. The chat, the Dashboard and the activity log use them, and your agent answers to its name." aside={settings.agentName ? <Pill>{settings.agentName}</Pill> : null}>
+      <NameField label="Your name" hint="What your agent calls you. Leave it empty to stay anonymous." value={settings.userName} placeholder="Your name" onSave={(v) => set({ userName: v })} />
+      <NameField label="Your agent’s name" hint="Anything you like. Empty uses the app’s own name, like Claude Code." value={settings.agentName} placeholder="Name your agent" onSave={(v) => set({ agentName: v })} />
+      <SetField label="It runs on" hint="The agent app on this PC that does the work, on its own sign-in and plan. Ideas from the Dashboard run on Claude Code or Codex. Settings → Agents has the details.">
+        <div className="segmented" role="radiogroup" aria-label="Agent app">
+          {AGENT_APPS.map(([id, label]) => (
+            <button key={id} role="radio" aria-checked={app === id} className={app === id ? 'on' : ''} disabled={!installed[id]} title={installed[id] ? '' : `${label} isn’t on this PC`} onClick={() => set({ chatEngine: id })}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </SetField>
+    </SetCard>
+  )
+}
+
 // Accessibility (a11y.js and styles.css; text size is the window's zoom, in main). Each applies at once.
 const TEXT_SIZE = [
   ['normal', 'Normal'],
@@ -152,6 +208,9 @@ function AccessCard({ n, settings, setSettings, notify }) {
   const on = ['highContrast', 'reduceMotion', 'focusRings', 'underlineLinks'].filter((k) => settings[k]).length + (settings.textSize && settings.textSize !== 'normal' ? 1 : 0)
   return (
     <SetCard id="access" n={n} title="Accessibility" sub="Make IV Studio easier to read and to use. Each change applies straight away." aside={on ? <Pill tone="ok">{on} on</Pill> : null}>
+      <SetField label="Colour" hint="The colour of buttons, highlights and the artwork. Red is the default.">
+        <AccentPicker value={settings.accent} onPick={(id) => (applyAccent(id), set({ accent: id }))} />
+      </SetField>
       <SetField label="Text size" hint="Makes everything bigger: text, buttons and pictures, the way browser zoom does.">
         <div className="segmented" role="radiogroup" aria-label="Text size">
           {TEXT_SIZE.map(([id, label]) => (
@@ -1226,6 +1285,7 @@ export default function Settings({ info, recheck, notify, go, setup }) {
 
         <div className="set-cards">
           <PcCard n={n('pc')} {...common} />
+          <YouCard n={n('you')} {...common} />
           <WordsCard n={n('words')} {...common} />
           <AccessCard n={n('access')} {...common} />
           <ComfyCard n={n('comfy')} {...common} recheck={recheck} comfyUp={comfyUp} comfyBusy={comfyBusy} />

@@ -213,12 +213,12 @@ export class Remake {
   // The int8 file for a kind on this ComfyUI (any folder), and what else Remake needs that it lacks.
   async check(kind = 'swap') {
     // Comfy Cloud has no Viggle Remake; the person's own cloud (RunPod, Modal) downloads it the first time it's used
-    if (this.studio.comfy.hosted) return { ready: false, cloud: true, error: 'Replace doesn’t run on Comfy Cloud: it needs Viggle Remake. Use this PC, or your own cloud on RunPod or Modal.', packs: [], models: [], unet: null }
+    if (this.studio.comfy.hosted) return { ready: false, cloud: true, error: 'Replace doesn’t run on Comfy Cloud: it needs its own model there. Use this PC, or your own cloud on RunPod or Modal.', packs: [], models: [], unet: null }
     const info = await this.studio.comfy.objectInfo()
     const unets = comboOptions(info, 'UNETLoader', 'unet_name') || []
     const unet = unets.find((u) => u.replace(/\\/g, '/').split('/').pop() === MODEL[kind]) || null
-    const packs = NODES.filter((c) => !info[c]).length ? [{ name: 'Viggle Remake nodes (Settings → Setup → Install missing node packs)', url: null, missing: NODES.filter((c) => !info[c]) }] : []
-    const models = unet ? [] : [{ name: `Viggle Remake ${kind === 'swap' ? 'swap' : 'edit'} (${MODEL[kind]}, 21 GB)`, where: 'diffusion_models', setup: kind === 'swap' ? 'remake_swap' : 'remake_edit' }]
+    const packs = NODES.filter((c) => !info[c]).length ? [{ name: 'Replace’s nodes (Settings → Setup → Install missing node packs)', url: null, missing: NODES.filter((c) => !info[c]) }] : []
+    const models = unet ? [] : [{ name: `Replace’s ${kind === 'swap' ? 'swap' : 'edit'} model (${MODEL[kind]}, 21 GB)`, where: 'diffusion_models', setup: kind === 'swap' ? 'remake_swap' : 'remake_edit' }]
     return { ready: !packs.length && !models.length, packs, models, unet }
   }
 

@@ -41,7 +41,7 @@ export function CinemaPicker({ value = [], onChange, onClose }) {
         <div className="craft-picker-head">
           <div>
             <h3 className="craft-title">Cinematography</h3>
-            <p className="small dim">Film stocks, lenses, light, camera rigs and moods. Each adds a tested phrase to the prompt. From Slate by Sam Wasserman.</p>
+            <p className="small dim">Film stocks, lenses, light, camera rigs and moods. Each adds a tested phrase to the prompt.</p>
           </div>
           <button className="lora-chip-x" aria-label="Close" onClick={onClose}>
             ×

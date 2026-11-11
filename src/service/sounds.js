@@ -120,7 +120,7 @@ export class Sounds {
     const st = await this.status()
     if (st.error) throw new Error(st.error)
     if (st.missingNodes?.length) throw new Error(`This ComfyUI has no ${st.missingNodes.join(', ')}. Update ComfyUI.`)
-    if (st.missing.length) throw new Error(`Stable Audio 3 needs ${st.missing.map((m) => m.label).join(' and ')}. Download ${st.missing.length === 1 ? 'it' : 'them'} on the Sounds page.`)
+    if (st.missing.length) throw new Error(`Sounds need ${st.missing.map((m) => m.label).join(' and ')}. Download ${st.missing.length === 1 ? 'it' : 'them'} on the Sounds page.`)
     const id = randomUUID().slice(0, 8)
     const s = seed == null || seed === '' ? Math.floor(Math.random() * 2 ** 31) : Math.floor(Number(seed))
     const title = String(name || '').trim() || text.split(/[.,;\n]/)[0].slice(0, 48)

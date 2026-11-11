@@ -458,7 +458,7 @@ tool('get_sequence', 'A sequence with its shots, versions (takes, shot-by-shot r
 tool('save_sequence', 'Create a sequence (no sequenceId) or update its settings and shots.', { sequenceId: z.string().optional(), ...sequenceFields }, ({ sequenceId, ...patch }) =>
   sequenceId ? studio.saveSequence(sequenceId, patch) : studio.saveSequence(studio.createSequence().id, patch)
 )
-tool('render_take', 'Render every shot of a sequence as one seamless take (H3 Multishot). Adds a version; follow with get_job.', { sequenceId: z.string() }, ({ sequenceId }) => studio.renderTake(sequenceId))
+tool('render_take', 'Render every shot of a sequence as one seamless take. Adds a version; follow with get_job.', { sequenceId: z.string() }, ({ sequenceId }) => studio.renderTake(sequenceId))
 tool('hunt_shot', 'Shot by shot: start previews for one shot (index from 0). Shot 1 gets 3 candidates; later shots continue from the previous finished shot.', { sequenceId: z.string(), index: z.number().int().min(0), seed: z.number().int().optional() }, ({ sequenceId, index, seed }) => studio.huntShot(sequenceId, index, { seed }))
 tool('finish_shot', 'Shot by shot: finish the picked candidate of one shot at the sequence size.', { sequenceId: z.string(), index: z.number().int().min(0), candidate: z.number().int().min(1).max(3).default(1) }, ({ sequenceId, index, candidate }) => studio.finishShot(sequenceId, index, { candidate }))
 tool('retake', 'Redo start..end seconds of a finished version and keep the rest. Adds a new version.', {
@@ -734,7 +734,7 @@ tool('break_down_film', 'Break the script into shots with the writer chosen in S
 const slate = () => loadSlate(resourcesDir())
 const writerNow = () => writerOf(readSettings(BASE))
 const busy = () => studio.gpuBusy().catch(() => false)
-tool('list_cinematography', 'The Cinematography picker\'s setups (Slate by Sam Wasserman, wassermanproductions.com): 165 ready phrases in 12 groups (photo, cinematic and commercial styles, film stocks, lenses, lighting setups, camera rigs, single-shot moves, mood, depth layers, frames within the frame, realism), and Slate\'s 12 coverage plans for a scene. Use setup ids with add_cinematography, plan ids with set_scene_coverage.', {
+tool('list_cinematography', 'The Cinematography picker\'s setups: 165 ready phrases in 12 groups (photo, cinematic and commercial styles, film stocks, lenses, lighting setups, camera rigs, single-shot moves, mood, depth layers, frames within the frame, realism), and 12 coverage plans for a scene. Use setup ids with add_cinematography, plan ids with set_scene_coverage.', {
   group: z.string().optional().describe('Only this group id, e.g. film-stocks, lighting-setups, camera')
 }, ({ group }) => ({
   setups: slate().setups.filter((g) => !group || g.id === group).map((g) => ({ id: g.id, label: g.label, items: g.items.map((i) => ({ id: i.id, label: i.label, snippet: i.snippet })) })),
@@ -769,7 +769,7 @@ tool('set_film_cinematography', "Set a film's cinematography: setup ids from lis
   filmId: z.string(),
   setups: z.array(z.string())
 }, ({ filmId, setups }) => films.update(filmId, { look: { ...(films.get(filmId).look || {}), setups: setupSnippets(slate(), setups).map((x) => ({ id: x.id, label: x.label, snippet: x.snippet })) } }))
-tool('set_scene_coverage', "Cover a film's scene with one of Slate's coverage plans (plan ids from list_cinematography): the storyboard planner then makes exactly the plan's shots, in its order, each named by its slot (Master, OTS A...). plan: '' for the planner's own choice. The scene is marked to plan again (break_down_film).", {
+tool('set_scene_coverage', "Cover a film's scene with one of the coverage plans (plan ids from list_cinematography): the storyboard planner then makes exactly the plan's shots, in its order, each named by its slot (Master, OTS A...). plan: '' for the planner's own choice. The scene is marked to plan again (break_down_film).", {
   filmId: z.string(),
   sceneId: z.string(),
   plan: z.string()
@@ -892,13 +892,13 @@ tool('reframe', `Put a video or picture in a new frame shape (9:16, 1:1, 4:5 or 
 const cutouts = new Cutouts({ dataDir: DATA, studio: () => studio, edits })
 // ---------- Clip effects and Workflows -> Effects: Freefield's apps (freefield.js) on this PC's ComfyUI ----------
 const clipfx = new FreefieldApps({ resourcesDir: resourcesDir(), dataDir: DATA, studio: () => studio })
-tool('effects_list', `The video and photo effects IV Studio can run (Freefield's apps): ${offeredFx().map((k) => [k, CLIP_FX[k]]).map(([k, v]) => `${k} (${v.label.toLowerCase()}; takes a ${v.media})`).join(', ')}. Give fx to get one effect's inputs (ids, types, options with their values, limits, defaults) and whether this ComfyUI can run it (missing node packs or models).`, { fx: z.enum(offeredFx()).optional() }, async ({ fx }) => (fx ? { ...clipfx.meta(fx), status: await clipfx.status(fx) } : { items: offeredFx().map((k) => ({ fx: k, ...CLIP_FX[k] })), status: await clipfx.statusAll() }))
+tool('effects_list', `The video and photo effects IV Studio can run: ${offeredFx().map((k) => [k, CLIP_FX[k]]).map(([k, v]) => `${k} (${v.label.toLowerCase()}; takes a ${v.media})`).join(', ')}. Give fx to get one effect's inputs (ids, types, options with their values, limits, defaults) and whether this ComfyUI can run it (missing node packs or models).`, { fx: z.enum(offeredFx()).optional() }, async ({ fx }) => (fx ? { ...clipfx.meta(fx), status: await clipfx.status(fx) } : { items: offeredFx().map((k) => ({ fx: k, ...CLIP_FX[k] })), status: await clipfx.statusAll() }))
 tool('run_effect', 'Run one effect on this PC (free, local; a few minutes) and wait for it. file: a video (dub, cleanplate, night, water, hdr, removebg, smooth) or a picture (effects, morph, transitions; transitions also takes last). values: the effect’s own inputs by id (effects_list fx=...), select inputs by their option value. Returns the result files (the first is the main video; a matte or a warp guide may follow). Put a result on an edit with add_media.', {
   fx: z.enum(offeredFx()),
   file: z.string().describe('Absolute path of the clip or picture'),
   last: z.string().optional().describe('transitions: absolute path of the last frame'),
   values: z.record(z.any()).optional(),
-  camera: z.object({ hfov: z.number().min(0).max(120).optional(), vertical_shift: z.number().min(-1).max(1).optional(), depth_ratio: z.number().min(1).max(20).optional(), keep_source_aim: z.boolean().optional(), smooth_depth: z.boolean().optional() }).optional().describe('reshoot only: CrossView Warp settings. hfov 0 (the default) reads the lens from the clip.'),
+  camera: z.object({ hfov: z.number().min(0).max(120).optional(), vertical_shift: z.number().min(-1).max(1).optional(), depth_ratio: z.number().min(1).max(20).optional(), keep_source_aim: z.boolean().optional(), smooth_depth: z.boolean().optional() }).optional().describe('reshoot only: the camera warp settings. hfov 0 (the default) reads the lens from the clip.'),
   size: z.number().optional().describe('reshoot only: picture size in megapixels, 0.35 (default; fits 5 s in 64 GB of RAM) or 0.5 (sharper, needs much more memory)'),
   name: z.string().optional()
 }, async ({ fx, file, last, values, camera, size, name }) => (readSettings(BASE).target === 'cloud' || (await voices.release()), clipfx.run({ fx, file, last, values: values || {}, camera: camera || null, size: size ?? null, name })))
@@ -1092,12 +1092,12 @@ tool('estimate_training', 'Steps, minutes and dollars of a training run (Modal, 
   epochs: z.number().int().min(10).max(200).optional().describe("Leave out for the preset's own"),
   options: z
     .object({
-      where: z.enum(['modal', 'runpod', 'local']).optional().describe("modal or runpod: the person's own account, billed. local: this PC with Fizgig, free (Fizgig installed, the H3 files in ComfyUI). RunPod training starts only from the app window, which holds the key"),
-      precision: z.enum(['auto', 'int8']).optional().describe("Fizgig's base: auto (fits the card; may use 4-bit on 24 GB) or int8 (accurate, the cloud's)"),
-      preset: z.enum(['quick', 'standard', 'thorough']).optional().describe('quick: rank 8, short (Fizgig Fast). standard: what Tess and Theo used. thorough: half as long again'),
+      where: z.enum(['modal', 'runpod', 'local']).optional().describe("modal or runpod: the person's own account, billed. local: this PC, free (the trainer installed, the H3 files in ComfyUI). RunPod training starts only from the app window, which holds the key"),
+      precision: z.enum(['auto', 'int8']).optional().describe("The trainer's base: auto (fits the card; may use 4-bit on 24 GB) or int8 (accurate, the cloud's)"),
+      preset: z.enum(['quick', 'standard', 'thorough']).optional().describe('quick: rank 8, short (the Fast recipe). standard: what Tess and Theo used. thorough: half as long again'),
       learn: z.enum(['look', 'look_voice']).optional().describe('look: stills only (no clips, cheaper). look_voice: stills and talking clips (the voice too)'),
       detail: z.enum(['normal', 'fine']).optional().describe('fine: about 0.5 MP instead of 0.25 MP, for small details (scars, tattoos); about twice the cost'),
-      mode: z.enum(['likeness', 'whole']).optional().describe("likeness: H3's identity blocks 20-49 (Fizgig Default). whole: 6-49 (More Blocks), the whole look"),
+      mode: z.enum(['likeness', 'whole']).optional().describe("likeness: H3's identity blocks 20-49 (the default). whole: 6-49 (more blocks), the whole look"),
       checkpoints: z.union([z.literal(10), z.literal(20), z.literal(40)]).optional().describe('About how many checkpoints to save for comparing'),
       rank: z.union([z.literal(8), z.literal(16), z.literal(32)]).optional().describe("Overrides the preset's rank"),
       seed: z.number().int().min(0).optional(),
@@ -1108,16 +1108,16 @@ tool('estimate_training', 'Steps, minutes and dollars of a training run (Modal, 
     .optional(),
   more: z.number().int().min(5).max(120).optional().describe('Train more: this many extra epochs on the last finished or stopped run, from its last saved state (same recipe)'),
 }, ({ trainingId, ...opts }) => trainings.estimateFor(trainings.get(trainingId), opts))
-tool('start_training', "Train the character LoRA: on this PC with Fizgig (options.where local, free; confirm_cost 0), or on the person's own Modal account (signed in on the Cloud page; RunPod only from the app window). The cloud costs real money: run estimate_training, tell the person the minutes and dollars, and only call this after they say yes, passing confirm_cost with that dollar figure. Runs in the background; poll get_character_training (train.state, train.progress).", {
+tool('start_training', "Train the character LoRA: on this PC (options.where local, free; confirm_cost 0), or on the person's own Modal account (signed in on the Cloud page; RunPod only from the app window). The cloud costs real money: run estimate_training, tell the person the minutes and dollars, and only call this after they say yes, passing confirm_cost with that dollar figure. Runs in the background; poll get_character_training (train.state, train.progress).", {
   trainingId: z.string(),
   gpu: z.string().optional().describe('Modal: B200, H200, H100. RunPod: its GPU name (e.g. NVIDIA L40S). This PC: leave out'),
   epochs: z.number().int().min(10).max(200).optional(),
   options: z
     .object({
-      preset: z.enum(['quick', 'standard', 'thorough']).optional().describe('quick: rank 8, short (Fizgig Fast). standard: what Tess and Theo used. thorough: half as long again'),
+      preset: z.enum(['quick', 'standard', 'thorough']).optional().describe('quick: rank 8, short (the Fast recipe). standard: what Tess and Theo used. thorough: half as long again'),
       learn: z.enum(['look', 'look_voice']).optional().describe('look: stills only (no clips, cheaper). look_voice: stills and talking clips (the voice too)'),
       detail: z.enum(['normal', 'fine']).optional().describe('fine: about 0.5 MP instead of 0.25 MP, for small details (scars, tattoos); about twice the cost'),
-      mode: z.enum(['likeness', 'whole']).optional().describe("likeness: H3's identity blocks 20-49 (Fizgig Default). whole: 6-49 (More Blocks), the whole look"),
+      mode: z.enum(['likeness', 'whole']).optional().describe("likeness: H3's identity blocks 20-49 (the default). whole: 6-49 (more blocks), the whole look"),
       checkpoints: z.union([z.literal(10), z.literal(20), z.literal(40)]).optional().describe('About how many checkpoints to save for comparing'),
       rank: z.union([z.literal(8), z.literal(16), z.literal(32)]).optional().describe("Overrides the preset's rank"),
       seed: z.number().int().min(0).optional(),
@@ -1160,7 +1160,7 @@ tool('adopt_checkpoint', 'Save the chosen epoch as a character preset (strength 
 const replace = new Replace({ studio, resourcesDir: resourcesDir(), dataDir: DATA, ffmpeg: edits.ffmpeg, ffprobe: edits.ffprobe })
 const REPLACE_MODES = ['person', 'people', 'people_maxq', 'object', 'mask', 'faces', 'colours']
 tool('replace_check', 'What this ComfyUI still needs for a Replace mode (node packs with links, models to download on the Setup page).', { mode: z.enum(REPLACE_MODES).default('person') }, ({ mode }) => replace.check(mode))
-tool('replace_video', `The old Replace engine (OpenJutsu masks). For swapping people and changing the scene use remake_paint and remake_render instead; use this for faces and colours. Swap people or objects in a video; the camera, cuts, motion and soundtrack stay. Modes: person (one picture replaces the main person; settings.role says who, optional), people (1-4 pictures, settings.roles one per picture), people_maxq (exactly 2, one pass per person, better likeness), object (settings.mode change|remove|background, settings.target what SAM tracks such as "hair", settings.changeTo what it becomes, or a picture), mask (a quick preview of what would be redrawn; run it first), faces (redraw small faces from one picture, settings.style photo|mouth), colours (settings.detail -1..1). The video needs a soundtrack. Only use invented characters or people who agreed. Returns a job: poll get_job; the result is the output with kind final.`, {
+tool('replace_video', `The old Replace engine (masks). For swapping people and changing the scene use remake_paint and remake_render instead; use this for faces and colours. Swap people or objects in a video; the camera, cuts, motion and soundtrack stay. Modes: person (one picture replaces the main person; settings.role says who, optional), people (1-4 pictures, settings.roles one per picture), people_maxq (exactly 2, one pass per person, better likeness), object (settings.mode change|remove|background, settings.target what SAM tracks such as "hair", settings.changeTo what it becomes, or a picture), mask (a quick preview of what would be redrawn; run it first), faces (redraw small faces from one picture, settings.style photo|mouth), colours (settings.detail -1..1). The video needs a soundtrack. Only use invented characters or people who agreed. Returns a job: poll get_job; the result is the output with kind final.`, {
   mode: z.enum(REPLACE_MODES),
   video: z.string().describe('Absolute path of the source video (prepare_media can trim it first)'),
   pictures: z.array(z.string()).default([]).describe('Absolute paths of character or object pictures'),
@@ -1203,7 +1203,7 @@ tool('remake_paint', `Remake, step 1 of 2: swap people (kind swap) or change the
   return remake.paint(s.id, { ...input, only: only || null })
 })
 tool('remake_use_picture', "Set your own picture as a Remake keyframe (it is fitted to the canvas).", { session: z.string(), frame: z.number().int(), picture: z.string() }, ({ session, frame, picture }) => remake.usePicture(session, frame, picture))
-tool('remake_render', `Remake, step 2 of 2: writes the six-section prompt with the person's prompt writer (from the source frames and the painted ones, following Viggle's guide) unless prompt is given, then renders takes (1-3, a few minutes each on a 24 GB card). Returns jobs: poll get_job, or replace_history for the result trimmed back to the source's length and shape.`, {
+tool('remake_render', `Remake, step 2 of 2: writes the six-section prompt with the person's prompt writer (from the source frames and the painted ones, following the model's own prompt guide) unless prompt is given, then renders takes (1-3, a few minutes each on a 24 GB card). Returns jobs: poll get_job, or replace_history for the result trimmed back to the source's length and shape.`, {
   session: z.string(),
   takes: z.number().int().min(1).max(3).default(1),
   seed: z.number().int().min(0).optional(),
@@ -1375,9 +1375,9 @@ tool('get_music', 'One song, brought up to date: status (queued, running, succes
 
 // ---------- Audio: sounds (Stable Audio 3 on this PC's ComfyUI) ----------
 const sounds = new Sounds({ studio, dataDir: DATA, probe: (f) => edits.probe(f) })
-tool('sound_status', "Whether this PC's ComfyUI can make sounds (Stable Audio 3, Stable Audio Community License): its two models and nodes. The person downloads missing ones on Audio > Sounds.", {}, () => sounds.status())
+tool('sound_status', "Whether this PC's ComfyUI can make sounds: its two models and nodes. The person downloads missing ones on Audio > Sounds.", {}, () => sounds.status())
 tool('write_sound', 'Turn a few words into a full sound description and a length, with the person\'s prompt writer (Settings).', { idea: z.string(), kind: z.enum(SOUND_KINDS.map((k) => k.id)).default('sfx') }, (args) => sounds.write(args))
-tool('make_sound', `Make a sound effect, ambience, one-shot or short music loop on this PC (free, local, Stable Audio 3, seconds). Kinds: ${SOUND_KINDS.map((k) => `${k.id} (${k.label.toLowerCase()}, about ${k.seconds} s)`).join(', ')}. Describe the source, material, space and how it moves over time. takes makes 1-${SOUND_LIMITS.takes} variations at once. Returns the sound at once; follow with get_sound until status is success, then each take's file goes on an edit with add_media (A2 under the music).`, {
+tool('make_sound', `Make a sound effect, ambience, one-shot or short music loop on this PC (free, local). Kinds: ${SOUND_KINDS.map((k) => `${k.id} (${k.label.toLowerCase()}, about ${k.seconds} s)`).join(', ')}. Describe the source, material, space and how it moves over time. takes makes 1-${SOUND_LIMITS.takes} variations at once. Returns the sound at once; follow with get_sound until status is success, then each take's file goes on an edit with add_media (A2 under the music).`, {
   description: z.string(),
   kind: z.enum(SOUND_KINDS.map((k) => k.id)).default('sfx'),
   seconds: z.number().min(SOUND_LIMITS.min).max(SOUND_LIMITS.max).optional(),
