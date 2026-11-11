@@ -923,10 +923,15 @@ the folders above, and LoRAs trained in Incognito land in ComfyUI's LoRAs folder
 
 ## Workflows
 
-Five tools for what comes after a render. Each opens on its own animated stage with its main bar centered (a
-wall of fire for Sizzle, a beat for Reel, running film for Sequences, blade cuts for Shinobi, a scanning swap
-for Replace), then works in numbered steps; the stages pause when they're off screen and stay still if your
-system asks for reduced motion. Sequences is described [above](#sequences).
+Seven tools for what comes after a render: Sequences, Sizzle, Effects, Reel, Shinobi, Replace and Rebuild. Each
+opens on its own animated stage with its main bar centered (a wall of fire for Sizzle, a beat for Reel, running
+film for Sequences, blade cuts for Shinobi, a scanning swap for Replace), then works in numbered steps; the
+stages pause when they're off screen and stay still if your system asks for reduced motion. Sequences is
+described [above](#sequences), and Effects in [what's new in 1.1](#whats-new-in-11).
+
+**Rebuild** takes a video you made apart and remakes it: IV Studio reads it shot by shot, your agent (Claude Code
+or Codex) plans how each shot is remade, you approve the plan and the frames, H3 renders the new shots on this PC,
+and a first cut lands in Edit beside the original.
 
 ### Sizzle
 
