@@ -193,16 +193,25 @@ export class Voices {
 
   // `text` said in a voice: a WAV in voices/lines, kept in the history. The same words, voice, engine and
   // seed give back the same file without asking the engine again.
-  async speak({ voiceId, text, seed = null }) {
+  // keep: false says it without adding it to Lines (the chat reading its replies aloud); those files sit in
+  // lines/_said and are replaced as new ones come.
+  async speak({ voiceId, text, seed = null, keep = true }) {
     const say = String(text || '').trim()
     if (!say) throw new Error('Type the line first.')
     const v = this.get(voiceId)
     const eng = 'voxcpm2'
     const s = seed ?? v.seed ?? 41
     if (!v.text) this.update(v.id, { text: (v.text = await this.transcribe(v.reference)) })
-    const file = path.join(this.dir, 'lines', `${v.id}_${hash(say, eng, s, v.text)}.wav`)
+    const file = path.join(this.dir, 'lines', keep ? '' : '_said', `${v.id}_${hash(say, eng, s, v.text)}.wav`)
+    if (!keep) {
+      fs.mkdirSync(path.dirname(file), { recursive: true })
+      // only the last few read-alouds are kept
+      const old = fs.readdirSync(path.dirname(file)).map((f) => path.join(path.dirname(file), f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)
+      for (const f of old.slice(20)) fs.rmSync(f, { force: true })
+    }
     if (!fs.existsSync(file)) await this.eng().call('speak', { text: say, out: file, ref_wav: v.reference, ref_text: v.text, seed: s })
     this.releaseSoon()
+    if (!keep) return { voiceId: v.id, voice: v.name, text: say, file, duration: WAV_SECONDS(fs.readFileSync(file)) }
     const line = { id: randomUUID().slice(0, 8), voiceId: v.id, voice: v.name, text: say, engine: eng, seed: s, file, duration: WAV_SECONDS(fs.readFileSync(file)), createdAt: now() }
     writeJson(this.linesFile(), [line, ...this.allLines()].slice(0, 500))
     return line

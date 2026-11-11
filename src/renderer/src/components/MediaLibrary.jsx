@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSelection } from '../selection'
 import { media } from '../media'
 import Stage from './Stage'
 import QuickBar from './AudioQuick'
@@ -65,6 +66,8 @@ export function Viewer({ sets, at, setAt, onClose, edits, notify, sendToCreate, 
   const set = sets[si]
   const item = set?.items[ii]
   const [target, setTarget] = useState('')
+  // for the chat: what's open in the viewer (selection.js)
+  useSelection('viewer', item ? { open: `${set?.setName || item.label}${item.variant ? `, ${item.variant}` : ''} in the Library viewer`, kind: item.type, ...(item.file?.path ? { file: item.file.path } : {}) } : null, [item?.key])
   // the person's own Claude Code or Codex (ChatPanel.jsx): the chat opens with this item attached
   const agent = useAgentName()
   // every version of every set, in order, for the arrow keys

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Inspector from './Inspector'
+import { useSelection } from '../../selection'
 import Preview from './Preview'
 import ProjectBin from './ProjectBin'
 import SourceMonitor from './SourceMonitor'
@@ -181,6 +182,21 @@ export default function EditEditor({ editId, notify, go, focus, setFocus, charac
     window.ivstudio.edits.fullScreen(on).catch(() => {})
   }
 
+  // for the chat: the selected clip and where the playhead is (selection.js)
+  const chatClip = edit?.clips?.find((c) => c.id === selected) || null
+  const chatMedia = chatClip?.media ? edit?.media?.[chatClip.media] : null
+  useSelection(
+    'edit',
+    edit
+      ? {
+          playhead: `${time.toFixed(1)} s`,
+          ...(chatClip
+            ? { clip: `${chatClip.text?.content ? `title "${chatClip.text.content.slice(0, 60)}"` : chatMedia?.name || 'a clip'} on ${chatClip.track}, ${chatClip.start.toFixed(1)} to ${(chatClip.start + (chatClip.out - chatClip.in)).toFixed(1)} s`, ...(chatMedia?.file ? { clipFile: chatMedia.file } : {}) }
+            : {})
+        }
+      : null,
+    [edit?.id, selected, Math.round(time * 2), edit?.clips?.length]
+  )
   if (!edit || !meta) return null
   const tracks = tracksOf(edit)
   const markers = edit.markers || []

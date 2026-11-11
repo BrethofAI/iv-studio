@@ -40,6 +40,7 @@ import { applyFinishSpeed, applySpeed, savedSpeed, SPEED_IDS, SPEEDS } from '../
 import { comfyFolders, contentDir, dataLocation, readSettings, resourcesDir, videosFolderOf, writerOf, writeSettings } from '../service/paths'
 import { H3_TERMS_NEEDED, setH3Gate, termsAccepted } from '../service/terms'
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
+import { keepUndo, readActivity, record as activityRecord, whoOf } from '../service/activity'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
 import { getBalance } from '../service/comfyaccount'
@@ -209,8 +210,21 @@ function writeUndo(tool, before) {
     /* an undo point is a help, not a reason to fail the change */
   }
 }
+// Every step an agent takes that changes, spends or fails goes into the activity log (activity.js), with who took it:
+// the chat, a Dashboard idea, or the outside agent that connected (its MCP client name).
+const who = () => whoOf({ env: process.env, client: server.server.getClientVersion?.() || null })
+function logStep(name, args, { value = null, error = null, t0, spend = null, undo = null }) {
+  try {
+    activityRecord(DATA, { tool: name, args, value, error: error?.message || error || null, ms: Date.now() - t0, who: who(), spend, undo })
+  } catch {
+    /* never a reason for the step to fail */
+  }
+}
 const tool = (name, description, shape, fn) =>
   server.registerTool(name, { description, inputSchema: shape }, async (args) => {
+    const t0 = Date.now()
+    let spendUsed = null
+    let undoId = null
     try {
       // the app switched Incognito on or off after this server started: its data is somewhere else now
       const s = readSettings(BASE)
@@ -231,9 +245,16 @@ const tool = (name, description, shape, fn) =>
       }
       // an edit the chat's agent changes: what it was before, so the chat can offer "Undo this change" even when
       // the edit isn't open (an open one also puts it on the editor's own Ctrl+Z)
-      const before = AGENT_CHAT && AGENT_ASK && EDIT_CHANGERS.has(name) && args.editId ? editSnapshot(args.editId) : null
+      const before = EDIT_CHANGERS.has(name) && args.editId ? editSnapshot(args.editId) : null
+      spendUsed = spend
       const value = await fn(args)
-      if (before) writeUndo(name, before)
+      if (before && AGENT_CHAT && AGENT_ASK) writeUndo(name, before)
+      // the activity log's own undo point, for any agent's change to an edit
+      if (before) {
+        const after = editSnapshot(before.editId)
+        if (!after || JSON.stringify(after.fields) !== JSON.stringify(before.fields)) undoId = keepUndo(DATA, before)
+      }
+      logStep(name, args, { value, t0, spend: spend && { credits: spend.credits, usd: spend.usd }, undo: undoId })
       // a paid step counts once it has started, whatever happens to the render after
       if (spend && spendDesk) await spendDesk.record(spend).catch(() => {})
       const started = AGENT_RUN && startedJobId(name, value)
@@ -243,6 +264,7 @@ const tool = (name, description, shape, fn) =>
       }
       return ok(value)
     } catch (err) {
+      logStep(name, args, { error: err, t0, spend: spendUsed && { credits: spendUsed.credits, usd: spendUsed.usd } })
       return fail(err)
     }
   })
@@ -1490,6 +1512,7 @@ tool('picture_tool', 'Run a one-step tool on a picture on this PC (free, local);
   seed: z.number().int().min(0).optional(),
   name: z.string().optional()
 }, async (args) => (readSettings(BASE).target === 'cloud' || (await voices.release()), images.tool(Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined)))))
+tool('list_activity', "What agents have done in IV Studio: every step that changed something, spent money or failed, newest first, from the chat inside IV Studio, Dashboard ideas and outside agents (Claude Desktop, Codex, Claude Code, Hermes). Each has who did it, the step, what it was about, the ids it touched (jobId, projectId, editId…), whether it worked and any spend. Looking things up isn't logged. Use it to answer \"what did you do\" or \"what changed\".", { days: z.number().int().min(1).max(30).default(2), who: z.enum(['chat', 'idea', 'outside']).optional().describe('Only the chat, Dashboard ideas, or outside agents'), problems: z.boolean().default(false).describe('Only failed steps'), limit: z.number().int().min(1).max(300).default(60) }, ({ days, who: kind, problems, limit }) => ({ items: readActivity(DATA, { days, who: kind || null, problems, limit }) }))
 tool('last_frame', "Save the exact last frame of a video (a finished version's file from get_job, or any local video) as a picture in IV Studio's Library (Images). Returns the picture set; files[0] is the PNG. Use it as the first frame of a new shot (generate_previews mode frames, media picture) or edit it with make_image mode edit. To carry the motion on instead, use generate_previews mode continue with the video as its media.", { file: z.string().describe('Absolute path to the video'), name: z.string().optional() }, ({ file, name }) => images.lastFrame({ file, name }))
 tool('list_images', 'Every picture set made in IV Studio, newest first, with status, files (once finished), model, prompt and seed.', {}, () => images.list())
 tool('get_image', 'One picture set, brought up to date: status (queued, running, success, error), progress, and its files once finished.', { imageId: z.string() }, ({ imageId }) => images.get(imageId))
@@ -1517,10 +1540,13 @@ async function sizzlePicture(files, { width = 960, tile = null, aspect = 16 / 9 
 }
 const sizzleTool = (name, description, shape, fn) =>
   server.registerTool(name, { description, inputSchema: shape }, async (args) => {
+    const t0 = Date.now()
     try {
       const { pictures = [], ...value } = await fn(args)
+      logStep(name, args, { value, t0 })
       return { content: [...pictures, { type: 'text', text: JSON.stringify(value, null, 2) }], structuredContent: value }
     } catch (err) {
+      logStep(name, args, { error: err, t0 })
       return fail(err)
     }
   })

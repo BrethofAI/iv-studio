@@ -181,7 +181,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
   // the Dashboard's "Let Claude Code make it" (src/service/agentrun.js)
   agentRun: { status: call('agentRun:status'), start: call('agentRun:start'), stop: call('agentRun:stop'), dismiss: call('agentRun:dismiss'), onChange: on('agentRun:changed') },
   // the chat panel with the person's own agent (src/service/agentchat.js)
-  chat: { status: call('chat:status'), new: call('chat:new'), open: call('chat:open'), send: call('chat:send'), answer: call('chat:answer'), stop: call('chat:stop'), spending: call('chat:spending'), undo: call('chat:undo'), onChange: on('chat:changed'), onShow: on('chat:show') },
+  chat: { status: call('chat:status'), new: call('chat:new'), open: call('chat:open'), send: call('chat:send'), answer: call('chat:answer'), stop: call('chat:stop'), spending: call('chat:spending'), undo: call('chat:undo'), onChange: on('chat:changed'), onShow: on('chat:show'), hear: call('chat:hear'), say: call('chat:say'), popout: call('chat:popout'), dock: call('chat:dock'), popped: call('chat:popped'), pin: call('chat:pin'), setContext: call('chat:setContext'), openInApp: call('chat:openInApp'), onPopped: on('chat:popped'), onDocked: on('chat:docked'), onOpenInApp: on('app:open'), forwardAsk: call('chat:forwardAsk'), onAsk: on('chat:ask') },
+  activity: { list: call('activity:list'), undo: call('activity:undo'), onChange: on('activity:changed') },
   // recipes: the chat's saved requests, as Dashboard buttons (src/service/recipes.js)
   recipes: { list: call('recipes:list'), remove: call('recipes:remove'), onChange: on('recipes:changed') },
   reels: {

@@ -543,3 +543,11 @@ a switch until it's restarted (reconnect the iv-studio MCP). Don't mention or mo
 - Rebuild only video the person made or may rework; the reference's sound is a guide.
 - The MCP server renders on the local ComfyUI, even when the app window is set to the cloud.
 - Report what you made with its file path, so the person can open it.
+
+## What agents did (the activity log)
+
+Every step an agent takes that changes something, spends or fails is written to IV Studio's activity log, with who
+took it: the chat inside IV Studio, a Dashboard idea, or an outside agent (Claude Desktop, Codex, Claude Code,
+Hermes), by its MCP client name. Looking things up isn't logged. `list_activity` reads it (days, who, problems only)
+so you can answer "what did you do yesterday" or "what changed". The person sees the same log in the chat's Activity
+tab, with Undo for any agent's change to an edit.

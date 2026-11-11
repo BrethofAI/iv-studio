@@ -5,10 +5,11 @@ import path from 'node:path'
 import { Readable } from 'node:stream'
 import { comfyFolders, dataLocation, incognitoDir, readSettings, resourcesDir, videosFolderOf, writerOf, writeSettings } from '../service/paths'
 import { chooseTarget, copyData, discardCopy, freeBytes, listData, movableEntries, oldCopy, removeOldCopy, verifyCopy, writePointer } from '../service/datafolder'
-import { EXTRA_BIN, findHarnesses, harnessStatus } from '../service/harness'
+import { codexWindow, EXTRA_BIN, findHarnesses, harnessStatus } from '../service/harness'
 import { AGENT_NAMES, startAgentRun } from '../service/agentrun'
+import { ACTIVITY_FOLDER, markUndone, pruneActivity, readActivity } from '../service/activity'
 import { AGENT_INFO, openSignIn, runInstall, signedIn } from '../service/agentinstall'
-import { applyChatEvent, ATTACH_EXTENSIONS, attachmentOf, listChats, loadChat, MAX_ATTACH, newChat, pruneChats, saveChat, startChatTurn, undoEditChange, withAttachments } from '../service/agentchat'
+import { applyChatEvent, applyUsage, spokenText as spoken, ATTACH_EXTENSIONS, attachmentOf, listChats, loadChat, MAX_ATTACH, newChat, pruneChats, saveChat, startChatTurn, undoEditChange, withAttachments } from '../service/agentchat'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS, MODAL_VERSION } from '../service/cloud'
 import { SetupProgress, about } from '../service/setupprogress'
@@ -189,6 +190,72 @@ let reviewer = null // reviews a take against its brief (review.js)
 
 function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
+  // the chat popped out into its own window (openChatWindow) hears everything too; it only listens for the chat's
+  if (chatWin && !chatWin.isDestroyed()) chatWin.webContents.send(channel, payload)
+}
+
+// ---------- the chat in its own window ----------
+// The same renderer, opened at #chat, shows only the chat (ChatWindow.jsx). The chat itself lives here in the main
+// process, so both windows show the same conversation. The main window keeps telling this process what page and
+// selection it's on (chat:setContext), which a message from the popped-out window is sent with.
+let chatWin = null
+let chatContext = null
+// set by Put back in the app: once the chat's window has really closed, the main window opens its panel
+let dockAfterClose = false
+function openChatWindow() {
+  if (chatWin && !chatWin.isDestroyed()) {
+    chatWin.show()
+    chatWin.focus()
+    return
+  }
+  const b = readSettings(BASE).chatWindow || {}
+  chatWin = new BrowserWindow({
+    width: b.width || 460,
+    height: b.height || 780,
+    ...(Number.isFinite(b.x) && Number.isFinite(b.y) ? { x: b.x, y: b.y } : {}),
+    minWidth: 360,
+    minHeight: 480,
+    show: false,
+    backgroundColor: BG,
+    title: 'IV Studio · Chat',
+    icon: path.join(resourcesDir(path.join(app.getAppPath(), 'resources')), 'icon.png'),
+    titleBarStyle: 'hidden',
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 14, y: 13 } } : { titleBarOverlay: { color: BG, symbolColor: '#f1ede5', height: 40 } }),
+    webPreferences: { preload: path.join(__dirname, '../preload/index.js'), contextIsolation: true, sandbox: true, nodeIntegration: false }
+  })
+  // put it back exactly where it was: setBounds mirrors the getBounds saved on close (the constructor's size reads
+  // the frame differently on Windows, so the window crept a little each time), and only on a screen that's still there
+  if (Number.isFinite(b.x) && Number.isFinite(b.y) && b.width && b.height) {
+    const area = screen.getDisplayMatching(b).workArea
+    const visible = b.x < area.x + area.width - 80 && b.x + b.width > area.x + 80 && b.y >= area.y - 10 && b.y < area.y + area.height - 80
+    if (visible) chatWin.setBounds(b)
+  }
+  chatWin.webContents.on('will-navigate', (e, url) => {
+    if (url !== chatWin.webContents.getURL()) e.preventDefault()
+  })
+  chatWin.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https:\/\//.test(url)) shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  chatWin.once('ready-to-show', () => chatWin?.show())
+  chatWin.on('close', () => {
+    try {
+      writeSettings({ chatWindow: chatWin.getBounds() }, BASE)
+    } catch {}
+  })
+  chatWin.on('closed', () => {
+    chatWin = null
+    send('chat:popped', false)
+    if (dockAfterClose && win && !win.isDestroyed()) {
+      win.webContents.send('chat:docked', true)
+      win.show()
+      win.focus()
+    }
+    dockAfterClose = false
+  })
+  if (process.env.ELECTRON_RENDERER_URL) chatWin.loadURL(`${process.env.ELECTRON_RENDERER_URL}#chat`)
+  else chatWin.loadFile(path.join(__dirname, '../renderer/index.html'), { hash: 'chat' })
+  send('chat:popped', true)
 }
 
 // Secrets at rest (the Comfy.org key, the cloud token) are encrypted with Windows' per-user key.
@@ -2424,7 +2491,13 @@ app.whenReady().then(() => {
     const exe = chatFound()[chat.engine]
     if (!exe) throw new Error(`${chat.name} isn't installed on this PC.`)
     const current = chat
-    current.entries.push({ kind: 'you', text: message, ...(attached.length ? { files: attached.map((a) => ({ name: a.name, kind: a.kind, path: a.path })) } : {}) })
+    // Codex doesn't report its window: its models cache does (harness.js codexWindow)
+    if (current.engine === 'codex') {
+      const cw = codexWindow(readSettings(BASE).codexModel || '')
+      if (cw) applyUsage(current, { window: cw.window, model: cw.model })
+    }
+    current.turnCalls = 0
+    current.entries.push({ kind: 'you', text: message, at: new Date().toISOString(), ...(attached.length ? { files: attached.map((a) => ({ name: a.name, kind: a.kind, path: a.path })) } : {}) })
     if (!current.title) current.title = message.slice(0, 80)
     saveChat(chatsRoot, current)
     const s = readSettings(BASE)
@@ -2435,14 +2508,28 @@ app.whenReady().then(() => {
     if (deskToken) Object.assign(extraEnv, { IV_STUDIO_AGENT_APP: deskUrl, IV_STUDIO_AGENT_TOKEN: deskToken })
     // an overnight batch started in this turn reports back to this chat
     extraEnv.IV_STUDIO_CHAT_ID = current.id
+    // who the activity log says took each step (activity.js)
+    extraEnv.IV_STUDIO_AGENT_NAME = `${AGENT_NAMES[current.engine]} in the chat`
     setTimeout(watchBatches, 5000)
+    // what the agent should know without asking: the page and what's picked on it (the window's), plus what's
+    // rendering or waiting and the newest failure (here)
+    const fullContext = context && typeof context === 'object' ? { ...context } : chatContext ? { ...chatContext } : {}
+    try {
+      const q = await Promise.race([studio.renderQueue(), new Promise((_, no) => setTimeout(() => no(new Error('slow')), 3000))])
+      fullContext.renders = (q.items || []).slice(0, 6).map((i) => ({ state: i.state, name: i.name, kind: i.kind, ours: i.ours, percent: i.progress?.max ? Math.round((100 * i.progress.value) / i.progress.max) : null }))
+    } catch {
+      /* ComfyUI busy or down: the agent can still ask */
+    }
+    try {
+      fullContext.problem = studio.recentProblem()
+    } catch {}
     const turn = startChatTurn({
       engine: current.engine,
       exe,
       dir: path.join(chatsRoot, current.id),
       session: current.session,
       message: withAttachments(message, attached),
-      context: context && typeof context === 'object' ? context : null,
+      context: fullContext,
       mcp: mcpCommand(),
       model: current.engine === 'claude' ? s.claudeModel || '' : s.codexModel || '',
       extraEnv,
@@ -2571,11 +2658,107 @@ app.whenReady().then(() => {
     return r
   })
   handle('chat:answer', ({ id, allow } = {}) => !!chatTurn?.answer(String(id || ''), !!allow))
-  handle('chat:stop', async () => {
+  handle('chat:popout', () => (openChatWindow(), true))
+  // back into the app: the popped-out window closes and the main window opens its panel
+  // back into the app: the chat's window closes, and then the main window opens its panel (on 'closed', so the main
+  // window no longer counts the chat as popped out)
+  handle('chat:dock', () => {
+    if (chatWin && !chatWin.isDestroyed()) {
+      dockAfterClose = true
+      chatWin.close()
+    } else if (win && !win.isDestroyed()) win.webContents.send('chat:docked', true)
+    return true
+  })
+  handle('chat:popped', () => !!(chatWin && !chatWin.isDestroyed()))
+  // a question from a button in the main window ("Ask Claude Code to fix it") while the chat is in its own window
+  handle('chat:forwardAsk', (detail) => {
+    if (!chatWin || chatWin.isDestroyed()) return false
+    chatWin.webContents.send('chat:ask', detail)
+    chatWin.show()
+    chatWin.focus()
+    return true
+  })
+  handle('chat:pin', (on) => {
+    if (chatWin && !chatWin.isDestroyed()) chatWin.setAlwaysOnTop(!!on)
+    return !!on
+  })
+  handle('chat:setContext', (ctx) => {
+    chatContext = ctx && typeof ctx === 'object' ? ctx : null
+    return true
+  })
+  // a link in the popped-out chat (a shot, an edit, a film): the main window goes there and comes to the front
+  handle('chat:openInApp', (where) => {
+    if (win && !win.isDestroyed()) win.webContents.send('app:open', where), win.show(), win.focus()
+    return true
+  })
+  // ---------- talking to the chat (ChatPanel's mic): IV Studio's own Whisper, and its voices to read replies ----------
+  // bytes: what the window recorded (webm/opus). The words come back; the window sends them as the message.
+  handle('chat:hear', async (bytes) => {
+    const st = voices.status()
+    if (!st.installed) throw Object.assign(new Error('Talking to the chat needs IV Studio’s voices set up once: Audio → Voices → Set up voices (about 12 GB, free).'), { code: 'voices' })
+    const buf = Buffer.from(bytes || [])
+    if (buf.length < 2000) throw new Error('That was too short to hear. Hold the mic a little longer.')
+    if (buf.length > 40 * 1024 * 1024) throw new Error('That recording is too long for one message.')
+    const file = path.join(os.tmpdir(), `ivs-hear-${Date.now().toString(36)}.webm`)
+    fs.writeFileSync(file, buf)
+    try {
+      const text = await voices.transcribe(file)
+      return { text: text.replace(/\s+/g, ' ').trim() }
+    } finally {
+      fs.rmSync(file, { force: true })
+    }
+  })
+  // A reply read aloud in one of the person's voices, not kept in Lines. Waits for no render: when ComfyUI is busy on
+  // this PC the window is told, so the voice engine doesn't load next to a render on the same graphics card.
+  handle('chat:say', async ({ text, voiceId } = {}) => {
+    const st = voices.status()
+    if (!st.installed) throw Object.assign(new Error('Reading replies aloud needs IV Studio’s voices set up once: Audio → Voices → Set up voices.'), { code: 'voices' })
+    const local = readSettings(BASE).target !== 'cloud'
+    if (local) {
+      const q = await studio.comfy.queue().catch(() => null)
+      if (q && (q.queue_running.length || q.queue_pending.length)) return { skipped: 'A render is using the graphics card, so this reply isn’t read aloud.' }
+    }
+    const list = voices.list()
+    const v = list.find((x) => x.id === voiceId) || list[0]
+    if (!v) throw new Error('Make or add a voice first (Audio → Voices), then pick it for reading replies.')
+    return voices.speak({ voiceId: v.id, text: spoken(text), keep: false })
+  })
+  // ---------- the agents' activity log (activity.js): written by the MCP server, read here ----------
+  try {
+    pruneActivity(DATA)
+  } catch {}
+  handle('activity:list', (opts = {}) => readActivity(DATA, { days: Math.min(30, Number(opts.days) || 7), who: opts.who || null, problems: !!opts.problems, limit: 400 }))
+  handle('activity:undo', (undoId) => {
+    const r = undoEditChange(path.join(DATA, ACTIVITY_FOLDER), String(undoId || ''), (editId, fields) => edits.save(editId, fields))
+    markUndone(DATA, String(undoId))
+    send('activity:changed', { at: Date.now() })
+    return r
+  })
+  let activityWatch = null
+  let activityTick = null
+  const watchActivity = () => {
+    try {
+      fs.mkdirSync(path.join(DATA, ACTIVITY_FOLDER), { recursive: true })
+      activityWatch = fs.watch(path.join(DATA, ACTIVITY_FOLDER), () => {
+        clearTimeout(activityTick)
+        activityTick = setTimeout(() => send('activity:changed', { at: Date.now() }), 300)
+      })
+    } catch {
+      /* no live updates: the tab still reads the log when opened */
+    }
+  }
+  watchActivity()
+  app.on('will-quit', () => activityWatch?.close())
+  // keepRenders: the person talked over the agent (ChatPanel's mic): stop its turn so the new words go in, but leave the
+  // renders it already started running; the agent can still cancel them if that's what they asked.
+  handle('chat:stop', async ({ keepRenders = false } = {}) => {
     if (!chatTurn) return chatView()
-    const jobs = chatTurn.jobs()
-    chatTurn.stop()
-    for (const id of jobs) await studio.cancelJob(id).catch(() => {})
+    const turn = chatTurn
+    const jobs = turn.jobs()
+    turn.stop()
+    if (!keepRenders) for (const id of jobs) await studio.cancelJob(id).catch(() => {})
+    // wait (briefly) for the turn to end, so a message sent next isn't refused as "still answering"
+    await Promise.race([turn.promise.catch(() => {}), new Promise((r) => setTimeout(r, 8000))])
     return chatView()
   })
   handle('models:h3', () => studio.h3Models())

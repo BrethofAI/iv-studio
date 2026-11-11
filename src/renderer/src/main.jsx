@@ -10,11 +10,15 @@ import './styles.css'
 import './studio.css'
 import App from './App'
 import ErrorBoundary from './components/ErrorBoundary'
+import ChatWindow from './components/ChatWindow'
+
+// the chat popped out into its own window opens this page at #chat (main process openChatWindow)
+const chatOnly = window.location.hash === '#chat'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      {chatOnly ? <ChatWindow /> : <App />}
     </ErrorBoundary>
   </StrictMode>
 )

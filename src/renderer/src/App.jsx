@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { selectionFor } from './selection'
 import { setSimpleWords } from './words'
 import { applyA11y } from './a11y'
 import { SetupPill } from './components/SetupProgress'
@@ -121,7 +122,26 @@ export default function App() {
       return false
     }
   })
+  // the chat popped out into its own window (ChatWindow.jsx): the title-bar button brings that window forward
+  const [chatPopped, setChatPopped] = useState(false)
+  const poppedRef = useRef(false)
+  poppedRef.current = chatPopped
+  useEffect(() => {
+    window.ivstudio.chat.popped().then(setChatPopped, () => {})
+    const offPop = window.ivstudio.chat.onPopped((on) => setChatPopped(!!on))
+    // put back in the app from its own window: the panel opens here
+    const offDock = window.ivstudio.chat.onDocked(() => {
+      poppedRef.current = false
+      setChatPopped(false)
+      toggleChat(true)
+    })
+    return () => (offPop(), offDock())
+  }, [])
   const toggleChat = (on) => {
+    if (on && poppedRef.current) {
+      window.ivstudio.chat.popout().catch(() => {})
+      return
+    }
     setChatOpen(on)
     try {
       localStorage.setItem('iv.chatOpen', on ? '1' : '0')
@@ -132,6 +152,8 @@ export default function App() {
   const [chatAsk, setChatAsk] = useState(null)
   useEffect(() => {
     const onAsk = (e) => {
+      // with the chat in its own window, the question goes there
+      if (poppedRef.current) return void window.ivstudio.chat.forwardAsk(e.detail).catch(() => {})
       setChatAsk({ ...e.detail, at: Date.now() })
       toggleChat(true)
     }
@@ -423,8 +445,32 @@ export default function App() {
     }
   }
 
+  // what the chat is told about the page (agentchat.js contextLine); with the chat in its own window, this page and
+  // the selection on it (selection.js) go to the main process as they change, for messages sent from there
+  const chatContext = { page, section, projectId: page === 'shot' ? projectId : null, productionId: page === 'project' ? productionId : null, sequenceId: page === 'sequence' ? sequenceId : null, editId: page === 'edit' ? editId : null, sizzleId: page === 'sizzle-project' ? sizzleId : null, rebuildId: page === 'rebuild-project' ? rebuildId : null, shinobiId: page === 'shinobi-film' ? shinobiId : null, trainingId: page === 'character' ? trainingId : null }
+  const ctxKey = JSON.stringify(chatContext)
+  useEffect(() => {
+    if (!chatPopped) return
+    const push = () => window.ivstudio.chat.setContext({ ...chatContext, selection: selectionFor(chatContext.page) }).catch(() => {})
+    push()
+    window.addEventListener('iv:selection', push)
+    return () => window.removeEventListener('iv:selection', push)
+  }, [ctxKey, chatPopped])
+  // a link in the chat or its Activity tab (ActivityLog.jsx openOf), here or from the chat's own window
+  const openRef = (kind, id) => {
+    if (kind === 'shot') return openShot(id)
+    if (kind === 'edit') return openEdit(id)
+    if (kind === 'film') return openProject(id)
+    if (kind === 'sequence') return openSequence(id)
+    if (kind === 'shots') return (switchSection('video'), setPage('library'))
+    if (kind === 'images') return (pickCreateKind('image'), switchSection('video'), setPage('create'))
+    if (['music', 'lines', 'voices'].includes(kind)) return (switchSection('audio'), setPage(kind))
+  }
+  const openRefNow = useRef(openRef)
+  openRefNow.current = openRef
+  useEffect(() => window.ivstudio.chat.onOpenInApp((w) => w?.kind && openRefNow.current(w.kind, w.id)), [])
   return (
-    <div className={`app ${incognito ? 'incognito' : ''} ${focus && page === 'edit' ? 'app-focus' : ''} ${info?.platform === 'darwin' ? 'mac' : ''} ${chatOpen ? 'chat-on' : ''}`}>
+    <div className={`app ${incognito ? 'incognito' : ''} ${focus && page === 'edit' ? 'app-focus' : ''} ${info?.platform === 'darwin' ? 'mac' : ''} ${chatOpen && !chatPopped ? 'chat-on' : ''}`}>
       <header className="titlebar">
         <img className="brand-logo" src={incognito ? ivMarkClosed : ivMark} alt="Infinite Variance" />
         <span className="mono brand-text">Infinite Variance</span>
@@ -443,7 +489,7 @@ export default function App() {
           </button>
         )}
         <AgentPill status={agentStatus} onOpen={() => window.dispatchEvent(new CustomEvent('iv:go', { detail: { page: 'home', section: 'video' } }))} />
-        <ChatButton open={chatOpen} busy={!!chatStatus?.chat?.busy} onClick={() => toggleChat(!chatOpen)} />
+        <ChatButton open={chatOpen && !chatPopped} popped={chatPopped} busy={!!chatStatus?.chat?.busy} onClick={() => toggleChat(!chatOpen)} />
         <div className={`engine-badge ${setup ? (ready ? 'ready' : 'error') : ''}`}>
           <span className="dot" />
           {setup?.remote && <span className="mono cloud-badge">Cloud</span>}
@@ -527,17 +573,18 @@ export default function App() {
         {page === 'cloud' && <Cloud {...ctx} />}
         {page === 'settings' && <Settings {...ctx} />}
       </main>
-      {chatOpen && (
+      {chatOpen && !chatPopped && (
         <ChatPanel
           status={chatStatus}
           reload={reloadChat}
           onClose={() => toggleChat(false)}
-          context={{ page, section, projectId: page === 'shot' ? projectId : null, productionId: page === 'project' ? productionId : null, sequenceId: page === 'sequence' ? sequenceId : null, editId: page === 'edit' ? editId : null, sizzleId: page === 'sizzle-project' ? sizzleId : null, rebuildId: page === 'rebuild-project' ? rebuildId : null, shinobiId: page === 'shinobi-film' ? shinobiId : null, trainingId: page === 'character' ? trainingId : null }}
+          context={chatContext}
           go={setPage}
           notify={notify}
           ask={chatAsk}
           clearAsk={() => setChatAsk(null)}
           openShot={openShot}
+          openRef={openRef}
         />
       )}
       <ConfirmHost />

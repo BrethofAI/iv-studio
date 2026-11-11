@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSelection } from '../selection'
 import Stage from './Stage'
 import QuickBar, { showBelow } from './AudioQuick'
 import { sendIdea } from './PromptWriter'
@@ -179,6 +180,13 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
   const finishSpeed = speed || savedId
 
   const sd = form.engine === 'seedance'
+  // for the chat: how this shot is set up so far (selection.js); the prompt's own words stay here
+  const charName = characters?.find?.((c) => c.id === form.character)?.name
+  useSelection(
+    'create',
+    { setup: `${sd ? 'Seedance 2.5' : 'MiniMax H3'}, ${form.mode} mode, ${charName || 'no character'}, ${form.aspect}, ${form.seconds} s, ${form.media.length} reference${form.media.length === 1 ? '' : 's'}${form.extraLoras.length ? `, ${form.extraLoras.length} LoRA${form.extraLoras.length === 1 ? '' : 's'}` : ''}, prompt ${form.prompt.trim() ? `${form.prompt.trim().split(/\s+/).length} words` : 'empty'}` },
+    [form.engine, form.mode, form.character, form.aspect, form.seconds, form.media.length, form.extraLoras.length, form.prompt.length > 0, Math.round(form.prompt.length / 40)]
+  )
   // the shot has a spoken line (or a voice line): a reference video's mouth can't be softened then (softmouth.js)
   const talks = !!form.voiceLine || /<d>[\s\S]*?\S[\s\S]*?<\/d>/.test(form.prompt || '')
   // Seedance: what the hunt would cost, from ComfyUI's own price for each take (pricing.js)

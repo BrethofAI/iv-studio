@@ -1239,6 +1239,26 @@ export class Studio {
     if (!job) throw new Error(`No job ${id}`)
     return refresh ? job : job
   }
+  // The newest render that failed in the last `withinMs` (30 minutes), for the chat's context: its name, kind,
+  // how long ago, and the reason in words (failures.js) or ComfyUI's own first line. Looks at the 40 newest jobs.
+  recentProblem({ withinMs = 30 * 60 * 1000, now = Date.now() } = {}) {
+    const dir = path.join(this.dataDir, 'jobs')
+    if (!fs.existsSync(dir)) return null
+    const files = fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs }))
+      .filter((x) => x.t > now - withinMs)
+      .sort((a, b) => b.t - a.t)
+      .slice(0, 40)
+    for (const { f, t } of files) {
+      const job = readJson(path.join(dir, f), null)
+      if (job?.status !== 'error') continue
+      const ex = explainFailure(job.error, { where: job.where, kind: job.kind })
+      return { jobId: job.id, name: job.name || null, kind: job.kind || null, minutesAgo: Math.max(0, Math.round((now - t) / 60000)), reason: ex?.title || String(job.error || 'it failed').split('\n')[0].slice(0, 200) }
+    }
+    return null
+  }
   // Adds fields to a saved job (its take ranking); returns the job as the window sees it.
   updateJob(id, patch) {
     const job = { ...this.getJob(id), ...patch }

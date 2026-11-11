@@ -84,6 +84,22 @@ export function codexModels(env = process.env, home = os.homedir()) {
   ]
 }
 
+// A Codex model's usable context window (its models cache: context_window times effective_context_window_percent),
+// for the chat's context meter. model: the slug the chat runs, or '' for the person's Codex default. null when the
+// cache doesn't say.
+export function codexWindow(model = '', env = process.env, home = os.homedir()) {
+  const slug = model || codexConfigured(env, home)
+  try {
+    const cache = JSON.parse(fs.readFileSync(path.join(codexHome(env, home), 'models_cache.json'), 'utf8'))
+    const list = cache.models || (Array.isArray(cache) ? cache : [])
+    const m = list.find((x) => x.slug === slug) || (!slug && list[0]) || null
+    if (!m?.context_window) return null
+    return { model: m.slug, window: Math.round((m.context_window * (m.effective_context_window_percent || 100)) / 100) }
+  } catch {
+    return null
+  }
+}
+
 // What Settings shows: which harnesses are installed, and their models.
 export function harnessStatus(env = process.env, home = os.homedir()) {
   const found = findHarnesses(env, home)

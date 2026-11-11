@@ -115,7 +115,24 @@ export function contextLine(ctx = {}) {
   const parts = [`IV Studio is showing ${PAGE_NAMES[ctx.page] || ctx.page || 'a page'}`]
   if (ctx.section) parts[0] += ` (${ctx.section === 'audio' ? 'audio' : 'visual'} side)`
   for (const [key, label] of CONTEXT_IDS) if (ctx[key]) parts.push(`${label} ${ctx[key]}`)
-  return `[${parts.join('; ')}]`
+  const lines = [`[${parts.join('; ')}]`]
+  // what's picked on that page (selection.js): the version, the clip and playhead, the Library item, Create's setup
+  const sel = ctx.selection && typeof ctx.selection === 'object' ? ctx.selection : null
+  if (sel) {
+    const said = Object.entries(sel)
+      .filter(([, v]) => v !== null && v !== undefined && v !== '')
+      .slice(0, 8)
+      .map(([k, v]) => `${k}: ${String(v).slice(0, 300)}`)
+    if (said.length) lines.push(`[Selected: ${said.join('; ')}]`)
+  }
+  // what's rendering on ComfyUI now and what's waiting (not only this chat's)
+  if (Array.isArray(ctx.renders)) {
+    const r = ctx.renders.map((x) => `${x.name || x.kind || 'a render'}${x.ours === false ? ' (not IV Studio’s)' : ''} ${x.state === 'running' ? `rendering${x.percent != null ? ` ${x.percent}%` : ''}` : 'waiting'}`)
+    lines.push(r.length ? `[Renders: ${r.join('; ')}]` : '[Renders: nothing rendering or waiting]')
+  }
+  // the newest failed render in the last half hour, so "why did that fail" has an answer
+  if (ctx.problem?.jobId) lines.push(`[Last failed render: ${ctx.problem.name || ctx.problem.kind || 'a render'} (job ${ctx.problem.jobId}), ${ctx.problem.minutesAgo} min ago: ${ctx.problem.reason}]`)
+  return lines.join('\n')
 }
 
 // One message's turn. dir: the chat's own folder (kept, so the agent's session can resume from the same place).
@@ -301,10 +318,10 @@ export function applyChatEvent(chat, e) {
   const last = chat.entries[chat.entries.length - 1]
   if (e.type === 'say') {
     // Claude Code repeats its last words in the final result: don't show them twice
-    if (!(last?.kind === 'agent' && last.text === e.text)) chat.entries.push({ kind: 'agent', text: e.text })
+    if (!(last?.kind === 'agent' && last.text === e.text)) chat.entries.push({ kind: 'agent', text: e.text, at: new Date().toISOString() })
   } else if (e.type === 'end') {
     if (!e.ok && e.text) chat.entries.push({ kind: 'problem', text: e.text.slice(0, 600) })
-    else if (e.text && !chat.entries.some((x, i) => x.kind === 'agent' && x.text === e.text && i >= chat.entries.length - 6)) chat.entries.push({ kind: 'agent', text: e.text })
+    else if (e.text && !chat.entries.some((x, i) => x.kind === 'agent' && x.text === e.text && i >= chat.entries.length - 6)) chat.entries.push({ kind: 'agent', text: e.text, at: new Date().toISOString() })
   } else if (e.type === 'step') {
     if (last?.kind === 'step' && last.tool === e.tool && e.tool === 'get_job') last.count = (last.count || 1) + 1
     else chat.entries.push({ kind: 'step', tool: e.tool, label: e.label, id: e.id, error: null })
@@ -319,8 +336,41 @@ export function applyChatEvent(chat, e) {
   } else if (e.type === 'undo') {
     chat.entries.push({ kind: 'undo', id: e.undo.id, editId: e.undo.editId, name: e.undo.name, label: e.undo.label, done: false })
   } else if (e.type === 'session') chat.session = e.id
+  else if (e.type === 'usage') applyUsage(chat, e)
+  else if (e.type === 'compact') {
+    chat.entries.push({ kind: 'compact', trigger: e.trigger, before: e.before, at: new Date().toISOString() })
+    if (chat.usage) chat.usage.context = null
+  }
+  // a tool call counts toward Codex's requests this turn (its context estimate)
+  if (e.type === 'step') chat.turnCalls = (chat.turnCalls || 0) + 1
   chat.updatedAt = new Date().toISOString()
   return chat
+}
+
+// The chat's usage (ChatPanel's meter): how full the agent's context window is now, and the totals so far.
+// Claude Code reports the window's contents after each reply (exact). Codex reports a turn's total over all its
+// requests, so its context is estimated as that total over the requests (tool calls + 1), marked approx.
+export function applyUsage(chat, e) {
+  const u = (chat.usage ||= { context: null, window: null, approx: false, input: 0, cached: 0, output: 0, apiUsd: 0, turns: 0 })
+  if (e.window) u.window = e.window
+  if (e.model) u.model = e.model
+  if (e.context != null) {
+    u.context = e.context
+    u.approx = false
+  }
+  if (e.turn) {
+    u.input += e.turn.input || 0
+    u.cached += e.turn.cached || 0
+    u.output += e.turn.output || 0
+    u.apiUsd = Math.round((u.apiUsd + (e.turn.apiUsd || 0)) * 10000) / 10000
+    u.turns += 1
+    if (chat.engine === 'codex') {
+      u.context = Math.round((e.turn.input || 0) / ((chat.turnCalls || 0) + 1))
+      u.approx = true
+    }
+    chat.turnCalls = 0
+  }
+  return u
 }
 
 // The edit as it was before an agent's change (chat dir's undo folder): the newest KEEP_UNDO are kept.
@@ -373,4 +423,25 @@ export function listChats(root) {
 }
 export function pruneChats(root, keep = KEEP_CHATS) {
   for (const c of listChats(root).slice(keep)) fs.rmSync(path.join(root, c.id), { recursive: true, force: true, maxRetries: 3 })
+}
+
+// A reply as it should be read aloud: no code, no markdown marks, links as their words, and no longer than about
+// 600 characters (it stops at the end of a sentence), so a long answer doesn't keep talking.
+export function spokenText(text, max = 600) {
+  let t = String(text || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*•]\s+/gm, '')
+    .replace(/[*~]+|(?<![A-Za-z0-9])_+|_+(?![A-Za-z0-9])/g, '')
+    .replace(/[>|#]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (t.length <= max) return t
+  const cut = t.slice(0, max)
+  const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('? '), cut.lastIndexOf('! '))
+  return end > max * 0.4 ? cut.slice(0, end + 1) : `${cut.replace(/\s+\S*$/, '')}…`
 }

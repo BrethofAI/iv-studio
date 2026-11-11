@@ -99,7 +99,7 @@ export const IMAGE_FAMILIES = [
     id: 'zimage',
     label: 'Z-Image Turbo',
     unet: /z[-_ ]?image/i,
-    te: { type: 'lumina2', files: ['qwen_3_4b.safetensors'] },
+    te: { type: 'lumina2', files: ['qwen_3_4b_fp8_mixed.safetensors', 'qwen_3_4b.safetensors', 'qwen_3_4b_bf16.safetensors'] },
     vae: ['ae.safetensors', 'Z-ImageVAE.safetensors'],
     steps: 8,
     cfg: 1,

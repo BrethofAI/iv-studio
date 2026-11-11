@@ -2,6 +2,19 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.2.0',
+    items: [
+      { text: 'Talk to the chat: press the mic, say what you want, and press send. IV Studio’s own speech recognition writes it down on your PC. Talking while the agent works stops its answer and sends your new words.' },
+      { text: 'Read aloud: the speaker in the chat’s header reads each reply in one of your voices (Audio → Voices).' },
+      { text: 'A cleaner chat: your messages and the agent’s in bubbles with times, each agent in its own colour, and one rounded box to write in.' },
+      { text: 'Pop the chat out into its own window (the arrow in its header), keep it on top, and put it back in the app when you’re done. It still knows what’s open in IV Studio.' },
+      { text: 'Activity: a tab in the chat that lists everything agents did in IV Studio (the chat, Dashboard ideas, and Claude Desktop, Codex or any agent using IV Studio from outside), with links to what they made and Undo for changes to an edit.' },
+      { text: 'The chat knows more about what you’re looking at: the version you picked on a shot, the clip and playhead in the editor, the item open in the Library, how Create is set up, what’s rendering, and the last render that failed.' },
+      { text: 'See how full the agent’s working memory is, and this chat’s usage, in the chat’s header. You’ll see a note when it summarizes earlier messages to make room.' },
+      { text: 'Fixed: Z-Image Turbo installed from Setup now works in Create → Image and Projects (they were looking for a different text encoder file).' }
+    ]
+  },
+  {
     version: '1.1.2',
     items: [
       { text: 'The portable Windows copy now updates itself like the installed one: a new version downloads in the background and Update to … restarts into it, keeping your data folder. (From 1.1.1 or older, unzip 1.1.2 over the folder once.)' },

@@ -124,7 +124,7 @@ const CHAT_INSTALLS = new Set(['install_node_packs', 'update_comfy', 'undo_comfy
 const CHAT_SETTINGS = new Set(['set_workflow_model', 'set_lora_family'])
 const CHAT_TRAINING = new Set(['start_training', 'create_character_training', 'make_training_clips'])
 // calls that only read, price or write words: fine even while Settings renders on the cloud
-const CHAT_READS = /^(get|list|check|price|estimate|search|identify|read)_|^(scan_hardware|plan_render|comfy_balance|music_status|voice_status|sound_status|picture_tools_status|shinobi_status|shinobi_tools|effects_list|grab_frame|write_prompt|write_shots_from_story|write_sound|write_film_script|write_film_shot_prompt|free_memory|release_voice_engine|show_in_app)$/
+export const CHAT_READS = /^(get|list|check|price|estimate|search|identify|read)_|^(scan_hardware|plan_render|comfy_balance|music_status|voice_status|sound_status|picture_tools_status|shinobi_status|shinobi_tools|effects_list|grab_frame|write_prompt|write_shots_from_story|write_sound|write_film_script|write_film_shot_prompt|free_memory|release_voice_engine|show_in_app)$/
 export function chatAsk(name, args = {}, { settings = {} } = {}) {
   if (name.startsWith('delete_')) return 'This deletes something and can’t be undone.'
   // reading, pricing and writing words never spend, even about Seedance (price_shot)
@@ -170,7 +170,38 @@ const LABELS = {
   generate_previews: 'Started the previews',
   get_job: 'Watching the render',
   list_renders: 'Looked at your renders',
-  list_projects: 'Looked at your projects'
+  list_projects: 'Looked at your projects',
+  finish_candidate: 'Finished a take',
+  enhance_final: 'Enhanced a final',
+  rank_takes: 'Ranked the takes',
+  review_take: 'Reviewed a take',
+  edit_timeline: 'Changed an edit',
+  add_media: 'Added to an edit',
+  create_edit: 'Started an edit',
+  caption_edit: 'Put captions on an edit',
+  set_edit_settings: 'Changed an edit’s settings',
+  export_edit: 'Exported an edit',
+  make_music: 'Made a song',
+  make_sound: 'Made a sound',
+  speak_line: 'Said a line',
+  design_voice: 'Designed a voice',
+  make_image: 'Made pictures',
+  picture_tool: 'Ran a picture tool',
+  run_effect: 'Ran an effect',
+  start_batch: 'Started an overnight batch',
+  create_film: 'Started a film',
+  write_film_script: 'Wrote the script',
+  break_down_film: 'Planned the storyboard',
+  render_film_scene: 'Filmed a scene',
+  render_film_shot: 'Filmed a shot',
+  build_rough_cut: 'Built the rough cut',
+  save_recipe: 'Saved a recipe',
+  save_character: 'Saved a character',
+  cancel_job: 'Cancelled a render',
+  last_frame: 'Saved a last frame',
+  install_node_packs: 'Installed node packs',
+  setup_voices: 'Set up voices',
+  start_training: 'Started training'
 }
 export const stepLabel = (tool) => LABELS[tool] || `${tool.charAt(0).toUpperCase()}${tool.slice(1).replace(/_/g, ' ')}`
 const toolOf = (name) => String(name || '').replace(new RegExp(`^mcp__${SERVER}__`), '')
@@ -189,6 +220,13 @@ export function parseLine(engine, line) {
   if (engine === 'claude') {
     // the session to --resume in a chat
     if (m.type === 'system' && m.subtype === 'init' && m.session_id) out.push({ type: 'session', id: m.session_id })
+    // Claude Code summarised the conversation to make room (auto when the window fills, or /compact)
+    if (m.type === 'system' && m.subtype === 'compact_boundary') out.push({ type: 'compact', trigger: m.compact_metadata?.trigger || 'auto', before: Number(m.compact_metadata?.pre_tokens) || null })
+    // each reply's own usage: what's in the context window right now (fresh, cached and newly cached input)
+    if (m.type === 'assistant' && m.message?.usage) {
+      const u = m.message.usage
+      out.push({ type: 'usage', context: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0) })
+    }
     if (m.type === 'assistant') {
       for (const c of m.message?.content || []) {
         if (c.type === 'text' && c.text?.trim()) out.push({ type: 'say', text: c.text.trim() })
@@ -196,7 +234,14 @@ export function parseLine(engine, line) {
       }
     } else if (m.type === 'user') {
       for (const c of m.message?.content || []) if (c.type === 'tool_result' && c.is_error) out.push({ type: 'stepError', id: c.tool_use_id, text: textOf(c.content) })
-    } else if (m.type === 'result') out.push({ type: 'end', ok: !m.is_error && m.subtype === 'success', text: String(m.result || '').trim() })
+    } else if (m.type === 'result') {
+      // the turn's totals, the model's window, and Claude Code's own price for it at API rates (a plan isn't charged
+      // per token)
+      const u = m.usage || {}
+      const mu = Object.entries(m.modelUsage || {})[0]
+      out.push({ type: 'usage', turn: { input: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0), cached: u.cache_read_input_tokens || 0, output: u.output_tokens || 0, apiUsd: Number(m.total_cost_usd) || 0 }, ...(mu ? { model: mu[0], window: mu[1]?.contextWindow || null } : {}) })
+      out.push({ type: 'end', ok: !m.is_error && m.subtype === 'success', text: String(m.result || '').trim() })
+    }
     return out
   }
   // codex exec --json
@@ -205,7 +250,12 @@ export function parseLine(engine, line) {
   else if (m.type === 'item.started' && it?.type === 'mcp_tool_call') out.push({ type: 'step', tool: it.tool, label: stepLabel(it.tool), id: it.id })
   else if (m.type === 'item.completed' && it?.type === 'mcp_tool_call' && (it.status === 'failed' || it.error)) out.push({ type: 'stepError', id: it.id, text: textOf(it.error?.message || it.result?.content) })
   else if (m.type === 'item.completed' && it?.type === 'agent_message' && it.text?.trim()) out.push({ type: 'say', text: it.text.trim() })
-  else if (m.type === 'turn.completed') out.push({ type: 'end', ok: true, text: null })
+  else if (m.type === 'turn.completed') {
+    // Codex's usage is the turn's total over every request it made, not what's in the window now
+    const u = m.usage || {}
+    out.push({ type: 'usage', turn: { input: u.input_tokens || 0, cached: u.cached_input_tokens || 0, output: (u.output_tokens || 0) + (u.reasoning_output_tokens || 0) } })
+    out.push({ type: 'end', ok: true, text: null })
+  } else if (/compact/i.test(m.type || '') || /compact/i.test(it?.type || '')) out.push({ type: 'compact', trigger: 'auto', before: null })
   else if (m.type === 'turn.failed' || m.type === 'error') out.push({ type: 'end', ok: false, text: String(m.error?.message || m.message || 'The agent stopped with an error.') })
   return out
 }
@@ -238,7 +288,7 @@ export function startAgentRun({ engine, exe, idea, mcp, model = '', extraEnv = {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'iv-studio-agent-'))
   const jobsFile = path.join(dir, 'jobs.txt')
   fs.writeFileSync(jobsFile, '')
-  const env = { ...mcp.env, ...extraEnv, IV_STUDIO_AGENT_RUN: '1', IV_STUDIO_AGENT_JOBS: jobsFile }
+  const env = { ...mcp.env, ...extraEnv, IV_STUDIO_AGENT_RUN: '1', IV_STUDIO_AGENT_JOBS: jobsFile, IV_STUDIO_AGENT_NAME: `${AGENT_NAMES[engine] || 'An agent'} (Dashboard idea)` }
   const server = { command: mcp.command, args: mcp.args, env }
   let args
   if (engine === 'claude') {

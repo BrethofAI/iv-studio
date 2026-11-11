@@ -28,6 +28,10 @@ pictures, songs and spoken lines, cut it all together and export. IV Studio driv
 cloud. No strong graphics card? Shots can also render on a GPU in your own [RunPod](https://www.runpod.io) or
 [Modal](https://modal.com) account, billed by the second, or on Comfy Cloud (see [Cloud](#cloud)).
 
+**IV Studio 1.2** lets you talk to the chat (it hears you with IV Studio's own speech recognition, on your PC) and
+read its replies aloud, shows every agent's work in an **Activity** log with Undo, gives the chat a cleaner look and
+its own window, and tells it more about what you're looking at.
+
 **IV Studio 1.1** brings your own Claude Code or Codex into the app as a chat that can make, edit and fix things
 for you, MiniMax H3 Image and Seedance 2.5 beside MiniMax H3, effects for any clip, nearly every feature on your
 own RunPod or Modal, speed presets for smaller graphics cards, and a new look that fits any window. See
@@ -51,6 +55,23 @@ H3 render. To report misuse, email [abuse@infinitevariance.ai](mailto:abuse@infi
   film or edit is open. Anything that deletes, costs money, installs or changes a setting shows an **Allow /
   Don't allow** card first. Conversations are kept, and you can go back to an earlier one. On a wide window the
   chat sits beside the page; on a smaller one it slides over it. Works on Windows, Mac and Linux.
+- **Talk to it (1.2).** Press the mic in the chat, say what you want and press send. IV Studio's own Whisper writes
+  it down on your PC (Audio → Voices → Set up voices once). Talking while the agent works stops its answer and
+  sends your new words; renders it already started keep going. The speaker button reads each reply aloud in one of
+  your voices (the first one takes a while as the voice loads; after that a few seconds).
+- **Its own window (1.2).** The arrow in the chat's header opens it in a window of its own: keep it on top while you
+  work, and put it back in the app when you're done. It still knows what's open in the main window, and its links
+  open things there.
+- **What it can see (1.2).** Besides the page, each message tells the agent what you picked on it (a shot's version,
+  the clip and playhead in the editor, the item open in the Library, how Create is set up), what's rendering or
+  waiting, and the last render that failed in the past half hour.
+- **Activity (1.2).** The chat's Activity tab lists everything agents did in IV Studio: the chat, Dashboard ideas,
+  and Claude Desktop, Codex, Claude Code or Hermes using IV Studio's MCP server from outside, each by name. Steps that
+  change something, spend or fail are kept for 30 days (looking things up isn't), with a link to what they made and
+  **Undo this change** for any agent's change to an edit. Agents can read it too (`list_activity`).
+- **Working memory (1.2).** The chat's header shows how full the agent's context window is (exact for Claude Code;
+  estimated for Codex from its usage) and, when clicked, the chat's tokens. A note shows when the agent summarizes
+  earlier messages to make room. Your plan's 5-hour and weekly limits aren't shared with apps, so they aren't shown.
 - **Ask about this.** Buttons around the app hand the chat a question: **Ask … to fix it** on a failed render
   (with IV Studio's own explanation), **Ask …** on any run and **Ask … to pick the best take** on the Shot page,
   and **Ask … about this** in the Library viewer.
@@ -1150,7 +1171,7 @@ Seedance finish, and New angle. Training a character runs on your PC, RunPod or 
 
 ## Agents (MCP)
 
-IV Studio includes a local MCP server (stdio) with 213 tools. It uses the same projects, characters, voices
+IV Studio includes a local MCP server (stdio) with 214 tools. It uses the same projects, characters, voices
 and songs as the window, so Claude Code or any MCP client can render shots and sequences, make pictures,
 speak lines, make music, cut them together and export. **Settings → Agents** has the command for your
 install, a message to paste into any agent, and a button that adds the IV Studio skill to Claude Code.
@@ -1174,6 +1195,7 @@ Agents learn how to use it from `resources/agent-guide.md`: the server's instruc
 
 - **Guide and start menu:** `get_guide`, `get_menu`.
 - **Images:** `list_image_models`, `make_image`, `list_images`, `get_image`, `cancel_image`, `delete_image`, `last_frame`.
+- **Activity:** `list_activity`.
 - **This PC:** `scan_hardware` (what Check my PC sees and recommends), `free_memory`.
 - **Shots:** `check_setup`, `install_node_packs`, `check_comfy_updates`, `update_comfy`, `undo_comfy_update`, `list_characters`, `list_projects`, `plan_render`, `check_prompt`,
   `list_samplers`, `generate_previews`, `finish_candidate`, `enhance_final`, `rank_takes`, `use_clean_stretch`, `review_take`, `make_previs`, `soften_mouth`.

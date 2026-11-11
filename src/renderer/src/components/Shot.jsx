@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { setSelection } from '../selection'
 import { confirmSpend } from './ComfyAccount'
 import { finishFor, savedSpeed, SPEEDS } from '../../../service/speed'
 import { media } from '../media'
@@ -592,7 +593,7 @@ function VersionsCard({ run, finishes, jobs, remote, ownCloud, caps, notify, mar
       </div>
       <div className="version-chips" role="tablist" aria-label="Finished versions">
         {list.map((x) => (
-          <button key={x.key} role="tab" aria-selected={x.key === v.key} className={`version-chip ${x.key === v.key ? 'on' : ''} ${state(x)}`} onClick={() => setChosen(x.key)} title={x.job.status === 'error' ? x.job.error : ''}>
+          <button key={x.key} role="tab" aria-selected={x.key === v.key} className={`version-chip ${x.key === v.key ? 'on' : ''} ${state(x)}`} onClick={() => (setChosen(x.key), setSelection('shot', { version: `${project?.name ? `${project.name}: ` : ''}${x.label}`, ...(x.out?.path ? { file: x.out.path } : {}) }))} title={x.job.status === 'error' ? x.job.error : ''}>
             {chipOf(x)}
             {state(x) === 'busy' && <span className="version-dot" aria-label="rendering" />}
             {state(x) === 'error' && <span className="version-err">!</span>}
@@ -726,6 +727,8 @@ function FinishDialog({ children, onClose }) {
 }
 
 export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps, remote, ownCloud, editRun, openSequence, openEdit, shotFromVersion, pictureToEdit, characters = [] }) {
+  // the version picked for the chat goes when the shot page does (selection.js)
+  useEffect(() => () => setSelection('shot', null), [])
   const [project, setProject] = useState(null)
   // the person's own Claude Code or Codex, for "Ask" and "pick the best take" on a run (ChatPanel.jsx)
   const agent = useAgentName()
