@@ -3,6 +3,7 @@
 //   node scripts/release.mjs 1.1.6              # check everything, then publish
 //   node scripts/release.mjs 1.1.6 --dry        # check everything, publish nothing
 //   node scripts/release.mjs 1.1.6 --notes path # release notes (default dist/release-notes-<version>.md)
+//   --tests-passed                              # skip step 3 when this same commit just passed it here
 //
 // Runs on Windows from a release worktree with its own node_modules (npm ci; never a junction). In order:
 //   1. The tree is clean, it fast-forwards from origin/main, and there are notes and a What's new entry.
@@ -50,6 +51,9 @@ function run(cmd, argv, { cwd = ROOT, quiet = false, env = process.env, allowFai
 }
 const git = (...a) => run('git', a, { quiet: true }).out
 const gh = (...a) => run('gh', a, { quiet: true }).out
+// npm itself, run with this Node: npm.cmd started from Node works out its own folder wrongly when quoted
+const NPM_CLI = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+const npm = (...a) => (fs.existsSync(NPM_CLI) ? run(process.execPath, [NPM_CLI, ...a], { quiet: true }) : run('npm.cmd', a, { quiet: true }))
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const sha256 = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex')
 const sha512b64 = (buf) => crypto.createHash('sha512').update(buf).digest('base64')
@@ -113,7 +117,7 @@ console.log(`commit ${SHA}`)
 step('Every CI test, and the cloud tests')
 const ciList = fs.readFileSync(path.join(ROOT, 'scripts/ci-linux.sh'), 'utf8').match(/for t in ([^;]+); do/)[1].trim().split(/\s+/)
 const failed = []
-for (const t of [...ciList, 'runpod', 'cloudprep', 'cloudvoice']) {
+for (const t of args.includes('--tests-passed') ? [] : [...ciList, 'runpod', 'cloudprep', 'cloudvoice']) {
   const r = run(process.execPath, [`test/${t}.mjs`], { quiet: true, allowFail: true, timeout: 300000 })
   if (!r.ok) failed.push(t)
 }
@@ -125,15 +129,25 @@ report.tests = ciList.length + 3
 step('Linux and Mac check this commit (nothing published)')
 const CANDIDATE = `release-candidate/${TAG}`
 git('push', '-q', '-f', 'origin', `HEAD:refs/heads/${CANDIDATE}`)
-gh('workflow', 'run', 'linux.yml', '--repo', REPO, '--ref', CANDIDATE)
-gh('workflow', 'run', 'mac.yml', '--repo', REPO, '--ref', CANDIDATE)
-const linuxCheck = await runFor('linux.yml', CANDIDATE, SHA)
-const macCheck = await runFor('mac.yml', CANDIDATE, SHA)
+// a check already running or passed for this commit (an earlier try of this release) is used again, not repeated
+const existing = (workflow) => {
+  const list = JSON.parse(gh('run', 'list', '--repo', REPO, '--workflow', workflow, '--branch', CANDIDATE, '--limit', '5', '--json', 'databaseId,headSha,status,conclusion'))
+  return list.find((x) => x.headSha === SHA && (x.status !== 'completed' || x.conclusion === 'success'))?.databaseId || null
+}
+const checkOn = async (workflow) => {
+  const had = existing(workflow)
+  if (had) return had
+  gh('workflow', 'run', workflow, '--repo', REPO, '--ref', CANDIDATE)
+  await sleep(4000)
+  return runFor(workflow, CANDIDATE, SHA)
+}
+const linuxCheck = await checkOn('linux.yml')
+const macCheck = await checkOn('mac.yml')
 console.log(`Linux run ${linuxCheck}, Mac run ${macCheck}`)
 
 step('Windows installer and portable zip')
-run('npm.cmd', ['run', 'dist'], { quiet: true })
-run('npm.cmd', ['run', 'dist:portable'], { quiet: true })
+npm('run', 'dist')
+npm('run', 'dist:portable')
 const dist = path.join(ROOT, 'dist')
 const winFiles = ['IV-Studio-Setup.exe', 'IV-Studio-Setup.exe.blockmap', 'latest.yml', 'IV-Studio-Portable-win-x64.zip', 'latest-portable.yml'].map((f) => path.join(dist, f))
 for (const f of winFiles) if (!fs.existsSync(f)) die(`Missing ${f}`)
