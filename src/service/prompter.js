@@ -350,6 +350,22 @@ function ollamaExe() {
   return local && fs.existsSync(local) ? local : null
 }
 
+// How Ollama's server is started. On Windows a detached `ollama serve` has no console of its own, so every model it
+// loads (llama-server.exe, a console program) opens a new terminal window. So: Ollama's own tray app when it's there
+// (it keeps the server and its runners hidden, as when Ollama starts with Windows), else `ollama serve` started through
+// PowerShell with a hidden console that its runners share. Mac and Linux start `ollama serve` in the background.
+export function ollamaStartCommand(exe, platform = process.platform, exists = fs.existsSync) {
+  if (platform !== 'win32') return { command: exe, args: ['serve'] }
+  const tray = path.join(path.dirname(exe), 'ollama app.exe')
+  if (exists(tray)) return { command: tray, args: [] }
+  const q = (s) => `'${String(s).replace(/'/g, "''")}'`
+  return { command: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', `Start-Process -FilePath ${q(exe)} -ArgumentList 'serve' -WindowStyle Hidden`] }
+}
+function startOllamaServer(exe) {
+  const { command, args } = ollamaStartCommand(exe)
+  spawn(command, args, { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+}
+
 // Starts Ollama's server if it is installed but not running, and waits for it.
 // Unloads whatever Ollama still holds (the title bar's Free memory). Returns the names it unloaded.
 export async function unloadOllama() {
@@ -368,7 +384,7 @@ export async function ensureOllama() {
   if (!ollamaIsLocal()) throw new Error(`Ollama isn't answering at ${ollamaUrl()}. Check the address in Settings → Prompt writer, and that Ollama listens there (OLLAMA_HOST=0.0.0.0).`)
   const exe = ollamaExe()
   if (!exe) throw new Error('Ollama is not installed. Install it from ollama.com, or use MiniMax Context IR.')
-  spawn(exe, ['serve'], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+  startOllamaServer(exe)
   for (let i = 0; i < 30; i++) {
     await new Promise((r) => setTimeout(r, 500))
     if ((await ollamaStatus()).running) return true
