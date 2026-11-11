@@ -93,9 +93,10 @@ const ps = (s) => `'${String(s).replace(/'/g, "''")}'`
 // .exe another process still has open, such as an agent's MCP server), the new items move in, and the old ones are
 // deleted (or left for cleanUpOld when something still holds them). If anything fails, the moved items go back.
 // Then IV Studio opens again.
+// Windows paths whatever OS builds it (the test runs on Linux and macOS too).
 export function installScript({ pid, appDir, staged, log, relaunch = true, stamp = Date.now() }) {
-  const old = path.join(appDir, PORTABLE_FOLDER, UPDATES_FOLDER, `old-${stamp}`)
-  const exe = path.join(appDir, 'IV Studio.exe')
+  const old = path.win32.join(appDir, PORTABLE_FOLDER, UPDATES_FOLDER, `old-${stamp}`)
+  const exe = path.win32.join(appDir, 'IV Studio.exe')
   return [
     '# IV Studio portable update',
     `$app = ${ps(appDir)}`,
