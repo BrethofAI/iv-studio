@@ -1,4 +1,4 @@
-// IV Studio 1.2's chat extras without an agent or a window: the activity log (activity.js), who took a step, the
+// IV Studio 1.1.3's chat extras without an agent or a window: the activity log (activity.js), who took a step, the
 // context meter's numbers (agentchat.js applyUsage), the fuller context line, and replies read aloud (spokenText).
 //   node test/chat-extras.mjs
 import assert from 'node:assert/strict'

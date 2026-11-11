@@ -15197,7 +15197,7 @@ html.rm .agent-dot.live {
   font-size: 18px;
 }
 
-/* ---------- Chat 1.2: bubbles, one rounded composer, tabs, context meter, its own window (ChatPanel.jsx) ---------- */
+/* ---------- Chat 1.1.3: bubbles, one rounded composer, tabs, context meter, its own window (ChatPanel.jsx) ---------- */
 .chat-panel {
   --you-bubble: #8e2a3d;
   --you-text: #fbefe9;
@@ -15697,7 +15697,7 @@ html.chat-window body {
   cursor: pointer;
 }
 
-/* ---- 1.2: Setup's optional tools say what they do (GitHub #21), and Create → Image sets a model up (#22) ---- */
+/* ---- 1.1.3: Setup's optional tools say what they do (GitHub #21), and Create → Image sets a model up (#22) ---- */
 .setup-toolbar {
   position: sticky;
   /* the page scrolls with var(--pad) of top padding; stick at its very top edge, not under the padding */

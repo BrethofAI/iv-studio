@@ -2,7 +2,7 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
-    version: '1.2.0',
+    version: '1.1.3',
     items: [
       { text: 'Talk to the chat: press the mic, say what you want, and press send. IV Studio’s own speech recognition writes it down on your PC. Talking while the agent works stops its answer and sends your new words.' },
       { text: 'Read aloud: the speaker in the chat’s header reads each reply in one of your voices (Audio → Voices).' },
