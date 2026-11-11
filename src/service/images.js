@@ -6,6 +6,7 @@
 // A picture set is a ComfyUI job (a project with tool 'image'); when it finishes its pictures are copied
 // into the app data's images/ folder, where the Library, the MCP server and Create's gallery find them.
 import { randomUUID } from 'node:crypto'
+import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { comboOptions } from './setup.js'
@@ -490,6 +491,37 @@ export class Images {
       this.saveAll(this.all().map((x) => (x.id === rec.id ? next : x)))
     }
     return next
+  }
+
+  // A video's last frame as a picture in the Library (a finished version's "Use the last frame"): read exactly,
+  // not a seek near the end. ffmpeg writes every frame of the final second over the same file, so the file left
+  // is the last one. A cloud render is downloaded first. Kept as its own set ("Last frame"), ready to be a
+  // shot's first frame or a picture to edit.
+  async lastFrame({ file, name } = {}) {
+    // the same video's frame, saved before and still there, is used again rather than saved twice
+    const key = typeof file === 'string' ? file : file?.path || file?.url || null
+    const had = key && this.all().find((r) => r.mode === 'frame' && r.source === key && r.files?.[0] && fs.existsSync(r.files[0]))
+    if (had) return had
+    const src = await this.studio.localCopy(file, path.join(this.dir, '_comfy'))
+    if (!src || !fs.existsSync(src)) throw new Error('That video is not on this PC.')
+    const id = randomUUID().slice(0, 8)
+    const title = String(name || '').trim() || `${path.basename(src, path.extname(src)).replace(/_\d+$/, '').replace(/[_-]+/g, ' ').slice(0, 40)} · last frame`
+    fs.mkdirSync(this.dir, { recursive: true })
+    const out = path.join(this.dir, `${slug(title)}_${id}.png`)
+    const ffmpeg = ffmpegStatic.ffmpegPath?.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
+    await new Promise((resolve, reject) => {
+      const p = spawn(ffmpeg, ['-v', 'error', '-y', '-sseof', '-1', '-i', src, '-map', '0:v:0', '-update', '1', '-c:v', 'png', out], { windowsHide: true })
+      const err = []
+      p.stderr.on('data', (d) => err.push(d))
+      p.on('error', reject)
+      p.on('close', (code) => (code === 0 && fs.existsSync(out) ? resolve() : reject(new Error(`Couldn't read the last frame${err.length ? `: ${String(Buffer.concat(err)).trim().split('\n').pop()}` : '.'}`))))
+    })
+    if (path.dirname(src) === path.join(this.dir, '_comfy')) fs.rmSync(src, { force: true })
+    const info = await probe(FFPROBE, out).catch(() => null)
+    const t = now()
+    const record = { id, name: title, mode: 'frame', family: 'frame', familyLabel: 'Last frame', model: null, prompt: '', loras: [], width: info?.width || null, height: info?.height || null, count: 1, seed: null, source: key, status: 'success', files: [out], createdAt: t, finishedAt: t }
+    this.saveAll([record, ...this.all()])
+    return record
   }
 
   // ---------- Tools: one-step fixes for a picture (picturetools.js) ----------

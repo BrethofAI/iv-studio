@@ -25,14 +25,14 @@ const SAMPLER_DEFAULT = 'er_sde'
 const SCHEDULER_DEFAULT = 'beta'
 // the speed preset the form's preview size, steps and takes match (service/speed.js), or null (Custom)
 const finishLabel = (f) => `${f.megapixels} MP${f.upscale2x ? ' + 2x' : ''}`
-const speedOfForm = (f) => speedOf({ megapixels: f.megapixels, steps: f.steps, previews: f.mode === 'continue' ? undefined : f.previews })
+const speedOfForm = (f) => speedOf({ megapixels: f.megapixels, steps: f.steps, previews: f.previews })
 
 // [id, label, hint, the hint in plain words (Simple words)]
 const MODES = [
   ['text', 'Text', 'Just the prompt.', 'Describe it in words; nothing else needed.'],
   ['reference', 'References', 'Pictures, videos or audio guide the shot. Name them <Picture 1>, <Video 1>, <Audio 1>.', 'Your own pictures, clips or sounds steer the shot. Call them <Picture 1>, <Video 1>, <Audio 1> in your words.'],
   ['frames', 'First / last frame', 'The clip opens on picture 1 and, optionally, ends on picture 2.', 'The video starts on your picture, and can end on a second one.'],
-  ['continue', 'Continue a video', 'Carries a clip on from its last frames. One preview, finished at its own size.', 'Picks up where a video ends and keeps it going.']
+  ['continue', 'Continue a video', 'Carries a clip on from its last frames. Hunt takes, then finish the whole video at full size.', 'Picks up where a video ends and keeps it going.']
 ]
 const ASPECTS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9']
 const PREVIEW_MP = [0.3, 0.4, 0.6, 0.8]
@@ -171,7 +171,8 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
 
   const request = useMemo(() => {
     const { projectId, projectName, voiceItem, ...r } = form
-    return { ...r, speed: speedOfForm(form) || undefined, character: r.character ?? 'none', media: r.media.map((m) => ({ kind: m.kind, file: m.path, ...(m.softMouth ? { softMouth: true } : {}) })) }
+    // a Continue shot made here hunts takes and gets the full finish (plan.js continueFull)
+    return { ...r, ...(r.mode === 'continue' && r.engine !== 'seedance' ? { continueFull: true } : {}), speed: speedOfForm(form) || undefined, character: r.character ?? 'none', media: r.media.map((m) => ({ kind: m.kind, file: m.path, ...(m.softMouth ? { softMouth: true } : {}) })) }
   }, [form])
   const speed = request.speed || null
   // a Custom shot finishes like the saved preset (the Finish panel's default too)
@@ -288,6 +289,9 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
       media
     }))
     media.forEach((m, i) => window.ivstudio.media.probe(m.path).then((info) => setForm((f) => ({ ...f, media: f.media.map((x, j) => (j === i && x.path === m.path ? { ...x, info } : x)) })), () => {}))
+    // from a finished version (Continue from this, or its last frame): a new shot that starts where it ended
+    if (incomingRun.from === 'continue') notify('A new shot that carries the finished version on. Say what happens next, or let Write it for me look at its last frame.', 'info')
+    else if (incomingRun.from === 'frames') notify('A new shot that opens on the last frame. Say what happens next, or let Write it for me look at it.', 'info')
     clearIncomingRun?.()
   }, [incomingRun])
   // Start from an example (starters.js): the row on this page, or the welcome wizard's "Make your first shot"
@@ -851,7 +855,7 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                 </div>
               </div>
             )}
-            {!sd && <SpeedRow value={speed} onPick={(id) => set({ ...previewFor(id), ...(form.mode === 'continue' ? { previews: form.previews } : {}) })} />}
+            {!sd && <SpeedRow value={speed} onPick={(id) => set(previewFor(id))} />}
             {!sd && (
             <div className="create-grid">
               <div className="create-field">
@@ -864,18 +868,16 @@ export default function Create({ setup, characters, notify, openShot, go, incomi
                   ))}
                 </div>
               </div>
-              {form.mode !== 'continue' && (
-                <div className="create-field">
-                  <span className="create-label mono">Previews</span>
-                  <div className="segmented">
-                    {[1, 2, 3].map((n) => (
-                      <button key={n} className={form.previews === n ? 'on' : ''} onClick={() => set({ previews: n })}>
-                        {n}
-                      </button>
-                    ))}
-                  </div>
+              <div className="create-field">
+                <span className="create-label mono">Previews</span>
+                <div className="segmented">
+                  {[1, 2, 3].map((n) => (
+                    <button key={n} className={form.previews === n ? 'on' : ''} onClick={() => set({ previews: n })}>
+                      {n}
+                    </button>
+                  ))}
                 </div>
-              )}
+              </div>
               <div className="create-field">
                 <span className="create-label mono">Quality</span>
                 <div className="segmented">

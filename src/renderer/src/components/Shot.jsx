@@ -378,7 +378,8 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote, ownCloud }
   const [size, setSize] = useState(null)
   const [busy, setBusy] = useState(false)
   const set = (patch) => setOpts((o) => ({ ...o, ...patch }))
-  const single = job.plan.request?.mode === 'continue'
+  // a Continue shot from the app's own chains finishes in one pass at preview size; one made in Create (continueFull) gets the full finish
+  const single = job.plan.request?.mode === 'continue' && !job.plan.request?.continueFull
   // how long this finish will take here, from this machine's own finishes (src/service/timing.js)
   const [eta, setEta] = useState(null)
   useEffect(() => {
@@ -516,7 +517,7 @@ function FinishPanel({ job, candidate, onStart, notify, caps, remote, ownCloud }
 // A run's finished versions in one card: a chip for every final (however it was finished) and every enhanced copy,
 // one player for the chosen one, its actions in one row, and Enhance folded behind a button. Replaces a stack of
 // full-size players, so a shot with several finishes doesn't run on for screens.
-function VersionsCard({ run, finishes, jobs, remote, ownCloud, caps, notify, marks, onMark, onCompare, review, reviewing, enhance, enhancing, written, editRun, project, versionOf }) {
+function VersionsCard({ run, finishes, jobs, remote, ownCloud, caps, notify, marks, onMark, onCompare, review, reviewing, enhance, enhancing, written, editRun, project, versionOf, shotFromVersion, pictureToEdit }) {
   const list = []
   for (const f of finishes) {
     list.push({ key: f.id, job: f, finish: f, out: f.outputs.find((o) => o.kind === 'final'), label: shortLabel(f), kind: 'final' })
@@ -532,6 +533,8 @@ function VersionsCard({ run, finishes, jobs, remote, ownCloud, caps, notify, mar
   const chipOf = (x) => `${takes.size > 1 ? `Take ${x.finish.plan?.finish?.candidate} · ` : ''}${x.kind === 'final' ? how(x.finish) : `→ ${enhanceLabel(x.job)}`}`
   const [chosen, setChosen] = useState(null)
   const [more, setMore] = useState(false)
+  const [frameMenu, setFrameMenu] = useState(false)
+  const [carrying, setCarrying] = useState(null) // 'continue' | 'frame' while the file is fetched or read
   const [look, setLook] = useState({ dlssStrength: 0.8, dlssStyle: 'Default', detail: 0 })
   const setL = (patch) => setLook((l) => ({ ...l, ...patch }))
   // the newest version that has a video, unless one was chosen
@@ -549,6 +552,34 @@ function VersionsCard({ run, finishes, jobs, remote, ownCloud, caps, notify, mar
   const chips = [res?.width && `${res.width}×${res.height}`, (res?.fps || 24) && `${res?.fps || 24} fps`, v.job.seconds && `${v.job.seconds} s render`].filter(Boolean)
   const markKey = `${run.id}:${v.key}`
   const state = (x) => (x.out?.url ? '' : x.job.status === 'error' ? 'error' : 'busy')
+  // Continue from this: the version as a Continue shot's source video (a cloud render is downloaded first)
+  async function carryOn() {
+    setCarrying('continue')
+    try {
+      const file = await window.ivstudio.media.localCopy({ path: v.out.path || null, url: v.out.url })
+      shotFromVersion(run, 'continue', file)
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setCarrying(null)
+    }
+  }
+  // Use the last frame: saved as a picture (Library, Create -> Image), then a first frame, a picture to edit, or kept
+  async function takeFrame(then) {
+    setCarrying('frame')
+    try {
+      const rec = await window.ivstudio.images.lastFrame({ file: { path: v.out.path || null, url: v.out.url }, name: `${project?.name || 'Shot'} · last frame` })
+      const file = rec.files[0]
+      setFrameMenu(false)
+      if (then === 'shot') shotFromVersion(run, 'frames', file)
+      else if (then === 'edit') pictureToEdit(file)
+      else notify(`Saved "${rec.name}" to the Library (Images).`, 'ok')
+    } catch (err) {
+      notify(err.message)
+    } finally {
+      setCarrying(null)
+    }
+  }
   return (
     <div className="versions-card">
       <div className="versions-head">
@@ -597,11 +628,41 @@ function VersionsCard({ run, finishes, jobs, remote, ownCloud, caps, notify, mar
             </button>
           )}
           {v.kind === 'final' && v.out?.path && (!remote || ownCloud) && (
-            <button className={`link-btn mono ${more ? 'pink' : ''}`} onClick={() => setMore(!more)} aria-expanded={more}>
+            <button className={`link-btn mono ${more ? 'pink' : ''}`} onClick={() => (setMore(!more), setFrameMenu(false))} aria-expanded={more}>
               Enhance {more ? '▴' : '▾'}
             </button>
           )}
+          {v.out?.url && shotFromVersion && (
+            <button className="link-btn mono version-carry" disabled={!!carrying} onClick={() => carryOn()} title="A new shot that picks up where this version ends">
+              {carrying === 'continue' ? 'Opening…' : 'Continue from this'}
+            </button>
+          )}
+          {v.out?.url && (
+            <button className={`link-btn mono version-lastframe ${frameMenu ? 'pink' : ''}`} disabled={!!carrying} onClick={() => (setFrameMenu(!frameMenu), setMore(false))} aria-expanded={frameMenu}>
+              {carrying === 'frame' ? 'Reading the frame…' : `Use the last frame ${frameMenu ? '▴' : '▾'}`}
+            </button>
+          )}
         </div>
+        {frameMenu && v.out?.url && (
+          <div className="lastframe-drawer">
+            <span className="dim small">The final frame of this version, saved as a picture in the Library.</span>
+            <div className="lastframe-actions">
+              {shotFromVersion && (
+                <button className="btn btn-small" disabled={!!carrying} onClick={() => takeFrame('shot')}>
+                  Start a shot from it
+                </button>
+              )}
+              {pictureToEdit && (
+                <button className="btn btn-small" disabled={!!carrying} onClick={() => takeFrame('edit')}>
+                  Edit it as a picture
+                </button>
+              )}
+              <button className="btn btn-small" disabled={!!carrying} onClick={() => takeFrame('save')}>
+                Just save it
+              </button>
+            </div>
+          </div>
+        )}
         {more && v.kind === 'final' && v.out?.path && (!remote || ownCloud) && (
           <div className="enhance-drawer">
             <span className="dim small enhance-sub">A sharper copy, added beside this one. Set the strength, then pick the size.</span>
@@ -664,7 +725,7 @@ function FinishDialog({ children, onClose }) {
   )
 }
 
-export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps, remote, ownCloud, editRun, openSequence, openEdit, characters = [] }) {
+export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps, remote, ownCloud, editRun, openSequence, openEdit, shotFromVersion, pictureToEdit, characters = [] }) {
   const [project, setProject] = useState(null)
   // the person's own Claude Code or Codex, for "Ask" and "pick the best take" on a run (ChatPanel.jsx)
   const agent = useAgentName()
@@ -1036,6 +1097,8 @@ export default function Shot({ projectId, jobs: live, setJobs, notify, go, caps,
                 editRun={editRun}
                 project={project}
                 versionOf={versionOf}
+                shotFromVersion={shotFromVersion}
+                pictureToEdit={pictureToEdit}
               />
             )}
           </section>

@@ -113,7 +113,9 @@ export const TOURS = {
       { at: '.take-clean', title: 'Cut around a cut', text: 'A take that cuts away can still be used: keep the part before or after the cut in an edit, or carry on from it in a Continue shot. Slow dissolves aren’t caught, only hard cuts.' },
       { at: '.take-pick', title: 'Pick one', text: 'Pick the take you like: the Finish settings open over the page. Picking also teaches the scoring your taste.' },
       { at: '.finish-panel', title: 'Finish it', text: 'Render the picked take at full size. An H3 take starts from the shot’s speed preset (1 MP plus 2x is much quicker than 2 MP). A Seedance take finishes at 1080p, or free here with SeedVR2, DLSS 5 or H3, each with a strength slider.' },
-      { at: '.versions-card', title: 'Finished versions', text: 'Every final and enhanced copy as a chip, one player for the one you choose. Enhance adds a sharper copy at the strength you set; Compare plays them in sync, in a grid or a wipe, zoomed in on the same spot.' }
+      { at: '.versions-card', title: 'Finished versions', text: 'Every final and enhanced copy as a chip, one player for the one you choose. Enhance adds a sharper copy at the strength you set; Compare plays them in sync, in a grid or a wipe, zoomed in on the same spot.' },
+      { at: '.version-carry', title: 'Keep it going', text: 'Continue from this opens a new Continue shot with this version as its source, keeping the character, LoRAs and shape. Say what happens next, hunt takes, and the finish is the whole continued video at full size.' },
+      { at: '.version-lastframe', title: 'Its last frame', text: 'Use the last frame saves the version’s final frame as a picture in the Library. Start a new shot from it as its first frame, or change it in Create → Image first.' }
     ]
   },
   edits: {

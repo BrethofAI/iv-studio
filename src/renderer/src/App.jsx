@@ -148,6 +148,7 @@ export default function App() {
   // a LoRA on its way to Create's LoRA tray (LoRAs > Use in a shot)
   const [loraForCreate, setLoraForCreate] = useState(null)
   const [loraForImage, setLoraForImage] = useState(null)
+  const [pictureForImage, setPictureForImage] = useState(null)
   // a picture from Create -> Image on its way to a shot's first frame (Use in a shot)
   const [pictureForCreate, setPictureForCreate] = useState(null)
   // a character picked on the dashboard (New shot with them)
@@ -328,6 +329,24 @@ export default function App() {
     switchSection('video')
     setPage('create')
   }
+  // A new shot that starts where a finished version ends: Continue mode with the version as its source video, or
+  // Frames mode with its last frame as the first frame. The run's character, LoRAs, shape, size and length come
+  // along; the prompt starts empty, because it says what happens next (Write it for me looks at the last frame).
+  const shotFromVersion = (run, how, file) => {
+    const q = run.plan?.request || {}
+    const media = how === 'continue' ? [{ kind: 'video', path: file }] : [{ kind: 'picture', path: file }]
+    setRunForCreate({ request: { ...q, mode: how === 'continue' ? 'continue' : 'frames', media, prompt: '' }, asked: null, projectId: null, projectName: '', from: how })
+    pickCreateKind('video')
+    switchSection('video')
+    setPage('create')
+  }
+  // a picture (a version's last frame) to change in Create -> Image's Edit
+  const pictureToEdit = (file) => {
+    setPictureForImage(file)
+    pickCreateKind('image')
+    switchSection('video')
+    setPage('create')
+  }
   // Go to a page from outside App's props (an iv:go event): the page, its sidebar half, and Create's switch and
   // mode (which reach Create and Image through the iv:learn event, once they've opened).
   const learnGo = (to) => {
@@ -382,7 +401,7 @@ export default function App() {
     window.addEventListener('iv:cloud-wizard', cloud)
     return () => (window.removeEventListener('iv:welcome', open), window.removeEventListener('iv:cloud-wizard', cloud), window.removeEventListener('iv:settings', words))
   }, [])
-  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, ownCloud: !!setup?.remote && !setup?.hosted, recheck, checking, characters, setCharacters, notify, openShot, editRun, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, focus, setFocus, openSizzle, openRebuild,remakeClip, replaceSeed }
+  const ctx = { setup, caps: setup?.caps, remote: !!setup?.remote, ownCloud: !!setup?.remote && !setup?.hosted, recheck, checking, characters, setCharacters, notify, openShot, editRun, openSequence, openProject, openEdit, openCharacter, openShinobi, jobs, setJobs, info, go: setPage, sendToCreate, addLoraToCreate, pictureToShot, shotFromVersion, pictureToEdit, focus, setFocus, openSizzle, openRebuild,remakeClip, replaceSeed }
   const missing = setup?.items?.filter((i) => i.status === 'missing').length || 0
   // ComfyUI on this PC isn't there: the title bar offers to start it (not when it's running but busy)
   const comfyDown = !setup?.remote && setup?.items?.some((i) => i.id === 'comfyui' && i.status !== 'ok' && !i.busy)
@@ -473,7 +492,7 @@ export default function App() {
         {page === 'home' && <Dashboard {...ctx} start={startTool} startShotWith={startShotWith} news={unseenNews(info?.version, seenNews)} dismissNews={() => markNewsSeen(info?.version)} />}
         {page === 'create' &&
           (createKind === 'image' ? (
-            <Images {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} incomingLora={loraForImage} clearIncomingLora={() => setLoraForImage(null)} />
+            <Images {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} incomingLora={loraForImage} clearIncomingLora={() => setLoraForImage(null)} incomingPicture={pictureForImage} clearIncomingPicture={() => setPictureForImage(null)} />
           ) : (
             <Create {...ctx} kindSwitch={<CreateKind kind={createKind} onKind={pickCreateKind} />} incomingLine={lineForCreate} clearIncomingLine={() => setLineForCreate(null)} incomingLora={loraForCreate} clearIncomingLora={() => setLoraForCreate(null)} incomingPicture={pictureForCreate} clearIncomingPicture={() => setPictureForCreate(null)} incomingCharacter={characterForCreate} clearIncomingCharacter={() => setCharacterForCreate(null)} incomingRun={runForCreate} clearIncomingRun={() => setRunForCreate(null)} />
           ))}

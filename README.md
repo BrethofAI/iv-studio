@@ -502,7 +502,9 @@ stays against the right edge.
      picture or video to H3's own sizes (about 0.5, 1 or 2 MP, both sides on a 32-pixel grid, video at
      24 fps), which some modes, like Retake, need.
    - **First / last frame:** the clip opens on a picture and can end on a second one.
-   - **Continue a video:** carries a clip on from its last frames.
+   - **Continue a video:** carries a clip on from its last frames. Hunt 1 to 3 takes like any shot; the
+     finish refines the picked take at full size and joins the source back on, so the final is the whole
+     continued video.
 
    Create is laid out as numbered steps (what kind of shot, who's in it, what it builds on, what happens,
    shape and size) beside a pinned **Your shot** card that shows the frame in its shape and the Hunt button.
@@ -525,6 +527,9 @@ stays against the right edge.
    changing faces a little). Every final and enhanced copy sits in one
    **Finished versions** card. **Compare** plays up to four takes, finals or copies in sync: side by side, as a
    wipe or in a grid, zoomed in on the same spot, with frame-by-frame stepping.
+   From any finished version, **Continue from this** opens a new Continue shot with it as the source (same
+   character, LoRAs and shape), and **Use the last frame** saves its final frame as a picture in the Library,
+   to start a new shot from it as the first frame or to change it in Create → Image first.
 4. **Shots.** Every shot keeps its runs, previews and finals. **Show in folder** opens the file. The Shots page
    groups them by the day you last worked on them (older ones by month; each day's heading stays at the top as
    you scroll and folds away with a click) and filters them by status, when, kind of shot, who's in it and
@@ -1142,7 +1147,7 @@ Seedance finish, and New angle. Training a character runs on your PC, RunPod or 
 
 ## Agents (MCP)
 
-IV Studio includes a local MCP server (stdio) with 212 tools. It uses the same projects, characters, voices
+IV Studio includes a local MCP server (stdio) with 213 tools. It uses the same projects, characters, voices
 and songs as the window, so Claude Code or any MCP client can render shots and sequences, make pictures,
 speak lines, make music, cut them together and export. **Settings → Agents** has the command for your
 install, a message to paste into any agent, and a button that adds the IV Studio skill to Claude Code.
@@ -1165,7 +1170,7 @@ Agents learn how to use it from `resources/agent-guide.md`: the server's instruc
 <summary>All tools</summary>
 
 - **Guide and start menu:** `get_guide`, `get_menu`.
-- **Images:** `list_image_models`, `make_image`, `list_images`, `get_image`, `cancel_image`, `delete_image`.
+- **Images:** `list_image_models`, `make_image`, `list_images`, `get_image`, `cancel_image`, `delete_image`, `last_frame`.
 - **This PC:** `scan_hardware` (what Check my PC sees and recommends), `free_memory`.
 - **Shots:** `check_setup`, `install_node_packs`, `check_comfy_updates`, `update_comfy`, `undo_comfy_update`, `list_characters`, `list_projects`, `plan_render`, `check_prompt`,
   `list_samplers`, `generate_previews`, `finish_candidate`, `enhance_final`, `rank_takes`, `use_clean_stretch`, `review_take`, `make_previs`, `soften_mouth`.

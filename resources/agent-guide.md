@@ -50,7 +50,12 @@ slowest step. On a 4090: Quality about 3 min to hunt and 3 min to finish, Low me
 
 Modes: `text` (prompt only), `reference` (pictures, videos or audio named `<Picture 1>`,
 `<Video 1>`, `<Audio 1>` in the prompt), `frames` (first and optional last frame), `continue`
-(extend a video from its last frames). `voiceLine` lip-syncs the previews to a recording.
+(extend a video from its last frames; 1-3 takes, and `finish_candidate` refines the picked take at
+`megapixels` and joins the source back on, so the final is the whole continued video; `continueFull: false`
+makes the old single take finished in one DLSS pass at preview size). `voiceLine` lip-syncs the previews to a
+recording. To start a new shot where a finished one ends: `generate_previews` mode `continue` with the final
+as the media video, or `last_frame` on it and mode `frames` with that picture (or `make_image` mode edit to
+change the picture first).
 `prepare_media` crops pictures and trims videos and sounds first (first/last frames should be
 cropped to the shot's aspect, because they're stretched to fit).
 

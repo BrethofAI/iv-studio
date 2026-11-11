@@ -270,6 +270,7 @@ const request = {
   scheduler: z.string().optional().describe('Preview scheduler (list_samplers); default beta'),
   media,
   overlapFrames: z.number().int().optional().describe('continue mode: 5, 22, 39 or 56'),
+  continueFull: z.boolean().optional().describe('continue mode (H3): true, the default here, hunts previews (1-3 takes) and finish_candidate then refines the picked take at the finish size and joins the source back on, so the final is the whole continued video; false makes one take, finished in one DLSS pass at preview size'),
   voiceLine: z.string().optional().describe('Absolute path to a voice recording; the previews lip-sync to it'),
   refmods: z.array(z.object({ name: z.string(), strength: z.number().min(0).max(1).optional(), copies: z.number().int().min(1).max(10).optional() })).optional(),
   retention: z.number().min(0).max(1).optional(),
@@ -286,7 +287,8 @@ const finish = {
   enhancer: z.enum(['dlss', 'seedvr2']).default('dlss').describe('dlss: DLSS 5 in the finish (noise reduction, upscale2x, fps). seedvr2: the finish skips DLSS and SeedVR2 then restores detail to enhanceResolution (24 fps); follow the enhanceJob of the finish job with get_job'),
   enhanceResolution: z.union([z.literal(1080), z.literal(1440), z.literal(2160)]).default(1080).describe('seedvr2: the short side'),
   dlssStrength: z.number().min(0).max(2).optional().describe("DLSS 5's strength (its noise reduction), 0-2; 0.8 is IV Studio's tested default. Higher adds contrast and skin texture; lower stays closest to the take"),
-  dlssStyle: z.enum(['Default', 'Natural', 'Cinematic']).optional().describe("DLSS 5's look")
+  dlssStyle: z.enum(['Default', 'Natural', 'Cinematic']).optional().describe("DLSS 5's look"),
+  continueFinish: z.enum(['full', 'single']).optional().describe('A continue shot hunted with continueFull: full (default) refines the take at megapixels and joins the source back on; single finishes in one DLSS pass at preview size')
 }
 
 // The full how-to, as plain markdown (resources/agent-guide.md, also the Claude Code skill), or MiniMax's own H3
@@ -395,6 +397,8 @@ tool('generate_previews', 'Start preview candidates (takes). Returns a job at on
   const errors = blocking(checkRequest(args))
   if (errors.length && !force) throw new Error(`The prompt checker found ${errors.length} error${errors.length > 1 ? 's' : ''}: ${errors.map((f) => f.message).join(' | ')} Fix the prompt (check_prompt gives fixes), or pass force: true.`)
   if (readSettings(BASE).target !== 'cloud') await voices.release()
+  // a continue shot started here hunts takes and gets the full finish, like one made in the window
+  if (args.mode === 'continue' && args.continueFull === undefined) args.continueFull = true
   return studio.generatePreviews(applySpeed(args, savedSpeed(readSettings(BASE))))
 })
 tool('finish_candidate', "Finish one preview candidate (2 MP pass, then DLSS 5 with optional RTX 2x and frame generation, or SeedVR2 with enhancer seedvr2) from its recorded settings. Reuses the candidate's saved latent. A Seedance take: way seedance (a draft only) renders it again at 1080p on the person's Comfy.org credits (price_shot with jobId gives the price; pass confirm_cost after they agree); way local finishes it free on this PC, with refiner seedvr2 (the default: SeedVR2 to resolution 1080 or 1440, keeps faces, about 4 minutes), dlss (DLSS 5 to the same size, about 15 s, adds a little skin texture) or h3 (H3 refines it at megapixels, strength light or medium, then DLSS 5; faces shift a little; useLora adds the character's LoRA); way take uses it as it is.", { jobId: z.string().describe('The previews job id'), ...finish, way: z.enum(['seedance', 'local', 'take']).optional().describe('Seedance takes only'), refiner: z.enum(['seedvr2', 'dlss', 'h3', 'h3seedvr2']).optional().describe('way local: seedvr2 (default, cleanest), dlss (DLSS 5, quickest), h3 (H3 pass then DLSS 5) or h3seedvr2 (H3 pass then SeedVR2 to resolution; follow the enhanceJob of the finish job)'), resolution: z.union([z.literal(1080), z.literal(1440)]).optional().describe('way local, seedvr2, dlss or h3seedvr2: the short side'), strength: z.union([z.enum(['light', 'medium']), z.number().min(0.05).max(0.5)]).optional().describe('way local, h3 or h3seedvr2: light (0.1), medium (0.2) or a number 0.05-0.5; above 0.2 faces change clearly'), detail: z.number().min(0).max(1).optional().describe('way local, seedvr2 or h3seedvr2: added detail, 0 (default) to about 0.3'), useLora: z.boolean().optional().describe('way local, h3'), confirm_cost: z.number().optional() }, async ({ confirm_cost, ...args }) => {
@@ -1486,6 +1490,7 @@ tool('picture_tool', 'Run a one-step tool on a picture on this PC (free, local);
   seed: z.number().int().min(0).optional(),
   name: z.string().optional()
 }, async (args) => (readSettings(BASE).target === 'cloud' || (await voices.release()), images.tool(Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined)))))
+tool('last_frame', "Save the exact last frame of a video (a finished version's file from get_job, or any local video) as a picture in IV Studio's Library (Images). Returns the picture set; files[0] is the PNG. Use it as the first frame of a new shot (generate_previews mode frames, media picture) or edit it with make_image mode edit. To carry the motion on instead, use generate_previews mode continue with the video as its media.", { file: z.string().describe('Absolute path to the video'), name: z.string().optional() }, ({ file, name }) => images.lastFrame({ file, name }))
 tool('list_images', 'Every picture set made in IV Studio, newest first, with status, files (once finished), model, prompt and seed.', {}, () => images.list())
 tool('get_image', 'One picture set, brought up to date: status (queued, running, success, error), progress, and its files once finished.', { imageId: z.string() }, ({ imageId }) => images.get(imageId))
 tool('cancel_image', 'Stop a picture set that is still being made. Never touches other ComfyUI work.', { imageId: z.string() }, ({ imageId }) => images.cancel(imageId))

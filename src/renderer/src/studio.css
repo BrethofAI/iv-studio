@@ -12476,6 +12476,18 @@ button.set-chip:hover {
   background: var(--ink-3);
   border: 1px solid var(--line);
 }
+.lastframe-drawer {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--ink-3);
+  border: 1px solid var(--line);
+}
+.lastframe-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .enhance-grid {
   grid-template-columns: minmax(0, 1fr);
   gap: 10px;

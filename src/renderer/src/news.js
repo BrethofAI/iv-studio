@@ -2,6 +2,15 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.1',
+    items: [
+      { text: 'Continue from this: every finished version can start a new Continue shot that carries it on, with the same character, LoRAs and shape.' },
+      { text: 'Continue shots made in Create now hunt 1 to 3 takes and finish like any shot: the picked take is refined at full size and joined to the source, so the final is the whole continued video.' },
+      { text: 'Use the last frame: save a finished version’s final frame as a picture in the Library, then start a new shot from it or change it in Create → Image.' },
+      { text: 'Sequences’ character list shows only characters with a LoRA, and says which reference-pack characters it can’t use.' }
+    ]
+  },
+  {
     version: '1.1.0',
     items: [
       { text: 'The rules for MiniMax H3: before your first H3 render, IV Studio shows them in plain words and asks you to agree to its terms once. Read them again, or report misuse, in Settings › About.' },

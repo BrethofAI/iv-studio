@@ -167,7 +167,7 @@ contextBridge.exposeInMainWorld('ivstudio', {
     onLog: on('training:log'),
     onChanged: on('training:changed')
   },
-  media: { probe: call('media:probe'), prepare: call('media:prepare'), pathFor: (file) => webUtils.getPathForFile(file) },
+  media: { probe: call('media:probe'), prepare: call('media:prepare'), localCopy: call('media:localCopy'), pathFor: (file) => webUtils.getPathForFile(file) },
   agents: {
     info: call('agents:info'),
     installSkill: call('agents:installSkill'),
@@ -310,7 +310,8 @@ contextBridge.exposeInMainWorld('ivstudio', {
     toEdit: call('images:toEdit'),
     toolsStatus: call('images:toolsStatus'),
     tool: call('images:tool'),
-    saveMask: call('images:saveMask')
+    saveMask: call('images:saveMask'),
+    lastFrame: call('images:lastFrame')
   },
   clipfx: { meta: call('clipfx:meta'), status: call('clipfx:status'), run: call('clipfx:run'),
     preview: call('clipfx:preview'), live: call('clipfx:live'), runs: call('clipfx:runs'), deleteRun: call('clipfx:deleteRun'), onProgress: on('clipfx:progress') },

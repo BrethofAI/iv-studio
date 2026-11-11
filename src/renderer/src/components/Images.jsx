@@ -32,7 +32,7 @@ const sizeOf = (aspect, mp) => {
 }
 
 // Create -> Image: Generate and Edit with the person's own image models, their LoRAs, and a gallery.
-export default function Images({ kindSwitch, notify, go, pictureToShot, incomingLora = null, clearIncomingLora = () => {} }) {
+export default function Images({ kindSwitch, notify, go, pictureToShot, incomingLora = null, clearIncomingLora = () => {}, incomingPicture = null, clearIncomingPicture = () => {} }) {
   const [status, setStatus] = useState(null)
   const [form, setForm] = useState(savedForm)
   const [sets, setSets] = useState([])
@@ -83,6 +83,14 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
     set({ mode: form.mode === 'edit' && f.edit ? 'edit' : 'generate', family: f.id, model: f.models.includes(form.model) ? form.model : f.models[0], loras: [...keep, { name: incomingLora.name, strength: info?.prefs?.strength ?? 1 }], prompt: words.length ? `${words.join(', ')}. ${form.prompt}` : form.prompt })
     notify(`${incomingLora.title || loraTitle(incomingLora.name)} is on, with ${f.label}.`, 'info')
   }, [incomingLora, status])
+  // a picture handed over to change (a finished version's last frame): Edit, with it as the picture to edit
+  useEffect(() => {
+    if (!incomingPicture || !status) return
+    clearIncomingPicture()
+    I().list().then(setSets, () => {})
+    editThis(incomingPicture)
+    if (families.some((x) => x.ready && x.edit)) notify('The last frame is ready to edit. Say what to change, then make it.', 'info')
+  }, [incomingPicture, status])
   // keep a family and checkpoint that fit the mode
   useEffect(() => {
     if (!status) return
@@ -397,7 +405,7 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
                     {s.name}
                   </span>
                   <span className="mono small dim">
-                    {s.mode === 'tool' ? `${s.familyLabel} · tool` : `${s.familyLabel} · ${s.mode === 'edit' ? 'edit' : 'generate'} · seed ${s.seed}`}
+                    {s.mode === 'frame' ? 'Last frame of a video' : s.mode === 'tool' ? `${s.familyLabel} · tool` : `${s.familyLabel} · ${s.mode === 'edit' ? 'edit' : 'generate'} · seed ${s.seed}`}
                   </span>
                   <button className="link-btn small" onClick={() => remove(s)}>
                     Delete
@@ -457,7 +465,8 @@ export default function Images({ kindSwitch, notify, go, pictureToShot, incoming
             if (v.mode === 'tool') {
               setToFix(v.refs?.[0] || null)
               set({ mode: 'tools' })
-            } else set({ mode: v.mode, family: v.family, model: v.model, prompt: v.prompt, negative: v.negative || '', loras: v.loras || [], aspect: v.aspect, megapixels: v.megapixels, count: v.count, seed: '', refs: v.refs || [] })
+            } else if (v.mode === 'frame') set({ mode: 'edit', refs: v.files || [] })
+            else set({ mode: v.mode, family: v.family, model: v.model, prompt: v.prompt, negative: v.negative || '', loras: v.loras || [], aspect: v.aspect, megapixels: v.megapixels, count: v.count, seed: '', refs: v.refs || [] })
             setViewing(null)
           }}
         />
@@ -502,7 +511,7 @@ function ImageViewer({ set, index, onIndex, onClose, onEdit, onFix, onShot, onEd
           <p className="image-set-name">{set.name}</p>
           <p className="small dim">{set.prompt}</p>
           <p className="mono small dim">
-            {set.mode === 'tool' ? set.familyLabel : `${set.familyLabel} · ${shortName(set.model)} · seed ${set.seed}`}
+            {set.mode === 'tool' || set.mode === 'frame' ? set.familyLabel : `${set.familyLabel} · ${shortName(set.model)} · seed ${set.seed}`}
             {set.files.length > 1 ? ` · ${index + 1} of ${set.files.length}` : ''}
           </p>
           <div className="image-viewer-actions">
