@@ -2,6 +2,15 @@
 // version's once, until it's dismissed; Settings → Updates lists the last few versions'.
 export const NEWS = [
   {
+    version: '1.1.8',
+    items: [
+      { text: 'More than one character in a shot: in Create’s “Who’s in it”, click several. The first leads with their trained look; the others come along as their face pictures, and Write it for me names them.' },
+      { text: 'Fixed: the storyboard of a long film stopped with “The writer returned something unreadable”. Long scenes are planned in parts, and if a writer’s answer is cut short anyway the board keeps what it finished and says so.' },
+      { text: 'Fixed: H3 files kept straight in diffusion_models (not in a “Minimax H3” folder) showed as installed but failed to render. IV Studio now uses each model’s name as your ComfyUI lists it.' },
+      { text: 'Hermes errors in the chat show Hermes’s own details, not just “Internal error”.' }
+    ]
+  },
+  {
     version: '1.1.7',
     items: [
       { text: 'A simpler welcome: it starts by asking how much you know about AI video. New to it? Everyday words, fewer choices, and IV Studio picks the settings for you. Then name yourself, your helper and your colour, and it checks your PC.' },
