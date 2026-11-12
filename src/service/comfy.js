@@ -201,8 +201,15 @@ function summariseNodeErrors(errs) {
 }
 
 // Swaps model file names in a graph's inputs (IV Studio's own build -> the version this ComfyUI has).
+// map keys are file names; a graph's value matches with or without its folder ("Minimax H3\x.safetensors" or "x.safetensors")
+const MODEL_FILE = /\.(safetensors|gguf|sft|ckpt|pt|pth|bin)$/i
 export function renameFiles(prompt, map) {
   if (!map || !Object.keys(map).length) return prompt
-  for (const node of Object.values(prompt)) for (const [k, v] of Object.entries(node.inputs || {})) if (typeof v === 'string' && map[v]) node.inputs[k] = map[v]
+  for (const node of Object.values(prompt))
+    for (const [k, v] of Object.entries(node.inputs || {})) {
+      if (typeof v !== 'string' || !MODEL_FILE.test(v)) continue
+      const to = map[v] ?? map[v.replace(/\\/g, '/').split('/').pop()]
+      if (to && to !== v) node.inputs[k] = to
+    }
   return prompt
 }

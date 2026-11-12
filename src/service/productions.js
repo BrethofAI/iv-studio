@@ -62,7 +62,8 @@ const SHOT_SCHEMA = {
       minItems: 1,
       items: {
         type: 'object',
-        properties: { action: { type: 'string' }, staging: { type: 'string' }, camera: { type: 'string' }, characters: { type: 'array', items: { type: 'string' } }, speaker: { type: 'string' }, line: { type: 'string' }, seconds: { type: 'number' }, ends: { type: 'string' } },
+        // length limits keep a small local writer from running on in one field until its answer is cut off (#27)
+        properties: { action: { type: 'string', maxLength: 500 }, staging: { type: 'string', maxLength: 500 }, camera: { type: 'string', maxLength: 160 }, characters: { type: 'array', maxItems: 8, items: { type: 'string', maxLength: 60 } }, speaker: { type: 'string', maxLength: 60 }, line: { type: 'string', maxLength: 800 }, seconds: { type: 'number' }, ends: { type: 'string', maxLength: 400 } },
         required: ['action', 'staging', 'camera', 'characters', 'speaker', 'line', 'seconds', 'ends']
       }
     }
@@ -541,8 +542,14 @@ export class Productions {
       // a coverage plan (Slate's): exactly its shots, in its order, each named by its slot
       const plan = sc.coverage?.shots?.length ? sc.coverage : null
       const people = [...new Set(p.cast.map((c) => this.character(c.characterId)?.name?.split(/\s+/)[0] || c.as).filter(Boolean))]
-      const out = await askWriter(this.writer(), { system: plan ? `${SHOT_RULES}\n\n${coverageRules(plan, { people })}` : SHOT_RULES, user, schema: SHOT_SCHEMA, cpu })
+      // a long scene (a 5-minute film has scenes of a minute or more) gets room for its shots; an answer cut off
+      // anyway keeps the shots it finished, and the board says so (GitHub #27)
+      const long = share > 60
+      const out = await askWriter(this.writer(), { system: plan ? `${SHOT_RULES}\n\n${coverageRules(plan, { people })}` : SHOT_RULES, user, schema: SHOT_SCHEMA, cpu, ctx: long ? 24576 : 16384, maxTokens: long ? 14000 : 8000, salvage: true })
       if (plan) out.shots = (out.shots || []).slice(0, plan.shots.length)
+      out.shots = (out.shots || []).filter((s) => s && String(s.action || '').trim())
+      const sceneNo = p.scenes.findIndex((s) => s.id === sid) + 1
+      if (!out.shots.length) throw new Error(`The writer gave no shots for scene ${sceneNo}. Try again, or pick another writer in Settings → Prompt writer.`)
       const shots = (out.shots || []).map((s, k) => ({
         id: id6(),
         action: String(s.action || '').trim(),
@@ -565,10 +572,18 @@ export class Productions {
         if (t) Object.assign(t, { shots, stale: false })
         q.breakdown.scenesDone++
         q.breakdown.shots += shots.length
+        if (out._cut) q.breakdown.cutScenes = [...(q.breakdown.cutScenes || []), sceneNo]
       })
+      // a shot whose prompt can't be written is left to write again from its drawer; the rest carry on
       for (const sh of shots) {
-        await this.writeShotPrompt(id, sid, sh.id, { cpu })
-        this.patch(id, (q) => q.breakdown.shotsDone++)
+        const failed = await this.writeShotPrompt(id, sid, sh.id, { cpu }).then(
+          () => false,
+          () => true
+        )
+        this.patch(id, (q) => {
+          q.breakdown.shotsDone++
+          if (failed) q.breakdown.promptErrors = (q.breakdown.promptErrors || 0) + 1
+        })
       }
     }
     const sketchError = sketch ? await this.sketch(id).then(() => null, (err) => err.message) : null

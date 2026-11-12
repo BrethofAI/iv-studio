@@ -47,10 +47,26 @@ ok('the 8-step turbo LoRA is not taken for the 4-step DMAD LoRA', () => {
 
 ok('a ComfyUI set up from the templates: the encoder and the subfolder LoRA are swapped in, the upscaler is missing', () => {
   const map = modelFileMap(manifest, TEMPLATES)
-  assert.deepEqual(map, {
-    'qwen3vl_32b_minimax_h3_int4_convrot.safetensors': 'qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors',
-    'minimax_h3_DMAD_4step_full_lora_avg_rank_39_bf16.safetensors': 'MiniMax H3\\minimax_h3_DMAD_4step_full_lora_avg_rank_39_bf16.safetensors'
-  })
+  assert.equal(map['qwen3vl_32b_minimax_h3_int4_convrot.safetensors'], 'qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors')
+  assert.equal(map['minimax_h3_DMAD_4step_full_lora_avg_rank_39_bf16.safetensors'], 'MiniMax H3\\minimax_h3_DMAD_4step_full_lora_avg_rank_39_bf16.safetensors')
+  // files at the top of their folder are mapped too, so a graph naming a subfolder finds them (GitHub #29)
+  assert.equal(map['minimax_h3_fl2va_pruned_int8_convrot.safetensors'], 'minimax_h3_fl2va_pruned_int8_convrot.safetensors')
+  for (const m of manifest.models.filter((m) => /Upscaler/.test(m.loader || ''))) assert.equal(map[m.match], undefined, m.id)
+})
+
+ok('#29: H3 at the top of diffusion_models while the graph names "Minimax H3\\": every loader gets the listed name', () => {
+  const graph = structuredClone(template)
+  const unets = () => Object.values(graph).filter((n) => n.class_type === 'UNETLoader').map((n) => n.inputs.unet_name)
+  assert.ok(unets().some((v) => /^Minimax H3[\\/]/.test(v)), 'the bundled graph names a subfolder')
+  renameFiles(graph, modelFileMap(manifest, TEMPLATES))
+  for (const v of unets()) assert.ok(!/[\\/]/.test(v), v)
+  // the other way round: a ComfyUI keeping the file in a subfolder, Linux-style
+  const sub = info({ UNETLoader: ['unet_name', ['Minimax H3/minimax_h3_fl2va_pruned_int8_convrot.safetensors']] })
+  assert.equal(renameFiles({ a: { inputs: { unet_name: 'minimax_h3_fl2va_pruned_int8_convrot.safetensors' } } }, modelFileMap(manifest, sub)).a.inputs.unet_name, 'Minimax H3/minimax_h3_fl2va_pruned_int8_convrot.safetensors')
+  // a Settings → Models pick saved with the old subfolder name
+  assert.equal(renameFiles({ a: { inputs: { unet_name: 'Minimax H3\\minimax_h3_fl2va_pruned_int8_convrot.safetensors' } } }, modelFileMap(manifest, TEMPLATES)).a.inputs.unet_name, 'minimax_h3_fl2va_pruned_int8_convrot.safetensors')
+  // text that isn't a model file name is never touched
+  assert.equal(renameFiles({ a: { inputs: { text: 'x' } } }, { x: 'y' }).a.inputs.text, 'x')
 })
 
 ok('the swap reaches every loader of the H3 workflow, and nothing else', () => {

@@ -860,6 +860,18 @@ function Board({ v, act, characters, openShot, setStep, mode }) {
         </div>
       )}
       {b?.sketchError && !film && <p className="small pink">Sketches: {b.sketchError}</p>}
+      {b?.state === 'done' && !film && b.cutScenes?.length > 0 && (
+        <p className="small pink">
+          The writer’s answer for scene {b.cutScenes.join(', ')} was cut short, so it may be missing its last moments. Check it, or{' '}
+          <button className="link-btn small" onClick={() => act(() => P().breakDown(v.id, { sceneIds: b.cutScenes.map((n) => v.scenes[n - 1]?.id).filter(Boolean), sketch: true }))}>
+            plan {b.cutScenes.length === 1 ? 'it' : 'them'} again
+          </button>
+          .
+        </p>
+      )}
+      {b?.state === 'done' && !film && b.promptErrors > 0 && (
+        <p className="small pink">{b.promptErrors === 1 ? 'One shot has' : `${b.promptErrors} shots have`} no prompt yet: the writer’s answer couldn’t be read. Open the shot and press Write the prompt.</p>
+      )}
       {v.scenes.map((sc, k) => (
         <div key={sc.id} className="wiz-scene">
           <div className="wiz-scene-head">

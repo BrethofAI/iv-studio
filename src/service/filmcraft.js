@@ -21,10 +21,10 @@ import { ollamaJson } from './prompter.js'
 // writer: { engine, model } from writerOf (paths.js). Claude Code and Codex answer through harness.js; anything else
 // (the local writer in Ollama or on an OpenAI-compatible server; Context IR, which only writes H3 prompts) through
 // the local writer. Returns the parsed JSON object of `schema`'s shape.
-export async function askWriter(writer, { system, user, schema, cpu = false, temperature = 0.5, ctx = 16384, timeoutMs = 600000 }) {
+export async function askWriter(writer, { system, user, schema, cpu = false, temperature = 0.5, ctx = 16384, timeoutMs = 600000, maxTokens, salvage = false }) {
   const w = writer || { engine: 'local' }
   if (isHarness(w.engine)) return harnessJson({ engine: w.engine, model: w.model, system, user: `${user}\n\nAnswer with the JSON object only.`, schema, timeoutMs })
-  return ollamaJson({ system, user, schema, model: w.engine === 'local' ? w.model || undefined : undefined, cpu, temperature, ctx })
+  return ollamaJson({ system, user, schema, model: w.engine === 'local' ? w.model || undefined : undefined, cpu, temperature, ctx, salvage, ...(maxTokens ? { maxTokens } : {}) })
 }
 export const writerName = (w) => ({ claude: 'Claude Code', codex: 'Codex', hermes: 'Hermes' })[w?.engine] || (w?.provider === 'openai' ? 'the OpenAI-compatible writer' : 'the local writer')
 

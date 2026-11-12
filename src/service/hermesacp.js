@@ -61,6 +61,18 @@ const startExe = (exe, args, opts) => {
 
 // server: IV Studio's MCP server for the chat, or null for a plain answer (the prompt writer). images: [{ data, mimeType }]
 // sent with the text when Hermes says its model takes pictures (promptCapabilities.image); otherwise left out.
+// A JSON-RPC error from Hermes in words: its message plus error.data.details (or data.message, or data as text) when
+// there is one, since "Internal error" alone hides the real cause, like a Windows permissions problem (GitHub #31).
+export function acpErrorText(error) {
+  const head = String(error?.message || '').trim() || 'Hermes refused.'
+  const d = error?.data
+  const raw = typeof d === 'string' ? d : d?.details ?? d?.detail ?? d?.message ?? (d && typeof d === 'object' && Object.keys(d).length ? JSON.stringify(d) : '')
+  const details = String(raw || '').trim()
+  if (!details || head.includes(details)) return head
+  const short = details.length > 800 ? `${details.slice(0, 800)}…` : details
+  return `${head.replace(/[.:\s]+$/, '')}: ${short}`
+}
+
 export function hermesTurn({ exe, cwd, server, session = null, text, images = [], model = '', emit = () => {}, env = process.env, spawnFn = startExe }) {
   const child = spawnFn(exe, [], { cwd, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
   let buf = ''
@@ -155,7 +167,7 @@ export function hermesTurn({ exe, cwd, server, session = null, text, images = []
       if (m.id != null && !m.method && pending.has(m.id)) {
         const p = pending.get(m.id)
         pending.delete(m.id)
-        if (m.error) p.reject(new Error(m.error.message || 'Hermes refused.'))
+        if (m.error) p.reject(new Error(acpErrorText(m.error)))
         else p.resolve(m.result)
       } else if (m.method === 'session/update') onUpdate(m.params?.update)
       else if (m.method && m.id != null) onRequest(m)

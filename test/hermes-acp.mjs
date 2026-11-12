@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { findHermes, hermesTool, hermesTurn, modelOption } from '../src/service/hermesacp.js'
+import { acpErrorText, findHermes, hermesTool, hermesTurn, modelOption } from '../src/service/hermesacp.js'
 import { applyChatEvent, newChat, startChatTurn } from '../src/service/agentchat.js'
 
 let n = 0
@@ -160,6 +160,15 @@ await ok('the chat runs a Hermes turn and keeps it as a conversation', async () 
   // the MCP server gets the chat's flags
   const env = reqs().find((m) => m.method === 'session/new').params.mcpServers[0].env.map((e) => e.name)
   assert.ok(env.includes('IV_STUDIO_AGENT_RUN') && env.includes('IV_STUDIO_AGENT_ASK'))
+})
+
+await ok("#31: Hermes's error.data.details shows with its message", () => {
+  assert.equal(acpErrorText({ code: -32603, message: 'Internal error', data: { details: 'PermissionError: [WinError 5] Access is denied' } }), 'Internal error: PermissionError: [WinError 5] Access is denied')
+  assert.equal(acpErrorText({ message: 'Internal error', data: 'boom' }), 'Internal error: boom')
+  assert.equal(acpErrorText({ message: 'Invalid params', data: { field: 'cwd' } }), 'Invalid params: {"field":"cwd"}')
+  assert.equal(acpErrorText({ message: 'Internal error' }), 'Internal error')
+  assert.equal(acpErrorText({}), 'Hermes refused.')
+  assert.ok(acpErrorText({ message: 'x', data: { details: 'y'.repeat(2000) } }).length < 820)
 })
 
 console.log(`${n - failed}/${n} passed`)
