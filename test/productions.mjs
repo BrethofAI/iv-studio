@@ -4,7 +4,7 @@ import { shotName } from '../src/service/studio.js'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { Productions, animaticPlan, asFirstFrame, beatOf, facePrompt, heading, isOutside, oneTake, placePicture, placePrompt, scriptText, sketchPrompt, spokenWords, withLine, withRoom, withSilence, wordMatch } from '../src/service/productions.js'
+import { Productions, animaticPlan, asFirstFrame, beatOf, facePrompt, heading, isOutside, oneTake, placePicture, placePrompt, sceneParts, scriptText, shotSchemaFor, sketchPrompt, spokenWords, withLine, withRoom, withSilence, wordMatch } from '../src/service/productions.js'
 import { parseScript } from '../src/service/screenplay.js'
 
 let n = 0
@@ -261,5 +261,22 @@ ok('a continuous shot needs a shot before it in its scene', () => {
   assert.equal(a.continues, false, 'the first shot of a scene has nothing to carry on from')
   assert.equal(b.continues, true)
   fs.rmSync(dir, { recursive: true, force: true })
+})
+ok('#27: a long scene is planned in parts between script elements; each answer is capped by its seconds', () => {
+  const lines = []
+  for (let i = 0; i < 32; i++) lines.push(`Tess picks up part ${i} and turns it under the lamp.\n\n${i % 2 ? 'THEO' : 'TESS'}\nLine number ${i} of the long night.`)
+  const sc = parseScript(`INT. WORKSHOP - NIGHT\n\n${lines.join('\n\n')}`).scenes[0]
+  assert.equal(sceneParts(sc, 50).length, 1, 'a short scene stays whole')
+  assert.equal(sceneParts(sc, 75).length, 1)
+  const parts = sceneParts(sc, 300)
+  assert.equal(parts.length, 5)
+  // every line is in exactly one part, in order, and the seconds add up to about the scene's
+  const all = parts.map((x) => x.text).join('\n')
+  for (let i = 0; i < 32; i++) assert.equal(all.split(`Line number ${i} of`).length - 1, 1, `line ${i}`)
+  assert.ok(all.indexOf('Line number 31') > all.indexOf('Line number 0'))
+  assert.ok(Math.abs(parts.reduce((t, x) => t + x.seconds, 0) - 300) <= 5)
+  assert.match(parts[1].text, /^INT\. WORKSHOP - NIGHT \(continued\)/)
+  assert.equal(shotSchemaFor(60).properties.shots.maxItems, 22)
+  assert.equal(shotSchemaFor(5).properties.shots.maxItems, 4)
 })
 console.log(`${n} checks passed`)

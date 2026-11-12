@@ -71,6 +71,36 @@ const SHOT_SCHEMA = {
   required: ['shots']
 }
 
+// The shot schema for a stretch of this many seconds: no more shots than 3-second shots would fill, plus two (#27).
+export function shotSchemaFor(seconds) {
+  const s = structuredClone(SHOT_SCHEMA)
+  s.properties.shots.maxItems = Math.max(3, Math.ceil(seconds / 3) + 2)
+  return s
+}
+
+// A scene in parts of about `each` seconds for the shot planner, split between script elements (a line of dialogue
+// or a paragraph of action is never cut), each with its share of the scene's seconds: [{ text, seconds }].
+// A scene up to 1.25 parts long stays whole.
+export function sceneParts(scene, seconds, each = 60) {
+  const els = scene.elements || []
+  const n = Math.min(els.length, Math.ceil(seconds / each))
+  if (n <= 1 || seconds <= each * 1.25) return [{ text: sceneText(scene), seconds }]
+  const size = (e) => String(e.text || '').length + 20
+  const total = els.reduce((t, e) => t + size(e), 0)
+  const groups = [[]]
+  let done = 0
+  for (const e of els) {
+    // start the next part once this one has its share (and there are parts left to fill)
+    if (groups[groups.length - 1].length && groups.length < n && done >= (total * groups.length) / n) groups.push([])
+    groups[groups.length - 1].push(e)
+    done += size(e)
+  }
+  return groups.map((g, k) => ({
+    text: sceneText({ heading: `${scene.heading}${k ? ' (continued)' : ''}`, elements: g }),
+    seconds: Math.max(6, Math.round((seconds * g.reduce((t, e) => t + size(e), 0)) / total))
+  }))
+}
+
 // withLine lives with the prompt checker now (Create's writers use it too)
 export { withLine }
 
@@ -538,16 +568,26 @@ export class Productions {
       // the scene's share of the film's length, by how much script it has
       const size = (s) => sceneText(s).length
       const share = Math.max(6, Math.round((p.targetSeconds * size(sc)) / Math.max(1, p.scenes.reduce((n, s) => n + size(s), 0))))
-      const user = [`Film: ${p.name}${p.logline ? `. ${p.logline}` : ''}`, castNames.length ? `Cast: ${castNames.join(', ')}` : '', loc?.description ? `${loc.name}: ${loc.description}` : '', lookWords(p.look) ? `Look: ${lookWords(p.look)}` : '', `Seconds for this scene: about ${share} (${Math.max(1, Math.round(share / 6))} shots or so).`, `Scene:\n${sceneText(sc)}`].filter(Boolean).join('\n')
+      const head = [`Film: ${p.name}${p.logline ? `. ${p.logline}` : ''}`, castNames.length ? `Cast: ${castNames.join(', ')}` : '', loc?.description ? `${loc.name}: ${loc.description}` : '', lookWords(p.look) ? `Look: ${lookWords(p.look)}` : '']
       // a coverage plan (Slate's): exactly its shots, in its order, each named by its slot
       const plan = sc.coverage?.shots?.length ? sc.coverage : null
       const people = [...new Set(p.cast.map((c) => this.character(c.characterId)?.name?.split(/\s+/)[0] || c.as).filter(Boolean))]
-      // a long scene (a 5-minute film has scenes of a minute or more) gets room for its shots; an answer cut off
-      // anyway keeps the shots it finished, and the board says so (GitHub #27)
-      const long = share > 60
-      const out = await askWriter(this.writer(), { system: plan ? `${SHOT_RULES}\n\n${coverageRules(plan, { people })}` : SHOT_RULES, user, schema: SHOT_SCHEMA, cpu, ctx: long ? 24576 : 16384, maxTokens: long ? 14000 : 8000, salvage: true })
-      if (plan) out.shots = (out.shots || []).slice(0, plan.shots.length)
-      out.shots = (out.shots || []).filter((s) => s && String(s.action || '').trim())
+      // A long scene (a 5-minute film can be one scene of several minutes) is planned in parts of about a minute,
+      // each carrying on from where the last ended, and each answer may hold only as many shots as its seconds
+      // allow, so a small local writer can't loop until it's cut off. An answer cut off anyway keeps the shots it
+      // finished, and the board says so (GitHub #27). A coverage plan is planned whole.
+      const parts = plan ? [{ text: sceneText(sc), seconds: share }] : sceneParts(sc, share)
+      const out = { shots: [], _cut: false }
+      for (const [k, part] of parts.entries()) {
+        const where = parts.length > 1 ? [`This is part ${k + 1} of ${parts.length} of the scene: plan the shots for this part only.`, out.shots.length ? `It opens as the previous part ended: ${out.shots[out.shots.length - 1].ends || out.shots[out.shots.length - 1].action}` : ''] : []
+        const user = [...head, ...where, `Seconds for this ${parts.length > 1 ? 'part' : 'scene'}: about ${part.seconds} (${Math.max(1, Math.round(part.seconds / 6))} shots or so).`, `Scene:\n${part.text}`].filter(Boolean).join('\n')
+        const schema = plan ? SHOT_SCHEMA : shotSchemaFor(part.seconds)
+        const long = part.seconds > 60
+        const got = await askWriter(this.writer(), { system: plan ? `${SHOT_RULES}\n\n${coverageRules(plan, { people })}` : SHOT_RULES, user, schema, cpu, ctx: long ? 24576 : 16384, maxTokens: long ? 14000 : 8000, salvage: true })
+        out.shots.push(...(got.shots || []).filter((s) => s && String(s.action || '').trim()))
+        if (got._cut) out._cut = true
+      }
+      if (plan) out.shots = out.shots.slice(0, plan.shots.length)
       const sceneNo = p.scenes.findIndex((s) => s.id === sid) + 1
       if (!out.shots.length) throw new Error(`The writer gave no shots for scene ${sceneNo}. Try again, or pick another writer in Settings → Prompt writer.`)
       const shots = (out.shots || []).map((s, k) => ({

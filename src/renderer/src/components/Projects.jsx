@@ -1036,7 +1036,7 @@ function Panel({ v, sh, n, film, ch, face, onClick }) {
         ) : sh.sketch ? (
           <img src={fileUrl(sh.sketch)} alt="" />
         ) : (
-          <span className="wiz-panel-blank mono small">{sh.sketchSet ? 'Sketching…' : sh.prompt ? 'No sketch yet' : 'Planning…'}</span>
+          <span className="wiz-panel-blank mono small">{sh.sketchSet ? 'Sketching…' : sh.prompt ? 'No sketch yet' : v.breakdown?.state === 'running' ? 'Planning…' : 'No prompt yet'}</span>
         )}
         <span className="wiz-panel-n">{n}</span>
         {sh.slot && <span className="wiz-panel-slot wiz-panel-cont">{sh.slot}</span>}

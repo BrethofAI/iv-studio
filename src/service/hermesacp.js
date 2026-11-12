@@ -59,20 +59,23 @@ const startExe = (exe, args, opts) => {
   return spawn(viaShell ? `"${exe}"` : exe, args, { ...opts, shell: viaShell })
 }
 
-// server: IV Studio's MCP server for the chat, or null for a plain answer (the prompt writer). images: [{ data, mimeType }]
-// sent with the text when Hermes says its model takes pictures (promptCapabilities.image); otherwise left out.
-// A JSON-RPC error from Hermes in words: its message plus error.data.details (or data.message, or data as text) when
-// there is one, since "Internal error" alone hides the real cause, like a Windows permissions problem (GitHub #31).
+// A JSON-RPC error from Hermes in words: its message plus error.data.details (or data.message, data.errors' field
+// problems, or data as text) when there is one, since "Internal error" alone hides the real cause, like a Windows
+// permissions problem (GitHub #31). Hermes sends { message: 'Internal error', data: { details: 'not_found' } }, and
+// for a bad request pydantic's { data: { errors: [{ loc: ['cwd'], msg: 'Field required' }] } }.
 export function acpErrorText(error) {
   const head = String(error?.message || '').trim() || 'Hermes refused.'
   const d = error?.data
-  const raw = typeof d === 'string' ? d : d?.details ?? d?.detail ?? d?.message ?? (d && typeof d === 'object' && Object.keys(d).length ? JSON.stringify(d) : '')
+  const fields = Array.isArray(d?.errors) ? d.errors.map((e) => [[].concat(e?.loc || []).join('.'), e?.msg].filter(Boolean).join(': ')).filter(Boolean).join('; ') : ''
+  const raw = typeof d === 'string' ? d : d?.details ?? d?.detail ?? d?.message ?? (fields || (d && typeof d === 'object' && Object.keys(d).length ? JSON.stringify(d) : ''))
   const details = String(raw || '').trim()
   if (!details || head.includes(details)) return head
   const short = details.length > 800 ? `${details.slice(0, 800)}…` : details
   return `${head.replace(/[.:\s]+$/, '')}: ${short}`
 }
 
+// server: IV Studio's MCP server for the chat, or null for a plain answer (the prompt writer). images: [{ data, mimeType }]
+// sent with the text when Hermes says its model takes pictures (promptCapabilities.image); otherwise left out.
 export function hermesTurn({ exe, cwd, server, session = null, text, images = [], model = '', emit = () => {}, env = process.env, spawnFn = startExe }) {
   const child = spawnFn(exe, [], { cwd, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
   let buf = ''
